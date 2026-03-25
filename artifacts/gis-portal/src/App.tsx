@@ -217,6 +217,62 @@ function FloatingParticles() {
   )
 }
 
+// ─────────────────────────────────────────────
+// Snowflake particles orbiting each landmark
+// ─────────────────────────────────────────────
+const FLAKE_COUNT = 22
+
+function SnowflakeRing({ hovered }: { hovered: boolean }) {
+  const ref = useRef<THREE.Points>(null)
+
+  const { baseAngles, radii, baseHeights, driftSpeeds, phases } = useMemo(() => {
+    const baseAngles = new Float32Array(FLAKE_COUNT)
+    const radii = new Float32Array(FLAKE_COUNT)
+    const baseHeights = new Float32Array(FLAKE_COUNT)
+    const driftSpeeds = new Float32Array(FLAKE_COUNT)
+    const phases = new Float32Array(FLAKE_COUNT)
+    for (let i = 0; i < FLAKE_COUNT; i++) {
+      baseAngles[i] = (i / FLAKE_COUNT) * Math.PI * 2
+      radii[i] = 0.28 + Math.random() * 0.38
+      baseHeights[i] = Math.random() * 3.8
+      driftSpeeds[i] = 0.22 + Math.random() * 0.32
+      phases[i] = Math.random() * Math.PI * 2
+    }
+    return { baseAngles, radii, baseHeights, driftSpeeds, phases }
+  }, [])
+
+  const positions = useMemo(() => new Float32Array(FLAKE_COUNT * 3), [])
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return
+    const t = clock.elapsedTime
+    const pos = ref.current.geometry.attributes['position'] as THREE.BufferAttribute
+    for (let i = 0; i < FLAKE_COUNT; i++) {
+      const angle = baseAngles[i] + t * driftSpeeds[i] * 0.55
+      const r = radii[i] + 0.08 * Math.sin(t * driftSpeeds[i] * 1.3 + phases[i])
+      const fallOffset = (t * driftSpeeds[i] * 0.55) % 3.8
+      const h = ((baseHeights[i] - fallOffset) + 3.8 * 2) % 3.8
+      pos.setXYZ(i, Math.cos(angle) * r, h, Math.sin(angle) * r)
+    }
+    pos.needsUpdate = true
+  })
+
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        size={hovered ? 0.075 : 0.048}
+        color={hovered ? '#ffffff' : '#c8eeff'}
+        sizeAttenuation
+        transparent
+        opacity={hovered ? 0.92 : 0.48}
+      />
+    </points>
+  )
+}
+
 function ZoneLabel({ position, text, color }: { position: [number, number, number]; text: string; color: string }) {
   return (
     <Html center position={position} style={{ pointerEvents: 'none' }}>
@@ -325,6 +381,9 @@ function Landmark({
 
       <pointLight color={col} intensity={hovered ? 6 : 2.5} distance={5.5} position={[0, 3.1, 0]} />
 
+      {/* Snowflake drift particles */}
+      <SnowflakeRing hovered={hovered} />
+
       {/* Always-visible name label */}
       <Html center position={[0, 4.35, 0]} style={{ pointerEvents: 'none' }}>
         <div style={{
@@ -431,13 +490,15 @@ function Scene({
       <Terrain />
       <FloatingParticles />
 
-      {/* Zone labels */}
+      {/* Zone labels — always visible */}
       <ZoneLabel position={[5.0, 7.0, 1.0]} text="私 領 域" color="rgba(192,132,252,1)" />
       <ZoneLabel position={[-4.0, 7.0, 0.5]} text="公 領 域" color="rgba(0,229,255,1)" />
 
+      {/* Landmarks — appear once data is loaded from API */}
       {sites.map(s => (
         <Landmark key={s.id} site={s} onSiteClick={onSiteClick} onUrlClick={onUrlClick} />
       ))}
+
       <OrbitControls
         autoRotate autoRotateSpeed={0.4}
         enableDamping dampingFactor={0.05}
@@ -871,7 +932,6 @@ function VersionHistory() {
 // ─────────────────────────────────────────────
 export default function App() {
   const [sites, setSites] = useState<SiteData[]>([])
-  const [loading, setLoading] = useState(true)
   const [unlocked, setUnlocked] = useState(() => localStorage.getItem(UNLOCK_KEY) === '1')
   const [modal, setModal] = useState<{ visible: boolean; pendingUrl: string }>({ visible: false, pendingUrl: '' })
   const [adminAuth, setAdminAuth] = useState(false)
@@ -889,8 +949,8 @@ export default function App() {
 
   useEffect(() => {
     apiFetchSites()
-      .then(data => { setSites(data); setLoading(false) })
-      .catch(() => { setLoading(false) })
+      .then(data => { setSites(data) })
+      .catch(() => { /* keep empty sites on error */ })
   }, [])
 
   const openUrl = useCallback((url: string, isPrivate: boolean) => {
@@ -950,17 +1010,10 @@ export default function App() {
           </div>
         }
       >
-        {!loading && <Scene sites={sites} onSiteClick={handleSiteClick} onUrlClick={handleUrlClick} />}
+        {/* Scene always renders — terrain & particles visible immediately.
+            Landmarks appear as soon as the API fetch resolves (sites.length > 0). */}
+        <Scene sites={sites} onSiteClick={handleSiteClick} onUrlClick={handleUrlClick} />
       </Canvas>
-
-      {/* Loading overlay */}
-      {loading && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div style={{ color: 'rgba(0,229,255,0.5)', fontSize: '12px', letterSpacing: '0.3em', textTransform: 'uppercase', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
-            Loading…
-          </div>
-        </div>
-      )}
 
       {/* Header */}
       <div style={{
