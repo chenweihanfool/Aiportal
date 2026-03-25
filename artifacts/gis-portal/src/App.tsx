@@ -218,43 +218,76 @@ function FloatingParticles() {
 }
 
 // ─────────────────────────────────────────────
-// Snowflake particles orbiting each landmark
+// Vortex / tornado particles orbiting each landmark
 // ─────────────────────────────────────────────
-const FLAKE_COUNT = 22
+const FLAKE_COUNT = 28
+const MAX_H = 4.0
 
 function SnowflakeRing({ hovered }: { hovered: boolean }) {
   const ref = useRef<THREE.Points>(null)
+  // 0 = calm drift, 1 = full tornado; ramps smoothly each frame
+  const wind = useRef(0)
+  // reusable Color objects to avoid GC pressure inside useFrame
+  const calmColor = useRef(new THREE.Color('#c8eeff'))
+  const stormColor = useRef(new THREE.Color('#ffddb0'))
 
   const { baseAngles, radii, baseHeights, driftSpeeds, phases } = useMemo(() => {
-    const baseAngles = new Float32Array(FLAKE_COUNT)
-    const radii = new Float32Array(FLAKE_COUNT)
+    const baseAngles  = new Float32Array(FLAKE_COUNT)
+    const radii       = new Float32Array(FLAKE_COUNT)
     const baseHeights = new Float32Array(FLAKE_COUNT)
     const driftSpeeds = new Float32Array(FLAKE_COUNT)
-    const phases = new Float32Array(FLAKE_COUNT)
+    const phases      = new Float32Array(FLAKE_COUNT)
     for (let i = 0; i < FLAKE_COUNT; i++) {
-      baseAngles[i] = (i / FLAKE_COUNT) * Math.PI * 2
-      radii[i] = 0.28 + Math.random() * 0.38
-      baseHeights[i] = Math.random() * 3.8
-      driftSpeeds[i] = 0.22 + Math.random() * 0.32
-      phases[i] = Math.random() * Math.PI * 2
+      baseAngles[i]  = (i / FLAKE_COUNT) * Math.PI * 2
+      radii[i]       = 0.25 + Math.random() * 0.38
+      baseHeights[i] = Math.random() * MAX_H
+      driftSpeeds[i] = 0.20 + Math.random() * 0.35
+      phases[i]      = Math.random() * Math.PI * 2
     }
     return { baseAngles, radii, baseHeights, driftSpeeds, phases }
   }, [])
 
   const positions = useMemo(() => new Float32Array(FLAKE_COUNT * 3), [])
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     if (!ref.current) return
-    const t = clock.elapsedTime
+
+    // ── wind ramp: 0 = calm, 1 = tornado ──────────────────────────────────
+    const targetWind = hovered ? 1 : 0
+    wind.current += (targetWind - wind.current) * Math.min(delta * 2.8, 1)
+    const w = wind.current
+
+    const t   = clock.elapsedTime
     const pos = ref.current.geometry.attributes['position'] as THREE.BufferAttribute
+
     for (let i = 0; i < FLAKE_COUNT; i++) {
-      const angle = baseAngles[i] + t * driftSpeeds[i] * 0.55
-      const r = radii[i] + 0.08 * Math.sin(t * driftSpeeds[i] * 1.3 + phases[i])
-      const fallOffset = (t * driftSpeeds[i] * 0.55) % 3.8
-      const h = ((baseHeights[i] - fallOffset) + 3.8 * 2) % 3.8
-      pos.setXYZ(i, Math.cos(angle) * r, h, Math.sin(angle) * r)
+      const spd = driftSpeeds[i]
+
+      // ── spin speed: 0.55 idle → 5.5 full tornado ─────────────────────
+      const spin  = 0.55 + w * 4.95
+      const angle = baseAngles[i] + t * spd * spin
+
+      // ── vertical drift: gentle fall when calm, fast spiral-UP in tornado ─
+      // netFall > 0 → downward; at w=0.5 → hover; w=1 → fast upward
+      const fallMag  = (0.35 + w * 1.4) * spd
+      const netFall  = fallMag * (1 - w * 2.1)           // crosses zero ~w=0.48
+      const hPos = ((baseHeights[i] - t * netFall + phases[i] * MAX_H) % MAX_H + MAX_H) % MAX_H
+
+      // ── radius: loose orbit idle → tight funnel at base, wide at top ─
+      const idleR    = radii[i] + 0.07 * Math.sin(t * spd + phases[i])
+      const vortexR  = 0.05 + (hPos / MAX_H) * 0.72   // tornado funnel shape
+      const r        = idleR * (1 - w) + vortexR * w
+
+      pos.setXYZ(i, Math.cos(angle) * r, hPos, Math.sin(angle) * r)
     }
     pos.needsUpdate = true
+
+    // ── material: animate size, opacity, and colour ───────────────────────
+    const mat   = ref.current.material as THREE.PointsMaterial
+    mat.size    = 0.046 + w * 0.060
+    mat.opacity = 0.44  + w * 0.52
+    mat.color.lerpColors(calmColor.current, stormColor.current, w * 0.65)
+    mat.needsUpdate = true
   })
 
   return (
@@ -263,11 +296,11 @@ function SnowflakeRing({ hovered }: { hovered: boolean }) {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        size={hovered ? 0.075 : 0.048}
-        color={hovered ? '#ffffff' : '#c8eeff'}
+        size={0.046}
+        color="#c8eeff"
         sizeAttenuation
         transparent
-        opacity={hovered ? 0.92 : 0.48}
+        opacity={0.44}
       />
     </points>
   )
