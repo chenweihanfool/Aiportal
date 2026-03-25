@@ -15,6 +15,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **3D / WebGL**: Three.js, @react-three/fiber, @react-three/drei (used in gis-portal)
 
 ## Structure
 
@@ -49,6 +50,19 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
 ## Packages
+
+### `artifacts/gis-portal` (`@workspace/gis-portal`)
+
+A full-screen 3D GIS portal built with React + Three.js (via @react-three/fiber and @react-three/drei). Serves at `/` (root).
+
+- Pure frontend, no backend required
+- Point cloud terrain: `src/App.tsx` — 100×100 grid BufferGeometry with sine/cosine height displacement, rendered as cyan `<points>` (no solid mesh)
+- 700 floating ambient particles rotating slowly above terrain
+- 6 landmark markers (light pillars + inverted cones) with hover states — each links to a real project URL
+- Glassmorphism info cards on hover: `backdrop-filter: blur(12px)`, transparent border, white text, clickable links
+- Auto-rotating `OrbitControls` with polar angle clamping
+- Projects linked: 人生進度管理系統, 健身追蹤, 扭曲的夢境, 圖根點管理系統, 土地移轉分析系統, 案件排程系統
+- Dependencies: `three`, `@react-three/fiber`, `@react-three/drei`, `@types/three`
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 
