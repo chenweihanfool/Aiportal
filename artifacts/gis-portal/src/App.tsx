@@ -1,37 +1,39 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Html } from '@react-three/drei'
-import { useRef, useState, useMemo, useCallback } from 'react'
+import { useRef, useState, useMemo, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
 import './portal.css'
 
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
-const ADMIN_PASSWORD = '85097110'
 const UNLOCK_KEY = 'portal_unlocked'
-const SITES_KEY = 'portal_sites'
 
-// ─────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────
-interface SiteLink {
-  label: string
-  url: string
-}
-
-interface SiteData {
-  id: string
-  name: string
-  subtitle: string
-  links: SiteLink[]
-  worldXZ: [number, number]
-  isPrivate: boolean
-}
+// Position pools — private sites go right side (+X), public sites go left side (-X)
+const PRIVATE_POSITION_POOL: [number, number][] = [
+  [4.0, 1.5], [5.5, 3.5], [3.5, -1.0], [6.0, -2.5],
+  [4.5, 5.0], [2.5, 3.8], [5.0, 0.2], [6.5, 2.5],
+]
+const PUBLIC_POSITION_POOL: [number, number][] = [
+  [-3.0, -1.5], [-5.0, 1.0], [-3.5, 3.5], [-4.5, -3.0],
+  [-2.0, 2.5], [-5.5, -1.8], [-2.5, -3.5], [-4.0, 4.0],
+]
 
 // ─────────────────────────────────────────────
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '1.3.0',
+    date: '2026-03-25',
+    summary: '後端資料庫 · 公私分區',
+    changes: [
+      '網站資料遷移至後端 PostgreSQL 資料庫',
+      '管理 CRUD 操作透過 REST API 持久化',
+      '公領域 / 私領域地標分區顯示（左右分區）',
+      '新增場景區域標示',
+    ],
+  },
   {
     version: '1.2.0',
     date: '2026-03-25',
@@ -41,7 +43,6 @@ const VERSION_HISTORY = [
       '新增首頁版本紀錄面板',
       '新增管理後台（CRUD 網站、公私領域設定）',
       '標題改為 AI工具入口網',
-      '統一通行碼管理',
     ],
   },
   {
@@ -67,71 +68,79 @@ const VERSION_HISTORY = [
 ]
 
 // ─────────────────────────────────────────────
-// Position Pool — auto-assigned to new sites
+// Types
 // ─────────────────────────────────────────────
-const POSITION_POOL: [number, number][] = [
-  [3.0, 0.5], [-1.5, 5.0], [5.0, 3.0], [2.0, -2.0], [4.5, -1.0], [-0.5, 4.0],
-  [-3.0, -1.5], [-2.5, 2.5], [1.0, 4.5], [-4.0, 0.5], [3.5, -3.5], [-1.0, -3.0],
-  [0.5, -4.0], [-3.5, 3.5], [5.5, 0.0], [-4.5, -2.0],
-]
-
-// ─────────────────────────────────────────────
-// Default Sites
-// ─────────────────────────────────────────────
-const DEFAULT_SITES: SiteData[] = [
-  {
-    id: '1', name: '人生進度管理系統', subtitle: 'Life Progress Management',
-    links: [
-      { label: '進入系統', url: 'https://pf-cwh.replit.app/' },
-      { label: '再平衡計算器', url: 'https://pf-cwh.replit.app/rebalancer' },
-    ],
-    worldXZ: [3.0, 0.5], isPrivate: true,
-  },
-  {
-    id: '2', name: '健身追蹤', subtitle: 'Fitness Tracking',
-    links: [{ label: '進入系統', url: 'https://fitness-forge-chenweihanfool.replit.app/' }],
-    worldXZ: [-1.5, 5.0], isPrivate: true,
-  },
-  {
-    id: '3', name: '扭曲的夢境', subtitle: 'Twisted Dreams — Art',
-    links: [{ label: '進入系統', url: 'https://art-mart--chenweihanfool.replit.app/' }],
-    worldXZ: [5.0, 3.0], isPrivate: true,
-  },
-  {
-    id: '4', name: '圖根點管理系統', subtitle: 'Survey Control Points',
-    links: [{ label: '進入系統', url: 'https://kc2-cwh.replit.app/' }],
-    worldXZ: [2.0, -2.0], isPrivate: false,
-  },
-  {
-    id: '5', name: '土地移轉分析系統', subtitle: 'Land Transfer Analysis',
-    links: [{ label: '進入系統', url: 'https://land-transfer-visualizer.replit.app/' }],
-    worldXZ: [4.5, -1.0], isPrivate: false,
-  },
-  {
-    id: '6', name: '案件排程系統', subtitle: 'Case Scheduling',
-    links: [{ label: '進入系統', url: 'https://map-scheduler.replit.app/' }],
-    worldXZ: [-0.5, 4.0], isPrivate: false,
-  },
-]
-
-function loadSites(): SiteData[] {
-  try {
-    const raw = localStorage.getItem(SITES_KEY)
-    if (raw) return JSON.parse(raw) as SiteData[]
-  } catch { /* ignore */ }
-  return DEFAULT_SITES
+interface SiteLink {
+  label: string
+  url: string
 }
 
-function saveSites(sites: SiteData[]): void {
-  localStorage.setItem(SITES_KEY, JSON.stringify(sites))
+interface SiteData {
+  id: string
+  name: string
+  subtitle: string
+  links: SiteLink[]
+  worldXZ: [number, number]
+  isPrivate: boolean
 }
 
-function nextPosition(existing: SiteData[]): [number, number] {
+// ─────────────────────────────────────────────
+// API helpers
+// ─────────────────────────────────────────────
+async function apiFetchSites(): Promise<SiteData[]> {
+  const r = await fetch('/api/sites')
+  if (!r.ok) throw new Error('Failed to fetch sites')
+  const data = await r.json() as { sites: SiteData[] }
+  return data.sites
+}
+
+async function apiVerifyPassword(password: string): Promise<boolean> {
+  const r = await fetch('/api/auth/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+  return r.ok
+}
+
+async function apiAddSite(data: Omit<SiteData, 'id'>, adminPassword: string): Promise<SiteData> {
+  const r = await fetch('/api/sites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+    body: JSON.stringify(data),
+  })
+  if (!r.ok) throw new Error('Failed to create site')
+  const json = await r.json() as { site: SiteData }
+  return json.site
+}
+
+async function apiUpdateSite(id: string, data: Partial<Omit<SiteData, 'id'>>, adminPassword: string): Promise<SiteData> {
+  const r = await fetch(`/api/sites/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+    body: JSON.stringify(data),
+  })
+  if (!r.ok) throw new Error('Failed to update site')
+  const json = await r.json() as { site: SiteData }
+  return json.site
+}
+
+async function apiDeleteSite(id: string, adminPassword: string): Promise<void> {
+  const r = await fetch(`/api/sites/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to delete site')
+}
+
+function nextPosition(existing: SiteData[], isPrivate: boolean): [number, number] {
+  const pool = isPrivate ? PRIVATE_POSITION_POOL : PUBLIC_POSITION_POOL
   const used = new Set(existing.map(s => `${s.worldXZ[0]},${s.worldXZ[1]}`))
-  for (const p of POSITION_POOL) {
+  for (const p of pool) {
     if (!used.has(`${p[0]},${p[1]}`)) return p
   }
-  return [(Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10]
+  const sign = isPrivate ? 1 : -1
+  return [sign * (3 + Math.random() * 3), (Math.random() - 0.5) * 6]
 }
 
 // ─────────────────────────────────────────────
@@ -208,6 +217,26 @@ function FloatingParticles() {
   )
 }
 
+function ZoneLabel({ position, text, color }: { position: [number, number, number]; text: string; color: string }) {
+  return (
+    <Html center position={position} style={{ pointerEvents: 'none' }}>
+      <div style={{
+        color,
+        fontSize: '10px',
+        fontWeight: '300',
+        letterSpacing: '0.45em',
+        textTransform: 'uppercase',
+        fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+        whiteSpace: 'nowrap',
+        opacity: 0.38,
+        userSelect: 'none',
+      }}>
+        {text}
+      </div>
+    </Html>
+  )
+}
+
 function Landmark({
   site,
   onSiteClick,
@@ -260,12 +289,11 @@ function Landmark({
     ? 'rgba(192, 132, 252, 0.85), 0 0 22px rgba(192, 132, 252, 0.4)'
     : 'rgba(0, 229, 255, 0.9), 0 0 22px rgba(0, 229, 255, 0.45)'
   const labelBorder = site.isPrivate ? 'rgba(192, 132, 252, 0.22)' : 'rgba(0, 229, 255, 0.22)'
-
   const secondaryLinks = site.links.slice(1)
 
   return (
     <group ref={groupRef} position={[wx, wy, wz]}>
-      {/* Invisible hit volume — handles hover + click */}
+      {/* Invisible hit volume */}
       <mesh
         position={[0, 1.6, 0]}
         onPointerEnter={handleEnter}
@@ -317,7 +345,7 @@ function Landmark({
         </div>
       </Html>
 
-      {/* Hover info card — info only, no primary button */}
+      {/* Hover info card */}
       {hovered && (
         <Html position={[0.75, 2.6, 0]} style={{ pointerEvents: 'none' }}>
           <div
@@ -354,7 +382,6 @@ function Landmark({
             <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', marginTop: '10px', letterSpacing: '0.05em' }}>
               點擊地標直接進入
             </div>
-            {/* Secondary links (e.g. rebalancer) */}
             {secondaryLinks.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px' }}>
                 {secondaryLinks.map(link => (
@@ -403,6 +430,11 @@ function Scene({
       <ambientLight intensity={0.15} />
       <Terrain />
       <FloatingParticles />
+
+      {/* Zone labels */}
+      <ZoneLabel position={[5.0, 7.0, 1.0]} text="私 領 域" color="rgba(192,132,252,1)" />
+      <ZoneLabel position={[-4.0, 7.0, 0.5]} text="公 領 域" color="rgba(0,229,255,1)" />
+
       {sites.map(s => (
         <Landmark key={s.id} site={s} onSiteClick={onSiteClick} onUrlClick={onUrlClick} />
       ))}
@@ -430,10 +462,14 @@ function PasswordModal({
 }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (input === ADMIN_PASSWORD) {
+    setLoading(true)
+    const ok = await apiVerifyPassword(input)
+    setLoading(false)
+    if (ok) {
       localStorage.setItem(UNLOCK_KEY, '1')
       window.open(pendingUrl, '_blank', 'noopener,noreferrer')
       onSuccess()
@@ -465,9 +501,10 @@ function PasswordModal({
         <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.42)', marginBottom: '28px', lineHeight: '1.6' }}>
           此為私領域網站，請輸入密碼以繼續。<br />本裝置驗證後將不再詢問。
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={e => { void handleSubmit(e) }}>
           <input
             type="password" value={input} autoFocus placeholder="••••••"
+            disabled={loading}
             onChange={e => { setInput(e.target.value); setError('') }}
             style={{
               width: '100%', padding: '12px 16px', background: 'rgba(0,0,0,0.35)',
@@ -482,9 +519,9 @@ function PasswordModal({
               style={{ flex: 1, padding: '11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', color: 'rgba(255,255,255,0.5)', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
               取消
             </button>
-            <button type="submit"
-              style={{ flex: 2, padding: '11px', background: 'rgba(192,132,252,0.14)', border: '1px solid rgba(192,132,252,0.38)', borderRadius: '10px', color: '#c084fc', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>
-              確認進入
+            <button type="submit" disabled={loading}
+              style={{ flex: 2, padding: '11px', background: 'rgba(192,132,252,0.14)', border: '1px solid rgba(192,132,252,0.38)', borderRadius: '10px', color: '#c084fc', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', opacity: loading ? 0.6 : 1 }}>
+              {loading ? '驗證中…' : '確認進入'}
             </button>
           </div>
         </form>
@@ -517,46 +554,66 @@ const BLANK_FORM = (): Omit<SiteData, 'id' | 'worldXZ'> => ({
   name: '', subtitle: '', links: [{ label: '進入系統', url: '' }], isPrivate: false,
 })
 
-function AdminPanel({ sites, onUpdate, onClose }: {
+interface AdminPanelProps {
   sites: SiteData[]
-  onUpdate: (sites: SiteData[]) => void
+  adminPassword: string
+  onAdd: (data: Omit<SiteData, 'id'>) => Promise<void>
+  onEdit: (id: string, data: Partial<Omit<SiteData, 'id'>>) => Promise<void>
+  onDelete: (id: string) => Promise<void>
   onClose: () => void
-}) {
+}
+
+function AdminPanel({ sites, adminPassword, onAdd, onEdit, onDelete, onClose }: AdminPanelProps) {
   const [editing, setEditing] = useState<SiteData | null>(null)
   const [adding, setAdding] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [form, setForm] = useState(BLANK_FORM())
+  const [busy, setBusy] = useState(false)
+  const [apiError, setApiError] = useState('')
+
+  void adminPassword
 
   const openEdit = (s: SiteData) => {
-    setEditing(s); setAdding(false)
+    setEditing(s); setAdding(false); setApiError('')
     setForm({ name: s.name, subtitle: s.subtitle, links: s.links.map(l => ({ ...l })), isPrivate: s.isPrivate })
   }
   const openAdd = () => {
-    setAdding(true); setEditing(null)
+    setAdding(true); setEditing(null); setApiError('')
     setForm(BLANK_FORM())
   }
-  const closeForm = () => { setEditing(null); setAdding(false) }
+  const closeForm = () => { setEditing(null); setAdding(false); setApiError('') }
 
-  const handleDelete = (id: string) => {
-    onUpdate(sites.filter(s => s.id !== id))
-    setConfirmDelete(null)
-    if (editing?.id === id) closeForm()
+  const handleDelete = async (id: string) => {
+    setBusy(true)
+    try {
+      await onDelete(id)
+      setConfirmDelete(null)
+      if (editing?.id === id) closeForm()
+    } catch {
+      setApiError('刪除失敗，請再試一次')
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const links = form.links.filter(l => l.url.trim())
     if (!form.name.trim() || links.length === 0) return
-    if (adding) {
-      const newSite: SiteData = {
-        id: Date.now().toString(),
-        name: form.name.trim(), subtitle: form.subtitle.trim(),
-        links, worldXZ: nextPosition(sites), isPrivate: form.isPrivate,
+    setBusy(true)
+    setApiError('')
+    try {
+      if (adding) {
+        const worldXZ = nextPosition(sites, form.isPrivate)
+        await onAdd({ name: form.name.trim(), subtitle: form.subtitle.trim(), links, worldXZ, isPrivate: form.isPrivate })
+      } else if (editing) {
+        await onEdit(editing.id, { name: form.name.trim(), subtitle: form.subtitle.trim(), links, isPrivate: form.isPrivate })
       }
-      onUpdate([...sites, newSite])
-    } else if (editing) {
-      onUpdate(sites.map(s => s.id === editing.id ? { ...s, name: form.name.trim(), subtitle: form.subtitle.trim(), links, isPrivate: form.isPrivate } : s))
+      closeForm()
+    } catch {
+      setApiError('儲存失敗，請再試一次')
+    } finally {
+      setBusy(false)
     }
-    closeForm()
   }
 
   const setLink = (idx: number, field: keyof SiteLink, val: string) =>
@@ -587,6 +644,24 @@ function AdminPanel({ sites, onUpdate, onClose }: {
           </button>
         </div>
 
+        {apiError && (
+          <div style={{ marginBottom: '14px', padding: '10px 14px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '8px', fontSize: '12px', color: 'rgba(248,113,113,0.9)' }}>
+            {apiError}
+          </div>
+        )}
+
+        {/* Zone legend */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ fontSize: '11px', color: 'rgba(0,229,255,0.55)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00e5ff', display: 'inline-block', opacity: 0.7 }} />
+            公領域 — 場景左側
+          </div>
+          <div style={{ fontSize: '11px', color: 'rgba(192,132,252,0.55)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#c084fc', display: 'inline-block', opacity: 0.7 }} />
+            私領域 — 場景右側
+          </div>
+        </div>
+
         {/* Site list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
           {sites.map(s => (
@@ -597,7 +672,6 @@ function AdminPanel({ sites, onUpdate, onClose }: {
                 background: editing?.id === s.id ? 'rgba(0,229,255,0.05)' : 'rgba(255,255,255,0.03)',
                 border: `1px solid ${editing?.id === s.id ? 'rgba(0,229,255,0.22)' : 'rgba(255,255,255,0.07)'}`,
                 borderRadius: confirmDelete === s.id ? '10px 10px 0 0' : '10px',
-                transition: 'border-color 0.2s',
               }}>
                 <span style={{
                   fontSize: '10px', padding: '2px 7px', borderRadius: '4px', whiteSpace: 'nowrap',
@@ -611,35 +685,33 @@ function AdminPanel({ sites, onUpdate, onClose }: {
                   <div style={{ fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.92)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.32)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.links[0]?.url}</div>
                 </div>
-                <button onClick={() => openEdit(s)} style={{ padding: '6px 12px', background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.25)', borderRadius: '7px', color: '#00e5ff', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                <button onClick={() => openEdit(s)} disabled={busy} style={{ padding: '6px 12px', background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.25)', borderRadius: '7px', color: '#00e5ff', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                   編輯
                 </button>
                 <button
                   onClick={() => setConfirmDelete(confirmDelete === s.id ? null : s.id)}
+                  disabled={busy}
                   style={{ padding: '6px 12px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '7px', color: '#f87171', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                   刪除
                 </button>
               </div>
-              {/* Inline delete confirmation */}
               {confirmDelete === s.id && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
                   <span style={{ flex: 1, fontSize: '12px', color: 'rgba(248,113,113,0.85)' }}>確定刪除「{s.name}」？</span>
                   <button onClick={() => setConfirmDelete(null)} style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', color: 'rgba(255,255,255,0.5)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>取消</button>
-                  <button onClick={() => handleDelete(s.id)} style={{ padding: '5px 12px', background: 'rgba(248,113,113,0.14)', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '6px', color: '#f87171', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>確定刪除</button>
+                  <button onClick={() => { void handleDelete(s.id) }} disabled={busy} style={{ padding: '5px 12px', background: 'rgba(248,113,113,0.14)', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '6px', color: '#f87171', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>確定刪除</button>
                 </div>
               )}
             </div>
           ))}
         </div>
 
-        {/* Add button */}
         {!showForm && (
-          <button onClick={openAdd} style={{ width: '100%', padding: '11px', background: 'rgba(0,229,255,0.06)', border: '1px dashed rgba(0,229,255,0.28)', borderRadius: '10px', color: '#00e5ff', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.06em' }}>
+          <button onClick={openAdd} disabled={busy} style={{ width: '100%', padding: '11px', background: 'rgba(0,229,255,0.06)', border: '1px dashed rgba(0,229,255,0.28)', borderRadius: '10px', color: '#00e5ff', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.06em' }}>
             ＋ 新增網站
           </button>
         )}
 
-        {/* Edit / Add Form */}
         {showForm && (
           <div style={{ marginTop: '12px', padding: '22px 24px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: 'rgba(255,255,255,0.8)', marginBottom: '18px' }}>
@@ -666,7 +738,7 @@ function AdminPanel({ sites, onUpdate, onClose }: {
                       color: form.isPrivate === priv ? (priv ? '#c084fc' : '#00e5ff') : 'rgba(255,255,255,0.4)',
                       fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit',
                     }}>
-                    {priv ? '🔒 私領域' : '🌐 公領域'}
+                    {priv ? '🔒 私領域（右側）' : '🌐 公領域（左側）'}
                   </button>
                 ))}
               </div>
@@ -691,11 +763,11 @@ function AdminPanel({ sites, onUpdate, onClose }: {
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              <button onClick={closeForm} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '9px', color: 'rgba(255,255,255,0.5)', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={closeForm} disabled={busy} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '9px', color: 'rgba(255,255,255,0.5)', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
                 取消
               </button>
-              <button onClick={handleSave} style={{ flex: 2, padding: '10px', background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.38)', borderRadius: '9px', color: '#00e5ff', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>
-                儲存
+              <button onClick={() => { void handleSave() }} disabled={busy} style={{ flex: 2, padding: '10px', background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.38)', borderRadius: '9px', color: '#00e5ff', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>
+                {busy ? '儲存中…' : '儲存'}
               </button>
             </div>
           </div>
@@ -706,30 +778,43 @@ function AdminPanel({ sites, onUpdate, onClose }: {
 }
 
 // ─────────────────────────────────────────────
-// Admin Auth Modal
+// Admin Auth Modal — verifies via API
 // ─────────────────────────────────────────────
-function AdminAuthModal({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
+function AdminAuthModal({ onSuccess, onCancel }: { onSuccess: (pw: string) => void; onCancel: () => void }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState('')
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (input === ADMIN_PASSWORD) { onSuccess() }
-    else { setError('通行碼錯誤'); setInput('') }
+    setLoading(true)
+    const ok = await apiVerifyPassword(input)
+    setLoading(false)
+    if (ok) {
+      onSuccess(input)
+    } else {
+      setError('通行碼錯誤')
+      setInput('')
+    }
   }
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5,8,20,0.88)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
       <div style={{ backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: '20px', padding: '36px 40px', width: '320px', color: 'white', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
         <div style={{ fontSize: '10px', color: 'rgba(0,229,255,0.6)', letterSpacing: '0.22em', textTransform: 'uppercase', marginBottom: '12px' }}>⚙ 管理後台</div>
         <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '20px' }}>輸入通行碼</div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={e => { void handleSubmit(e) }}>
           <input type="password" value={input} autoFocus placeholder="••••••••"
+            disabled={loading}
             onChange={e => { setInput(e.target.value); setError('') }}
             style={{ width: '100%', padding: '11px 14px', background: 'rgba(0,0,0,0.35)', border: `1px solid ${error ? 'rgba(248,113,113,0.6)' : 'rgba(255,255,255,0.14)'}`, borderRadius: '9px', color: 'white', fontSize: '15px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', letterSpacing: '0.18em' }} />
           {error && <div style={{ fontSize: '12px', color: 'rgba(248,113,113,0.9)', marginTop: '8px' }}>{error}</div>}
           <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
             <button type="button" onClick={onCancel} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '9px', color: 'rgba(255,255,255,0.5)', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>取消</button>
-            <button type="submit" style={{ flex: 2, padding: '10px', background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.35)', borderRadius: '9px', color: '#00e5ff', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>進入</button>
+            <button type="submit" disabled={loading} style={{ flex: 2, padding: '10px', background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.35)', borderRadius: '9px', color: '#00e5ff', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', opacity: loading ? 0.6 : 1 }}>
+              {loading ? '驗證中…' : '進入'}
+            </button>
           </div>
         </form>
       </div>
@@ -785,11 +870,28 @@ function VersionHistory() {
 // App
 // ─────────────────────────────────────────────
 export default function App() {
-  const [sites, setSites] = useState<SiteData[]>(loadSites)
+  const [sites, setSites] = useState<SiteData[]>([])
+  const [loading, setLoading] = useState(true)
   const [unlocked, setUnlocked] = useState(() => localStorage.getItem(UNLOCK_KEY) === '1')
   const [modal, setModal] = useState<{ visible: boolean; pendingUrl: string }>({ visible: false, pendingUrl: '' })
   const [adminAuth, setAdminAuth] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [adminPassword, setAdminPassword] = useState('')
+
+  const refreshSites = useCallback(async () => {
+    try {
+      const data = await apiFetchSites()
+      setSites(data)
+    } catch {
+      // silently keep whatever we have
+    }
+  }, [])
+
+  useEffect(() => {
+    apiFetchSites()
+      .then(data => { setSites(data); setLoading(false) })
+      .catch(() => { setLoading(false) })
+  }, [])
 
   const openUrl = useCallback((url: string, isPrivate: boolean) => {
     if (!isPrivate || unlocked) {
@@ -812,10 +914,26 @@ export default function App() {
     setModal({ visible: false, pendingUrl: '' })
   }, [])
 
-  const handleSitesUpdate = useCallback((updated: SiteData[]) => {
-    setSites(updated)
-    saveSites(updated)
+  const handleAdminAuthSuccess = useCallback((pw: string) => {
+    setAdminPassword(pw)
+    setAdminAuth(false)
+    setAdminOpen(true)
   }, [])
+
+  const handleAdd = useCallback(async (data: Omit<SiteData, 'id'>) => {
+    await apiAddSite(data, adminPassword)
+    await refreshSites()
+  }, [adminPassword, refreshSites])
+
+  const handleEdit = useCallback(async (id: string, data: Partial<Omit<SiteData, 'id'>>) => {
+    await apiUpdateSite(id, data, adminPassword)
+    await refreshSites()
+  }, [adminPassword, refreshSites])
+
+  const handleDelete = useCallback(async (id: string) => {
+    await apiDeleteSite(id, adminPassword)
+    await refreshSites()
+  }, [adminPassword, refreshSites])
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#050814', position: 'relative', overflow: 'hidden' }}>
@@ -832,8 +950,17 @@ export default function App() {
           </div>
         }
       >
-        <Scene sites={sites} onSiteClick={handleSiteClick} onUrlClick={handleUrlClick} />
+        {!loading && <Scene sites={sites} onSiteClick={handleSiteClick} onUrlClick={handleUrlClick} />}
       </Canvas>
+
+      {/* Loading overlay */}
+      {loading && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ color: 'rgba(0,229,255,0.5)', fontSize: '12px', letterSpacing: '0.3em', textTransform: 'uppercase', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
+            Loading…
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{
@@ -899,7 +1026,7 @@ export default function App() {
       {/* Admin auth */}
       {adminAuth && !adminOpen && (
         <AdminAuthModal
-          onSuccess={() => { setAdminAuth(false); setAdminOpen(true) }}
+          onSuccess={handleAdminAuthSuccess}
           onCancel={() => setAdminAuth(false)}
         />
       )}
@@ -908,7 +1035,10 @@ export default function App() {
       {adminOpen && (
         <AdminPanel
           sites={sites}
-          onUpdate={handleSitesUpdate}
+          adminPassword={adminPassword}
+          onAdd={handleAdd}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
           onClose={() => setAdminOpen(false)}
         />
       )}

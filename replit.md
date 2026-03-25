@@ -55,18 +55,19 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 A full-screen 3D GIS portal built with React + Three.js (via @react-three/fiber and @react-three/drei). Serves at `/` (root).
 
-- Pure frontend, no backend required; title: "AI工具入口網"
-- Point cloud terrain: 101×101 grid BufferGeometry with sine/cosine height displacement, rendered as `<points>` (no solid mesh)
+- Title: "AI工具入口網"; pure frontend (Vite + React Three Fiber)
+- Point cloud terrain: 101×101 grid with sine/cosine height, rendered as `<points>`
 - 700 floating ambient particles, auto-rotating OrbitControls
-- Sites stored in localStorage (`portal_sites` key); defaults to 6 built-in projects
-- Clicking a 3D landmark directly opens the site's primary URL (no popup buttons needed)
-- Always-visible name labels above each landmark; hover card shows info + secondary links only
-- Public/private classification: cyan (#00e5ff) vs purple (#c084fc) labels
-- Private sites: password modal on first visit, device remembered via `portal_unlocked` localStorage key
-- Version history panel: bottom-left collapsible, hardcoded `VERSION_HISTORY` array (update before each release)
-- Admin panel: bottom-right ⚙ button → password auth (`85097110`) → full CRUD (add/edit/delete sites, set name/subtitle/links/public-private)
-- Single password `85097110` for everything (private access + admin)
-- Admin positions auto-assigned from `POSITION_POOL` for new sites
+- **Site data stored in PostgreSQL via `/api/sites`** — seeded automatically on first run
+- Clicking a 3D landmark directly opens the primary URL; hover card shows info + secondary links
+- Always-visible name labels; public (cyan #00e5ff) vs private (purple #c084fc)
+- **Zone separation**: private sites on right side (X > 0), public sites on left side (X < 0)
+- 3D zone labels "私 領 域" and "公 領 域" visible in scene
+- Private site access: password modal → POST /api/auth/verify; device remembered via `portal_unlocked` localStorage
+- Admin panel: ⚙ button → POST /api/auth/verify → CRUD panel (add/edit/delete) — all changes persist to DB
+- Single password `85097110` for everything (verified server-side via API)
+- New sites positioned in PRIVATE_POSITION_POOL or PUBLIC_POSITION_POOL based on isPrivate
+- Version history panel (bottom-left): hardcoded `VERSION_HISTORY` — update before each release
 - Dependencies (all devDependencies): `three`, `@react-three/fiber`, `@react-three/drei`, `@types/three`
 
 ### `artifacts/api-server` (`@workspace/api-server`)
