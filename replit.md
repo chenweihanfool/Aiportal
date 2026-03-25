@@ -68,6 +68,7 @@ A full-screen 3D GIS portal built with React + Three.js (via @react-three/fiber 
 - Single password `85097110` for everything (verified server-side via API)
 - New sites positioned in PRIVATE_POSITION_POOL or PUBLIC_POSITION_POOL based on isPrivate
 - Version history panel (bottom-left): hardcoded `VERSION_HISTORY` — update before each release
+- **SnowflakeRing** (v1.4.0): 28 particles per landmark orbit with gentle drift; hover triggers tornado vortex — wind lerp 0→1, spin ×10, funnel radius shape, upward spiral, colour transitions ice-blue → amber-white
 - Dependencies (all devDependencies): `three`, `@react-three/fiber`, `@react-three/drei`, `@types/three`
 
 ### `artifacts/api-server` (`@workspace/api-server`)
