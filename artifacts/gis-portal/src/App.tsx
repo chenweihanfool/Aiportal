@@ -615,7 +615,7 @@ export default function App() {
             marginBottom: 0,
           }}
         >
-          Hover to explore · Click to enter
+          點擊地標 · 立即進入
         </p>
       </div>
 
