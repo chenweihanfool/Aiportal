@@ -4,6 +4,9 @@ import { useRef, useState, useMemo, useCallback } from 'react'
 import * as THREE from 'three'
 import './portal.css'
 
+const PRIVATE_PASSWORD = 'cwh520'
+const STORAGE_KEY = 'portal_unlocked'
+
 function getHeight(x: number, z: number): number {
   return (
     Math.sin(x * 0.5) * Math.cos(z * 0.3) * 2.0 +
@@ -23,6 +26,7 @@ interface Project {
   subtitle: string
   links: ProjectLink[]
   worldXZ: [number, number]
+  isPrivate: boolean
 }
 
 const PROJECTS: Project[] = [
@@ -35,6 +39,7 @@ const PROJECTS: Project[] = [
       { label: '再平衡計算器', url: 'https://pf-cwh.replit.app/rebalancer' },
     ],
     worldXZ: [3.0, 0.5],
+    isPrivate: true,
   },
   {
     id: 2,
@@ -42,6 +47,7 @@ const PROJECTS: Project[] = [
     subtitle: 'Fitness Tracking',
     links: [{ label: '進入系統', url: 'https://fitness-forge-chenweihanfool.replit.app/' }],
     worldXZ: [-1.5, 5.0],
+    isPrivate: true,
   },
   {
     id: 3,
@@ -49,6 +55,7 @@ const PROJECTS: Project[] = [
     subtitle: 'Twisted Dreams — Art',
     links: [{ label: '進入系統', url: 'https://art-mart--chenweihanfool.replit.app/' }],
     worldXZ: [5.0, 3.0],
+    isPrivate: true,
   },
   {
     id: 4,
@@ -56,6 +63,7 @@ const PROJECTS: Project[] = [
     subtitle: 'Survey Control Points',
     links: [{ label: '進入系統', url: 'https://kc2-cwh.replit.app/' }],
     worldXZ: [2.0, -2.0],
+    isPrivate: false,
   },
   {
     id: 5,
@@ -63,6 +71,7 @@ const PROJECTS: Project[] = [
     subtitle: 'Land Transfer Analysis',
     links: [{ label: '進入系統', url: 'https://land-transfer-visualizer.replit.app/' }],
     worldXZ: [4.5, -1.0],
+    isPrivate: false,
   },
   {
     id: 6,
@@ -70,6 +79,7 @@ const PROJECTS: Project[] = [
     subtitle: 'Case Scheduling',
     links: [{ label: '進入系統', url: 'https://map-scheduler.replit.app/' }],
     worldXZ: [-0.5, 4.0],
+    isPrivate: false,
   },
 ]
 
@@ -142,7 +152,13 @@ function FloatingParticles() {
   )
 }
 
-function Landmark({ project }: { project: Project }) {
+function Landmark({
+  project,
+  onLinkClick,
+}: {
+  project: Project
+  onLinkClick: (url: string, isPrivate: boolean) => void
+}) {
   const [hovered, setHovered] = useState(false)
   const groupRef = useRef<THREE.Group>(null)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -169,6 +185,31 @@ function Landmark({ project }: { project: Project }) {
 
   const col = hovered ? '#ffaa00' : '#00e5ff'
   const emi = hovered ? '#ff6600' : '#009abb'
+  const labelColor = project.isPrivate ? '#c084fc' : '#00e5ff'
+  const labelGlow = project.isPrivate
+    ? 'rgba(192, 132, 252, 0.85), 0 0 22px rgba(192, 132, 252, 0.4)'
+    : 'rgba(0, 229, 255, 0.9), 0 0 22px rgba(0, 229, 255, 0.45)'
+  const labelBorder = project.isPrivate
+    ? 'rgba(192, 132, 252, 0.22)'
+    : 'rgba(0, 229, 255, 0.22)'
+
+  const btnBase: React.CSSProperties = {
+    display: 'block',
+    width: '100%',
+    padding: '9px 14px',
+    background: 'rgba(0, 229, 255, 0.08)',
+    border: '1px solid rgba(0, 229, 255, 0.28)',
+    borderRadius: '8px',
+    color: '#00e5ff',
+    fontSize: '12px',
+    fontWeight: '500',
+    letterSpacing: '0.06em',
+    textDecoration: 'none',
+    textAlign: 'center',
+    cursor: 'pointer',
+    fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    boxSizing: 'border-box',
+  }
 
   return (
     <group ref={groupRef} position={[wx, wy, wz]}>
@@ -194,6 +235,27 @@ function Landmark({ project }: { project: Project }) {
 
       <pointLight color={col} intensity={hovered ? 6 : 2.5} distance={5.5} position={[0, 3.1, 0]} />
 
+      <Html center position={[0, 4.35, 0]} style={{ pointerEvents: 'none' }}>
+        <div
+          style={{
+            color: labelColor,
+            fontSize: '11px',
+            fontWeight: '500',
+            fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+            letterSpacing: '0.06em',
+            whiteSpace: 'nowrap',
+            textShadow: `0 0 10px ${labelGlow}`,
+            background: 'rgba(5, 8, 20, 0.55)',
+            padding: '3px 9px',
+            borderRadius: '5px',
+            border: `1px solid ${labelBorder}`,
+            userSelect: 'none',
+          }}
+        >
+          {project.name}
+        </div>
+      </Html>
+
       {hovered && (
         <Html position={[0.75, 2.6, 0]} style={{ pointerEvents: 'none' }}>
           <div
@@ -216,14 +278,14 @@ function Landmark({ project }: { project: Project }) {
             <div
               style={{
                 fontSize: '10px',
-                color: 'rgba(0, 229, 255, 0.65)',
+                color: project.isPrivate ? 'rgba(192, 132, 252, 0.75)' : 'rgba(0, 229, 255, 0.65)',
                 letterSpacing: '0.18em',
-                marginBottom: '8px',
+                marginBottom: '6px',
                 textTransform: 'uppercase',
                 fontWeight: '500',
               }}
             >
-              PROJECT {String(project.id).padStart(2, '0')}
+              {project.isPrivate ? '🔒 私領域' : '🌐 公領域'}
             </div>
             <div
               style={{
@@ -248,25 +310,10 @@ function Landmark({ project }: { project: Project }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {project.links.map((link) => (
-                <a
+                <button
                   key={link.url}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'block',
-                    padding: '9px 14px',
-                    background: 'rgba(0, 229, 255, 0.08)',
-                    border: '1px solid rgba(0, 229, 255, 0.28)',
-                    borderRadius: '8px',
-                    color: '#00e5ff',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    letterSpacing: '0.06em',
-                    textDecoration: 'none',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                  }}
+                  onClick={() => onLinkClick(link.url, project.isPrivate)}
+                  style={btnBase}
                   onMouseEnter={(e) => {
                     const t = e.currentTarget
                     t.style.background = 'rgba(0, 229, 255, 0.18)'
@@ -279,7 +326,7 @@ function Landmark({ project }: { project: Project }) {
                   }}
                 >
                   {link.label} →
-                </a>
+                </button>
               ))}
             </div>
           </div>
@@ -289,7 +336,7 @@ function Landmark({ project }: { project: Project }) {
   )
 }
 
-function Scene() {
+function Scene({ onLinkClick }: { onLinkClick: (url: string, isPrivate: boolean) => void }) {
   return (
     <>
       <color attach="background" args={['#050814']} />
@@ -298,7 +345,7 @@ function Scene() {
       <Terrain />
       <FloatingParticles />
       {PROJECTS.map((p) => (
-        <Landmark key={p.id} project={p} />
+        <Landmark key={p.id} project={p} onLinkClick={onLinkClick} />
       ))}
       <OrbitControls
         autoRotate
@@ -314,7 +361,205 @@ function Scene() {
   )
 }
 
+function PasswordModal({
+  pendingUrl,
+  onSuccess,
+  onCancel,
+}: {
+  pendingUrl: string
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const [input, setInput] = useState('')
+  const [error, setError] = useState('')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (input === PRIVATE_PASSWORD) {
+      localStorage.setItem(STORAGE_KEY, '1')
+      window.open(pendingUrl, '_blank', 'noopener,noreferrer')
+      onSuccess()
+    } else {
+      setError('密碼錯誤，請再試一次')
+      setInput('')
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(5, 8, 20, 0.88)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div
+        style={{
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          background: 'rgba(255, 255, 255, 0.06)',
+          border: '1px solid rgba(255, 255, 255, 0.14)',
+          borderRadius: '20px',
+          padding: '40px 44px',
+          width: '340px',
+          color: 'white',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          boxShadow: '0 0 80px rgba(192, 132, 252, 0.18), inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}
+      >
+        <div
+          style={{
+            fontSize: '10px',
+            color: 'rgba(192, 132, 252, 0.75)',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            marginBottom: '14px',
+            fontWeight: '500',
+          }}
+        >
+          🔒 私領域網站
+        </div>
+        <div style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', letterSpacing: '0.02em' }}>
+          輸入密碼
+        </div>
+        <div
+          style={{
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.42)',
+            marginBottom: '28px',
+            lineHeight: '1.6',
+          }}
+        >
+          此為私領域網站，請輸入密碼以繼續。<br />
+          本裝置驗證後將不再詢問。
+        </div>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="password"
+            value={input}
+            onChange={(e) => { setInput(e.target.value); setError('') }}
+            autoFocus
+            placeholder="••••••"
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              background: 'rgba(0, 0, 0, 0.35)',
+              border: `1px solid ${error ? 'rgba(248, 113, 113, 0.6)' : 'rgba(255, 255, 255, 0.14)'}`,
+              borderRadius: '10px',
+              color: 'white',
+              fontSize: '15px',
+              fontFamily: 'inherit',
+              outline: 'none',
+              boxSizing: 'border-box',
+              letterSpacing: '0.18em',
+              transition: 'border-color 0.2s',
+            }}
+          />
+          {error && (
+            <div
+              style={{
+                fontSize: '12px',
+                color: 'rgba(248, 113, 113, 0.9)',
+                marginTop: '8px',
+              }}
+            >
+              {error}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                flex: 1,
+                padding: '11px',
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                color: 'rgba(255,255,255,0.5)',
+                fontSize: '13px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'border-color 0.2s, color 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.32)'
+                e.currentTarget.style.color = 'rgba(255,255,255,0.75)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'
+                e.currentTarget.style.color = 'rgba(255,255,255,0.5)'
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              style={{
+                flex: 2,
+                padding: '11px',
+                background: 'rgba(192, 132, 252, 0.14)',
+                border: '1px solid rgba(192, 132, 252, 0.38)',
+                borderRadius: '10px',
+                color: '#c084fc',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'background 0.2s, border-color 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(192, 132, 252, 0.24)'
+                e.currentTarget.style.borderColor = 'rgba(192, 132, 252, 0.6)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(192, 132, 252, 0.14)'
+                e.currentTarget.style.borderColor = 'rgba(192, 132, 252, 0.38)'
+              }}
+            >
+              確認進入
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  const [unlocked, setUnlocked] = useState(() => localStorage.getItem(STORAGE_KEY) === '1')
+  const [modal, setModal] = useState<{ visible: boolean; pendingUrl: string }>({
+    visible: false,
+    pendingUrl: '',
+  })
+
+  const handleLinkClick = useCallback(
+    (url: string, isPrivate: boolean) => {
+      if (!isPrivate || unlocked) {
+        window.open(url, '_blank', 'noopener,noreferrer')
+        return
+      }
+      setModal({ visible: true, pendingUrl: url })
+    },
+    [unlocked],
+  )
+
+  const handleModalSuccess = useCallback(() => {
+    setUnlocked(true)
+    setModal({ visible: false, pendingUrl: '' })
+  }, [])
+
+  const handleModalCancel = useCallback(() => {
+    setModal({ visible: false, pendingUrl: '' })
+  }, [])
+
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#050814', position: 'relative', overflow: 'hidden' }}>
       <Canvas
@@ -330,7 +575,7 @@ export default function App() {
           </div>
         }
       >
-        <Scene />
+        <Scene onLinkClick={handleLinkClick} />
       </Canvas>
 
       <div
@@ -370,7 +615,7 @@ export default function App() {
             marginBottom: 0,
           }}
         >
-          Hover Landmarks to Explore Projects
+          Hover to explore · Click to enter
         </p>
       </div>
 
@@ -397,6 +642,14 @@ export default function App() {
           Drag to orbit · Scroll to zoom
         </p>
       </div>
+
+      {modal.visible && (
+        <PasswordModal
+          pendingUrl={modal.pendingUrl}
+          onSuccess={handleModalSuccess}
+          onCancel={handleModalCancel}
+        />
+      )}
     </div>
   )
 }
