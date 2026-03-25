@@ -55,14 +55,19 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 A full-screen 3D GIS portal built with React + Three.js (via @react-three/fiber and @react-three/drei). Serves at `/` (root).
 
-- Pure frontend, no backend required
-- Point cloud terrain: `src/App.tsx` — 100×100 grid BufferGeometry with sine/cosine height displacement, rendered as cyan `<points>` (no solid mesh)
-- 700 floating ambient particles rotating slowly above terrain
-- 6 landmark markers (light pillars + inverted cones) with hover states — each links to a real project URL
-- Glassmorphism info cards on hover: `backdrop-filter: blur(12px)`, transparent border, white text, clickable links
-- Auto-rotating `OrbitControls` with polar angle clamping
-- Projects linked: 人生進度管理系統, 健身追蹤, 扭曲的夢境, 圖根點管理系統, 土地移轉分析系統, 案件排程系統
-- Dependencies: `three`, `@react-three/fiber`, `@react-three/drei`, `@types/three`
+- Pure frontend, no backend required; title: "AI工具入口網"
+- Point cloud terrain: 101×101 grid BufferGeometry with sine/cosine height displacement, rendered as `<points>` (no solid mesh)
+- 700 floating ambient particles, auto-rotating OrbitControls
+- Sites stored in localStorage (`portal_sites` key); defaults to 6 built-in projects
+- Clicking a 3D landmark directly opens the site's primary URL (no popup buttons needed)
+- Always-visible name labels above each landmark; hover card shows info + secondary links only
+- Public/private classification: cyan (#00e5ff) vs purple (#c084fc) labels
+- Private sites: password modal on first visit, device remembered via `portal_unlocked` localStorage key
+- Version history panel: bottom-left collapsible, hardcoded `VERSION_HISTORY` array (update before each release)
+- Admin panel: bottom-right ⚙ button → password auth (`85097110`) → full CRUD (add/edit/delete sites, set name/subtitle/links/public-private)
+- Single password `85097110` for everything (private access + admin)
+- Admin positions auto-assigned from `POSITION_POOL` for new sites
+- Dependencies (all devDependencies): `three`, `@react-three/fiber`, `@react-three/drei`, `@types/three`
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 
