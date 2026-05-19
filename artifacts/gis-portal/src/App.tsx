@@ -2,6 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Html } from '@react-three/drei'
 import { useRef, useState, useMemo, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
+import { motion, AnimatePresence } from 'framer-motion'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -972,6 +973,326 @@ function VersionHistory() {
 }
 
 // ─────────────────────────────────────────────
+// Arcade Mode — Street Fighter character select
+// ─────────────────────────────────────────────
+const ARCADE_AVATARS = ['⚡', '🔮', '🌐', '📊', '🗺️', '💫', '🎯', '🏆', '⚔️', '🛡️', '🧭', '🔬']
+
+function ArcadeFighterCard({
+  site,
+  index,
+  unlocked,
+  onSelect,
+}: {
+  site: SiteData
+  index: number
+  unlocked: boolean
+  onSelect: (site: SiteData) => void
+}) {
+  const [clicked, setClicked] = useState(false)
+  const [hoverLabel, setHoverLabel] = useState(false)
+  const isLocked = site.isPrivate && !unlocked
+  const color = site.isPrivate ? '#c084fc' : '#00e5ff'
+  const colorMid = site.isPrivate ? 'rgba(192,132,252,0.4)' : 'rgba(0,229,255,0.4)'
+  const colorDim = site.isPrivate ? 'rgba(192,132,252,0.12)' : 'rgba(0,229,255,0.12)'
+  const glowClass = site.isPrivate ? 'arcade-card-purple' : 'arcade-card-cyan'
+  const avatar = ARCADE_AVATARS[index % ARCADE_AVATARS.length]
+  const hpPercent = Math.min(100, Math.max(20, (site.links.length / 4) * 100))
+
+  const handleClick = () => {
+    setClicked(true)
+    setTimeout(() => {
+      setClicked(false)
+      onSelect(site)
+    }, 300)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.055, duration: 0.32, ease: 'easeOut' }}
+    >
+      <div
+        className={`arcade-card ${glowClass}`}
+        onMouseEnter={() => setHoverLabel(true)}
+        onMouseLeave={() => setHoverLabel(false)}
+        onClick={handleClick}
+      >
+        {clicked && <div className="arcade-fight-flash" />}
+
+        {/* Portrait */}
+        <div style={{
+          background: `radial-gradient(ellipse at center, ${colorDim} 0%, rgba(5,8,20,0.95) 75%)`,
+          height: '88px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '2.2rem',
+          borderBottom: `1px solid ${colorMid}`,
+          position: 'relative',
+        }}>
+          <span style={{
+            filter: hoverLabel ? `drop-shadow(0 0 10px ${color})` : 'none',
+            transition: 'filter 0.2s',
+            lineHeight: 1,
+          }}>
+            {isLocked ? '🔒' : avatar}
+          </span>
+          <div style={{
+            position: 'absolute', top: 5, left: 7,
+            color: colorMid, fontSize: '0.42rem',
+            fontFamily: '"Press Start 2P", monospace',
+          }}>
+            {String(index + 1).padStart(2, '0')}
+          </div>
+          {hoverLabel && (
+            <div style={{
+              position: 'absolute', top: 5, right: 7,
+              color, fontSize: '0.4rem',
+              fontFamily: '"Press Start 2P", monospace',
+              animation: 'cursor-blink 0.65s infinite',
+            }}>
+              ▶ SELECT
+            </div>
+          )}
+        </div>
+
+        {/* Name plate */}
+        <div style={{ padding: '8px 9px 7px', background: 'rgba(0,0,0,0.25)' }}>
+          <div style={{
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: 'clamp(0.38rem, 1vw, 0.55rem)',
+            color,
+            textShadow: `0 0 8px ${color}`,
+            letterSpacing: '0.04em',
+            lineHeight: 1.5,
+            marginBottom: '3px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {site.name}
+          </div>
+          {site.subtitle && (
+            <div style={{
+              fontFamily: '"Press Start 2P", monospace',
+              fontSize: '0.34rem',
+              color: 'rgba(255,255,255,0.38)',
+              letterSpacing: '0.02em',
+              marginBottom: '7px',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {site.subtitle}
+            </div>
+          )}
+
+          {/* HP / links bar */}
+          <div style={{ marginBottom: '6px' }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              marginBottom: '3px',
+            }}>
+              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.32rem', color: 'rgba(255,255,255,0.35)' }}>LINKS</span>
+              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.32rem', color: colorMid }}>{site.links.length}</span>
+            </div>
+            <div style={{
+              height: '4px',
+              background: 'rgba(255,255,255,0.07)',
+              border: `1px solid ${colorMid}`,
+              borderRadius: '1px', overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%', width: `${hpPercent}%`,
+                background: `linear-gradient(90deg, ${color}, ${colorMid})`,
+                boxShadow: `0 0 5px ${color}`,
+                transition: 'width 0.5s ease',
+              }} />
+            </div>
+          </div>
+
+          {/* Badge */}
+          <div style={{
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: '0.32rem',
+            color: isLocked ? '#fbbf24' : color,
+            letterSpacing: '0.06em',
+            textAlign: 'right',
+          }}>
+            {isLocked ? '🔐 LOCKED' : (site.isPrivate ? '▶ PRIVATE' : '◆ PUBLIC')}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function ArcadeListView({
+  sites,
+  unlocked,
+  onSiteSelect,
+}: {
+  sites: SiteData[]
+  unlocked: boolean
+  onSiteSelect: (site: SiteData) => void
+}) {
+  const publicSites = sites.filter(s => !s.isPrivate)
+  const privateSites = sites.filter(s => s.isPrivate)
+
+  return (
+    <div className="arcade-bg" style={{
+      width: '100%', height: '100%',
+      position: 'absolute', inset: 0,
+      display: 'flex', flexDirection: 'column',
+      overflowY: 'auto',
+    }}>
+      <div className="arcade-scanlines" />
+
+      {/* Sticky header */}
+      <div style={{
+        padding: '1.25rem 2rem 1rem',
+        textAlign: 'center',
+        borderBottom: '2px solid rgba(0,229,255,0.15)',
+        background: 'rgba(5,8,20,0.88)',
+        backdropFilter: 'blur(6px)',
+        flexShrink: 0,
+        position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        <div style={{
+          fontFamily: '"Press Start 2P", monospace',
+          fontSize: 'clamp(0.65rem, 2vw, 1rem)',
+          color: '#00e5ff',
+          textShadow: '0 0 20px rgba(0,229,255,0.85), 0 0 40px rgba(0,229,255,0.4)',
+          letterSpacing: '0.08em',
+          animation: 'header-flicker 9s infinite',
+          marginBottom: '0.45rem',
+        }}>
+          SELECT YOUR PORTAL
+          <span style={{ animation: 'cursor-blink 0.8s infinite', marginLeft: '2px' }}>_</span>
+        </div>
+        <div style={{
+          fontFamily: '"Press Start 2P", monospace',
+          fontSize: 'clamp(0.3rem, 0.8vw, 0.42rem)',
+          color: 'rgba(255,255,255,0.3)',
+          letterSpacing: '0.1em',
+        }}>
+          AI工具入口網 &nbsp;•&nbsp; {sites.length} PORTALS AVAILABLE
+        </div>
+        {/* Decorative bar */}
+        <div style={{
+          margin: '0.65rem auto 0',
+          maxWidth: '260px', height: '2px',
+          background: 'linear-gradient(90deg, transparent, #00e5ff, transparent)',
+          boxShadow: '0 0 8px rgba(0,229,255,0.5)',
+        }} />
+      </div>
+
+      {/* Zone grid */}
+      <div style={{ flex: 1, padding: '1.25rem 1.5rem 5rem', overflowY: 'auto', position: 'relative', zIndex: 2 }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '1.5rem',
+          maxWidth: '1100px',
+          margin: '0 auto',
+        }}>
+
+          {/* Public zone */}
+          <div>
+            <div style={{
+              fontFamily: '"Press Start 2P", monospace',
+              fontSize: 'clamp(0.4rem, 1.1vw, 0.58rem)',
+              color: '#00e5ff',
+              textShadow: '0 0 12px rgba(0,229,255,0.6)',
+              letterSpacing: '0.28em',
+              textAlign: 'center',
+              padding: '0.55rem',
+              borderBottom: '1px solid rgba(0,229,255,0.22)',
+              marginBottom: '0.9rem',
+              background: 'rgba(0,229,255,0.03)',
+              borderRadius: '2px 2px 0 0',
+            }}>
+              ◆ 公 領 域 ◆
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.65rem' }}>
+              {publicSites.length > 0
+                ? publicSites.map((site, i) => (
+                    <ArcadeFighterCard
+                      key={site.id}
+                      site={site}
+                      index={i}
+                      unlocked={unlocked}
+                      onSelect={onSiteSelect}
+                    />
+                  ))
+                : (
+                    <div style={{
+                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.42rem',
+                      color: 'rgba(255,255,255,0.18)', padding: '2rem', textAlign: 'center',
+                    }}>
+                      NO DATA
+                    </div>
+                  )
+              }
+            </div>
+          </div>
+
+          {/* Private zone */}
+          <div>
+            <div style={{
+              fontFamily: '"Press Start 2P", monospace',
+              fontSize: 'clamp(0.4rem, 1.1vw, 0.58rem)',
+              color: '#c084fc',
+              textShadow: '0 0 12px rgba(192,132,252,0.6)',
+              letterSpacing: '0.28em',
+              textAlign: 'center',
+              padding: '0.55rem',
+              borderBottom: '1px solid rgba(192,132,252,0.22)',
+              marginBottom: '0.9rem',
+              background: 'rgba(192,132,252,0.03)',
+              borderRadius: '2px 2px 0 0',
+            }}>
+              ▶ 私 領 域 ▶
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.65rem' }}>
+              {privateSites.length > 0
+                ? privateSites.map((site, i) => (
+                    <ArcadeFighterCard
+                      key={site.id}
+                      site={site}
+                      index={i + publicSites.length}
+                      unlocked={unlocked}
+                      onSelect={onSiteSelect}
+                    />
+                  ))
+                : (
+                    <div style={{
+                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.42rem',
+                      color: 'rgba(255,255,255,0.18)', padding: '2rem', textAlign: 'center',
+                    }}>
+                      NO DATA
+                    </div>
+                  )
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer hint */}
+      <div style={{
+        position: 'absolute', bottom: '1.5rem', left: 0, right: 0,
+        textAlign: 'center', pointerEvents: 'none', zIndex: 3,
+      }}>
+        <div style={{
+          fontFamily: '"Press Start 2P", monospace',
+          fontSize: '0.34rem',
+          color: 'rgba(255,255,255,0.16)',
+          letterSpacing: '0.15em',
+        }}>
+          ◄ CLICK TO SELECT &nbsp;•&nbsp; 🔐 = PRIVATE LOCKED ►
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // App
 // ─────────────────────────────────────────────
 export default function App() {
@@ -981,6 +1302,8 @@ export default function App() {
   const [adminAuth, setAdminAuth] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
+  const [viewMode, setViewMode] = useState<'3d' | 'arcade'>('3d')
+  const [modeFlash, setModeFlash] = useState<string | null>(null)
 
   const refreshSites = useCallback(async () => {
     try {
@@ -1039,59 +1362,174 @@ export default function App() {
     await refreshSites()
   }, [adminPassword, refreshSites])
 
+  const handleViewToggle = useCallback(() => {
+    const next = viewMode === '3d' ? 'arcade' : '3d'
+    const label = next === 'arcade' ? 'ARCADE!' : 'FIGHT!'
+    setModeFlash(label)
+    setTimeout(() => {
+      setViewMode(next)
+      setModeFlash(null)
+    }, 280)
+  }, [viewMode])
+
+  const isArcade = viewMode === 'arcade'
+
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#050814', position: 'relative', overflow: 'hidden' }}>
-      <Canvas
-        camera={{ position: [0, 10, 16], fov: 60, near: 0.1, far: 200 }}
-        style={{ display: 'block' }}
-        gl={{ antialias: true }}
-        fallback={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#00e5ff', fontFamily: 'Helvetica Neue, sans-serif', textAlign: 'center' }}>
-            <div>
-              <div style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>WebGL Not Available</div>
-              <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)' }}>Please use a modern browser with WebGL support.</div>
+
+      {/* ── Animated view layers ── */}
+      <AnimatePresence mode="wait">
+        {viewMode === '3d' ? (
+          <motion.div
+            key="view-3d"
+            initial={{ opacity: 0, scale: 1.04 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, y: 40 }}
+            transition={{ duration: 0.38, ease: 'easeInOut' }}
+            style={{ position: 'absolute', inset: 0 }}
+          >
+            <Canvas
+              camera={{ position: [0, 10, 16], fov: 60, near: 0.1, far: 200 }}
+              style={{ display: 'block' }}
+              gl={{ antialias: true }}
+              fallback={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#00e5ff', fontFamily: 'Helvetica Neue, sans-serif', textAlign: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>WebGL Not Available</div>
+                    <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)' }}>Please use a modern browser with WebGL support.</div>
+                  </div>
+                </div>
+              }
+            >
+              <Scene sites={sites} onSiteClick={handleSiteClick} onUrlClick={handleUrlClick} />
+            </Canvas>
+
+            {/* Header */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0,
+              padding: '2rem 2rem 4rem', textAlign: 'center', pointerEvents: 'none',
+              background: 'linear-gradient(to bottom, rgba(5,8,20,0.85) 0%, rgba(5,8,20,0.2) 70%, transparent 100%)',
+            }}>
+              <h1 style={{
+                color: '#00e5ff', fontSize: 'clamp(1.2rem, 3vw, 2rem)',
+                fontWeight: '300', letterSpacing: '0.3em', textTransform: 'uppercase',
+                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                margin: 0, textShadow: '0 0 40px rgba(0, 229, 255, 0.45)',
+              }}>
+                AI工具入口網
+              </h1>
+              <p style={{
+                color: 'rgba(255,255,255,0.38)', fontSize: '0.7rem',
+                letterSpacing: '0.28em', textTransform: 'uppercase',
+                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                marginTop: '0.55rem', marginBottom: 0,
+              }}>
+                點擊地標 · 立即進入
+              </p>
             </div>
-          </div>
-        }
-      >
-        {/* Scene always renders — terrain & particles visible immediately.
-            Landmarks appear as soon as the API fetch resolves (sites.length > 0). */}
-        <Scene sites={sites} onSiteClick={handleSiteClick} onUrlClick={handleUrlClick} />
-      </Canvas>
 
-      {/* Header */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0,
-        padding: '2rem 2rem 4rem', textAlign: 'center', pointerEvents: 'none',
-        background: 'linear-gradient(to bottom, rgba(5,8,20,0.85) 0%, rgba(5,8,20,0.2) 70%, transparent 100%)',
-      }}>
-        <h1 style={{
-          color: '#00e5ff', fontSize: 'clamp(1.2rem, 3vw, 2rem)',
-          fontWeight: '300', letterSpacing: '0.3em', textTransform: 'uppercase',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-          margin: 0, textShadow: '0 0 40px rgba(0, 229, 255, 0.45)',
-        }}>
-          AI工具入口網
-        </h1>
-        <p style={{
-          color: 'rgba(255,255,255,0.38)', fontSize: '0.7rem',
-          letterSpacing: '0.28em', textTransform: 'uppercase',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-          marginTop: '0.55rem', marginBottom: 0,
-        }}>
-          點擊地標 · 立即進入
-        </p>
-      </div>
+            {/* Bottom hint */}
+            <div style={{ position: 'absolute', bottom: '1.5rem', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
+              <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif', margin: 0 }}>
+                Drag to orbit · Scroll to zoom
+              </p>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="view-arcade"
+            initial={{ opacity: 0, y: 60 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 60 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            style={{ position: 'absolute', inset: 0 }}
+          >
+            <ArcadeListView
+              sites={sites}
+              unlocked={unlocked}
+              onSiteSelect={handleSiteClick}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Bottom hint */}
-      <div style={{ position: 'absolute', bottom: '1.5rem', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
-        <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif', margin: 0 }}>
-          Drag to orbit · Scroll to zoom
-        </p>
-      </div>
+      {/* ── Mode flash overlay ── */}
+      <AnimatePresence>
+        {modeFlash && (
+          <motion.div
+            key="flash"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.14 }}
+            style={{
+              position: 'absolute', inset: 0, zIndex: 200,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: isArcade ? 'rgba(192,132,252,0.12)' : 'rgba(0,229,255,0.12)',
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{
+              fontFamily: '"Press Start 2P", monospace',
+              fontSize: 'clamp(1.8rem, 5vw, 3.5rem)',
+              color: isArcade ? '#c084fc' : '#00e5ff',
+              textShadow: isArcade
+                ? '0 0 30px rgba(192,132,252,0.9), 0 0 60px rgba(192,132,252,0.5)'
+                : '0 0 30px rgba(0,229,255,0.9), 0 0 60px rgba(0,229,255,0.5)',
+              letterSpacing: '0.1em',
+            }}>
+              {modeFlash}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Always-on-top chrome ── */}
 
       {/* Version history — bottom left */}
       <VersionHistory />
+
+      {/* View mode toggle — bottom center */}
+      <button
+        onClick={handleViewToggle}
+        title={isArcade ? '切換 3D 地標模式' : '切換街機清單模式'}
+        style={{
+          position: 'absolute', bottom: '1.5rem', left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 100,
+          background: isArcade
+            ? 'rgba(192,132,252,0.12)'
+            : 'rgba(0,229,255,0.08)',
+          backdropFilter: 'blur(10px)',
+          border: `1px solid ${isArcade ? 'rgba(192,132,252,0.4)' : 'rgba(0,229,255,0.3)'}`,
+          borderRadius: '6px',
+          color: isArcade ? '#c084fc' : '#00e5ff',
+          fontFamily: '"Press Start 2P", monospace',
+          fontSize: 'clamp(0.38rem, 1vw, 0.52rem)',
+          letterSpacing: '0.08em',
+          padding: '8px 14px',
+          cursor: 'pointer',
+          lineHeight: 1,
+          boxShadow: isArcade
+            ? '0 0 12px rgba(192,132,252,0.3)'
+            : '0 0 12px rgba(0,229,255,0.2)',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.boxShadow = isArcade
+            ? '0 0 22px rgba(192,132,252,0.55)'
+            : '0 0 22px rgba(0,229,255,0.45)'
+          e.currentTarget.style.transform = 'translateX(-50%) scale(1.05)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.boxShadow = isArcade
+            ? '0 0 12px rgba(192,132,252,0.3)'
+            : '0 0 12px rgba(0,229,255,0.2)'
+          e.currentTarget.style.transform = 'translateX(-50%) scale(1)'
+        }}
+      >
+        {isArcade ? '🌐 3D MODE' : '🕹 ARCADE'}
+      </button>
 
       {/* Admin button — bottom right */}
       <button

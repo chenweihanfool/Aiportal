@@ -12,3 +12,117 @@ body,
 * {
   box-sizing: border-box;
 }
+
+/* ─── Arcade Mode ─── */
+
+.arcade-bg {
+  background:
+    radial-gradient(ellipse at 25% 50%, rgba(0,229,255,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 75% 50%, rgba(192,132,252,0.04) 0%, transparent 60%),
+    #050814;
+}
+
+.arcade-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.arcade-scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.08) 3px,
+    rgba(0,0,0,0.08) 4px
+  );
+}
+
+.arcade-card {
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  background: rgba(5, 8, 20, 0.9);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.arcade-card:hover {
+  transform: translateY(-3px) scale(1.035);
+}
+
+.arcade-card-cyan {
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  animation: pixel-glow-cyan 2.5s ease-in-out infinite;
+}
+
+.arcade-card-cyan:hover {
+  box-shadow: 0 0 20px rgba(0,229,255,0.45), 0 8px 24px rgba(0,0,0,0.5) !important;
+}
+
+.arcade-card-purple {
+  border: 1px solid rgba(192, 132, 252, 0.35);
+  animation: pixel-glow-purple 2.5s ease-in-out infinite;
+}
+
+.arcade-card-purple:hover {
+  box-shadow: 0 0 20px rgba(192,132,252,0.45), 0 8px 24px rgba(0,0,0,0.5) !important;
+}
+
+.arcade-fight-flash {
+  position: absolute;
+  inset: 0;
+  background: white;
+  z-index: 10;
+  animation: fight-flash 0.35s ease forwards;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+@keyframes pixel-glow-cyan {
+  0%, 100% { box-shadow: 0 0 6px rgba(0,229,255,0.25), inset 0 0 6px rgba(0,229,255,0.03); }
+  50%       { box-shadow: 0 0 14px rgba(0,229,255,0.5), inset 0 0 10px rgba(0,229,255,0.07); }
+}
+
+@keyframes pixel-glow-purple {
+  0%, 100% { box-shadow: 0 0 6px rgba(192,132,252,0.25), inset 0 0 6px rgba(192,132,252,0.03); }
+  50%       { box-shadow: 0 0 14px rgba(192,132,252,0.5), inset 0 0 10px rgba(192,132,252,0.07); }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes fight-flash {
+  0%   { opacity: 0; }
+  20%  { opacity: 0.85; }
+  80%  { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+@keyframes header-flicker {
+  0%, 93%, 100% { opacity: 1; }
+  94%  { opacity: 0.35; }
+  95%  { opacity: 1; }
+  97%  { opacity: 0.25; }
+  98%  { opacity: 1; }
+}
+
+@keyframes mode-flash {
+  0%   { opacity: 0; }
+  25%  { opacity: 1; }
+  75%  { opacity: 1; }
+  100% { opacity: 0; }
+}
