@@ -1035,9 +1035,9 @@ function ArcadeFighterCard({
         {/* Portrait */}
         <div style={{
           background: `radial-gradient(ellipse at center, ${colorDim} 0%, rgba(5,8,20,0.95) 75%)`,
-          height: '88px',
+          height: '110px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '2.2rem',
+          fontSize: '2.8rem',
           borderBottom: `1px solid ${colorMid}`,
           position: 'relative',
         }}>
@@ -1050,7 +1050,7 @@ function ArcadeFighterCard({
           </span>
           <div style={{
             position: 'absolute', top: 5, left: 7,
-            color: colorMid, fontSize: '0.42rem',
+            color: colorMid, fontSize: '0.6rem',
             fontFamily: '"Press Start 2P", monospace',
           }}>
             {String(index + 1).padStart(2, '0')}
@@ -1058,7 +1058,7 @@ function ArcadeFighterCard({
           {hoverLabel && (
             <div style={{
               position: 'absolute', top: 5, right: 7,
-              color, fontSize: '0.4rem',
+              color, fontSize: '0.55rem',
               fontFamily: '"Press Start 2P", monospace',
               animation: 'cursor-blink 0.65s infinite',
             }}>
@@ -1071,12 +1071,12 @@ function ArcadeFighterCard({
         <div style={{ padding: '8px 9px 7px', background: 'rgba(0,0,0,0.25)' }}>
           <div style={{
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: 'clamp(0.38rem, 1vw, 0.55rem)',
+            fontSize: 'clamp(0.6rem, 1.4vw, 0.82rem)',
             color,
             textShadow: `0 0 8px ${color}`,
             letterSpacing: '0.04em',
             lineHeight: 1.5,
-            marginBottom: '3px',
+            marginBottom: '5px',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {site.name}
@@ -1084,10 +1084,10 @@ function ArcadeFighterCard({
           {site.subtitle && (
             <div style={{
               fontFamily: '"Press Start 2P", monospace',
-              fontSize: '0.34rem',
+              fontSize: 'clamp(0.48rem, 1vw, 0.62rem)',
               color: 'rgba(255,255,255,0.38)',
               letterSpacing: '0.02em',
-              marginBottom: '7px',
+              marginBottom: '8px',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {site.subtitle}
@@ -1100,8 +1100,8 @@ function ArcadeFighterCard({
               display: 'flex', justifyContent: 'space-between',
               marginBottom: '3px',
             }}>
-              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.32rem', color: 'rgba(255,255,255,0.35)' }}>LINKS</span>
-              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.32rem', color: colorMid }}>{site.links.length}</span>
+              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.52rem', color: 'rgba(255,255,255,0.35)' }}>LINKS</span>
+              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.52rem', color: colorMid }}>{site.links.length}</span>
             </div>
             <div style={{
               height: '4px',
@@ -1121,7 +1121,7 @@ function ArcadeFighterCard({
           {/* Badge */}
           <div style={{
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: '0.32rem',
+            fontSize: '0.52rem',
             color: isLocked ? '#fbbf24' : color,
             letterSpacing: '0.06em',
             textAlign: 'right',
@@ -1167,19 +1167,19 @@ function ArcadeListView({
       }}>
         <div style={{
           fontFamily: '"Press Start 2P", monospace',
-          fontSize: 'clamp(0.65rem, 2vw, 1rem)',
+          fontSize: 'clamp(1rem, 2.5vw, 1.5rem)',
           color: '#00e5ff',
           textShadow: '0 0 20px rgba(0,229,255,0.85), 0 0 40px rgba(0,229,255,0.4)',
           letterSpacing: '0.08em',
           animation: 'header-flicker 9s infinite',
-          marginBottom: '0.45rem',
+          marginBottom: '0.55rem',
         }}>
           SELECT YOUR PORTAL
           <span style={{ animation: 'cursor-blink 0.8s infinite', marginLeft: '2px' }}>_</span>
         </div>
         <div style={{
           fontFamily: '"Press Start 2P", monospace',
-          fontSize: 'clamp(0.3rem, 0.8vw, 0.42rem)',
+          fontSize: 'clamp(0.5rem, 1vw, 0.65rem)',
           color: 'rgba(255,255,255,0.3)',
           letterSpacing: '0.1em',
         }}>
@@ -1208,7 +1208,7 @@ function ArcadeListView({
           <div>
             <div style={{
               fontFamily: '"Press Start 2P", monospace',
-              fontSize: 'clamp(0.4rem, 1.1vw, 0.58rem)',
+              fontSize: 'clamp(0.65rem, 1.4vw, 0.85rem)',
               color: '#00e5ff',
               textShadow: '0 0 12px rgba(0,229,255,0.6)',
               letterSpacing: '0.28em',
@@ -1221,7 +1221,7 @@ function ArcadeListView({
             }}>
               ◆ 公 領 域 ◆
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.65rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '0.9rem' }}>
               {publicSites.length > 0
                 ? publicSites.map((site, i) => (
                     <ArcadeFighterCard
@@ -1234,7 +1234,7 @@ function ArcadeListView({
                   ))
                 : (
                     <div style={{
-                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.42rem',
+                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.65rem',
                       color: 'rgba(255,255,255,0.18)', padding: '2rem', textAlign: 'center',
                     }}>
                       NO DATA
@@ -1248,7 +1248,7 @@ function ArcadeListView({
           <div>
             <div style={{
               fontFamily: '"Press Start 2P", monospace',
-              fontSize: 'clamp(0.4rem, 1.1vw, 0.58rem)',
+              fontSize: 'clamp(0.65rem, 1.4vw, 0.85rem)',
               color: '#c084fc',
               textShadow: '0 0 12px rgba(192,132,252,0.6)',
               letterSpacing: '0.28em',
@@ -1261,7 +1261,7 @@ function ArcadeListView({
             }}>
               ▶ 私 領 域 ▶
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.65rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '0.9rem' }}>
               {privateSites.length > 0
                 ? privateSites.map((site, i) => (
                     <ArcadeFighterCard
@@ -1274,7 +1274,7 @@ function ArcadeListView({
                   ))
                 : (
                     <div style={{
-                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.42rem',
+                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.65rem',
                       color: 'rgba(255,255,255,0.18)', padding: '2rem', textAlign: 'center',
                     }}>
                       NO DATA
@@ -1293,9 +1293,9 @@ function ArcadeListView({
       }}>
         <div style={{
           fontFamily: '"Press Start 2P", monospace',
-          fontSize: '0.34rem',
+          fontSize: '0.55rem',
           color: 'rgba(255,255,255,0.16)',
-          letterSpacing: '0.15em',
+          letterSpacing: '0.12em',
         }}>
           ◄ CLICK TO SELECT &nbsp;•&nbsp; 🔐 = PRIVATE LOCKED ►
         </div>
@@ -1314,7 +1314,7 @@ export default function App() {
   const [adminAuth, setAdminAuth] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
-  const [viewMode, setViewMode] = useState<'3d' | 'arcade'>('3d')
+  const [viewMode, setViewMode] = useState<'3d' | 'arcade'>('arcade')
   const [modeFlash, setModeFlash] = useState<string | null>(null)
 
   const refreshSites = useCallback(async () => {
