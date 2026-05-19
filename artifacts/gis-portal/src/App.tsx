@@ -25,6 +25,18 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.5.0',
+    date: '2026-05-19',
+    summary: '街機電玩 UI · 動畫視圖切換',
+    changes: [
+      '新增快打旋風風格的街機角色選擇清單（Arcade Mode）',
+      '地標以格鬥士肖像卡呈現，含 HP 條、公私領域分區',
+      'CRT 掃描線、pixel grid 背景與 Press Start 2P 像素字體',
+      '底部切換鈕一鍵在 3D 地標與街機清單間動畫過渡',
+      '切換時顯示 ARCADE! / FIGHT! 霓虹閃光效果',
+    ],
+  },
+  {
     version: '1.4.0',
     date: '2026-03-25',
     summary: '龍捲風粒子 · 即時渲染修正',
