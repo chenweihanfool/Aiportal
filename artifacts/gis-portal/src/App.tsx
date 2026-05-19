@@ -25,6 +25,18 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.6.0',
+    date: '2026-05-19',
+    summary: '毛玻璃粒子 Portal UI · 全息重設計',
+    changes: [
+      '以透明毛玻璃（Glassmorphism）取代街機風格，全頁不捲動',
+      '背景粒子網格：72 個浮動粒子 + 連線，游標吸引特效',
+      '卡片 backdrop-filter blur + 頂部光暈線，hover 浮升動效',
+      '公/私領域以垂直分隔線區分，細膩光暈 zone label',
+      'grid-auto-rows: 1fr 確保所有卡片一頁完整呈現',
+    ],
+  },
+  {
     version: '1.5.0',
     date: '2026-05-19',
     summary: '街機電玩 UI · 動畫視圖切換',
@@ -985,11 +997,88 @@ function VersionHistory() {
 }
 
 // ─────────────────────────────────────────────
-// Arcade Mode — Street Fighter character select
+// Glass Portal View — Glassmorphism + Particles
 // ─────────────────────────────────────────────
-const ARCADE_AVATARS = ['⚡', '🔮', '🌐', '📊', '🗺️', '💫', '🎯', '🏆', '⚔️', '🛡️', '🧭', '🔬']
+const PORTAL_ICONS = ['⚡', '🔮', '🌐', '📊', '🗺️', '💫', '🎯', '🏆', '⚔️', '🛡️', '🧭', '🔬']
 
-function ArcadeFighterCard({
+// Floating particle canvas — mouse-attracted dots + connecting lines
+function ParticleCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const mouseRef = useRef({ x: -9999, y: -9999 })
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    let animId: number
+
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
+    resize()
+    window.addEventListener('resize', resize)
+    const onMouse = (e: MouseEvent) => { mouseRef.current = { x: e.clientX, y: e.clientY } }
+    window.addEventListener('mousemove', onMouse)
+
+    const pts = Array.from({ length: 72 }, () => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - 0.5) * 0.38,
+      vy: (Math.random() - 0.5) * 0.38,
+      r: Math.random() * 1.3 + 0.5,
+      op: Math.random() * 0.32 + 0.10,
+    }))
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      const { x: mx, y: my } = mouseRef.current
+
+      for (const p of pts) {
+        const dx = mx - p.x, dy = my - p.y
+        const d = Math.hypot(dx, dy)
+        if (d < 170) { const f = (1 - d / 170) * 0.016; p.vx += dx * f; p.vy += dy * f }
+        const spd = Math.hypot(p.vx, p.vy)
+        if (spd > 1.5) { p.vx = p.vx / spd * 1.5; p.vy = p.vy / spd * 1.5 }
+        p.vx *= 0.987; p.vy *= 0.987
+        p.x += p.vx; p.y += p.vy
+        if (p.x < 0) p.x = canvas.width
+        if (p.x > canvas.width) p.x = 0
+        if (p.y < 0) p.y = canvas.height
+        if (p.y > canvas.height) p.y = 0
+
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, d < 130 ? p.r * 1.9 : p.r, 0, Math.PI * 2)
+        ctx.fillStyle = d < 130 ? `rgba(0,229,255,${p.op * 2.4})` : `rgba(160,210,255,${p.op})`
+        ctx.fill()
+      }
+
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const d = Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y)
+          if (d < 112) {
+            ctx.beginPath()
+            ctx.moveTo(pts[i].x, pts[i].y)
+            ctx.lineTo(pts[j].x, pts[j].y)
+            ctx.strokeStyle = `rgba(0,229,255,${(1 - d / 112) * 0.12})`
+            ctx.lineWidth = 0.55
+            ctx.stroke()
+          }
+        }
+      }
+      animId = requestAnimationFrame(draw)
+    }
+    draw()
+
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('resize', resize)
+      window.removeEventListener('mousemove', onMouse)
+    }
+  }, [])
+
+  return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }} />
+}
+
+function GlassCard({
   site,
   index,
   unlocked,
@@ -1001,140 +1090,117 @@ function ArcadeFighterCard({
   onSelect: (site: SiteData) => void
 }) {
   const [clicked, setClicked] = useState(false)
-  const [hoverLabel, setHoverLabel] = useState(false)
   const isLocked = site.isPrivate && !unlocked
-  const color = site.isPrivate ? '#c084fc' : '#00e5ff'
-  const colorMid = site.isPrivate ? 'rgba(192,132,252,0.4)' : 'rgba(0,229,255,0.4)'
-  const colorDim = site.isPrivate ? 'rgba(192,132,252,0.12)' : 'rgba(0,229,255,0.12)'
-  const glowClass = site.isPrivate ? 'arcade-card-purple' : 'arcade-card-cyan'
-  const avatar = ARCADE_AVATARS[index % ARCADE_AVATARS.length]
-  const hpPercent = Math.min(100, Math.max(20, (site.links.length / 4) * 100))
+  const accent = site.isPrivate ? '#c084fc' : '#00e5ff'
+  const rgb = site.isPrivate ? '192,132,252' : '0,229,255'
 
   const handleClick = () => {
+    if (clicked) return
     setClicked(true)
-    setTimeout(() => {
-      setClicked(false)
-      onSelect(site)
-    }, 300)
+    setTimeout(() => { setClicked(false); onSelect(site) }, 280)
   }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.055, duration: 0.32, ease: 'easeOut' }}
+      initial={{ opacity: 0, y: 18, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: index * 0.05, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.18 } }}
+      onClick={handleClick}
+      style={{
+        position: 'relative',
+        cursor: 'pointer',
+        background: 'rgba(255,255,255,0.055)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: `1px solid rgba(${rgb},0.22)`,
+        borderRadius: '16px',
+        padding: '0.9rem 0.85rem 0.75rem',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: `0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)`,
+        zIndex: 2,
+      }}
     >
-      <div
-        className={`arcade-card ${glowClass}`}
-        onMouseEnter={() => setHoverLabel(true)}
-        onMouseLeave={() => setHoverLabel(false)}
-        onClick={handleClick}
-      >
-        {clicked && <div className="arcade-fight-flash" />}
-
-        {/* Portrait */}
+      {clicked && (
         <div style={{
-          background: `radial-gradient(ellipse at center, ${colorDim} 0%, rgba(5,8,20,0.95) 75%)`,
-          height: '110px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '2.8rem',
-          borderBottom: `1px solid ${colorMid}`,
-          position: 'relative',
+          position: 'absolute', inset: 0, borderRadius: '16px',
+          background: `radial-gradient(circle at center, rgba(${rgb},0.32) 0%, transparent 70%)`,
+          animation: 'fight-flash 0.28s ease forwards',
+          pointerEvents: 'none', zIndex: 10,
+        }} />
+      )}
+      {/* Top shimmer line */}
+      <div style={{
+        position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px',
+        background: `linear-gradient(90deg, transparent, rgba(${rgb},0.6), transparent)`,
+      }} />
+
+      {/* Icon */}
+      <div style={{
+        fontSize: 'clamp(1.5rem, 2.4vw, 2rem)',
+        lineHeight: 1, marginBottom: '0.5rem',
+        filter: `drop-shadow(0 0 8px rgba(${rgb},0.55))`,
+      }}>
+        {isLocked ? '🔒' : PORTAL_ICONS[index % PORTAL_ICONS.length]}
+      </div>
+
+      {/* Name */}
+      <div style={{
+        color: accent,
+        fontSize: 'clamp(0.72rem, 1.15vw, 0.92rem)',
+        fontWeight: '600',
+        fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+        letterSpacing: '0.02em',
+        marginBottom: '0.2rem',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        textShadow: `0 0 12px rgba(${rgb},0.55)`,
+        lineHeight: 1.3,
+      }}>{site.name}</div>
+
+      {/* Subtitle */}
+      {site.subtitle && (
+        <div style={{
+          color: 'rgba(255,255,255,0.4)',
+          fontSize: 'clamp(0.58rem, 0.88vw, 0.7rem)',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          marginBottom: '0.4rem', lineHeight: 1.3,
+        }}>{site.subtitle}</div>
+      )}
+
+      <div style={{ flex: 1 }} />
+
+      {/* Footer */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        paddingTop: '0.45rem',
+        borderTop: `1px solid rgba(${rgb},0.13)`,
+        marginTop: '0.4rem',
+      }}>
+        <span style={{
+          color: 'rgba(255,255,255,0.28)',
+          fontSize: 'clamp(0.5rem, 0.78vw, 0.62rem)',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          letterSpacing: '0.06em',
         }}>
-          <span style={{
-            filter: hoverLabel ? `drop-shadow(0 0 10px ${color})` : 'none',
-            transition: 'filter 0.2s',
-            lineHeight: 1,
-          }}>
-            {isLocked ? '🔒' : avatar}
-          </span>
-          <div style={{
-            position: 'absolute', top: 5, left: 7,
-            color: colorMid, fontSize: '0.6rem',
-            fontFamily: '"Press Start 2P", monospace',
-          }}>
-            {String(index + 1).padStart(2, '0')}
-          </div>
-          {hoverLabel && (
-            <div style={{
-              position: 'absolute', top: 5, right: 7,
-              color, fontSize: '0.55rem',
-              fontFamily: '"Press Start 2P", monospace',
-              animation: 'cursor-blink 0.65s infinite',
-            }}>
-              ▶ SELECT
-            </div>
-          )}
-        </div>
-
-        {/* Name plate */}
-        <div style={{ padding: '8px 9px 7px', background: 'rgba(0,0,0,0.25)' }}>
-          <div style={{
-            fontFamily: '"Press Start 2P", monospace',
-            fontSize: 'clamp(0.6rem, 1.4vw, 0.82rem)',
-            color,
-            textShadow: `0 0 8px ${color}`,
-            letterSpacing: '0.04em',
-            lineHeight: 1.5,
-            marginBottom: '5px',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {site.name}
-          </div>
-          {site.subtitle && (
-            <div style={{
-              fontFamily: '"Press Start 2P", monospace',
-              fontSize: 'clamp(0.48rem, 1vw, 0.62rem)',
-              color: 'rgba(255,255,255,0.38)',
-              letterSpacing: '0.02em',
-              marginBottom: '8px',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {site.subtitle}
-            </div>
-          )}
-
-          {/* HP / links bar */}
-          <div style={{ marginBottom: '6px' }}>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between',
-              marginBottom: '3px',
-            }}>
-              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.52rem', color: 'rgba(255,255,255,0.35)' }}>LINKS</span>
-              <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: '0.52rem', color: colorMid }}>{site.links.length}</span>
-            </div>
-            <div style={{
-              height: '4px',
-              background: 'rgba(255,255,255,0.07)',
-              border: `1px solid ${colorMid}`,
-              borderRadius: '1px', overflow: 'hidden',
-            }}>
-              <div style={{
-                height: '100%', width: `${hpPercent}%`,
-                background: `linear-gradient(90deg, ${color}, ${colorMid})`,
-                boxShadow: `0 0 5px ${color}`,
-                transition: 'width 0.5s ease',
-              }} />
-            </div>
-          </div>
-
-          {/* Badge */}
-          <div style={{
-            fontFamily: '"Press Start 2P", monospace',
-            fontSize: '0.52rem',
-            color: isLocked ? '#fbbf24' : color,
-            letterSpacing: '0.06em',
-            textAlign: 'right',
-          }}>
-            {isLocked ? '🔐 LOCKED' : (site.isPrivate ? '▶ PRIVATE' : '◆ PUBLIC')}
-          </div>
-        </div>
+          {site.links.length} LINK{site.links.length !== 1 ? 'S' : ''}
+        </span>
+        <span style={{
+          color: isLocked ? '#fbbf24' : `rgba(${rgb},0.8)`,
+          fontSize: 'clamp(0.5rem, 0.78vw, 0.62rem)',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          letterSpacing: '0.05em', fontWeight: '500',
+        }}>
+          {isLocked ? '🔐 LOCKED' : (site.isPrivate ? 'PRIVATE' : 'PUBLIC')}
+        </span>
       </div>
     </motion.div>
   )
 }
 
-function ArcadeListView({
+function GlassPortalView({
   sites,
   unlocked,
   onSiteSelect,
@@ -1146,158 +1212,137 @@ function ArcadeListView({
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
 
+  const ZoneLabel = ({ label, color, rgb }: { label: string; color: string; rgb: string }) => (
+    <div style={{
+      color, letterSpacing: '0.32em',
+      fontSize: 'clamp(0.58rem, 0.9vw, 0.72rem)',
+      fontWeight: '300',
+      fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+      textTransform: 'uppercase',
+      textAlign: 'center',
+      paddingBottom: '0.5rem',
+      marginBottom: '0.7rem',
+      flexShrink: 0,
+      borderBottom: `1px solid rgba(${rgb},0.18)`,
+      textShadow: `0 0 14px rgba(${rgb},0.55)`,
+    }}>{label}</div>
+  )
+
   return (
-    <div className="arcade-bg" style={{
+    <div style={{
       width: '100%', height: '100%',
       position: 'absolute', inset: 0,
       display: 'flex', flexDirection: 'column',
-      overflowY: 'auto',
+      overflow: 'hidden',
+      background: 'radial-gradient(ellipse at 25% 50%, rgba(0,229,255,0.045) 0%, transparent 55%), radial-gradient(ellipse at 75% 50%, rgba(192,132,252,0.045) 0%, transparent 55%), #050814',
     }}>
-      <div className="arcade-scanlines" />
+      <ParticleCanvas />
 
-      {/* Sticky header */}
+      {/* Pixel grid */}
       <div style={{
-        padding: '1.25rem 2rem 1rem',
+        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1,
+        backgroundImage: 'linear-gradient(rgba(0,229,255,0.016) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.016) 1px, transparent 1px)',
+        backgroundSize: '42px 42px',
+      }} />
+
+      {/* Header */}
+      <div style={{
+        position: 'relative', zIndex: 3, flexShrink: 0,
+        padding: '1rem 2rem 0.85rem',
         textAlign: 'center',
-        borderBottom: '2px solid rgba(0,229,255,0.15)',
-        background: 'rgba(5,8,20,0.88)',
-        backdropFilter: 'blur(6px)',
-        flexShrink: 0,
-        position: 'sticky', top: 0, zIndex: 10,
+        background: 'rgba(5,8,20,0.55)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        borderBottom: '1px solid rgba(255,255,255,0.055)',
       }}>
-        <div style={{
-          fontFamily: '"Press Start 2P", monospace',
-          fontSize: 'clamp(1rem, 2.5vw, 1.5rem)',
-          color: '#00e5ff',
-          textShadow: '0 0 20px rgba(0,229,255,0.85), 0 0 40px rgba(0,229,255,0.4)',
-          letterSpacing: '0.08em',
-          animation: 'header-flicker 9s infinite',
-          marginBottom: '0.55rem',
+        <h1 style={{
+          color: '#00e5ff', margin: 0,
+          fontSize: 'clamp(1rem, 2.2vw, 1.4rem)',
+          fontWeight: '200',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          letterSpacing: '0.38em',
+          textTransform: 'uppercase',
+          textShadow: '0 0 28px rgba(0,229,255,0.7), 0 0 56px rgba(0,229,255,0.3)',
+          animation: 'header-flicker 10s infinite',
+        }}>AI 工具入口網</h1>
+        <p style={{
+          margin: '0.3rem 0 0',
+          color: 'rgba(255,255,255,0.26)',
+          fontSize: 'clamp(0.48rem, 0.85vw, 0.6rem)',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
         }}>
-          SELECT YOUR PORTAL
-          <span style={{ animation: 'cursor-blink 0.8s infinite', marginLeft: '2px' }}>_</span>
-        </div>
-        <div style={{
-          fontFamily: '"Press Start 2P", monospace',
-          fontSize: 'clamp(0.5rem, 1vw, 0.65rem)',
-          color: 'rgba(255,255,255,0.3)',
-          letterSpacing: '0.1em',
-        }}>
-          AI工具入口網 &nbsp;•&nbsp; {sites.length} PORTALS AVAILABLE
-        </div>
-        {/* Decorative bar */}
-        <div style={{
-          margin: '0.65rem auto 0',
-          maxWidth: '260px', height: '2px',
-          background: 'linear-gradient(90deg, transparent, #00e5ff, transparent)',
-          boxShadow: '0 0 8px rgba(0,229,255,0.5)',
-        }} />
+          {sites.length > 0 ? `${sites.length} portals available` : 'connecting...'}
+        </p>
       </div>
 
-      {/* Zone grid */}
-      <div style={{ flex: 1, padding: '1.25rem 1.5rem 5rem', overflowY: 'auto', position: 'relative', zIndex: 2 }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '1.5rem',
-          maxWidth: '1100px',
-          margin: '0 auto',
-        }}>
-
-          {/* Public zone */}
-          <div>
-            <div style={{
-              fontFamily: '"Press Start 2P", monospace',
-              fontSize: 'clamp(0.65rem, 1.4vw, 0.85rem)',
-              color: '#00e5ff',
-              textShadow: '0 0 12px rgba(0,229,255,0.6)',
-              letterSpacing: '0.28em',
-              textAlign: 'center',
-              padding: '0.55rem',
-              borderBottom: '1px solid rgba(0,229,255,0.22)',
-              marginBottom: '0.9rem',
-              background: 'rgba(0,229,255,0.03)',
-              borderRadius: '2px 2px 0 0',
-            }}>
-              ◆ 公 領 域 ◆
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '0.9rem' }}>
-              {publicSites.length > 0
-                ? publicSites.map((site, i) => (
-                    <ArcadeFighterCard
-                      key={site.id}
-                      site={site}
-                      index={i}
-                      unlocked={unlocked}
-                      onSelect={onSiteSelect}
-                    />
-                  ))
-                : (
-                    <div style={{
-                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.65rem',
-                      color: 'rgba(255,255,255,0.18)', padding: '2rem', textAlign: 'center',
-                    }}>
-                      NO DATA
-                    </div>
-                  )
-              }
-            </div>
-          </div>
-
-          {/* Private zone */}
-          <div>
-            <div style={{
-              fontFamily: '"Press Start 2P", monospace',
-              fontSize: 'clamp(0.65rem, 1.4vw, 0.85rem)',
-              color: '#c084fc',
-              textShadow: '0 0 12px rgba(192,132,252,0.6)',
-              letterSpacing: '0.28em',
-              textAlign: 'center',
-              padding: '0.55rem',
-              borderBottom: '1px solid rgba(192,132,252,0.22)',
-              marginBottom: '0.9rem',
-              background: 'rgba(192,132,252,0.03)',
-              borderRadius: '2px 2px 0 0',
-            }}>
-              ▶ 私 領 域 ▶
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '0.9rem' }}>
-              {privateSites.length > 0
-                ? privateSites.map((site, i) => (
-                    <ArcadeFighterCard
-                      key={site.id}
-                      site={site}
-                      index={i + publicSites.length}
-                      unlocked={unlocked}
-                      onSelect={onSiteSelect}
-                    />
-                  ))
-                : (
-                    <div style={{
-                      fontFamily: '"Press Start 2P", monospace', fontSize: '0.65rem',
-                      color: 'rgba(255,255,255,0.18)', padding: '2rem', textAlign: 'center',
-                    }}>
-                      NO DATA
-                    </div>
-                  )
-              }
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer hint */}
+      {/* Two-zone layout */}
       <div style={{
-        position: 'absolute', bottom: '1.5rem', left: 0, right: 0,
+        flex: 1, zIndex: 3,
+        display: 'grid',
+        gridTemplateColumns: '1fr 1px 1fr',
+        padding: '1rem 1.4rem 4.5rem',
+        gap: '0 1.2rem',
+        overflow: 'hidden',
+      }}>
+        {/* Public zone */}
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <ZoneLabel label="◆  公  領  域" color="#00e5ff" rgb="0,229,255" />
+          <div style={{
+            flex: 1, overflow: 'hidden',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
+            gridAutoRows: '1fr',
+            gap: '0.7rem',
+          }}>
+            {publicSites.length > 0
+              ? publicSites.map((s, i) => (
+                  <GlassCard key={s.id} site={s} index={i} unlocked={unlocked} onSelect={onSiteSelect} />
+                ))
+              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase' }}>No Data</div>
+            }
+          </div>
+        </div>
+
+        {/* Vertical divider */}
+        <div style={{
+          background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.07), rgba(0,229,255,0.14), rgba(255,255,255,0.07), transparent)',
+          margin: '5% 0',
+        }} />
+
+        {/* Private zone */}
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <ZoneLabel label="▶  私  領  域" color="#c084fc" rgb="192,132,252" />
+          <div style={{
+            flex: 1, overflow: 'hidden',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
+            gridAutoRows: '1fr',
+            gap: '0.7rem',
+          }}>
+            {privateSites.length > 0
+              ? privateSites.map((s, i) => (
+                  <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
+                ))
+              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase' }}>No Data</div>
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        position: 'absolute', bottom: '4.8rem', left: 0, right: 0,
         textAlign: 'center', pointerEvents: 'none', zIndex: 3,
       }}>
         <div style={{
-          fontFamily: '"Press Start 2P", monospace',
-          fontSize: '0.55rem',
-          color: 'rgba(255,255,255,0.16)',
-          letterSpacing: '0.12em',
+          color: 'rgba(255,255,255,0.11)',
+          fontSize: '0.58rem',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          letterSpacing: '0.18em', textTransform: 'uppercase',
         }}>
-          ◄ CLICK TO SELECT &nbsp;•&nbsp; 🔐 = PRIVATE LOCKED ►
+          Click to enter  ·  🔐 Private requires password
         </div>
       </div>
     </div>
@@ -1376,7 +1421,7 @@ export default function App() {
 
   const handleViewToggle = useCallback(() => {
     const next = viewMode === '3d' ? 'arcade' : '3d'
-    const label = next === 'arcade' ? 'ARCADE!' : 'FIGHT!'
+    const label = next === 'arcade' ? 'PORTALS' : '3D MODE'
     setModeFlash(label)
     setTimeout(() => {
       setViewMode(next)
@@ -1456,7 +1501,7 @@ export default function App() {
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             style={{ position: 'absolute', inset: 0 }}
           >
-            <ArcadeListView
+            <GlassPortalView
               sites={sites}
               unlocked={unlocked}
               onSiteSelect={handleSiteClick}
@@ -1477,18 +1522,21 @@ export default function App() {
             style={{
               position: 'absolute', inset: 0, zIndex: 200,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: isArcade ? 'rgba(192,132,252,0.12)' : 'rgba(0,229,255,0.12)',
+              background: isArcade ? 'rgba(0,229,255,0.06)' : 'rgba(192,132,252,0.06)',
+              backdropFilter: 'blur(4px)',
               pointerEvents: 'none',
             }}
           >
             <div style={{
-              fontFamily: '"Press Start 2P", monospace',
-              fontSize: 'clamp(1.8rem, 5vw, 3.5rem)',
+              fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+              fontWeight: '100',
+              fontSize: 'clamp(2rem, 5vw, 4rem)',
               color: isArcade ? '#c084fc' : '#00e5ff',
               textShadow: isArcade
-                ? '0 0 30px rgba(192,132,252,0.9), 0 0 60px rgba(192,132,252,0.5)'
-                : '0 0 30px rgba(0,229,255,0.9), 0 0 60px rgba(0,229,255,0.5)',
-              letterSpacing: '0.1em',
+                ? '0 0 40px rgba(192,132,252,0.9), 0 0 80px rgba(192,132,252,0.4)'
+                : '0 0 40px rgba(0,229,255,0.9), 0 0 80px rgba(0,229,255,0.4)',
+              letterSpacing: '0.35em',
+              textTransform: 'uppercase',
             }}>
               {modeFlash}
             </div>
@@ -1510,16 +1558,19 @@ export default function App() {
           transform: 'translateX(-50%)',
           zIndex: 100,
           background: isArcade
-            ? 'rgba(192,132,252,0.12)'
-            : 'rgba(0,229,255,0.08)',
-          backdropFilter: 'blur(10px)',
-          border: `1px solid ${isArcade ? 'rgba(192,132,252,0.4)' : 'rgba(0,229,255,0.3)'}`,
-          borderRadius: '6px',
+            ? 'rgba(192,132,252,0.10)'
+            : 'rgba(0,229,255,0.07)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: `1px solid ${isArcade ? 'rgba(192,132,252,0.35)' : 'rgba(0,229,255,0.28)'}`,
+          borderRadius: '8px',
           color: isArcade ? '#c084fc' : '#00e5ff',
-          fontFamily: '"Press Start 2P", monospace',
-          fontSize: 'clamp(0.38rem, 1vw, 0.52rem)',
-          letterSpacing: '0.08em',
-          padding: '8px 14px',
+          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontWeight: '300',
+          fontSize: 'clamp(0.6rem, 1vw, 0.72rem)',
+          letterSpacing: '0.15em',
+          textTransform: 'uppercase',
+          padding: '9px 18px',
           cursor: 'pointer',
           lineHeight: 1,
           boxShadow: isArcade
@@ -1540,7 +1591,7 @@ export default function App() {
           e.currentTarget.style.transform = 'translateX(-50%) scale(1)'
         }}
       >
-        {isArcade ? '🌐 3D MODE' : '🕹 ARCADE'}
+        {isArcade ? '🌐  3D MODE' : '✦  PORTALS'}
       </button>
 
       {/* Admin button — bottom right */}
