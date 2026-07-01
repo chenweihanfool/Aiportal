@@ -25,6 +25,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.6.1',
+    date: '2026-07-01',
+    summary: '手機版面修正 · 卡片捲動',
+    changes: [
+      '修正手機瀏覽時字體/卡片消失問題：窄螢幕改為公私領域上下堆疊',
+      '窄螢幕啟用垂直捲動，卡片高度依內容自動調整，不再被裁切',
+    ],
+  },
+  {
     version: '1.6.0',
     date: '2026-05-19',
     summary: '毛玻璃粒子 Portal UI · 全息重設計',
@@ -1278,7 +1287,7 @@ function GlassPortalView({
       </div>
 
       {/* Two-zone layout */}
-      <div style={{
+      <div className="glass-portal-zones" style={{
         flex: 1, zIndex: 3,
         display: 'grid',
         gridTemplateColumns: '1fr 1px 1fr',
@@ -1287,9 +1296,9 @@ function GlassPortalView({
         overflow: 'hidden',
       }}>
         {/* Public zone */}
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="glass-portal-zone" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <ZoneLabel label="◆  公  領  域" color="#00e5ff" rgb="0,229,255" />
-          <div style={{
+          <div className="glass-portal-cards" style={{
             flex: 1, overflow: 'hidden',
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
@@ -1306,15 +1315,15 @@ function GlassPortalView({
         </div>
 
         {/* Vertical divider */}
-        <div style={{
+        <div className="glass-portal-divider" style={{
           background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.07), rgba(0,229,255,0.14), rgba(255,255,255,0.07), transparent)',
           margin: '5% 0',
         }} />
 
         {/* Private zone */}
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="glass-portal-zone" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <ZoneLabel label="▶  私  領  域" color="#c084fc" rgb="192,132,252" />
-          <div style={{
+          <div className="glass-portal-cards" style={{
             flex: 1, overflow: 'hidden',
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',

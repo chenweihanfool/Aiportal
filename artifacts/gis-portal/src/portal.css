@@ -126,3 +126,37 @@ body,
   75%  { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* ─── Glass Portal — mobile layout ───
+   Desktop forces everything onto one screen (equal-height rows, overflow hidden).
+   On short/narrow phone viewports that squeezes cards below their content's
+   minimum height and clips the rest, so switch to a stacked, scrollable layout. */
+@media (max-width: 768px) {
+  .glass-portal-zones {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    gap: 1.4rem !important;
+    padding: 0.85rem 1rem 5.5rem !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .glass-portal-divider {
+    display: none !important;
+  }
+
+  .glass-portal-zone {
+    overflow: visible !important;
+    flex: none !important;
+  }
+
+  .glass-portal-cards {
+    grid-auto-rows: auto !important;
+    overflow: visible !important;
+  }
+
+  .glass-portal-cards > * {
+    min-height: 92px;
+  }
+}
