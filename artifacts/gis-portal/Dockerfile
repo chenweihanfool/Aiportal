@@ -12,7 +12,7 @@ FROM base AS build
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile --filter "@workspace/gis-portal..."
-RUN pnpm --filter @workspace/gis-portal run build
+RUN BASE_PATH=/aiportal/ pnpm --filter @workspace/gis-portal run build
 
 FROM nginx:alpine AS runtime
 COPY artifacts/gis-portal/nginx.conf /etc/nginx/conf.d/default.conf
