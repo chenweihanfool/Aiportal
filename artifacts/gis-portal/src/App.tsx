@@ -132,15 +132,17 @@ interface SiteData {
 // ─────────────────────────────────────────────
 // API helpers
 // ─────────────────────────────────────────────
+const API_BASE = import.meta.env.BASE_URL ?? '/'
+
 async function apiFetchSites(): Promise<SiteData[]> {
-  const r = await fetch('/api/sites')
+  const r = await fetch(`${API_BASE}api/sites`)
   if (!r.ok) throw new Error('Failed to fetch sites')
   const data = await r.json() as { sites: SiteData[] }
   return data.sites
 }
 
 async function apiVerifyPassword(password: string): Promise<boolean> {
-  const r = await fetch('/api/auth/verify', {
+  const r = await fetch(`${API_BASE}api/auth/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
@@ -149,7 +151,7 @@ async function apiVerifyPassword(password: string): Promise<boolean> {
 }
 
 async function apiAddSite(data: Omit<SiteData, 'id'>, adminPassword: string): Promise<SiteData> {
-  const r = await fetch('/api/sites', {
+  const r = await fetch(`${API_BASE}api/sites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
     body: JSON.stringify(data),
@@ -160,7 +162,7 @@ async function apiAddSite(data: Omit<SiteData, 'id'>, adminPassword: string): Pr
 }
 
 async function apiUpdateSite(id: string, data: Partial<Omit<SiteData, 'id'>>, adminPassword: string): Promise<SiteData> {
-  const r = await fetch(`/api/sites/${id}`, {
+  const r = await fetch(`${API_BASE}api/sites/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
     body: JSON.stringify(data),
@@ -171,7 +173,7 @@ async function apiUpdateSite(id: string, data: Partial<Omit<SiteData, 'id'>>, ad
 }
 
 async function apiDeleteSite(id: string, adminPassword: string): Promise<void> {
-  const r = await fetch(`/api/sites/${id}`, {
+  const r = await fetch(`${API_BASE}api/sites/${id}`, {
     method: 'DELETE',
     headers: { 'x-admin-password': adminPassword },
   })
