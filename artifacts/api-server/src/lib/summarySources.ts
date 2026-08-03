@@ -16,4 +16,10 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     url: process.env["PF_CWH_SUMMARY_URL"] ?? "https://cwh2023.synology.me/pf/api/public/summary",
     isPrivate: true,
   },
+  {
+    id: "fitnessforge",
+    name: "運動 APP 系統",
+    url: process.env["FITNESSFORGE_SUMMARY_URL"] ?? "https://cwh2023.synology.me/fitness/api/public/summary",
+    isPrivate: true,
+  },
 ];

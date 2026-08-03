@@ -25,6 +25,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.8.0',
+    date: '2026-08-03',
+    summary: '系統總覽看板（第二階段：運動 APP 系統）',
+    changes: [
+      '私領域卡片新增運動 APP 系統（FitnessForge）摘要：本週積分、較上週趨勢、肌群訓練分布雷達圖',
+      '雷達圖依本週各肌群訓練量正規化繪製（8 軸：胸/背/腿/肩/二頭肌/核心/臀/三頭肌），最高量的肌群固定畫滿整個半徑',
+      'api-server 設定新增 fitnessforge 摘要來源，架構完全沿用第一階段（排程快取、私領域密碼解鎖）',
+    ],
+  },
+  {
     version: '1.7.0',
     date: '2026-08-03',
     summary: '系統總覽看板（第一階段：人生進度管理系統）',
@@ -1309,8 +1319,62 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
   )
 }
 
+const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌']
+
+function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
+  const weeklyScore = typeof data['weeklyScore'] === 'number' ? data['weeklyScore'] : null
+  const trendPct = typeof data['trendPct'] === 'number' ? data['trendPct'] : null
+  const muscleGroups = Array.isArray(data['muscleGroups'])
+    ? data['muscleGroups'] as Array<{ muscleGroup: string; totalVolume: number }>
+    : []
+
+  const values = MUSCLE_GROUP_AXES.map(name => muscleGroups.find(m => m.muscleGroup === name)?.totalVolume ?? 0)
+  const maxValue = Math.max(1, ...values)
+  const cx = 46, cy = 46, r = 32
+  const n = MUSCLE_GROUP_AXES.length
+  const axisPoint = (i: number, radius: number) => {
+    const angle = (Math.PI * 2 * i) / n - Math.PI / 2
+    return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)] as const
+  }
+  const polygonPoints = values
+    .map((v, i) => axisPoint(i, r * (v / maxValue)))
+    .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(' ')
+  const gridPoints = (frac: number) =>
+    MUSCLE_GROUP_AXES.map((_, i) => axisPoint(i, r * frac)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+
+  const topGroups = muscleGroups.slice(0, 2).map(m => m.muscleGroup).join('、')
+
+  return (
+    <>
+      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '2px' }}>本週積分</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '0.6rem' }}>
+        <div style={{ fontSize: 'clamp(1.05rem, 1.6vw, 1.3rem)', fontWeight: '600', color: 'rgba(255,255,255,0.95)' }}>
+          {weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—'}
+        </div>
+        {trendPct !== null && (
+          <div style={{ fontSize: '11px', fontWeight: '600', color: trendPct >= 0 ? '#34d399' : '#f87171' }}>
+            {trendPct >= 0 ? '+' : ''}{trendPct.toFixed(1)}% 較上週
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <svg width="66" height="66" viewBox="0 0 92 92" style={{ flexShrink: 0 }}>
+          <polygon points={gridPoints(1)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+          <polygon points={gridPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+          <polygon points={polygonPoints} fill="rgba(192,132,252,0.28)" stroke="#c084fc" strokeWidth={1.6} />
+        </svg>
+        <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
+          {topGroups ? <>本週主要肌群<br />{topGroups}</> : '本週尚無訓練紀錄'}
+        </div>
+      </div>
+    </>
+  )
+}
+
 const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) => React.ReactElement> = {
   'pf-cwh': PfCwhSummaryBody,
+  'fitnessforge': FitnessForgeSummaryBody,
 }
 
 function GlassSummaryCard({

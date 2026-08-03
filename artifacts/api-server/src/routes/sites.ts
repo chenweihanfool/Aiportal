@@ -39,7 +39,7 @@ const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
     links: [{ label: "進入系統", url: "https://fitness-forge-chenweihanfool.replit.app/" }],
     worldXZ: [5.5, 3.5],
     isPrivate: true,
-    subsystemId: null,
+    subsystemId: "fitnessforge",
   },
   {
     name: "扭曲的夢境",
