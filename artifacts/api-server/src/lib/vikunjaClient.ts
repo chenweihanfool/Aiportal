@@ -69,10 +69,17 @@ export interface UpcomingTask {
 export interface VikunjaSummary {
   windowDays: number;
   tasks: UpcomingTask[];
+  totalTasks: number;
+  doneTasks: number;
+  completionRate: number | null;
+  upcomingCount: number;
+  overdueCount: number;
+  busyIndex: number | null;
 }
 
 // Tasks due within `windowDays` (including already-overdue ones), across
-// every project, incomplete only. Capped and sorted soonest-due first.
+// every project, incomplete only. `tasks` is capped for display; the counts
+// below are computed from the FULL fetched set, not the capped list.
 export async function fetchVikunjaSummary(
   baseUrl: string,
   token: string,
@@ -86,12 +93,16 @@ export async function fetchVikunjaSummary(
   const tasksByProject = await Promise.all(
     projects.map((p) => client.listTasksInProject(p.id)),
   );
+  const allTasks = tasksByProject.flat();
+
+  const totalTasks = allTasks.length;
+  const doneTasks = allTasks.filter((t) => t.done).length;
+  const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : null;
 
   const now = Date.now();
   const horizon = now + windowDays * 24 * 60 * 60 * 1000;
 
-  const upcoming: UpcomingTask[] = tasksByProject
-    .flat()
+  const upcomingAll: UpcomingTask[] = allTasks
     .filter((t) => !t.done && !isUnsetDate(t.due_date))
     .map((t) => ({
       id: t.id,
@@ -103,8 +114,26 @@ export async function fetchVikunjaSummary(
       overdue: new Date(t.due_date).getTime() < now,
     }))
     .filter((t) => new Date(t.dueDate).getTime() <= horizon)
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, maxTasks);
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-  return { windowDays, tasks: upcoming };
+  const overdueCount = upcomingAll.filter((t) => t.overdue).length;
+  const upcomingCount = upcomingAll.length - overdueCount;
+
+  // 忙碌指數：逾期任務、待辦任務量、完成率三項加權，逾期權重最高（最直接的
+  // 壓力訊號），完成率用「落後程度」（100-completionRate）而非直接用完成率，
+  // 分數越高代表越忙／壓力越大，封頂 100。這是第一版粗略公式，數字本身沒有
+  // 精確的科學意義，用來抓「大概是不是在超載」的相對趨勢。
+  const behindRate = completionRate !== null ? 100 - completionRate : 50;
+  const busyIndex = Math.min(100, Math.round(overdueCount * 15 + upcomingCount * 5 + behindRate * 0.3));
+
+  return {
+    windowDays,
+    tasks: upcomingAll.slice(0, maxTasks),
+    totalTasks,
+    doneTasks,
+    completionRate,
+    upcomingCount,
+    overdueCount,
+    busyIndex,
+  };
 }

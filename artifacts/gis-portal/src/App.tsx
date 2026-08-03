@@ -25,6 +25,17 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.11.0',
+    date: '2026-08-03',
+    summary: '每個子系統改成「單一綜合指數 + 輔助數據」，字體全面放大',
+    changes: [
+      '不再只是列原始數字——三個子系統各自新增一個綜合指數當作卡片主角：人生自由指數（pf-cwh：資產分/報酬分/休假配速分平均）、運動習慣指數（FitnessForge：訓練量分/覆蓋分/均衡分/趨勢分平均）、忙碌指數（Vikunja：逾期任務/待辦任務/完成落後程度加權，越高越忙）',
+      '忙碌指數是「越低越好」的指標，跟其他兩個「越高越好」的指數共用同一套色階/文字邏輯但方向相反（≥80 忙碌指數顯示「輕鬆」綠色，其他兩個指數則是「優異」）',
+      '放棄任務追蹤系統的簡易甘特圖呈現，改成跟其他兩張卡一致的「大數字 + 幾個輔助統計」版面，不用再佔 2 欄寬',
+      '全面放大字體與留白：卡片 padding、hero 數字（clamp 2.4rem–3.2rem）、輔助數據、圖示、頁尾文字都比照卡片實際可用空間重新抓比例，不再是小卡片時代的尺寸',
+    ],
+  },
+  {
     version: '1.10.1',
     date: '2026-08-03',
     summary: '排版與資料修正：2 欄網格、休假配速、甘特圖補標籤',
@@ -1216,8 +1227,8 @@ function GlassCard({
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         border: `1px solid rgba(${rgb},0.22)`,
-        borderRadius: '16px',
-        padding: '0.9rem 0.85rem 0.75rem',
+        borderRadius: '18px',
+        padding: '1.2rem 1.3rem 1rem',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -1227,7 +1238,7 @@ function GlassCard({
     >
       {clicked && (
         <div style={{
-          position: 'absolute', inset: 0, borderRadius: '16px',
+          position: 'absolute', inset: 0, borderRadius: '18px',
           background: `radial-gradient(circle at center, rgba(${rgb},0.32) 0%, transparent 70%)`,
           animation: 'fight-flash 0.28s ease forwards',
           pointerEvents: 'none', zIndex: 10,
@@ -1241,8 +1252,8 @@ function GlassCard({
 
       {/* Icon */}
       <div style={{
-        fontSize: 'clamp(1.5rem, 2.4vw, 2rem)',
-        lineHeight: 1, marginBottom: '0.5rem',
+        fontSize: 'clamp(1.8rem, 2.6vw, 2.4rem)',
+        lineHeight: 1, marginBottom: '0.6rem',
         filter: `drop-shadow(0 0 8px rgba(${rgb},0.55))`,
       }}>
         {isLocked ? '🔒' : PORTAL_ICONS[index % PORTAL_ICONS.length]}
@@ -1251,11 +1262,11 @@ function GlassCard({
       {/* Name */}
       <div style={{
         color: accent,
-        fontSize: 'clamp(0.72rem, 1.15vw, 0.92rem)',
+        fontSize: 'clamp(0.95rem, 1.3vw, 1.15rem)',
         fontWeight: '600',
         fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
         letterSpacing: '0.02em',
-        marginBottom: '0.2rem',
+        marginBottom: '0.25rem',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         textShadow: `0 0 12px rgba(${rgb},0.55)`,
         lineHeight: 1.3,
@@ -1265,10 +1276,10 @@ function GlassCard({
       {site.subtitle && (
         <div style={{
           color: 'rgba(255,255,255,0.4)',
-          fontSize: 'clamp(0.58rem, 0.88vw, 0.7rem)',
+          fontSize: 'clamp(0.75rem, 1vw, 0.85rem)',
           fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          marginBottom: '0.4rem', lineHeight: 1.3,
+          marginBottom: '0.5rem', lineHeight: 1.3,
         }}>{site.subtitle}</div>
       )}
 
@@ -1277,13 +1288,13 @@ function GlassCard({
       {/* Footer */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        paddingTop: '0.45rem',
+        paddingTop: '0.6rem',
         borderTop: `1px solid rgba(${rgb},0.13)`,
-        marginTop: '0.4rem',
+        marginTop: '0.5rem',
       }}>
         <span style={{
-          color: 'rgba(255,255,255,0.28)',
-          fontSize: 'clamp(0.5rem, 0.78vw, 0.62rem)',
+          color: 'rgba(255,255,255,0.3)',
+          fontSize: 'clamp(0.68rem, 0.9vw, 0.78rem)',
           fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
           letterSpacing: '0.06em',
         }}>
@@ -1291,7 +1302,7 @@ function GlassCard({
         </span>
         <span style={{
           color: isLocked ? '#fbbf24' : `rgba(${rgb},0.8)`,
-          fontSize: 'clamp(0.5rem, 0.78vw, 0.62rem)',
+          fontSize: 'clamp(0.68rem, 0.9vw, 0.78rem)',
           fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
           letterSpacing: '0.05em', fontWeight: '500',
         }}>
@@ -1324,45 +1335,75 @@ function formatMinutesAgo(iso: string | null): string {
   return `${Math.round(mins / 60)} 小時前更新`
 }
 
+// ── Shared hero-index + supporting-stats layout ──
+// Each subsystem card leads with one big composite index (the "so what" you
+// can't get from glancing at the subsystem itself) and a few raw supporting
+// numbers underneath. `invert` flips the color/label bands for indices where
+// LOWER is better (e.g. a busyness score) instead of higher.
+function heroTone(score: number | null, invert: boolean): { color: string; label: string } {
+  if (score === null) return { color: 'rgba(255,255,255,0.4)', label: '資料不足' }
+  const s = invert ? 100 - score : score
+  if (s >= 80) return { color: '#34d399', label: invert ? '輕鬆' : '優異' }
+  if (s >= 50) return { color: '#fbbf24', label: '普通' }
+  return { color: '#f87171', label: invert ? '緊繃' : '待加強' }
+}
+
+function HeroIndex({ label, score, invert = false }: { label: string; score: number | null; invert?: boolean }) {
+  const tone = heroTone(score, invert)
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '5px' }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+        <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>
+          {score !== null ? score : '—'}
+        </div>
+        <div style={{ fontSize: '15px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
+      </div>
+    </div>
+  )
+}
+
+function SupportStats({ items }: { items: Array<{ label: string; value: string; color?: string }> }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem 2rem' }}>
+      {items.map(it => (
+        <div key={it.label}>
+          <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}</div>
+          <div style={{ fontSize: '18px', fontWeight: '600', color: it.color ?? 'rgba(255,255,255,0.9)' }}>{it.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
+  const lifeFreedomIndex = typeof data['lifeFreedomIndex'] === 'number' ? data['lifeFreedomIndex'] : null
   const totalAssetsTWD = typeof data['totalAssetsTWD'] === 'number' ? data['totalAssetsTWD'] : null
   const twrr = typeof data['twrr'] === 'number' ? data['twrr'] : null
   const mwrr = typeof data['mwrr'] === 'number' ? data['mwrr'] : null
   const pacingIndex = typeof data['pacingIndex'] === 'number' ? data['pacingIndex'] : null
 
   return (
-    <>
-      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '2px' }}>總資產</div>
-      <div style={{ fontSize: 'clamp(1.05rem, 1.6vw, 1.3rem)', fontWeight: '600', color: 'rgba(255,255,255,0.95)', marginBottom: '0.55rem' }}>
-        {totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—'}
-      </div>
-      <div style={{ display: 'flex', gap: '14px', marginBottom: '0.6rem' }}>
-        <div>
-          <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em' }}>TWRR</div>
-          <div style={{ fontSize: '12px', fontWeight: '600', color: twrr === null ? 'rgba(255,255,255,0.4)' : (twrr >= 0 ? '#34d399' : '#f87171') }}>{formatPct(twrr)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em' }}>MWRR</div>
-          <div style={{ fontSize: '12px', fontWeight: '600', color: mwrr === null ? 'rgba(255,255,255,0.4)' : (mwrr >= 0 ? '#34d399' : '#f87171') }}>{formatPct(mwrr)}</div>
-        </div>
-      </div>
-      <div>
-        <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em', marginBottom: '3px' }}>
-          休假配速 {pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—'}
-        </div>
-        <div style={{ height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', borderRadius: '2px', width: `${pacingIndex !== null ? Math.min(100, pacingIndex * 100) : 0}%`, background: 'linear-gradient(90deg, rgba(192,132,252,0.5), #c084fc)' }} />
-        </div>
-      </div>
-    </>
+    <div style={{ flex: 1 }}>
+      <HeroIndex label="人生自由指數" score={lifeFreedomIndex} />
+      <SupportStats items={[
+        { label: '總資產', value: totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—' },
+        { label: 'TWRR', value: formatPct(twrr), color: twrr === null ? undefined : (twrr >= 0 ? '#34d399' : '#f87171') },
+        { label: 'MWRR', value: formatPct(mwrr), color: mwrr === null ? undefined : (mwrr >= 0 ? '#34d399' : '#f87171') },
+        { label: '休假配速', value: pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—' },
+      ]} />
+    </div>
   )
 }
 
 const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌']
 
 function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
+  const habitIndex = typeof data['habitIndex'] === 'number' ? data['habitIndex'] : null
   const weeklyScore = typeof data['weeklyScore'] === 'number' ? data['weeklyScore'] : null
   const trendPct = typeof data['trendPct'] === 'number' ? data['trendPct'] : null
+  const balanceScore = typeof data['balanceScore'] === 'number' ? data['balanceScore'] : null
+  const coverageScore = typeof data['coverageScore'] === 'number' ? data['coverageScore'] : null
   const muscleGroups = Array.isArray(data['muscleGroups'])
     ? data['muscleGroups'] as Array<{ muscleGroup: string; totalVolume: number }>
     : []
@@ -1382,154 +1423,43 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
   const gridPoints = (frac: number) =>
     MUSCLE_GROUP_AXES.map((_, i) => axisPoint(i, r * frac)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
 
-  const topGroups = muscleGroups.slice(0, 2).map(m => m.muscleGroup).join('、')
-
   return (
-    <>
-      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '2px' }}>本週積分</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '0.6rem' }}>
-        <div style={{ fontSize: 'clamp(1.05rem, 1.6vw, 1.3rem)', fontWeight: '600', color: 'rgba(255,255,255,0.95)' }}>
-          {weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—'}
-        </div>
-        {trendPct !== null && (
-          <div style={{ fontSize: '11px', fontWeight: '600', color: trendPct >= 0 ? '#34d399' : '#f87171' }}>
-            {trendPct >= 0 ? '+' : ''}{trendPct.toFixed(1)}% 較上週
-          </div>
-        )}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <svg width="66" height="66" viewBox="0 0 92 92" style={{ flexShrink: 0 }}>
+    <div style={{ flex: 1 }}>
+      <HeroIndex label="運動習慣指數" score={habitIndex} />
+      <div style={{ display: 'flex', gap: '1.6rem', alignItems: 'center' }}>
+        <SupportStats items={[
+          { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—' },
+          { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? '#34d399' : '#f87171') },
+          { label: '覆蓋率', value: coverageScore !== null ? `${coverageScore}%` : '—' },
+          { label: '均衡度', value: balanceScore !== null ? `${balanceScore}%` : '—' },
+        ]} />
+        <svg width="88" height="88" viewBox="0 0 92 92" style={{ flexShrink: 0, marginLeft: 'auto' }}>
           <polygon points={gridPoints(1)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
           <polygon points={gridPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
           <polygon points={polygonPoints} fill="rgba(192,132,252,0.28)" stroke="#c084fc" strokeWidth={1.6} />
         </svg>
-        <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
-          {topGroups ? <>本週主要肌群<br />{topGroups}</> : '本週尚無訓練紀錄'}
-        </div>
-      </div>
-    </>
-  )
-}
-
-interface VikunjaUpcomingTask {
-  id: number
-  title: string
-  projectTitle: string
-  dueDate: string
-  startDate: string | null
-  overdue: boolean
-}
-
-function dueChipLabel(dueDate: string, overdue: boolean): string {
-  if (overdue) return '已逾期'
-  const days = Math.round((new Date(dueDate).getTime() - Date.now()) / 86400000)
-  if (days <= 0) return '今天'
-  if (days === 1) return '明天'
-  return `${days} 天後`
-}
-
-const GANTT_OVERDUE_BUFFER_DAYS = 3
-
-function dayIndex(iso: string, spanStartMs: number): number {
-  return Math.floor((new Date(iso).getTime() - spanStartMs) / 86400000)
-}
-
-// Label column fixed width + one column per day in the span.
-const GANTT_LABEL_COL = 'minmax(58px, 92px)'
-
-function VikunjaGantt({ tasks, windowDays }: { tasks: VikunjaUpcomingTask[]; windowDays: number }) {
-  const startOfToday = new Date()
-  startOfToday.setHours(0, 0, 0, 0)
-  const spanStartMs = startOfToday.getTime() - GANTT_OVERDUE_BUFFER_DAYS * 86400000
-  const totalDays = GANTT_OVERDUE_BUFFER_DAYS + windowDays + 1
-  const todayCol = GANTT_OVERDUE_BUFFER_DAYS
-  const gridCols = `${GANTT_LABEL_COL} repeat(${totalDays}, 1fr)`
-
-  return (
-    <div>
-      {/* Day-scale axis: left edge, today, right edge */}
-      <div style={{ display: 'grid', gridTemplateColumns: gridCols, fontSize: '8px', color: 'rgba(255,255,255,0.3)', marginBottom: '3px' }}>
-        <div />
-        <div style={{ gridColumn: '2', textAlign: 'left' }}>-{GANTT_OVERDUE_BUFFER_DAYS}天</div>
-        <div style={{ gridColumn: String(todayCol + 2), textAlign: 'center', color: '#00e5ff', fontWeight: 600 }}>今天</div>
-        <div style={{ gridColumn: String(totalDays + 1), textAlign: 'right' }}>+{windowDays}天</div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: gridCols, gridAutoRows: '16px', rowGap: '4px' }}>
-        {/* Today line, spanning every task row */}
-        <div style={{
-          gridColumn: String(todayCol + 2),
-          gridRow: `1 / ${tasks.length + 1}`,
-          borderLeft: '1px solid #00e5ff', boxShadow: '0 0 4px rgba(0,229,255,0.7)',
-        }} />
-        {tasks.map((t, idx) => {
-          const endIdx = Math.min(totalDays - 1, Math.max(0, dayIndex(t.dueDate, spanStartMs)))
-          const rawStartIdx = t.startDate ? dayIndex(t.startDate, spanStartMs) : endIdx
-          const startIdx = Math.min(endIdx, Math.max(0, rawStartIdx))
-          return (
-            <div key={t.id} style={{ display: 'contents' }}>
-              <div style={{
-                gridColumn: '1', gridRow: idx + 1, alignSelf: 'center',
-                fontSize: '9px', color: 'rgba(255,255,255,0.55)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {t.title}
-              </div>
-              <div style={{
-                gridColumn: `${startIdx + 2} / ${endIdx + 3}`,
-                gridRow: idx + 1, alignSelf: 'center',
-                height: '7px', borderRadius: '3px',
-                background: t.overdue
-                  ? 'rgba(248,113,113,0.7)'
-                  : 'linear-gradient(90deg, rgba(192,132,252,0.5), rgba(192,132,252,0.9))',
-              }} />
-            </div>
-          )
-        })}
       </div>
     </div>
   )
 }
 
 function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
-  const tasks = Array.isArray(data['tasks']) ? data['tasks'] as VikunjaUpcomingTask[] : []
-  const windowDays = typeof data['windowDays'] === 'number' ? data['windowDays'] : 7
-  const shown = tasks.slice(0, 5)
+  const busyIndex = typeof data['busyIndex'] === 'number' ? data['busyIndex'] : null
+  const completionRate = typeof data['completionRate'] === 'number' ? data['completionRate'] : null
+  const upcomingCount = typeof data['upcomingCount'] === 'number' ? data['upcomingCount'] : null
+  const overdueCount = typeof data['overdueCount'] === 'number' ? data['overdueCount'] : null
 
   return (
     <div style={{ flex: 1 }}>
-      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
-        {windowDays} 天內到期
-      </div>
-      {shown.length === 0 ? (
-        <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>近期沒有到期任務</div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '0.8rem' }}>
-            {shown.map(t => (
-              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10.5px', height: '12px' }}>
-                <span style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                <span style={{
-                  fontSize: '9px', padding: '1px 6px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0,
-                  background: t.overdue ? 'rgba(248,113,113,0.14)' : 'rgba(251,191,36,0.14)',
-                  color: t.overdue ? '#f87171' : '#fbbf24',
-                }}>
-                  {dueChipLabel(t.dueDate, t.overdue)}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div style={{ borderTop: '1px solid rgba(192,132,252,0.13)', paddingTop: '0.6rem' }}>
-            <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>簡易甘特圖</div>
-            <VikunjaGantt tasks={shown} windowDays={windowDays} />
-          </div>
-        </>
-      )}
+      <HeroIndex label="忙碌指數" score={busyIndex} invert />
+      <SupportStats items={[
+        { label: '完成率', value: completionRate !== null ? `${completionRate}%` : '—' },
+        { label: '待辦任務', value: upcomingCount !== null ? String(upcomingCount) : '—' },
+        { label: '逾期任務', value: overdueCount !== null ? String(overdueCount) : '—', color: overdueCount !== null && overdueCount > 0 ? '#f87171' : undefined },
+      ]} />
     </div>
   )
 }
-
-const WIDE_SUMMARY_CARDS = new Set(['vikunja'])
 
 const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) => React.ReactElement> = {
   'pf-cwh': PfCwhSummaryBody,
@@ -1554,7 +1484,6 @@ function GlassSummaryCard({
   const rgb = site.isPrivate ? '192,132,252' : '0,229,255'
   const accent = site.isPrivate ? '#c084fc' : '#00e5ff'
   const Body = SUMMARY_BODIES[summary.subsystemId]
-  const wide = WIDE_SUMMARY_CARDS.has(summary.subsystemId)
 
   return (
     <motion.div
@@ -1566,13 +1495,12 @@ function GlassSummaryCard({
       style={{
         position: 'relative',
         cursor: 'pointer',
-        gridColumn: wide ? 'span 2' : undefined,
         background: 'rgba(255,255,255,0.055)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         border: `1px solid rgba(${rgb},0.22)`,
-        borderRadius: '16px',
-        padding: '0.9rem 0.85rem 0.75rem',
+        borderRadius: '18px',
+        padding: '1.5rem 1.6rem 1.2rem',
         display: 'flex',
         flexDirection: 'column',
         boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
@@ -1583,38 +1511,38 @@ function GlassSummaryCard({
         background: `linear-gradient(90deg, transparent, rgba(${rgb},0.6), transparent)`,
       }} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.7rem' }}>
-        <span style={{ fontSize: '18px', filter: `drop-shadow(0 0 8px rgba(${rgb},0.55))` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.1rem' }}>
+        <span style={{ fontSize: '26px', filter: `drop-shadow(0 0 8px rgba(${rgb},0.55))` }}>
           {isLocked ? '🔒' : PORTAL_ICONS[index % PORTAL_ICONS.length]}
         </span>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ color: accent, fontSize: '12px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</div>
-          <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '9.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.subtitle}</div>
+          <div style={{ color: accent, fontSize: '16px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.subtitle}</div>
         </div>
       </div>
 
       {isLocked ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '6px', padding: '0.6rem 0' }}>
-          <div style={{ fontSize: '13px', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)' }}>••••••</div>
-          <div style={{ fontSize: '9.5px', color: '#fbbf24', letterSpacing: '0.05em' }}>🔒 解鎖後顯示</div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '1.2rem 0' }}>
+          <div style={{ fontSize: '18px', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)' }}>••••••</div>
+          <div style={{ fontSize: '11.5px', color: '#fbbf24', letterSpacing: '0.05em' }}>🔒 解鎖後顯示</div>
         </div>
       ) : summary.status === 'pending' ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>資料準備中…</div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>資料準備中…</div>
       ) : summary.data && Body ? (
         <Body data={summary.data} />
       ) : (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>暫時無法取得資料</div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>暫時無法取得資料</div>
       )}
 
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        paddingTop: '0.45rem', marginTop: '0.6rem',
+        paddingTop: '0.7rem', marginTop: '1rem',
         borderTop: `1px solid rgba(${rgb},0.13)`,
       }}>
-        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.28)', letterSpacing: '0.04em' }}>
+        <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.04em' }}>
           {isLocked ? '——' : formatMinutesAgo(summary.fetchedAt)}
         </span>
-        <span style={{ fontSize: '9px', color: isLocked ? '#fbbf24' : `rgba(${rgb},0.8)`, letterSpacing: '0.05em', fontWeight: '500' }}>
+        <span style={{ fontSize: '10.5px', color: isLocked ? '#fbbf24' : `rgba(${rgb},0.8)`, letterSpacing: '0.05em', fontWeight: '500' }}>
           {isLocked ? '🔐 LOCKED' : (site.isPrivate ? 'PRIVATE' : 'PUBLIC')}
         </span>
       </div>
