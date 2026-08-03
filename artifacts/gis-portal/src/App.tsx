@@ -25,6 +25,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.10.0',
+    date: '2026-08-03',
+    summary: '版面改垂直佈局，貼近概念稿',
+    changes: [
+      '私領域/公領域從左右對半分改成上下垂直排列：私領域儀表板卡片在上、佔滿版面寬度，公領域純連結卡在下，跟一開始的設計概念稿一致',
+      '私領域改用固定 4 欄 bento 網格，有摘要來源的卡片（如任務追蹤系統）可以橫跨 2 欄，卡片不再被半版寬度擠壓',
+      '手機版對應調整：≤768px 縮成 2 欄、≤480px 縮成 1 欄且寬卡自動變回單欄，不會橫向溢出',
+    ],
+  },
+  {
     version: '1.9.1',
     date: '2026-08-03',
     summary: '修正密碼過期後無法自動重鎖 · Vikunja 補甘特圖',
@@ -1666,50 +1676,23 @@ function GlassPortalView({
         </p>
       </div>
 
-      {/* Two-zone layout */}
+      {/* Vertical layout: private dashboard cards get the full width up top,
+          plain public links sit in a smaller row below — matches the
+          reference concept (dashboard.html), not a half-width split. */}
       <div className="glass-portal-zones" style={{
         flex: 1, zIndex: 3,
-        display: 'grid',
-        gridTemplateColumns: '1fr 1px 1fr',
-        padding: '1rem 1.4rem 4.5rem',
-        gap: '0 1.2rem',
-        overflow: 'hidden',
+        display: 'flex', flexDirection: 'column', gap: '1.6rem',
+        padding: '1.2rem 1.4rem 4.5rem',
+        overflowY: 'auto', overflowX: 'hidden',
       }}>
-        {/* Public zone */}
-        <div className="glass-portal-zone" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <ZoneLabel label="◆  公  領  域" color="#00e5ff" rgb="0,229,255" />
-          <div className="glass-portal-cards" style={{
-            flex: 1, overflow: 'hidden',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
-            gridAutoRows: '1fr',
-            gap: '0.7rem',
-          }}>
-            {publicSites.length > 0
-              ? publicSites.map((s, i) => (
-                  <GlassCard key={s.id} site={s} index={i} unlocked={unlocked} onSelect={onSiteSelect} />
-                ))
-              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase' }}>No Data</div>
-            }
-          </div>
-        </div>
-
-        {/* Vertical divider */}
-        <div className="glass-portal-divider" style={{
-          background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.07), rgba(0,229,255,0.14), rgba(255,255,255,0.07), transparent)',
-          margin: '5% 0',
-        }} />
-
-        {/* Private zone */}
-        <div className="glass-portal-zone" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Private zone / system-overview dashboard */}
+        <div className="glass-portal-zone">
           <ZoneLabel label="▶  私  領  域" color="#c084fc" rgb="192,132,252" />
-          <div className="glass-portal-cards" style={{
-            flex: 1, overflowY: 'auto', overflowX: 'hidden',
+          <div className="glass-portal-bento" style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             gridAutoRows: 'auto',
-            alignContent: 'start',
-            gap: '0.7rem',
+            gap: '0.9rem',
           }}>
             {privateSites.length > 0
               ? privateSites.map((s, i) => {
@@ -1718,7 +1701,31 @@ function GlassPortalView({
                     ? <GlassSummaryCard key={s.id} site={s} summary={summary} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
                     : <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
                 })
-              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase' }}>No Data</div>
+              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
+            }
+          </div>
+        </div>
+
+        {/* Horizontal divider */}
+        <div className="glass-portal-hr" style={{
+          height: '1px', flexShrink: 0,
+          background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.08), rgba(0,229,255,0.16), rgba(255,255,255,0.08), transparent)',
+        }} />
+
+        {/* Public zone */}
+        <div className="glass-portal-zone">
+          <ZoneLabel label="◆  公  領  域" color="#00e5ff" rgb="0,229,255" />
+          <div className="glass-portal-cards" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
+            gridAutoRows: 'auto',
+            gap: '0.7rem',
+          }}>
+            {publicSites.length > 0
+              ? publicSites.map((s, i) => (
+                  <GlassCard key={s.id} site={s} index={i} unlocked={unlocked} onSelect={onSiteSelect} />
+                ))
+              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
             }
           </div>
         </div>

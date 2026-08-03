@@ -128,35 +128,34 @@ body,
 }
 
 /* ─── Glass Portal — mobile layout ───
-   Desktop forces everything onto one screen (equal-height rows, overflow hidden).
-   On short/narrow phone viewports that squeezes cards below their content's
-   minimum height and clips the rest, so switch to a stacked, scrollable layout. */
+   Base layout (App.tsx) is already a vertical, scrollable stack — private
+   dashboard cards on top, public links below — so mobile mainly needs
+   tighter spacing and fewer bento columns. */
 @media (max-width: 768px) {
   .glass-portal-zones {
-    display: flex !important;
-    flex-direction: column !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    gap: 1.4rem !important;
+    gap: 1.2rem !important;
     padding: 0.85rem 1rem 5.5rem !important;
     -webkit-overflow-scrolling: touch;
   }
 
-  .glass-portal-divider {
-    display: none !important;
-  }
-
-  .glass-portal-zone {
-    overflow: visible !important;
-    flex: none !important;
-  }
-
-  .glass-portal-cards {
-    grid-auto-rows: auto !important;
-    overflow: visible !important;
+  .glass-portal-bento {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 
   .glass-portal-cards > * {
     min-height: 92px;
+  }
+}
+
+@media (max-width: 480px) {
+  .glass-portal-bento {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Wide cards (e.g. Vikunja's `grid-column: span 2` inline style) would
+     otherwise spill into an implicit second column the single-column grid
+     doesn't have room for. */
+  .glass-portal-bento > * {
+    grid-column: 1 / -1 !important;
   }
 }
