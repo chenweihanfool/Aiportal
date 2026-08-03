@@ -49,11 +49,16 @@ async function fetchOne(source: SummarySource): Promise<void> {
 }
 
 export function startSummaryFetchJob(): void {
-  const runAll = () => {
+  // Sequential, not concurrent (`for...of` + await, not a fire-and-forget
+  // loop of `void fetchOne(...)`) — the "hhi" source reads the OTHER three
+  // sources' just-written subsystem_summaries rows rather than re-fetching
+  // their origin APIs itself, so it needs them to have actually landed in
+  // the DB first. SUMMARY_SOURCES keeps "hhi" last for exactly this reason.
+  const runAll = async () => {
     for (const source of SUMMARY_SOURCES) {
-      void fetchOne(source);
+      await fetchOne(source);
     }
   };
-  runAll();
-  setInterval(runAll, INTERVAL_MS);
+  void runAll();
+  setInterval(() => void runAll(), INTERVAL_MS);
 }

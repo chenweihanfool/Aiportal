@@ -145,6 +145,12 @@ body,
   .glass-portal-cards > * {
     min-height: 92px;
   }
+
+  .hhi-contributions {
+    flex-direction: column !important;
+    gap: 0.8rem !important;
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {

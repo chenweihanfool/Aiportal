@@ -25,6 +25,18 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.12.0',
+    date: '2026-08-03',
+    summary: '新增翰翰仔幸福指數總合卡片，任務追蹤系統改接正式忙碌指數服務',
+    changes: [
+      '新增「翰翰仔幸福指數（HHI）」置頂橫向卡片：綜合人生自由指數、運動習慣指數、忙碌指數（反轉為生活從容分）三項加權平均，加上最弱項修正與日對日平滑顯示，明確標示非醫療/心理診斷，僅為生活系統總覽指標',
+      'HHI 缺資料時不當作 0 計算：任一來源缺席就在剩餘來源間重新分配權重，三項全缺則顯示「資料準備中」，絕不顯示假分數',
+      '卡片可展開查看明細（基礎分、最弱項分數、平滑前後分數），行動版三項貢獻度改直式排列',
+      '任務追蹤系統卡片的忙碌指數不再由前端即時計算，改為讀取 services/busyness-index/ Python 服務每日寫入 Postgres 的 busyness_index_history 正式資料（該服務含逾期壓力/近期負荷/停滯程度/完成度衰減加權四項子分數）',
+      'summaryFetchJob 改成循序（非併發）抓取四個來源，讓 HHI 能安全讀取同一輪次中另外三個來源剛寫入的快取資料',
+    ],
+  },
+  {
     version: '1.11.0',
     date: '2026-08-03',
     summary: '每個子系統改成「單一綜合指數 + 輔助數據」，字體全面放大',
@@ -1443,19 +1455,25 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
   )
 }
 
+// Field names match services/busyness-index's Postgres busyness_index_history
+// row (see artifacts/api-server/src/lib/summarySources.ts's
+// fetchVikunjaBusynessFromHistory) — four independently-computed 0-100
+// sub-scores, any of which can be null when its own data is insufficient.
 function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
   const busyIndex = typeof data['busyIndex'] === 'number' ? data['busyIndex'] : null
-  const completionRate = typeof data['completionRate'] === 'number' ? data['completionRate'] : null
-  const upcomingCount = typeof data['upcomingCount'] === 'number' ? data['upcomingCount'] : null
-  const overdueCount = typeof data['overdueCount'] === 'number' ? data['overdueCount'] : null
+  const overdueScore = typeof data['overdueScore'] === 'number' ? data['overdueScore'] : null
+  const loadScore = typeof data['loadScore'] === 'number' ? data['loadScore'] : null
+  const stagnationScore = typeof data['stagnationScore'] === 'number' ? data['stagnationScore'] : null
+  const completionScore = typeof data['completionScore'] === 'number' ? data['completionScore'] : null
 
   return (
     <div style={{ flex: 1 }}>
       <HeroIndex label="忙碌指數" score={busyIndex} invert />
       <SupportStats items={[
-        { label: '完成率', value: completionRate !== null ? `${completionRate}%` : '—' },
-        { label: '待辦任務', value: upcomingCount !== null ? String(upcomingCount) : '—' },
-        { label: '逾期任務', value: overdueCount !== null ? String(overdueCount) : '—', color: overdueCount !== null && overdueCount > 0 ? '#f87171' : undefined },
+        { label: '逾期壓力', value: overdueScore !== null ? String(overdueScore) : '—' },
+        { label: '近期負荷', value: loadScore !== null ? String(loadScore) : '—' },
+        { label: '停滯程度', value: stagnationScore !== null ? String(stagnationScore) : '—' },
+        { label: '拖延程度', value: completionScore !== null ? String(completionScore) : '—' },
       ]} />
     </div>
   )
@@ -1465,6 +1483,155 @@ const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) 
   'pf-cwh': PfCwhSummaryBody,
   'fitnessforge': FitnessForgeSummaryBody,
   'vikunja': VikunjaSummaryBody,
+}
+
+// ─────────────────────────────────────────────
+// 翰翰仔幸福指數 (Hanhan Happiness Index) — full-width hero card, top of the
+// private zone. Not tied to any portal_sites row (there's no external
+// system to link to), so it's rendered separately from the site-mapped
+// bento grid rather than going through GlassSummaryCard. A reflective
+// dashboard-navigation number, not a medical/psychological diagnosis.
+// ─────────────────────────────────────────────
+function hhiTone(score: number): { color: string; label: string } {
+  if (score >= 80) return { color: '#00e5ff', label: '很幸福' }
+  if (score >= 65) return { color: '#34d399', label: '穩定前進' }
+  if (score >= 50) return { color: '#fbbf24', label: '尚可，需留意' }
+  if (score >= 35) return { color: '#fb923c', label: '需調整' }
+  return { color: '#f87171', label: '警報，先照顧自己' }
+}
+
+function HappinessHeroCard({
+  summary,
+  unlocked,
+  onRequestUnlock,
+}: {
+  summary: DashboardSummary | undefined
+  unlocked: boolean
+  onRequestUnlock: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isLocked = !unlocked // hhi is always isPrivate — see summarySources.ts
+
+  const data = summary?.data
+  const displayedScore = typeof data?.['displayedScore'] === 'number' ? data['displayedScore'] as number : null
+  const finalScore = typeof data?.['finalScore'] === 'number' ? data['finalScore'] as number : null
+  const baseScore = typeof data?.['baseScore'] === 'number' ? data['baseScore'] as number : null
+  const weakestScore = typeof data?.['weakestScore'] === 'number' ? data['weakestScore'] as number : null
+  const weakestComponent = typeof data?.['weakestComponent'] === 'string' ? data['weakestComponent'] as string : null
+  const lifeFreedomScore = typeof data?.['lifeFreedomScore'] === 'number' ? data['lifeFreedomScore'] as number : null
+  const fitnessHabitScore = typeof data?.['fitnessHabitScore'] === 'number' ? data['fitnessHabitScore'] as number : null
+  const calmScore = typeof data?.['calmScore'] === 'number' ? data['calmScore'] as number : null
+  const usingStaleData = data?.['usingStaleData'] === true
+  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number } | undefined
+
+  const cardStyle: React.CSSProperties = {
+    position: 'relative',
+    cursor: isLocked ? 'pointer' : (data ? 'pointer' : 'default'),
+    background: 'rgba(255,255,255,0.055)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(192,132,252,0.28)',
+    borderRadius: '20px',
+    padding: '1.6rem 1.8rem',
+    marginBottom: '1.2rem',
+    boxShadow: '0 4px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
+  }
+
+  if (isLocked) {
+    return (
+      <div style={cardStyle} onClick={onRequestUnlock}>
+        <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.6), transparent)' }} />
+        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+          翰翰仔幸福指數 · Hanhan Happiness Index
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0' }}>
+          <span style={{ fontSize: '20px', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)' }}>••••••</span>
+          <span style={{ fontSize: '12px', color: '#fbbf24', letterSpacing: '0.05em' }}>🔒 解鎖後顯示</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data || displayedScore === null) {
+    return (
+      <div style={cardStyle}>
+        <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.6), transparent)' }} />
+        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+          翰翰仔幸福指數 · Hanhan Happiness Index
+        </div>
+        <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)' }}>資料準備中…</div>
+      </div>
+    )
+  }
+
+  const tone = hhiTone(displayedScore)
+  const contributions: Array<{ label: string; value: number | null; weightPct: number }> = [
+    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.45) * 100) },
+    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.30) * 100) },
+    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.25) * 100) },
+  ]
+
+  return (
+    <div style={cardStyle} onClick={() => setExpanded(x => !x)}>
+      <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: `linear-gradient(90deg, transparent, ${tone.color}99, transparent)` }} />
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+            翰翰仔幸福指數 · Hanhan Happiness Index
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 'clamp(2.8rem, 5vw, 4rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 28px ${tone.color}66` }}>
+              {displayedScore}
+            </div>
+            <div style={{ fontSize: '16px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
+          </div>
+          {weakestComponent && (
+            <div style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.5)', marginTop: '0.5rem' }}>
+              目前最需要照顧：<span style={{ color: '#fbbf24', fontWeight: '600' }}>{weakestComponent}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="hhi-contributions" style={{ display: 'flex', gap: '1.6rem', flexWrap: 'wrap' }}>
+          {contributions.map(c => (
+            <div key={c.label}>
+              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', marginBottom: '3px' }}>
+                {c.label} · {c.weightPct}%
+              </div>
+              <div style={{ fontSize: '19px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>
+                {c.value !== null ? Math.round(c.value) : '—'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.8rem', marginTop: '1.1rem', borderTop: '1px solid rgba(192,132,252,0.15)' }}>
+        <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)' }}>
+          {formatMinutesAgo(summary?.fetchedAt ?? null)}
+          {usingStaleData ? <span style={{ color: '#fbbf24', marginLeft: '8px' }}>· 部分資料為最近可用值</span> : null}
+        </span>
+        <span style={{ fontSize: '10.5px', color: 'rgba(192,132,252,0.7)' }}>{expanded ? '收起 ▲' : '展開明細 ▼'}</span>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {[
+            ['基礎分（三項加權平均）', baseScore !== null ? baseScore.toFixed(2) : '—'],
+            ['最弱項分數', weakestScore !== null ? weakestScore.toFixed(2) : '—'],
+            ['短板修正後（平滑前）', finalScore !== null ? String(finalScore) : '—'],
+            ['平滑後（目前顯示值）', String(displayedScore)],
+          ].map(([label, value]) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
+              <span style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</span>
+              <span style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '500' }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function GlassSummaryCard({
@@ -1555,11 +1722,13 @@ function GlassPortalView({
   dashboard,
   unlocked,
   onSiteSelect,
+  onRequestUnlock,
 }: {
   sites: SiteData[]
   dashboard: DashboardSummary[]
   unlocked: boolean
   onSiteSelect: (site: SiteData) => void
+  onRequestUnlock: () => void
 }) {
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
@@ -1641,6 +1810,11 @@ function GlassPortalView({
         {/* Private zone / system-overview dashboard */}
         <div className="glass-portal-zone">
           <ZoneLabel label="▶  私  領  域" color="#c084fc" rgb="192,132,252" />
+          <HappinessHeroCard
+            summary={dashboard.find(d => d.subsystemId === 'hhi')}
+            unlocked={unlocked}
+            onRequestUnlock={onRequestUnlock}
+          />
           <div className="glass-portal-bento" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
@@ -1766,6 +1940,13 @@ export default function App() {
     openUrl(url, isPrivate)
   }, [openUrl])
 
+  // HHI has no associated site/URL to navigate to, so unlocking it just opens
+  // the password modal with an empty pendingUrl (PasswordModal already skips
+  // window.open when pendingUrl is falsy).
+  const handleRequestUnlock = useCallback(() => {
+    setModal({ visible: true, pendingUrl: '' })
+  }, [])
+
   const handleModalSuccess = useCallback((password: string) => {
     setUnlockedPassword(password)
     setModal({ visible: false, pendingUrl: '' })
@@ -1879,6 +2060,7 @@ export default function App() {
               dashboard={dashboard}
               unlocked={unlocked}
               onSiteSelect={handleSiteClick}
+              onRequestUnlock={handleRequestUnlock}
             />
           </motion.div>
         )}
