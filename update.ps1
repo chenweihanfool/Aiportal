@@ -5,7 +5,12 @@
     Steps:
       1. git pull (from chenweihanfool/Aiportal on GitHub)
       2. docker compose up -d --build (build + (re)create both api-server and gis-portal)
-      3. pnpm --filter db push (drizzle-kit schema sync -- safe to run every deploy)
+      3. docker compose --profile migrate run --rm db-migrate (drizzle-kit schema
+         sync, run INSIDE a Linux container -- safe to run every deploy).
+         Deliberately not `pnpm --filter db push` on this Windows host: drizzle-kit
+         has known Windows glob/path resolution bugs ("No schema files found")
+         that silently no-op the push, which let a real deploy ship with a
+         missing table and crash-loop api-server (2026-08-03 incident).
       4. health check (verify /api/healthz responds)
 
     Same pattern as pf-cwh/fitnessforge on this host. Postgres itself is NOT
@@ -107,24 +112,26 @@ catch {
 }
 
 # ==============================================
-# Step 3: schema sync (drizzle-kit push)
+# Step 3: schema sync (drizzle-kit push, run inside a Linux container --
+# NOT on this Windows host, see note in the header above)
 # ==============================================
 Write-Host "[3/4] Syncing database schema..." -ForegroundColor Yellow
 try {
     Push-Location $RepoDir
-    # Aiportal uses pnpm workspace; schema is under lib/db/, pushed via pnpm --filter db
-    $pushResult = cmd /c "pnpm --filter db push 2>&1"
+    $pushResult = cmd /c "docker compose --profile migrate run --rm db-migrate 2>&1"
     Write-Host $pushResult
     if ($LASTEXITCODE -ne 0) {
-        throw "pnpm --filter db push failed (exit code: $LASTEXITCODE)"
+        throw "db-migrate failed (exit code: $LASTEXITCODE)"
     }
     Write-Host "  >> Schema synced" -ForegroundColor Green
     Pop-Location
 }
 catch {
     Write-Host "ERROR schema sync: $_" -ForegroundColor Red
-    Write-Host "  If this failed, run manually: cd $RepoDir && pnpm --filter db push" -ForegroundColor Yellow
+    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose --profile migrate run --rm db-migrate" -ForegroundColor Yellow
     Pop-Location
+    Write-Host "  Schema sync failure is treated as fatal -- a missing table will crash-loop api-server." -ForegroundColor Red
+    exit 1
 }
 
 # ==============================================
