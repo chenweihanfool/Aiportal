@@ -9,6 +9,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      VIKUNJA_API_BASE_URL: ${VIKUNJA_API_BASE_URL}
+      VIKUNJA_API_TOKEN: ${VIKUNJA_API_TOKEN}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
