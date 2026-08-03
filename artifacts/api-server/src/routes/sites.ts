@@ -18,6 +18,7 @@ interface ApiSite {
   links: SiteLink[];
   worldXZ: [number, number];
   isPrivate: boolean;
+  subsystemId: string | null;
 }
 
 const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
@@ -30,6 +31,7 @@ const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
     ],
     worldXZ: [4.0, 1.5],
     isPrivate: true,
+    subsystemId: "pf-cwh",
   },
   {
     name: "健身追蹤",
@@ -37,6 +39,7 @@ const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
     links: [{ label: "進入系統", url: "https://fitness-forge-chenweihanfool.replit.app/" }],
     worldXZ: [5.5, 3.5],
     isPrivate: true,
+    subsystemId: null,
   },
   {
     name: "扭曲的夢境",
@@ -44,6 +47,7 @@ const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
     links: [{ label: "進入系統", url: "https://art-mart--chenweihanfool.replit.app/" }],
     worldXZ: [3.5, -1.0],
     isPrivate: true,
+    subsystemId: null,
   },
   {
     name: "圖根點管理系統",
@@ -51,6 +55,7 @@ const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
     links: [{ label: "進入系統", url: "https://kc2-cwh.replit.app/" }],
     worldXZ: [-3.0, -1.5],
     isPrivate: false,
+    subsystemId: null,
   },
   {
     name: "土地移轉分析系統",
@@ -58,6 +63,7 @@ const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
     links: [{ label: "進入系統", url: "https://land-transfer-visualizer.replit.app/" }],
     worldXZ: [-5.0, 1.0],
     isPrivate: false,
+    subsystemId: null,
   },
   {
     name: "案件排程系統",
@@ -65,6 +71,7 @@ const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
     links: [{ label: "進入系統", url: "https://map-scheduler.replit.app/" }],
     worldXZ: [-3.5, 3.5],
     isPrivate: false,
+    subsystemId: null,
   },
 ];
 
@@ -76,6 +83,7 @@ function toApiSite(row: typeof portalSitesTable.$inferSelect): ApiSite {
     links: (row.links ?? []) as SiteLink[],
     worldXZ: [row.worldX, row.worldZ],
     isPrivate: row.isPrivate,
+    subsystemId: row.subsystemId,
   };
 }
 
@@ -111,6 +119,7 @@ router.get("/sites", async (req: Request, res: Response) => {
       worldX: s.worldXZ[0],
       worldZ: s.worldXZ[1],
       isPrivate: s.isPrivate,
+      subsystemId: s.subsystemId,
       sortOrder: i,
     }));
     await db.insert(portalSitesTable).values(insertValues);
@@ -126,12 +135,13 @@ router.get("/sites", async (req: Request, res: Response) => {
 });
 
 router.post("/sites", requireAdmin, async (req: Request, res: Response) => {
-  const { name, subtitle, links, worldXZ, isPrivate } = req.body as {
+  const { name, subtitle, links, worldXZ, isPrivate, subsystemId } = req.body as {
     name: string;
     subtitle?: string;
     links: SiteLink[];
     worldXZ: [number, number];
     isPrivate: boolean;
+    subsystemId?: string | null;
   };
 
   const [inserted] = await db
@@ -143,6 +153,7 @@ router.post("/sites", requireAdmin, async (req: Request, res: Response) => {
       worldX: worldXZ[0],
       worldZ: worldXZ[1],
       isPrivate,
+      subsystemId: subsystemId?.trim() || null,
       sortOrder: 999,
     })
     .returning();
@@ -157,12 +168,13 @@ router.put("/sites/:id", requireAdmin, async (req: Request, res: Response) => {
     return;
   }
 
-  const { name, subtitle, links, worldXZ, isPrivate } = req.body as {
+  const { name, subtitle, links, worldXZ, isPrivate, subsystemId } = req.body as {
     name?: string;
     subtitle?: string;
     links?: SiteLink[];
     worldXZ?: [number, number];
     isPrivate?: boolean;
+    subsystemId?: string | null;
   };
 
   const updates: Partial<typeof portalSitesTable.$inferInsert> = {};
@@ -171,6 +183,7 @@ router.put("/sites/:id", requireAdmin, async (req: Request, res: Response) => {
   if (links !== undefined) updates.links = links;
   if (worldXZ !== undefined) { updates.worldX = worldXZ[0]; updates.worldZ = worldXZ[1]; }
   if (isPrivate !== undefined) updates.isPrivate = isPrivate;
+  if (subsystemId !== undefined) updates.subsystemId = subsystemId?.trim() || null;
 
   const [updated] = await db
     .update(portalSitesTable)

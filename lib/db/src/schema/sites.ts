@@ -11,6 +11,9 @@ export const portalSitesTable = pgTable("portal_sites", {
   worldZ: real("world_z").notNull(),
   isPrivate: boolean("is_private").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
+  // Optional link to a subsystem_summaries row — set this to render a rich
+  // dashboard widget (GlassSummaryCard) instead of a plain link card.
+  subsystemId: text("subsystem_id"),
 });
 
 export const insertPortalSiteSchema = createInsertSchema(portalSitesTable).omit({ id: true });

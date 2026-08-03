@@ -25,6 +25,18 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.7.0',
+    date: '2026-08-03',
+    summary: '系統總覽看板（第一階段：人生進度管理系統）',
+    changes: [
+      '私領域卡片新增「摘要卡」型態：有對應 /api/public/summary 來源的子系統，從純連結卡升級成內嵌數據的儀表板卡片',
+      '第一階段串接人生進度管理系統（pf-cwh）：總資產、TWRR、MWRR、休假比率',
+      'api-server 新增排程器每 20 分鐘拉取一次各子系統摘要並快取，來源掛掉時保留上次快取值，不讓整頁被拖垮',
+      '新增 GET /api/dashboard：人看的卡片與 AI Agent 要讀的結構化資料共用同一份，私領域摘要一樣要密碼解鎖才吐出真實數字',
+      '私領域解鎖沿用同一把密碼，解鎖後會即時重新拉取一次摘要資料，不用整頁重新整理',
+    ],
+  },
+  {
     version: '1.6.1',
     date: '2026-07-01',
     summary: '手機版面修正 · 卡片捲動',
@@ -127,6 +139,17 @@ interface SiteData {
   links: SiteLink[]
   worldXZ: [number, number]
   isPrivate: boolean
+  subsystemId: string | null
+}
+
+interface DashboardSummary {
+  subsystemId: string
+  name: string
+  isPrivate: boolean
+  status: 'ok' | 'error' | 'pending'
+  errorMessage: string | null
+  fetchedAt: string | null
+  data: Record<string, unknown> | null
 }
 
 // ─────────────────────────────────────────────
@@ -139,6 +162,15 @@ async function apiFetchSites(): Promise<SiteData[]> {
   if (!r.ok) throw new Error('Failed to fetch sites')
   const data = await r.json() as { sites: SiteData[] }
   return data.sites
+}
+
+async function apiFetchDashboard(adminPassword: string | null): Promise<DashboardSummary[]> {
+  const r = await fetch(`${API_BASE}api/dashboard`, {
+    headers: adminPassword ? { 'x-admin-password': adminPassword } : {},
+  })
+  if (!r.ok) throw new Error('Failed to fetch dashboard')
+  const data = await r.json() as { summaries: DashboardSummary[] }
+  return data.summaries
 }
 
 async function apiVerifyPassword(password: string): Promise<boolean> {
@@ -598,7 +630,7 @@ function PasswordModal({
   onCancel,
 }: {
   pendingUrl: string
-  onSuccess: () => void
+  onSuccess: (password: string) => void
   onCancel: () => void
 }) {
   const [input, setInput] = useState('')
@@ -611,9 +643,9 @@ function PasswordModal({
     const ok = await apiVerifyPassword(input)
     setLoading(false)
     if (ok) {
-      localStorage.setItem(UNLOCK_KEY, '1')
-      window.open(pendingUrl, '_blank', 'noopener,noreferrer')
-      onSuccess()
+      localStorage.setItem(UNLOCK_KEY, input)
+      if (pendingUrl) window.open(pendingUrl, '_blank', 'noopener,noreferrer')
+      onSuccess(input)
     } else {
       setError('密碼錯誤，請再試一次')
       setInput('')
@@ -692,7 +724,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 }
 
 const BLANK_FORM = (): Omit<SiteData, 'id' | 'worldXZ'> => ({
-  name: '', subtitle: '', links: [{ label: '進入系統', url: '' }], isPrivate: false,
+  name: '', subtitle: '', links: [{ label: '進入系統', url: '' }], isPrivate: false, subsystemId: null,
 })
 
 interface AdminPanelProps {
@@ -716,7 +748,7 @@ function AdminPanel({ sites, adminPassword, onAdd, onEdit, onDelete, onClose }: 
 
   const openEdit = (s: SiteData) => {
     setEditing(s); setAdding(false); setApiError('')
-    setForm({ name: s.name, subtitle: s.subtitle, links: s.links.map(l => ({ ...l })), isPrivate: s.isPrivate })
+    setForm({ name: s.name, subtitle: s.subtitle, links: s.links.map(l => ({ ...l })), isPrivate: s.isPrivate, subsystemId: s.subsystemId })
   }
   const openAdd = () => {
     setAdding(true); setEditing(null); setApiError('')
@@ -743,11 +775,12 @@ function AdminPanel({ sites, adminPassword, onAdd, onEdit, onDelete, onClose }: 
     setBusy(true)
     setApiError('')
     try {
+      const subsystemId = form.subsystemId?.trim() || null
       if (adding) {
         const worldXZ = nextPosition(sites, form.isPrivate)
-        await onAdd({ name: form.name.trim(), subtitle: form.subtitle.trim(), links, worldXZ, isPrivate: form.isPrivate })
+        await onAdd({ name: form.name.trim(), subtitle: form.subtitle.trim(), links, worldXZ, isPrivate: form.isPrivate, subsystemId })
       } else if (editing) {
-        await onEdit(editing.id, { name: form.name.trim(), subtitle: form.subtitle.trim(), links, isPrivate: form.isPrivate })
+        await onEdit(editing.id, { name: form.name.trim(), subtitle: form.subtitle.trim(), links, isPrivate: form.isPrivate, subsystemId })
       }
       closeForm()
     } catch {
@@ -883,6 +916,15 @@ function AdminPanel({ sites, adminPassword, onAdd, onEdit, onDelete, onClose }: 
                   </button>
                 ))}
               </div>
+            </FormField>
+
+            <FormField label="儀表板摘要來源 ID（選填）">
+              <input
+                value={form.subsystemId ?? ''}
+                onChange={e => setForm(f => ({ ...f, subsystemId: e.target.value }))}
+                placeholder="例如 pf-cwh，留空則顯示為一般連結卡"
+                style={inputSt}
+              />
             </FormField>
 
             <div style={{ marginBottom: '14px' }}>
@@ -1211,12 +1253,157 @@ function GlassCard({
   )
 }
 
+// ─────────────────────────────────────────────
+// Glass Summary Card — rich dashboard widget for subsystems with a
+// /api/public/summary source (see lib/summarySources.ts on the api-server)
+// ─────────────────────────────────────────────
+function formatTWD(n: number): string {
+  return `NT$ ${Math.round(n).toLocaleString('zh-TW')}`
+}
+
+function formatPct(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '資料不足'
+  const pct = n * 100
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+}
+
+function formatMinutesAgo(iso: string | null): string {
+  if (!iso) return '尚未取得'
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000))
+  if (mins < 1) return '剛剛更新'
+  if (mins < 60) return `${mins} 分鐘前更新`
+  return `${Math.round(mins / 60)} 小時前更新`
+}
+
+function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
+  const totalAssetsTWD = typeof data['totalAssetsTWD'] === 'number' ? data['totalAssetsTWD'] : null
+  const twrr = typeof data['twrr'] === 'number' ? data['twrr'] : null
+  const mwrr = typeof data['mwrr'] === 'number' ? data['mwrr'] : null
+  const leaveRatio = typeof data['leaveRatio'] === 'number' ? data['leaveRatio'] : null
+
+  return (
+    <>
+      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '2px' }}>總資產</div>
+      <div style={{ fontSize: 'clamp(1.05rem, 1.6vw, 1.3rem)', fontWeight: '600', color: 'rgba(255,255,255,0.95)', marginBottom: '0.55rem' }}>
+        {totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—'}
+      </div>
+      <div style={{ display: 'flex', gap: '14px', marginBottom: '0.6rem' }}>
+        <div>
+          <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em' }}>TWRR</div>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: twrr === null ? 'rgba(255,255,255,0.4)' : (twrr >= 0 ? '#34d399' : '#f87171') }}>{formatPct(twrr)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em' }}>MWRR</div>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: mwrr === null ? 'rgba(255,255,255,0.4)' : (mwrr >= 0 ? '#34d399' : '#f87171') }}>{formatPct(mwrr)}</div>
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em', marginBottom: '3px' }}>
+          休假比率 {leaveRatio !== null ? `${Math.round(leaveRatio * 100)}%` : '—'}
+        </div>
+        <div style={{ height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', borderRadius: '2px', width: `${leaveRatio !== null ? Math.min(100, leaveRatio * 100) : 0}%`, background: 'linear-gradient(90deg, rgba(192,132,252,0.5), #c084fc)' }} />
+        </div>
+      </div>
+    </>
+  )
+}
+
+const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) => React.ReactElement> = {
+  'pf-cwh': PfCwhSummaryBody,
+}
+
+function GlassSummaryCard({
+  site,
+  summary,
+  index,
+  unlocked,
+  onSelect,
+}: {
+  site: SiteData
+  summary: DashboardSummary
+  index: number
+  unlocked: boolean
+  onSelect: (site: SiteData) => void
+}) {
+  const isLocked = site.isPrivate && !unlocked
+  const rgb = site.isPrivate ? '192,132,252' : '0,229,255'
+  const accent = site.isPrivate ? '#c084fc' : '#00e5ff'
+  const Body = SUMMARY_BODIES[summary.subsystemId]
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: index * 0.05, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ scale: 1.03, y: -5, transition: { duration: 0.18 } }}
+      onClick={() => onSelect(site)}
+      style={{
+        position: 'relative',
+        cursor: 'pointer',
+        background: 'rgba(255,255,255,0.055)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: `1px solid rgba(${rgb},0.22)`,
+        borderRadius: '16px',
+        padding: '0.9rem 0.85rem 0.75rem',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px',
+        background: `linear-gradient(90deg, transparent, rgba(${rgb},0.6), transparent)`,
+      }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.7rem' }}>
+        <span style={{ fontSize: '18px', filter: `drop-shadow(0 0 8px rgba(${rgb},0.55))` }}>
+          {isLocked ? '🔒' : PORTAL_ICONS[index % PORTAL_ICONS.length]}
+        </span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ color: accent, fontSize: '12px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</div>
+          <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '9.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.subtitle}</div>
+        </div>
+      </div>
+
+      {isLocked ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '6px', padding: '0.6rem 0' }}>
+          <div style={{ fontSize: '13px', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)' }}>••••••</div>
+          <div style={{ fontSize: '9.5px', color: '#fbbf24', letterSpacing: '0.05em' }}>🔒 解鎖後顯示</div>
+        </div>
+      ) : summary.status === 'pending' ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>資料準備中…</div>
+      ) : summary.data && Body ? (
+        <Body data={summary.data} />
+      ) : (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>暫時無法取得資料</div>
+      )}
+
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        paddingTop: '0.45rem', marginTop: '0.6rem',
+        borderTop: `1px solid rgba(${rgb},0.13)`,
+      }}>
+        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.28)', letterSpacing: '0.04em' }}>
+          {isLocked ? '——' : formatMinutesAgo(summary.fetchedAt)}
+        </span>
+        <span style={{ fontSize: '9px', color: isLocked ? '#fbbf24' : `rgba(${rgb},0.8)`, letterSpacing: '0.05em', fontWeight: '500' }}>
+          {isLocked ? '🔐 LOCKED' : (site.isPrivate ? 'PRIVATE' : 'PUBLIC')}
+        </span>
+      </div>
+    </motion.div>
+  )
+}
+
 function GlassPortalView({
   sites,
+  dashboard,
   unlocked,
   onSiteSelect,
 }: {
   sites: SiteData[]
+  dashboard: DashboardSummary[]
   unlocked: boolean
   onSiteSelect: (site: SiteData) => void
 }) {
@@ -1326,16 +1513,20 @@ function GlassPortalView({
         <div className="glass-portal-zone" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <ZoneLabel label="▶  私  領  域" color="#c084fc" rgb="192,132,252" />
           <div className="glass-portal-cards" style={{
-            flex: 1, overflow: 'hidden',
+            flex: 1, overflowY: 'auto', overflowX: 'hidden',
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
-            gridAutoRows: '1fr',
+            gridAutoRows: 'auto',
+            alignContent: 'start',
             gap: '0.7rem',
           }}>
             {privateSites.length > 0
-              ? privateSites.map((s, i) => (
-                  <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
-                ))
+              ? privateSites.map((s, i) => {
+                  const summary = s.subsystemId ? dashboard.find(d => d.subsystemId === s.subsystemId) : undefined
+                  return summary && SUMMARY_BODIES[summary.subsystemId]
+                    ? <GlassSummaryCard key={s.id} site={s} summary={summary} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
+                    : <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
+                })
               : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase' }}>No Data</div>
             }
           </div>
@@ -1365,7 +1556,9 @@ function GlassPortalView({
 // ─────────────────────────────────────────────
 export default function App() {
   const [sites, setSites] = useState<SiteData[]>([])
-  const [unlocked, setUnlocked] = useState(() => localStorage.getItem(UNLOCK_KEY) === '1')
+  const [dashboard, setDashboard] = useState<DashboardSummary[]>([])
+  const [unlockedPassword, setUnlockedPassword] = useState<string | null>(() => localStorage.getItem(UNLOCK_KEY))
+  const unlocked = !!unlockedPassword
   const [modal, setModal] = useState<{ visible: boolean; pendingUrl: string }>({ visible: false, pendingUrl: '' })
   const [adminAuth, setAdminAuth] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
@@ -1388,6 +1581,12 @@ export default function App() {
       .catch(() => { /* keep empty sites on error */ })
   }, [])
 
+  useEffect(() => {
+    apiFetchDashboard(unlockedPassword)
+      .then(data => { setDashboard(data) })
+      .catch(() => { /* keep whatever we have */ })
+  }, [unlockedPassword])
+
   const openUrl = useCallback((url: string, isPrivate: boolean) => {
     if (!isPrivate || unlocked) {
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -1404,8 +1603,8 @@ export default function App() {
     openUrl(url, isPrivate)
   }, [openUrl])
 
-  const handleModalSuccess = useCallback(() => {
-    setUnlocked(true)
+  const handleModalSuccess = useCallback((password: string) => {
+    setUnlockedPassword(password)
     setModal({ visible: false, pendingUrl: '' })
   }, [])
 
@@ -1514,6 +1713,7 @@ export default function App() {
           >
             <GlassPortalView
               sites={sites}
+              dashboard={dashboard}
               unlocked={unlocked}
               onSiteSelect={handleSiteClick}
             />
