@@ -33,7 +33,7 @@ $ErrorActionPreference = "Continue"
 $RepoDir = "F:\WEBAPP\SRC\Aiportal"
 $LogFile = "$RepoDir\update.log"
 $StartTime = Get-Date
-$HealthUrl = "https://cwh2023.asuscomm.com/aiportal/"
+$HealthUrl = "https://cwh2023.synology.me/aiportal/"
 $HealthCheckUrl = "http://127.0.0.1:5139/api/healthz"
 $AppPort = 5139
 
