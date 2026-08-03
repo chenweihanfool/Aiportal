@@ -11,7 +11,7 @@
       - Python installed, with dependencies from requirements.txt:
             pip install -r requirements.txt
       - A .env file in this same directory (copy .env.example, fill in
-        VIKUNJA_URL / VIKUNJA_TOKEN / DATABASE_URL) — compute_daily.py loads
+        VIKUNJA_URL / VIKUNJA_TOKEN / DATABASE_URL) ??compute_daily.py loads
         it automatically via python-dotenv, no need to set them as system/task
         environment variables.
 .NOTES
@@ -25,11 +25,11 @@ $ErrorActionPreference = "Stop"
 
 $TaskName = "AiportalBusynessIndex"
 $ScriptDir = $PSScriptRoot
-$PythonExe = "python"  # change to a full path if `python` isn't on PATH for the account running the task
+$PythonExe = "C:\Users\user\AppData\Local\hermes\hermes-agent\venv\Scripts\python.exe"  # change to a full path if `python` isn't on PATH for the account running the task
 $SqlitePath = Join-Path $ScriptDir "busyness_snapshots.db"
 
 if (-not (Test-Path (Join-Path $ScriptDir ".env"))) {
-    Write-Host "WARNING: no .env found in $ScriptDir — copy .env.example to .env and fill in VIKUNJA_URL / VIKUNJA_TOKEN / DATABASE_URL before this task will succeed." -ForegroundColor Yellow
+    Write-Host "WARNING: no .env found in $ScriptDir ??copy .env.example to .env and fill in VIKUNJA_URL / VIKUNJA_TOKEN / DATABASE_URL before this task will succeed." -ForegroundColor Yellow
 }
 
 $Action = New-ScheduledTaskAction `
