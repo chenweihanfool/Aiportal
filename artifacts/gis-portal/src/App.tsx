@@ -25,6 +25,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.9.1',
+    date: '2026-08-03',
+    summary: '修正密碼過期後無法自動重鎖 · Vikunja 補甘特圖',
+    changes: [
+      '修正解鎖密碼失效後卡片會卡在「暫時無法取得資料」的問題：/api/dashboard 只有在密碼被伺服器拒絕時才會回傳 data:null（真正的抓取失敗會保留上次快取值，不會是 null），所以現在偵測到這個訊號就自動清掉本機存的舊密碼、退回真正的鎖定畫面，讓使用者重新輸入現在有效的密碼',
+      '任務追蹤系統卡片加寬為 2 欄，補上簡易甘特圖（沿用現有到期任務清單資料，未設定起始日的任務畫成單日標記）',
+    ],
+  },
+  {
     version: '1.9.0',
     date: '2026-08-03',
     summary: '系統總覽看板（第三階段：任務追蹤系統）',
@@ -1387,6 +1396,7 @@ interface VikunjaUpcomingTask {
   title: string
   projectTitle: string
   dueDate: string
+  startDate: string | null
   overdue: boolean
 }
 
@@ -1398,36 +1408,93 @@ function dueChipLabel(dueDate: string, overdue: boolean): string {
   return `${days} 天後`
 }
 
+const GANTT_OVERDUE_BUFFER_DAYS = 3
+
+function dayIndex(iso: string, spanStartMs: number): number {
+  return Math.floor((new Date(iso).getTime() - spanStartMs) / 86400000)
+}
+
+function VikunjaGantt({ tasks, windowDays }: { tasks: VikunjaUpcomingTask[]; windowDays: number }) {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const spanStartMs = startOfToday.getTime() - GANTT_OVERDUE_BUFFER_DAYS * 86400000
+  const totalDays = GANTT_OVERDUE_BUFFER_DAYS + windowDays + 1
+  const todayCol = GANTT_OVERDUE_BUFFER_DAYS
+
+  return (
+    <div style={{ marginTop: '0.7rem', position: 'relative' }}>
+      <div style={{
+        position: 'absolute', top: 0, bottom: 0,
+        left: `${(todayCol / totalDays) * 100}%`,
+        width: '1px', background: '#00e5ff', boxShadow: '0 0 4px rgba(0,229,255,0.8)',
+      }} />
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${totalDays}, 1fr)`,
+        gridAutoRows: '7px',
+        rowGap: '5px',
+      }}>
+        {tasks.map((t, idx) => {
+          const endIdx = Math.min(totalDays - 1, Math.max(0, dayIndex(t.dueDate, spanStartMs)))
+          const rawStartIdx = t.startDate ? dayIndex(t.startDate, spanStartMs) : endIdx
+          const startIdx = Math.min(endIdx, Math.max(0, rawStartIdx))
+          return (
+            <div key={t.id} style={{
+              gridColumn: `${startIdx + 1} / ${endIdx + 2}`,
+              gridRow: idx + 1,
+              borderRadius: '3px',
+              background: t.overdue
+                ? 'rgba(248,113,113,0.6)'
+                : 'linear-gradient(90deg, rgba(192,132,252,0.45), rgba(192,132,252,0.85))',
+            }} />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
   const tasks = Array.isArray(data['tasks']) ? data['tasks'] as VikunjaUpcomingTask[] : []
   const windowDays = typeof data['windowDays'] === 'number' ? data['windowDays'] : 7
+  const shown = tasks.slice(0, 5)
 
   return (
-    <>
-      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
-        {windowDays} 天內到期
+    <div style={{ display: 'flex', gap: '1rem', flex: 1 }}>
+      <div style={{ flex: '0 0 47%', minWidth: 0 }}>
+        <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+          {windowDays} 天內到期
+        </div>
+        {shown.length === 0 ? (
+          <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>近期沒有到期任務</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            {shown.map(t => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10.5px', height: '12px' }}>
+                <span style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                <span style={{
+                  fontSize: '9px', padding: '1px 6px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0,
+                  background: t.overdue ? 'rgba(248,113,113,0.14)' : 'rgba(251,191,36,0.14)',
+                  color: t.overdue ? '#f87171' : '#fbbf24',
+                }}>
+                  {dueChipLabel(t.dueDate, t.overdue)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      {tasks.length === 0 ? (
-        <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>近期沒有到期任務</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          {tasks.slice(0, 4).map(t => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10.5px' }}>
-              <span style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-              <span style={{
-                fontSize: '9px', padding: '1px 6px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0,
-                background: t.overdue ? 'rgba(248,113,113,0.14)' : 'rgba(251,191,36,0.14)',
-                color: t.overdue ? '#f87171' : '#fbbf24',
-              }}>
-                {dueChipLabel(t.dueDate, t.overdue)}
-              </span>
-            </div>
-          ))}
+      {shown.length > 0 && (
+        <div style={{ flex: 1, minWidth: 0, borderLeft: '1px solid rgba(192,132,252,0.13)', paddingLeft: '1rem' }}>
+          <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>簡易甘特圖</div>
+          <VikunjaGantt tasks={shown} windowDays={windowDays} />
         </div>
       )}
-    </>
+    </div>
   )
 }
+
+const WIDE_SUMMARY_CARDS = new Set(['vikunja'])
 
 const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) => React.ReactElement> = {
   'pf-cwh': PfCwhSummaryBody,
@@ -1452,6 +1519,7 @@ function GlassSummaryCard({
   const rgb = site.isPrivate ? '192,132,252' : '0,229,255'
   const accent = site.isPrivate ? '#c084fc' : '#00e5ff'
   const Body = SUMMARY_BODIES[summary.subsystemId]
+  const wide = WIDE_SUMMARY_CARDS.has(summary.subsystemId)
 
   return (
     <motion.div
@@ -1463,6 +1531,7 @@ function GlassSummaryCard({
       style={{
         position: 'relative',
         cursor: 'pointer',
+        gridColumn: wide ? 'span 2' : undefined,
         background: 'rgba(255,255,255,0.055)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
@@ -1705,7 +1774,19 @@ export default function App() {
 
   useEffect(() => {
     apiFetchDashboard(unlockedPassword)
-      .then(data => { setDashboard(data) })
+      .then(data => {
+        setDashboard(data)
+        // The server only ever sends `data: null` for a private summary when
+        // it rejects the caller's password (a genuine fetch failure keeps the
+        // last cached value instead). If the client still thinks it's
+        // unlocked but every private summary came back redacted, the stored
+        // password is stale — clear it so the UI drops back to the real
+        // locked state instead of silently showing "暫時無法取得資料" forever.
+        if (unlockedPassword && data.some(s => s.isPrivate && s.data === null)) {
+          localStorage.removeItem(UNLOCK_KEY)
+          setUnlockedPassword(null)
+        }
+      })
       .catch(() => { /* keep whatever we have */ })
   }, [unlockedPassword])
 
