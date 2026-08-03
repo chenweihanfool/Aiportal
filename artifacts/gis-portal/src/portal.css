@@ -148,7 +148,8 @@ body,
 }
 
 @media (max-width: 480px) {
-  .glass-portal-bento {
+  .glass-portal-bento,
+  .glass-portal-cards {
     grid-template-columns: 1fr !important;
   }
 

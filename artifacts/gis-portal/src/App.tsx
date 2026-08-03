@@ -25,6 +25,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.10.1',
+    date: '2026-08-03',
+    summary: '排版與資料修正：2 欄網格、休假配速、甘特圖補標籤',
+    changes: [
+      '私領域改回每列最多 2 欄（不是 4 欄）：第一列人生進度管理系統+運動 APP 系統並排，任務追蹤系統（2 欄寬）獨自佔一列，其餘依序往下排；公領域也改成每列 2 欄',
+      '人生進度管理系統卡片「休假比率」改成「休假配速」：原本接錯欄位（顯示的是已休天數/總假別天數，畫面上根本沒有這個數字），改抓 pf-cwh 自己也在用的配速指數',
+      '任務追蹤系統卡片內部改垂直排版（清單在上、甘特圖在下），甘特圖欄位加大到全卡寬度；甘特圖補上日期軸（-3天／今天／+7天）跟每列任務名稱標籤，不再是看不懂在畫什麼的裸線條',
+    ],
+  },
+  {
     version: '1.10.0',
     date: '2026-08-03',
     summary: '版面改垂直佈局，貼近概念稿',
@@ -1318,7 +1328,7 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
   const totalAssetsTWD = typeof data['totalAssetsTWD'] === 'number' ? data['totalAssetsTWD'] : null
   const twrr = typeof data['twrr'] === 'number' ? data['twrr'] : null
   const mwrr = typeof data['mwrr'] === 'number' ? data['mwrr'] : null
-  const leaveRatio = typeof data['leaveRatio'] === 'number' ? data['leaveRatio'] : null
+  const pacingIndex = typeof data['pacingIndex'] === 'number' ? data['pacingIndex'] : null
 
   return (
     <>
@@ -1338,10 +1348,10 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
       </div>
       <div>
         <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em', marginBottom: '3px' }}>
-          休假比率 {leaveRatio !== null ? `${Math.round(leaveRatio * 100)}%` : '—'}
+          休假配速 {pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—'}
         </div>
         <div style={{ height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', borderRadius: '2px', width: `${leaveRatio !== null ? Math.min(100, leaveRatio * 100) : 0}%`, background: 'linear-gradient(90deg, rgba(192,132,252,0.5), #c084fc)' }} />
+          <div style={{ height: '100%', borderRadius: '2px', width: `${pacingIndex !== null ? Math.min(100, pacingIndex * 100) : 0}%`, background: 'linear-gradient(90deg, rgba(192,132,252,0.5), #c084fc)' }} />
         </div>
       </div>
     </>
@@ -1424,39 +1434,56 @@ function dayIndex(iso: string, spanStartMs: number): number {
   return Math.floor((new Date(iso).getTime() - spanStartMs) / 86400000)
 }
 
+// Label column fixed width + one column per day in the span.
+const GANTT_LABEL_COL = 'minmax(58px, 92px)'
+
 function VikunjaGantt({ tasks, windowDays }: { tasks: VikunjaUpcomingTask[]; windowDays: number }) {
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
   const spanStartMs = startOfToday.getTime() - GANTT_OVERDUE_BUFFER_DAYS * 86400000
   const totalDays = GANTT_OVERDUE_BUFFER_DAYS + windowDays + 1
   const todayCol = GANTT_OVERDUE_BUFFER_DAYS
+  const gridCols = `${GANTT_LABEL_COL} repeat(${totalDays}, 1fr)`
 
   return (
-    <div style={{ marginTop: '0.7rem', position: 'relative' }}>
-      <div style={{
-        position: 'absolute', top: 0, bottom: 0,
-        left: `${(todayCol / totalDays) * 100}%`,
-        width: '1px', background: '#00e5ff', boxShadow: '0 0 4px rgba(0,229,255,0.8)',
-      }} />
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${totalDays}, 1fr)`,
-        gridAutoRows: '7px',
-        rowGap: '5px',
-      }}>
+    <div>
+      {/* Day-scale axis: left edge, today, right edge */}
+      <div style={{ display: 'grid', gridTemplateColumns: gridCols, fontSize: '8px', color: 'rgba(255,255,255,0.3)', marginBottom: '3px' }}>
+        <div />
+        <div style={{ gridColumn: '2', textAlign: 'left' }}>-{GANTT_OVERDUE_BUFFER_DAYS}天</div>
+        <div style={{ gridColumn: String(todayCol + 2), textAlign: 'center', color: '#00e5ff', fontWeight: 600 }}>今天</div>
+        <div style={{ gridColumn: String(totalDays + 1), textAlign: 'right' }}>+{windowDays}天</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: gridCols, gridAutoRows: '16px', rowGap: '4px' }}>
+        {/* Today line, spanning every task row */}
+        <div style={{
+          gridColumn: String(todayCol + 2),
+          gridRow: `1 / ${tasks.length + 1}`,
+          borderLeft: '1px solid #00e5ff', boxShadow: '0 0 4px rgba(0,229,255,0.7)',
+        }} />
         {tasks.map((t, idx) => {
           const endIdx = Math.min(totalDays - 1, Math.max(0, dayIndex(t.dueDate, spanStartMs)))
           const rawStartIdx = t.startDate ? dayIndex(t.startDate, spanStartMs) : endIdx
           const startIdx = Math.min(endIdx, Math.max(0, rawStartIdx))
           return (
-            <div key={t.id} style={{
-              gridColumn: `${startIdx + 1} / ${endIdx + 2}`,
-              gridRow: idx + 1,
-              borderRadius: '3px',
-              background: t.overdue
-                ? 'rgba(248,113,113,0.6)'
-                : 'linear-gradient(90deg, rgba(192,132,252,0.45), rgba(192,132,252,0.85))',
-            }} />
+            <div key={t.id} style={{ display: 'contents' }}>
+              <div style={{
+                gridColumn: '1', gridRow: idx + 1, alignSelf: 'center',
+                fontSize: '9px', color: 'rgba(255,255,255,0.55)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {t.title}
+              </div>
+              <div style={{
+                gridColumn: `${startIdx + 2} / ${endIdx + 3}`,
+                gridRow: idx + 1, alignSelf: 'center',
+                height: '7px', borderRadius: '3px',
+                background: t.overdue
+                  ? 'rgba(248,113,113,0.7)'
+                  : 'linear-gradient(90deg, rgba(192,132,252,0.5), rgba(192,132,252,0.9))',
+              }} />
+            </div>
           )
         })}
       </div>
@@ -1470,15 +1497,15 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
   const shown = tasks.slice(0, 5)
 
   return (
-    <div style={{ display: 'flex', gap: '1rem', flex: 1 }}>
-      <div style={{ flex: '0 0 47%', minWidth: 0 }}>
-        <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
-          {windowDays} 天內到期
-        </div>
-        {shown.length === 0 ? (
-          <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>近期沒有到期任務</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+        {windowDays} 天內到期
+      </div>
+      {shown.length === 0 ? (
+        <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>近期沒有到期任務</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '0.8rem' }}>
             {shown.map(t => (
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10.5px', height: '12px' }}>
                 <span style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
@@ -1492,13 +1519,11 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
               </div>
             ))}
           </div>
-        )}
-      </div>
-      {shown.length > 0 && (
-        <div style={{ flex: 1, minWidth: 0, borderLeft: '1px solid rgba(192,132,252,0.13)', paddingLeft: '1rem' }}>
-          <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>簡易甘特圖</div>
-          <VikunjaGantt tasks={shown} windowDays={windowDays} />
-        </div>
+          <div style={{ borderTop: '1px solid rgba(192,132,252,0.13)', paddingTop: '0.6rem' }}>
+            <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>簡易甘特圖</div>
+            <VikunjaGantt tasks={shown} windowDays={windowDays} />
+          </div>
+        </>
       )}
     </div>
   )
@@ -1690,7 +1715,7 @@ function GlassPortalView({
           <ZoneLabel label="▶  私  領  域" color="#c084fc" rgb="192,132,252" />
           <div className="glass-portal-bento" style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gridAutoRows: 'auto',
             gap: '0.9rem',
           }}>
@@ -1717,7 +1742,7 @@ function GlassPortalView({
           <ZoneLabel label="◆  公  領  域" color="#00e5ff" rgb="0,229,255" />
           <div className="glass-portal-cards" style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gridAutoRows: 'auto',
             gap: '0.7rem',
           }}>
