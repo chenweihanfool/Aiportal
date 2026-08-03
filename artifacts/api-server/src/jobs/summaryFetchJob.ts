@@ -6,11 +6,7 @@ const INTERVAL_MS = 20 * 60 * 1000; // 20 minutes — within the 15-30 min cache
 
 async function fetchOne(source: SummarySource): Promise<void> {
   try {
-    const res = await fetch(source.url, {
-      signal: AbortSignal.timeout(source.timeoutMs ?? 8000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data: unknown = await res.json();
+    const data = await source.fetch();
 
     await db
       .insert(subsystemSummariesTable)

@@ -25,6 +25,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.9.0',
+    date: '2026-08-03',
+    summary: '系統總覽看板（第三階段：任務追蹤系統）',
+    changes: [
+      '私領域卡片新增任務追蹤系統（Vikunja）摘要：7 天內到期任務清單，依到期日排序，逾期／今天／N天後分色標示',
+      'Vikunja 是第三方系統、無法加自訂端點，api-server 改直接呼叫 Vikunja 既有 REST API（獨立唯讀 token）彙整全部專案的任務',
+      '甘特圖視覺化這次先不做——卡片維持現有寬度，等其他子系統都好、一次做版面加寬時再一起補',
+    ],
+  },
+  {
     version: '1.8.0',
     date: '2026-08-03',
     summary: '系統總覽看板（第二階段：運動 APP 系統）',
@@ -1372,9 +1382,57 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
   )
 }
 
+interface VikunjaUpcomingTask {
+  id: number
+  title: string
+  projectTitle: string
+  dueDate: string
+  overdue: boolean
+}
+
+function dueChipLabel(dueDate: string, overdue: boolean): string {
+  if (overdue) return '已逾期'
+  const days = Math.round((new Date(dueDate).getTime() - Date.now()) / 86400000)
+  if (days <= 0) return '今天'
+  if (days === 1) return '明天'
+  return `${days} 天後`
+}
+
+function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
+  const tasks = Array.isArray(data['tasks']) ? data['tasks'] as VikunjaUpcomingTask[] : []
+  const windowDays = typeof data['windowDays'] === 'number' ? data['windowDays'] : 7
+
+  return (
+    <>
+      <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+        {windowDays} 天內到期
+      </div>
+      {tasks.length === 0 ? (
+        <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>近期沒有到期任務</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          {tasks.slice(0, 4).map(t => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10.5px' }}>
+              <span style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+              <span style={{
+                fontSize: '9px', padding: '1px 6px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0,
+                background: t.overdue ? 'rgba(248,113,113,0.14)' : 'rgba(251,191,36,0.14)',
+                color: t.overdue ? '#f87171' : '#fbbf24',
+              }}>
+                {dueChipLabel(t.dueDate, t.overdue)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) => React.ReactElement> = {
   'pf-cwh': PfCwhSummaryBody,
   'fitnessforge': FitnessForgeSummaryBody,
+  'vikunja': VikunjaSummaryBody,
 }
 
 function GlassSummaryCard({
