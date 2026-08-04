@@ -1,4 +1,4 @@
-import { db, subsystemSummariesTable, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
+import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,
@@ -49,21 +49,6 @@ async function fetchVikunjaBusynessFromHistory(): Promise<unknown> {
   };
 }
 
-async function readCachedScore(
-  subsystemId: string,
-  field: string
-): Promise<{ value: number | null; stale: boolean }> {
-  const [row] = await db
-    .select()
-    .from(subsystemSummariesTable)
-    .where(eq(subsystemSummariesTable.subsystemId, subsystemId))
-    .limit(1);
-  if (!row) return { value: null, stale: false };
-  const data = row.data as Record<string, unknown>;
-  const value = typeof data[field] === "number" ? (data[field] as number) : null;
-  return { value, stale: row.status === "error" };
-}
-
 function taipeiDateString(date: Date): string {
   // en-CA formats as YYYY-MM-DD, which is both what Postgres DATE columns
   // expect and directly sortable/comparable as a string.
@@ -75,106 +60,12 @@ function taipeiDateString(date: Date): string {
   }).format(date);
 }
 
-// 翰翰仔幸福指數 — derived from the OTHER three sources' already-cached
-// subsystem_summaries rows (not re-fetched from their origin APIs), so this
-// must run AFTER pf-cwh/fitnessforge/vikunja in the same sequential
-// summaryFetchJob pass. See jobs/summaryFetchJob.ts for why the pass is
-// sequential rather than concurrent — this is the reason.
-async function computeAndPersistHappinessIndex(): Promise<unknown> {
-  const [lifeFreedom, fitness, vikunja] = await Promise.all([
-    readCachedScore("pf-cwh", "lifeFreedomIndex"),
-    readCachedScore("fitnessforge", "habitIndex"),
-    readCachedScore("vikunja", "busyIndex"),
-  ]);
-
-  const result = computeHappinessComponents({
-    lifeFreedomScore: lifeFreedom.value,
-    fitnessHabitScore: fitness.value,
-    busynessScore: vikunja.value,
-  });
-
-  const usingStaleData = lifeFreedom.stale || fitness.stale || vikunja.stale;
-  const configVersion = getHappinessConfigVersion();
-  // Sent to the frontend so it displays the weight percentages next to each
-  // contribution without hardcoding a second copy of HAPPINESS_CONFIG that
-  // could silently drift out of sync with this one.
-  const weights = {
-    lifeFreedomWeight: HAPPINESS_CONFIG.lifeFreedomWeight,
-    fitnessWeight: HAPPINESS_CONFIG.fitnessWeight,
-    calmWeight: HAPPINESS_CONFIG.calmWeight,
-  };
-
-  if (result.finalScore === null) {
-    // All three inputs missing — nothing to persist, nothing fake to show.
-    return {
-      finalScore: null,
-      displayedScore: null,
-      baseScore: null,
-      weakestScore: null,
-      weakestComponent: null,
-      lifeFreedomScore: null,
-      fitnessHabitScore: null,
-      calmScore: null,
-      busynessScore: null,
-      availableComponents: [],
-      usingStaleData,
-      configVersion,
-      weights,
-    };
-  }
-
-  const now = new Date();
-  const today = taipeiDateString(now);
-  const yesterday = taipeiDateString(new Date(now.getTime() - 24 * 60 * 60 * 1000));
-
-  const [yesterdayRow] = await db
-    .select({ displayedScore: happinessIndexHistoryTable.displayedScore })
-    .from(happinessIndexHistoryTable)
-    .where(eq(happinessIndexHistoryTable.date, yesterday))
-    .limit(1);
-
-  const displayedScore = computeDisplayedScore(result.finalScore, yesterdayRow?.displayedScore ?? null);
-
-  const historyRow = {
-    date: today,
-    finalScore: result.finalScore,
-    displayedScore,
-    baseScore: result.baseScore!,
-    weakestScore: result.weakestScore!,
-    weakestComponent: result.weakestComponent!,
-    availableComponents: result.components.availableComponents,
-    configVersion,
-  };
-
-  await db
-    .insert(happinessIndexHistoryTable)
-    .values(historyRow)
-    .onConflictDoUpdate({
-      target: happinessIndexHistoryTable.date,
-      set: { ...historyRow, computedAt: new Date() },
-    });
-
-  return {
-    finalScore: result.finalScore,
-    displayedScore,
-    baseScore: result.baseScore,
-    weakestScore: result.weakestScore,
-    weakestComponent: result.weakestComponent,
-    lifeFreedomScore: result.components.lifeFreedomScore,
-    fitnessHabitScore: result.components.fitnessHabitScore,
-    calmScore: result.components.calmScore,
-    busynessScore: vikunja.value,
-    availableComponents: result.components.availableComponents,
-    usingStaleData,
-    configVersion,
-    weights,
-  };
-}
-
 // Add one entry per subsystem as it comes online. summaryFetchJob polls
 // every source on the same schedule and caches the result in
-// subsystem_summaries. Order matters: "hhi" reads the other three's cached
-// rows, so it must stay last.
+// subsystem_summaries as a fallback for when the real-time dashboard fetch
+// (fetchFreshSummaries, below) can't reach the DB at all. "hhi" is computed
+// separately in fetchFreshSummaries from the other three's live results, so
+// it's not listed here.
 export const SUMMARY_SOURCES: SummarySource[] = [
   {
     id: "pf-cwh",
@@ -265,7 +156,7 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
     busynessScore,
   });
 
-  const hhiData = await computeHappinessIndexFresh(result);
+  const hhiData = await computeHappinessIndexFresh(result, busynessScore);
   const hhiEntry: DashboardSummary = {
     subsystemId: "hhi",
     name: "翰翰仔幸福指數",
@@ -280,11 +171,15 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   return results;
 }
 
-/** Re-compute HHI for the live dashboard without writing to
- *  happiness_index_history (that only happens in the cron). Reads yesterday's
- *  displayedScore from the DB so smoothing is still correct. */
+/** Recompute HHI from a live fetch and upsert today's row to
+ *  happiness_index_history, keyed by date — safe to call on every page load
+ *  since it's idempotent, not just once a day. This is now the only place
+ *  that writes to that table (the old cron-based writer was removed when the
+ *  dashboard switched to real-time fetch). Reads yesterday's displayedScore
+ *  from the DB so day-over-day smoothing keeps working. */
 async function computeHappinessIndexFresh(
-  result: import("./happinessIndex").HappinessResult
+  result: import("./happinessIndex").HappinessResult,
+  busynessScore: number | null
 ): Promise<Record<string, unknown>> {
   const usingStaleData = false; // fresh fetch is never stale
   const configVersion = getHappinessConfigVersion();
@@ -295,6 +190,7 @@ async function computeHappinessIndexFresh(
   };
 
   if (result.finalScore === null) {
+    // All three inputs missing — nothing to persist, nothing fake to show.
     return {
       finalScore: null,
       displayedScore: null,
@@ -324,6 +220,25 @@ async function computeHappinessIndexFresh(
 
   const displayedScore = computeDisplayedScore(result.finalScore, yesterdayRow?.displayedScore ?? null);
 
+  const historyRow = {
+    date: today,
+    finalScore: result.finalScore,
+    displayedScore,
+    baseScore: result.baseScore!,
+    weakestScore: result.weakestScore!,
+    weakestComponent: result.weakestComponent!,
+    availableComponents: result.components.availableComponents,
+    configVersion,
+  };
+
+  await db
+    .insert(happinessIndexHistoryTable)
+    .values(historyRow)
+    .onConflictDoUpdate({
+      target: happinessIndexHistoryTable.date,
+      set: { ...historyRow, computedAt: new Date() },
+    });
+
   return {
     finalScore: result.finalScore,
     displayedScore,
@@ -333,7 +248,7 @@ async function computeHappinessIndexFresh(
     lifeFreedomScore: result.components.lifeFreedomScore,
     fitnessHabitScore: result.components.fitnessHabitScore,
     calmScore: result.components.calmScore,
-    busynessScore: null, // not needed here
+    busynessScore,
     availableComponents: result.components.availableComponents,
     usingStaleData,
     configVersion,

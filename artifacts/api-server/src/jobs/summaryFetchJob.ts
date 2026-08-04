@@ -48,12 +48,15 @@ async function fetchOne(source: SummarySource): Promise<void> {
   }
 }
 
+// This cron only maintains the subsystem_summaries fallback cache used when
+// the real-time dashboard fetch (fetchFreshSummaries, in summarySources.ts)
+// can't reach the DB at all — /api/dashboard no longer reads this cache in
+// the normal path. "hhi" isn't in SUMMARY_SOURCES, so it isn't cached here;
+// it's computed fresh from live data on every dashboard request instead.
 export function startSummaryFetchJob(): void {
-  // Sequential, not concurrent (`for...of` + await, not a fire-and-forget
-  // loop of `void fetchOne(...)`) — the "hhi" source reads the OTHER three
-  // sources' just-written subsystem_summaries rows rather than re-fetching
-  // their origin APIs itself, so it needs them to have actually landed in
-  // the DB first. SUMMARY_SOURCES keeps "hhi" last for exactly this reason.
+  // Sequential, not concurrent — no strict ordering requirement anymore, but
+  // this keeps origin API load spread out rather than hitting pf-cwh and
+  // FitnessForge at the exact same instant.
   const runAll = async () => {
     for (const source of SUMMARY_SOURCES) {
       await fetchOne(source);
