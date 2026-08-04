@@ -196,10 +196,147 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     isPrivate: true,
     fetch: fetchVikunjaBusynessFromHistory,
   },
-  {
-    id: "hhi",
+];
+// REAL-TIME FETCH — for /api/dashboard on page load (not cached)
+// ─────────────────────────────────────────────
+
+export interface DashboardSummary {
+  subsystemId: string;
+  name: string;
+  isPrivate: boolean;
+  status: "ok" | "error" | "pending";
+  errorMessage: string | null;
+  fetchedAt: string | null;
+  data: Record<string, unknown> | null;
+}
+
+/** Fetch all subsystem data directly from their origin APIs (or DB history
+ *  for sources like Vikunja that are already persisted). Returns a map
+ *  keyed by subsystemId so the dashboard route can assemble the response.
+ *  On failure, returns the error as the data payload so the UI shows
+ *  "暫時無法取得資料" rather than crashing. */
+export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummary>> {
+  const results = new Map<string, DashboardSummary>();
+
+  // Fetch the three raw sources concurrently (pf-cwh, fitnessforge, vikunja)
+  // hhi is derived from them, so it's computed after.
+  const rawSources = SUMMARY_SOURCES.filter((s) => s.id !== "hhi");
+  const fetchPromises = rawSources.map(async (source) => {
+    try {
+      const data = await source.fetch();
+      return {
+        subsystemId: source.id,
+        name: source.name,
+        isPrivate: source.isPrivate,
+        status: "ok" as const,
+        errorMessage: null,
+        fetchedAt: new Date().toISOString(),
+        data: data as Record<string, unknown>,
+      };
+    } catch (err) {
+      const message = (err as Error).message;
+      return {
+        subsystemId: source.id,
+        name: source.name,
+        isPrivate: source.isPrivate,
+        status: "error" as const,
+        errorMessage: message,
+        fetchedAt: new Date().toISOString(),
+        data: null,
+      };
+    }
+  });
+
+  const rawResults = await Promise.all(fetchPromises);
+  rawResults.forEach((r) => results.set(r.subsystemId, r));
+
+  // Compute HHI from the raw results we just fetched (not from DB cache).
+  const pf = results.get("pf-cwh");
+  const ff = results.get("fitnessforge");
+  const vk = results.get("vikunja");
+
+  const lifeFreedomScore = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
+  const fitnessHabitScore = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
+  const busynessScore = vk?.status === "ok" ? (vk.data)?.busyIndex as number | null : null;
+
+  const result = computeHappinessComponents({
+    lifeFreedomScore,
+    fitnessHabitScore,
+    busynessScore,
+  });
+
+  const hhiData = await computeHappinessIndexFresh(result);
+  const hhiEntry: DashboardSummary = {
+    subsystemId: "hhi",
     name: "翰翰仔幸福指數",
     isPrivate: true,
-    fetch: computeAndPersistHappinessIndex,
-  },
-];
+    status: hhiData.finalScore !== null ? "ok" : "pending",
+    errorMessage: hhiData.finalScore !== null ? null : "資料準備中",
+    fetchedAt: new Date().toISOString(),
+    data: hhiData,
+  };
+  results.set("hhi", hhiEntry);
+
+  return results;
+}
+
+/** Re-compute HHI for the live dashboard without writing to
+ *  happiness_index_history (that only happens in the cron). Reads yesterday's
+ *  displayedScore from the DB so smoothing is still correct. */
+async function computeHappinessIndexFresh(
+  result: import("./happinessIndex").HappinessResult
+): Promise<Record<string, unknown>> {
+  const usingStaleData = false; // fresh fetch is never stale
+  const configVersion = getHappinessConfigVersion();
+  const weights = {
+    lifeFreedomWeight: HAPPINESS_CONFIG.lifeFreedomWeight,
+    fitnessWeight: HAPPINESS_CONFIG.fitnessWeight,
+    calmWeight: HAPPINESS_CONFIG.calmWeight,
+  };
+
+  if (result.finalScore === null) {
+    return {
+      finalScore: null,
+      displayedScore: null,
+      baseScore: null,
+      weakestScore: null,
+      weakestComponent: null,
+      lifeFreedomScore: null,
+      fitnessHabitScore: null,
+      calmScore: null,
+      busynessScore: null,
+      availableComponents: [],
+      usingStaleData,
+      configVersion,
+      weights,
+    };
+  }
+
+  const now = new Date();
+  const today = taipeiDateString(now);
+  const yesterday = taipeiDateString(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+
+  const [yesterdayRow] = await db
+    .select({ displayedScore: happinessIndexHistoryTable.displayedScore })
+    .from(happinessIndexHistoryTable)
+    .where(eq(happinessIndexHistoryTable.date, yesterday))
+    .limit(1);
+
+  const displayedScore = computeDisplayedScore(result.finalScore, yesterdayRow?.displayedScore ?? null);
+
+  return {
+    finalScore: result.finalScore,
+    displayedScore,
+    baseScore: result.baseScore,
+    weakestScore: result.weakestScore,
+    weakestComponent: result.weakestComponent,
+    lifeFreedomScore: result.components.lifeFreedomScore,
+    fitnessHabitScore: result.components.fitnessHabitScore,
+    calmScore: result.components.calmScore,
+    busynessScore: null, // not needed here
+    availableComponents: result.components.availableComponents,
+    usingStaleData,
+    configVersion,
+    weights,
+  };
+}
