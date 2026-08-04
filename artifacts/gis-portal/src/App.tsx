@@ -284,16 +284,6 @@ async function apiDeleteSite(id: string, adminPassword: string): Promise<void> {
   if (!r.ok) throw new Error('Failed to delete site')
 }
 
-async function apiTriggerPfCwhSnapshot(adminPassword: string): Promise<{ success: boolean; message: string; timestamp: string }> {
-  const r = await fetch(`${API_BASE}api/admin/trigger-snapshot`, {
-    method: 'POST',
-    headers: { 'x-admin-password': adminPassword },
-  })
-  if (!r.ok) throw new Error('Failed to trigger snapshot')
-  const data = await r.json() as { success: boolean; message: string; timestamp: string }
-  return data
-}
-
 function nextPosition(existing: SiteData[], isPrivate: boolean): [number, number] {
   const pool = isPrivate ? PRIVATE_POSITION_POOL : PUBLIC_POSITION_POOL
   const used = new Set(existing.map(s => `${s.worldXZ[0]},${s.worldXZ[1]}`))
