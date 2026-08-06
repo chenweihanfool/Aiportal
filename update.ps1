@@ -90,7 +90,7 @@ catch {
 Write-Host "[2/4] Building + starting containers..." -ForegroundColor Yellow
 try {
     Push-Location $RepoDir
-    $upResult = cmd /c "docker compose up -d --build 2>&1"
+    $upResult = cmd /c "docker compose up -d --build --force-recreate 2>&1"
     Write-Host $upResult
     # Skip LASTEXITCODE here -- Docker Desktop on this Windows host can emit a
     # false-positive .hermes-tmp cleanup warning (non-zero exit) after an
