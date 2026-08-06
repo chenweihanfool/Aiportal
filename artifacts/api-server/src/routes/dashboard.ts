@@ -19,29 +19,18 @@ router.get("/dashboard", async (req: Request, res: Response) => {
   try {
     const freshMap = await fetchFreshSummaries();
 
-    const summaries = SUMMARY_SOURCES.map((source: { id: string; name: string; isPrivate: boolean }) => {
-      const row = freshMap.get(source.id);
-      if (!row) {
-        return {
-          subsystemId: source.id,
-          name: source.name,
-          isPrivate: source.isPrivate,
-          status: "pending" as const,
-          errorMessage: null,
-          fetchedAt: null,
-          data: null,
-        };
-      }
-      return {
-        subsystemId: row.subsystemId,
-        name: row.name,
-        isPrivate: row.isPrivate,
-        status: row.status,
-        errorMessage: row.errorMessage,
-        fetchedAt: row.fetchedAt,
-        data: row.isPrivate && !unlocked ? null : row.data,
-      };
-    });
+    // Iterate the map itself, not SUMMARY_SOURCES — "hhi" is computed from
+    // the other three's results rather than being one of the fetched
+    // sources, so it's only present in freshMap, never in SUMMARY_SOURCES.
+    const summaries = Array.from(freshMap.values()).map((row) => ({
+      subsystemId: row.subsystemId,
+      name: row.name,
+      isPrivate: row.isPrivate,
+      status: row.status,
+      errorMessage: row.errorMessage,
+      fetchedAt: row.fetchedAt,
+      data: row.isPrivate && !unlocked ? null : row.data,
+    }));
 
     res.json({ summaries });
   } catch (err) {
