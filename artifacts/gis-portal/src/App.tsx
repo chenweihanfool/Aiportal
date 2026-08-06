@@ -25,6 +25,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.14.0',
+    date: '2026-08-07',
+    summary: '子系統卡片數字加註計算公式（hover 顯示），運動 APP 肌群雷達圖放大',
+    changes: [
+      '人生進度管理系統、運動 APP 系統、任務追蹤系統三張卡片的主指數跟每個輔助數字旁邊加上 ⓘ 標記，滑鼠移上去會顯示該數字實際怎麼算出來的（例如「均衡度 = 最弱肌群複合分 ÷ 最強肌群複合分」），不用回頭問或猜',
+      '運動 APP 系統的肌群雷達圖從 88px 放大到 130px，原本太小看不清楚各肌群分布',
+    ],
+  },
+  {
     version: '1.13.0',
     date: '2026-08-07',
     summary: '入口網改成開頁即時抓取各子系統資料，修正翰翰仔幸福指數消失的問題',
@@ -1371,11 +1380,14 @@ function heroTone(score: number | null, invert: boolean): { color: string; label
   return { color: '#f87171', label: invert ? '緊繃' : '待加強' }
 }
 
-function HeroIndex({ label, score, invert = false }: { label: string; score: number | null; invert?: boolean }) {
+// `formula` renders as a native title tooltip (hover to see how the number
+// above it is actually calculated) — cheapest way to "annotate" every stat
+// without building a bespoke tooltip component for a single-user dashboard.
+function HeroIndex({ label, score, invert = false, formula }: { label: string; score: number | null; invert?: boolean; formula?: string }) {
   const tone = heroTone(score, invert)
   return (
-    <div style={{ marginBottom: '1rem' }}>
-      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '5px' }}>{label}</div>
+    <div style={{ marginBottom: '1rem' }} title={formula}>
+      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '5px' }}>{label}{formula ? ' ⓘ' : ''}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
         <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>
           {score !== null ? score : '—'}
@@ -1386,12 +1398,12 @@ function HeroIndex({ label, score, invert = false }: { label: string; score: num
   )
 }
 
-function SupportStats({ items }: { items: Array<{ label: string; value: string; color?: string }> }) {
+function SupportStats({ items }: { items: Array<{ label: string; value: string; color?: string; formula?: string }> }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem 2rem' }}>
       {items.map(it => (
-        <div key={it.label}>
-          <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}</div>
+        <div key={it.label} title={it.formula}>
+          <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}{it.formula ? ' ⓘ' : ''}</div>
           <div style={{ fontSize: '18px', fontWeight: '600', color: it.color ?? 'rgba(255,255,255,0.9)' }}>{it.value}</div>
         </div>
       ))}
@@ -1408,12 +1420,12 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div style={{ flex: 1 }}>
-      <HeroIndex label="人生自由指數" score={lifeFreedomIndex} />
+      <HeroIndex label="人生自由指數" score={lifeFreedomIndex} formula="資產分／報酬分／休假配速分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均，不會整個是 0）" />
       <SupportStats items={[
-        { label: '總資產', value: totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—' },
-        { label: 'TWRR', value: formatPct(twrr), color: twrr === null ? undefined : (twrr >= 0 ? '#34d399' : '#f87171') },
-        { label: 'MWRR', value: formatPct(mwrr), color: mwrr === null ? undefined : (mwrr >= 0 ? '#34d399' : '#f87171') },
-        { label: '休假配速', value: pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—' },
+        { label: '總資產', value: totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—', formula: '目前資產總市值（最新一筆快照）' },
+        { label: 'TWRR', value: formatPct(twrr), color: twrr === null ? undefined : (twrr >= 0 ? '#34d399' : '#f87171'), formula: '時間加權報酬率——排除加減碼時機影響，純看資產本身的報酬表現' },
+        { label: 'MWRR', value: formatPct(mwrr), color: mwrr === null ? undefined : (mwrr >= 0 ? '#34d399' : '#f87171'), formula: '金額加權報酬率——考慮加減碼金額與時機，反映實際到手的報酬' },
+        { label: '休假配速', value: pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—', formula: '休假進度 ÷ 年度時間進度，100% = 剛好照今年時間進度休假' },
       ]} />
     </div>
   )
@@ -1448,15 +1460,15 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div style={{ flex: 1 }}>
-      <HeroIndex label="運動習慣指數" score={habitIndex} />
+      <HeroIndex label="運動習慣指數" score={habitIndex} formula="訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）；訓練量分等三項已依「本週已過幾分之幾」配速調整，不是單純比對整週終點" />
       <div style={{ display: 'flex', gap: '1.6rem', alignItems: 'center' }}>
         <SupportStats items={[
-          { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—' },
-          { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? '#34d399' : '#f87171') },
-          { label: '覆蓋率', value: coverageScore !== null ? `${coverageScore}%` : '—' },
-          { label: '均衡度', value: balanceScore !== null ? `${balanceScore}%` : '—' },
+          { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—', formula: '本週各筆訓練紀錄的加權分數總和（原始累積量，未經配速調整）' },
+          { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? '#34d399' : '#f87171'), formula: '本週至今 vs 上週同一段等長時間至今；上週那段時間剛好沒資料時，改比「目前配速 vs 個人平均配速」' },
+          { label: '覆蓋率', value: coverageScore !== null ? `${coverageScore}%` : '—', formula: '本週肌群雷達圖多邊形面積 ÷ 每軸都達 100% 維持量時的面積，越高代表整體訓練量越飽滿' },
+          { label: '均衡度', value: balanceScore !== null ? `${balanceScore}%` : '—', formula: '最弱肌群複合分 ÷ 最強肌群複合分（複合分 = 組數 40% + 容量 60%），數字越低代表落差越大' },
         ]} />
-        <svg width="88" height="88" viewBox="0 0 92 92" style={{ flexShrink: 0, marginLeft: 'auto' }}>
+        <svg width="130" height="130" viewBox="0 0 92 92" style={{ flexShrink: 0, marginLeft: 'auto' }}>
           <polygon points={gridPoints(1)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
           <polygon points={gridPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
           <polygon points={polygonPoints} fill="rgba(192,132,252,0.28)" stroke="#c084fc" strokeWidth={1.6} />
@@ -1479,12 +1491,12 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div style={{ flex: 1 }}>
-      <HeroIndex label="忙碌指數" score={busyIndex} invert />
+      <HeroIndex label="忙碌指數" score={busyIndex} invert formula="逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，數字越高代表越忙（跟其他卡片「越高越好」方向相反，每天由 Python 服務算一次）" />
       <SupportStats items={[
-        { label: '逾期壓力', value: overdueScore !== null ? String(overdueScore) : '—' },
-        { label: '近期負荷', value: loadScore !== null ? String(loadScore) : '—' },
-        { label: '停滯程度', value: stagnationScore !== null ? String(stagnationScore) : '—' },
-        { label: '拖延程度', value: completionScore !== null ? String(completionScore) : '—' },
+        { label: '逾期壓力', value: overdueScore !== null ? String(overdueScore) : '—', formula: '目前逾期任務的嚴重程度（數量、逾期天數），對比近三個月基準' },
+        { label: '近期負荷', value: loadScore !== null ? String(loadScore) : '—', formula: '近期任務負荷 ÷ 長期平均負荷（ACWR 概念），比值越高代表最近突然變忙' },
+        { label: '停滯程度', value: stagnationScore !== null ? String(stagnationScore) : '—', formula: '任務長期沒有進展、卡住不動的程度' },
+        { label: '拖延程度', value: completionScore !== null ? String(completionScore) : '—', formula: '過去 90 天準時完成率的反向指標（指數衰減加權，越近期權重越高），數字越高代表越常拖延' },
       ]} />
     </div>
   )
