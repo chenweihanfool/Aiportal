@@ -28,11 +28,18 @@ services:
   # workspace incl. drizzle-kit), not the slim `runtime` stage, since the
   # runtime image has no node_modules. Run explicitly on every deploy:
   #   docker compose --profile migrate run --rm db-migrate
-  # This exists because running `pnpm --filter db push` on the Windows
-  # deploy host directly hits drizzle-kit's Windows glob/path bugs
-  # ("No schema files found") — running it inside the same Linux
-  # environment the schema actually targets avoids that whole class of
-  # host/container mismatch.
+  #
+  # Applies versioned SQL files from lib/db/migrations/ (generate them with
+  # `pnpm --filter @workspace/db run generate` after changing schema.ts,
+  # commit them, then this runs on deploy) instead of `drizzle-kit push`'s
+  # live schema diffing. Switched away from push because it kept proposing
+  # to DROP+recreate busyness_index_history / happiness_index_history (the
+  # only two tables with a text[] column) even when the declared schema
+  # exactly matched the live DB — a drizzle-kit push limitation with
+  # Postgres array-column diffing, not a schema mistake. generate+migrate
+  # sidesteps live diffing entirely: each migration is exact, reviewed SQL,
+  # and re-running an already-applied migration is a safe no-op, so there's
+  # no more data-loss prompt to babysit on every deploy.
   db-migrate:
     profiles: ["migrate"]
     build:
@@ -40,7 +47,7 @@ services:
       dockerfile: artifacts/api-server/Dockerfile
       target: build
     working_dir: /repo
-    entrypoint: ["pnpm", "--filter", "@workspace/db", "run", "push"]
+    entrypoint: ["pnpm", "--filter", "@workspace/db", "run", "migrate"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
     networks:
