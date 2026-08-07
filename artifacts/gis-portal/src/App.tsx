@@ -25,6 +25,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.16.0',
+    date: '2026-08-08',
+    summary: '子系統卡片公式說明改成點擊展開，不再依賴滑鼠 hover（手機也能用）',
+    changes: [
+      '上一版（v1.14.0）加的公式 ⓘ 用的是瀏覽器原生 title 屬性，只有滑鼠移上去才會出現，手機觸控完全用不到——改成跟翰翰仔幸福指數卡片「展開明細」一樣的點擊展開模式：卡片內新增「公式說明 ▼」按鈕，點下去在卡片內展開所有數字的公式說明，再點一次收起',
+      '三張子系統卡片（人生進度管理系統／運動 APP 系統／任務追蹤系統）本身點擊會導覽到外部系統連結，公式展開按鈕做了事件阻擋（stopPropagation），點它只會展開/收起面板，不會誤觸跳轉',
+    ],
+  },
+  {
     version: '1.15.0',
     date: '2026-08-08',
     summary: '翰翰仔幸福指數新增每日趨勢線，任務追蹤系統改顯示從容指數',
@@ -1405,14 +1414,14 @@ function heroTone(score: number | null, invert: boolean): { color: string; label
   return { color: '#f87171', label: invert ? '緊繃' : '待加強' }
 }
 
-// `formula` renders as a native title tooltip (hover to see how the number
-// above it is actually calculated) — cheapest way to "annotate" every stat
-// without building a bespoke tooltip component for a single-user dashboard.
-function HeroIndex({ label, score, invert = false, formula }: { label: string; score: number | null; invert?: boolean; formula?: string }) {
+// `formula` is NOT rendered here — hover tooltips don't work on touch, so
+// every number's formula instead collects into a single tap-to-expand
+// FormulaPanel per card (below), matching the HHI card's "展開明細" pattern.
+function HeroIndex({ label, score, invert = false }: { label: string; score: number | null; invert?: boolean }) {
   const tone = heroTone(score, invert)
   return (
-    <div style={{ marginBottom: '1rem' }} title={formula}>
-      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '5px' }}>{label}{formula ? ' ⓘ' : ''}</div>
+    <div style={{ marginBottom: '1rem' }}>
+      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '5px' }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
         <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>
           {score !== null ? score : '—'}
@@ -1427,8 +1436,8 @@ function SupportStats({ items }: { items: Array<{ label: string; value: string; 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem 2rem' }}>
       {items.map(it => (
-        <div key={it.label} title={it.formula}>
-          <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}{it.formula ? ' ⓘ' : ''}</div>
+        <div key={it.label}>
+          <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}</div>
           <div style={{ fontSize: '18px', fontWeight: '600', color: it.color ?? 'rgba(255,255,255,0.9)' }}>{it.value}</div>
         </div>
       ))}
@@ -1436,29 +1445,69 @@ function SupportStats({ items }: { items: Array<{ label: string; value: string; 
   )
 }
 
-function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
+// Tap-to-expand formula detail — same visual pattern as the HHI card's
+// "展開明細": a footer toggle line, then a dashed-border panel of
+// label/formula rows. Works identically on mouse and touch, unlike the
+// native `title` hover tooltip this replaced (which never triggers on
+// mobile since there's no hover state to trigger it).
+function FormulaToggle({ expanded, onToggle }: { expanded: boolean; onToggle: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      onClick={onToggle}
+      style={{ marginTop: '0.6rem', textAlign: 'right', fontSize: '10.5px', color: 'rgba(192,132,252,0.7)', cursor: 'pointer' }}
+    >
+      {expanded ? '收起公式說明 ▲' : '公式說明 ▼'}
+    </div>
+  )
+}
+
+function FormulaPanel({ rows }: { rows: Array<{ label: string; formula?: string }> }) {
+  const withFormula = rows.filter((r): r is { label: string; formula: string } => !!r.formula)
+  if (withFormula.length === 0) return null
+  return (
+    <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {withFormula.map(r => (
+        <div key={r.label} style={{ fontSize: '11px' }}>
+          <div style={{ color: 'rgba(255,255,255,0.55)', fontWeight: '600', marginBottom: '2px' }}>{r.label}</div>
+          <div style={{ color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>{r.formula}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PfCwhSummaryBody({ data, expanded, onToggleExpand }: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) {
   const lifeFreedomIndex = typeof data['lifeFreedomIndex'] === 'number' ? data['lifeFreedomIndex'] : null
   const totalAssetsTWD = typeof data['totalAssetsTWD'] === 'number' ? data['totalAssetsTWD'] : null
   const twrr = typeof data['twrr'] === 'number' ? data['twrr'] : null
   const mwrr = typeof data['mwrr'] === 'number' ? data['mwrr'] : null
   const pacingIndex = typeof data['pacingIndex'] === 'number' ? data['pacingIndex'] : null
 
+  const items = [
+    { label: '總資產', value: totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—', formula: '目前資產總市值（最新一筆快照）' },
+    { label: 'TWRR', value: formatPct(twrr), color: twrr === null ? undefined : (twrr >= 0 ? '#34d399' : '#f87171'), formula: '時間加權報酬率——排除加減碼時機影響，純看資產本身的報酬表現' },
+    { label: 'MWRR', value: formatPct(mwrr), color: mwrr === null ? undefined : (mwrr >= 0 ? '#34d399' : '#f87171'), formula: '金額加權報酬率——考慮加減碼金額與時機，反映實際到手的報酬' },
+    { label: '休假配速', value: pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—', formula: '休假進度 ÷ 年度時間進度，100% = 剛好照今年時間進度休假' },
+  ]
+
   return (
     <div style={{ flex: 1 }}>
-      <HeroIndex label="人生自由指數" score={lifeFreedomIndex} formula="資產分／報酬分／休假配速分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均，不會整個是 0）" />
-      <SupportStats items={[
-        { label: '總資產', value: totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—', formula: '目前資產總市值（最新一筆快照）' },
-        { label: 'TWRR', value: formatPct(twrr), color: twrr === null ? undefined : (twrr >= 0 ? '#34d399' : '#f87171'), formula: '時間加權報酬率——排除加減碼時機影響，純看資產本身的報酬表現' },
-        { label: 'MWRR', value: formatPct(mwrr), color: mwrr === null ? undefined : (mwrr >= 0 ? '#34d399' : '#f87171'), formula: '金額加權報酬率——考慮加減碼金額與時機，反映實際到手的報酬' },
-        { label: '休假配速', value: pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—', formula: '休假進度 ÷ 年度時間進度，100% = 剛好照今年時間進度休假' },
-      ]} />
+      <HeroIndex label="人生自由指數" score={lifeFreedomIndex} />
+      <SupportStats items={items} />
+      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
+      {expanded && (
+        <FormulaPanel rows={[
+          { label: '人生自由指數', formula: '資產分／報酬分／休假配速分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均，不會整個是 0）' },
+          ...items,
+        ]} />
+      )}
     </div>
   )
 }
 
 const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌']
 
-function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
+function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) {
   const habitIndex = typeof data['habitIndex'] === 'number' ? data['habitIndex'] : null
   const weeklyScore = typeof data['weeklyScore'] === 'number' ? data['weeklyScore'] : null
   const trendPct = typeof data['trendPct'] === 'number' ? data['trendPct'] : null
@@ -1483,22 +1532,31 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
   const gridPoints = (frac: number) =>
     MUSCLE_GROUP_AXES.map((_, i) => axisPoint(i, r * frac)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
 
+  const items = [
+    { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—', formula: '本週各筆訓練紀錄的加權分數總和（原始累積量，未經配速調整）' },
+    { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? '#34d399' : '#f87171'), formula: '本週至今 vs 上週同一段等長時間至今；上週那段時間剛好沒資料時，改比「目前配速 vs 個人平均配速」' },
+    { label: '覆蓋率', value: coverageScore !== null ? `${coverageScore}%` : '—', formula: '本週肌群雷達圖多邊形面積 ÷ 每軸都達 100% 維持量時的面積，越高代表整體訓練量越飽滿' },
+    { label: '均衡度', value: balanceScore !== null ? `${balanceScore}%` : '—', formula: '最弱肌群複合分 ÷ 最強肌群複合分（複合分 = 組數 40% + 容量 60%），數字越低代表落差越大' },
+  ]
+
   return (
     <div style={{ flex: 1 }}>
-      <HeroIndex label="運動習慣指數" score={habitIndex} formula="訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）；訓練量分等三項已依「本週已過幾分之幾」配速調整，不是單純比對整週終點" />
+      <HeroIndex label="運動習慣指數" score={habitIndex} />
       <div style={{ display: 'flex', gap: '1.6rem', alignItems: 'center' }}>
-        <SupportStats items={[
-          { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—', formula: '本週各筆訓練紀錄的加權分數總和（原始累積量，未經配速調整）' },
-          { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? '#34d399' : '#f87171'), formula: '本週至今 vs 上週同一段等長時間至今；上週那段時間剛好沒資料時，改比「目前配速 vs 個人平均配速」' },
-          { label: '覆蓋率', value: coverageScore !== null ? `${coverageScore}%` : '—', formula: '本週肌群雷達圖多邊形面積 ÷ 每軸都達 100% 維持量時的面積，越高代表整體訓練量越飽滿' },
-          { label: '均衡度', value: balanceScore !== null ? `${balanceScore}%` : '—', formula: '最弱肌群複合分 ÷ 最強肌群複合分（複合分 = 組數 40% + 容量 60%），數字越低代表落差越大' },
-        ]} />
+        <SupportStats items={items} />
         <svg width="130" height="130" viewBox="0 0 92 92" style={{ flexShrink: 0, marginLeft: 'auto' }}>
           <polygon points={gridPoints(1)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
           <polygon points={gridPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
           <polygon points={polygonPoints} fill="rgba(192,132,252,0.28)" stroke="#c084fc" strokeWidth={1.6} />
         </svg>
       </div>
+      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
+      {expanded && (
+        <FormulaPanel rows={[
+          { label: '運動習慣指數', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）；訓練量分等三項已依「本週已過幾分之幾」配速調整，不是單純比對整週終點' },
+          ...items,
+        ]} />
+      )}
     </div>
   )
 }
@@ -1507,7 +1565,7 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
 // row (see artifacts/api-server/src/lib/summarySources.ts's
 // fetchVikunjaBusynessFromHistory) — four independently-computed 0-100
 // sub-scores, any of which can be null when its own data is insufficient.
-function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
+function VikunjaSummaryBody({ data, expanded, onToggleExpand }: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) {
   const busyIndex = typeof data['busyIndex'] === 'number' ? data['busyIndex'] : null
   // 從容指數 = 100 - 忙碌指數，跟翰翰仔幸福指數卡片裡「生活從容」用的是同一個
   // calmScore 概念——顯示方向改成「越高越好」，跟另外兩張卡片（人生自由指數／
@@ -1519,20 +1577,29 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
   const stagnationScore = typeof data['stagnationScore'] === 'number' ? data['stagnationScore'] : null
   const completionScore = typeof data['completionScore'] === 'number' ? data['completionScore'] : null
 
+  const items = [
+    { label: '逾期壓力', value: overdueScore !== null ? String(overdueScore) : '—', formula: '目前逾期任務的嚴重程度（數量、逾期天數），對比近三個月基準' },
+    { label: '近期負荷', value: loadScore !== null ? String(loadScore) : '—', formula: '近期任務負荷 ÷ 長期平均負荷（ACWR 概念），比值越高代表最近突然變忙' },
+    { label: '停滯程度', value: stagnationScore !== null ? String(stagnationScore) : '—', formula: '任務長期沒有進展、卡住不動的程度' },
+    { label: '拖延程度', value: completionScore !== null ? String(completionScore) : '—', formula: '過去 90 天準時完成率的反向指標（指數衰減加權，越近期權重越高），數字越高代表越常拖延' },
+  ]
+
   return (
     <div style={{ flex: 1 }}>
-      <HeroIndex label="從容指數" score={calmIndex} formula="100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容，跟其他卡片方向一致" />
-      <SupportStats items={[
-        { label: '逾期壓力', value: overdueScore !== null ? String(overdueScore) : '—', formula: '目前逾期任務的嚴重程度（數量、逾期天數），對比近三個月基準' },
-        { label: '近期負荷', value: loadScore !== null ? String(loadScore) : '—', formula: '近期任務負荷 ÷ 長期平均負荷（ACWR 概念），比值越高代表最近突然變忙' },
-        { label: '停滯程度', value: stagnationScore !== null ? String(stagnationScore) : '—', formula: '任務長期沒有進展、卡住不動的程度' },
-        { label: '拖延程度', value: completionScore !== null ? String(completionScore) : '—', formula: '過去 90 天準時完成率的反向指標（指數衰減加權，越近期權重越高），數字越高代表越常拖延' },
-      ]} />
+      <HeroIndex label="從容指數" score={calmIndex} />
+      <SupportStats items={items} />
+      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
+      {expanded && (
+        <FormulaPanel rows={[
+          { label: '從容指數', formula: '100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容，跟其他卡片方向一致' },
+          ...items,
+        ]} />
+      )}
     </div>
   )
 }
 
-const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) => React.ReactElement> = {
+const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) => React.ReactElement> = {
   'pf-cwh': PfCwhSummaryBody,
   'fitnessforge': FitnessForgeSummaryBody,
   'vikunja': VikunjaSummaryBody,
@@ -1777,6 +1844,13 @@ function GlassSummaryCard({
   const rgb = site.isPrivate ? '192,132,252' : '0,229,255'
   const accent = site.isPrivate ? '#c084fc' : '#00e5ff'
   const Body = SUMMARY_BODIES[summary.subsystemId]
+  const [expanded, setExpanded] = useState(false)
+  // The whole card navigates to the site on click — the formula toggle
+  // needs stopPropagation so tapping it doesn't also trigger that navigation.
+  const handleToggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpanded(x => !x)
+  }
 
   return (
     <motion.div
@@ -1822,7 +1896,7 @@ function GlassSummaryCard({
       ) : summary.status === 'pending' ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>資料準備中…</div>
       ) : summary.data && Body ? (
-        <Body data={summary.data} />
+        <Body data={summary.data} expanded={expanded} onToggleExpand={handleToggleExpand} />
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>暫時無法取得資料</div>
       )}
