@@ -25,6 +25,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.15.0',
+    date: '2026-08-08',
+    summary: '翰翰仔幸福指數新增每日趨勢線，任務追蹤系統改顯示從容指數',
+    changes: [
+      '翰翰仔幸福指數卡片「展開明細」新增近 30 天趨勢線圖，跟人生進度管理系統的投資組合績效圖一樣是每天記一筆、畫成折線——資料來源是本來就在寫入的 happiness_index_history 表，只是這次才把歷史資料實際畫出來；新增 GET /api/happiness/history 端點供這張圖抓資料，跟 /api/dashboard 分開，因為歷史資料一天只變一次，不需要每次開頁面都重抓',
+      '任務追蹤系統卡片主指數從「忙碌指數」改顯示「從容指數」（= 100 － 忙碌指數，跟 HHI 卡片「生活從容」貢獻度是同一個數字），三張子系統卡片現在方向一致都是「越高越好」，不用切換心智模型；逾期壓力／近期負荷／停滯程度／拖延程度四個子分數維持原本「越高代表這個問題越嚴重」的診斷語意，只有主指數翻轉',
+      '這張趨勢線圖剛上線時歷史資料還很少（happiness_index_history 這幾天才開始穩定寫入），會隨著每天自動累積慢慢畫出線來，沒辦法回填更早以前的資料',
+    ],
+  },
+  {
     version: '1.14.0',
     date: '2026-08-07',
     summary: '子系統卡片數字加註計算公式（hover 顯示），運動 APP 肌群雷達圖放大',
@@ -263,6 +273,21 @@ async function apiFetchDashboard(adminPassword: string | null): Promise<Dashboar
   if (!r.ok) throw new Error('Failed to fetch dashboard')
   const data = await r.json() as { summaries: DashboardSummary[] }
   return data.summaries
+}
+
+interface HappinessHistoryPoint {
+  date: string
+  finalScore: number
+  displayedScore: number
+}
+
+async function apiFetchHappinessHistory(adminPassword: string, days = 30): Promise<HappinessHistoryPoint[]> {
+  const r = await fetch(`${API_BASE}api/happiness/history?days=${days}`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch happiness history')
+  const data = await r.json() as { history: HappinessHistoryPoint[] }
+  return data.history
 }
 
 async function apiVerifyPassword(password: string): Promise<boolean> {
@@ -1484,6 +1509,11 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
 // sub-scores, any of which can be null when its own data is insufficient.
 function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
   const busyIndex = typeof data['busyIndex'] === 'number' ? data['busyIndex'] : null
+  // 從容指數 = 100 - 忙碌指數，跟翰翰仔幸福指數卡片裡「生活從容」用的是同一個
+  // calmScore 概念——顯示方向改成「越高越好」，跟另外兩張卡片（人生自由指數／
+  // 運動習慣指數）視覺上一致，不用切換色階/文字方向的心智負擔。逾期壓力等四個
+  // 子分數維持原本「數字越高代表這個問題越嚴重」的診斷語意不變，只有主指數翻轉。
+  const calmIndex = busyIndex !== null ? Math.max(0, Math.min(100, 100 - busyIndex)) : null
   const overdueScore = typeof data['overdueScore'] === 'number' ? data['overdueScore'] : null
   const loadScore = typeof data['loadScore'] === 'number' ? data['loadScore'] : null
   const stagnationScore = typeof data['stagnationScore'] === 'number' ? data['stagnationScore'] : null
@@ -1491,7 +1521,7 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div style={{ flex: 1 }}>
-      <HeroIndex label="忙碌指數" score={busyIndex} invert formula="逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，數字越高代表越忙（跟其他卡片「越高越好」方向相反，每天由 Python 服務算一次）" />
+      <HeroIndex label="從容指數" score={calmIndex} formula="100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容，跟其他卡片方向一致" />
       <SupportStats items={[
         { label: '逾期壓力', value: overdueScore !== null ? String(overdueScore) : '—', formula: '目前逾期任務的嚴重程度（數量、逾期天數），對比近三個月基準' },
         { label: '近期負荷', value: loadScore !== null ? String(loadScore) : '—', formula: '近期任務負荷 ÷ 長期平均負荷（ACWR 概念），比值越高代表最近突然變忙' },
@@ -1523,17 +1553,79 @@ function hhiTone(score: number): { color: string; label: string } {
   return { color: '#f87171', label: '警報，先照顧自己' }
 }
 
+// Lightweight custom SVG line chart — no charting library, matching the
+// muscle-radar chart elsewhere in this file. viewBox width is a fixed 100
+// units with preserveAspectRatio="none" + CSS width:100%, so it stretches
+// to whatever container width it's given without needing to measure the
+// container in JS.
+function TrendLineChart({ points, color = '#c084fc', height = 90 }: { points: HappinessHistoryPoint[]; color?: string; height?: number }) {
+  if (points.length < 2) {
+    return (
+      <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)', padding: '0.6rem 0' }}>
+        還沒有足夠的歷史資料可畫趨勢線（目前 {points.length} 天，至少需要 2 天）——每天會自動多記一筆，過幾天回來看就有線了
+      </div>
+    )
+  }
+
+  const width = 100
+  const values = points.map(p => p.displayedScore)
+  const minV = Math.min(...values)
+  const maxV = Math.max(...values)
+  const range = maxV - minV || 1
+  const padY = 6
+  const innerH = height - padY * 2
+  const stepX = width / (points.length - 1)
+  const coords = points.map((p, i) => {
+    const x = i * stepX
+    const y = padY + innerH - ((p.displayedScore - minV) / range) * innerH
+    return [x, y] as const
+  })
+  const linePath = coords.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ')
+  const last = coords[coords.length - 1]!
+  const areaPath = `${linePath} L${last[0].toFixed(2)},${height} L0,${height} Z`
+
+  return (
+    <div>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+        <path d={areaPath} fill={`${color}22`} stroke="none" />
+        <path d={linePath} fill="none" stroke={color} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '4px' }}>
+        <span>{points[0]!.date}</span>
+        <span>最低 {minV} · 最高 {maxV}</span>
+        <span>{points[points.length - 1]!.date}</span>
+      </div>
+    </div>
+  )
+}
+
 function HappinessHeroCard({
   summary,
   unlocked,
+  unlockedPassword,
   onRequestUnlock,
 }: {
   summary: DashboardSummary | undefined
   unlocked: boolean
+  unlockedPassword: string | null
   onRequestUnlock: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [history, setHistory] = useState<HappinessHistoryPoint[] | null>(null)
+  const [historyError, setHistoryError] = useState(false)
   const isLocked = !unlocked // hhi is always isPrivate — see summarySources.ts
+
+  // Lazy-load history only once the card is actually expanded — most page
+  // views never open this panel, no reason to fetch 30 days of history on
+  // every load just in case.
+  useEffect(() => {
+    if (!expanded || !unlockedPassword || history !== null) return
+    let cancelled = false
+    apiFetchHappinessHistory(unlockedPassword)
+      .then(rows => { if (!cancelled) setHistory(rows) })
+      .catch(() => { if (!cancelled) setHistoryError(true) })
+    return () => { cancelled = true }
+  }, [expanded, unlockedPassword, history])
 
   const data = summary?.data
   const displayedScore = typeof data?.['displayedScore'] === 'number' ? data['displayedScore'] as number : null
@@ -1651,6 +1743,17 @@ function HappinessHeroCard({
               <span style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '500' }}>{value}</span>
             </div>
           ))}
+
+          <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+            <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>近 30 天趨勢（每日顯示值）</div>
+            {historyError ? (
+              <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
+            ) : history === null ? (
+              <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
+            ) : (
+              <TrendLineChart points={history} color={tone.color} />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1744,12 +1847,14 @@ function GlassPortalView({
   sites,
   dashboard,
   unlocked,
+  unlockedPassword,
   onSiteSelect,
   onRequestUnlock,
 }: {
   sites: SiteData[]
   dashboard: DashboardSummary[]
   unlocked: boolean
+  unlockedPassword: string | null
   onSiteSelect: (site: SiteData) => void
   onRequestUnlock: () => void
 }) {
@@ -1836,6 +1941,7 @@ function GlassPortalView({
           <HappinessHeroCard
             summary={dashboard.find(d => d.subsystemId === 'hhi')}
             unlocked={unlocked}
+            unlockedPassword={unlockedPassword}
             onRequestUnlock={onRequestUnlock}
           />
           <div className="glass-portal-bento" style={{
@@ -2082,6 +2188,7 @@ export default function App() {
               sites={sites}
               dashboard={dashboard}
               unlocked={unlocked}
+              unlockedPassword={unlockedPassword}
               onSiteSelect={handleSiteClick}
               onRequestUnlock={handleRequestUnlock}
             />

@@ -1,4 +1,6 @@
 import { Router, type Request, type Response } from "express";
+import { db, happinessIndexHistoryTable } from "@workspace/db";
+import { desc } from "drizzle-orm";
 import { fetchFreshSummaries } from "../lib/summarySources";
 import { SUMMARY_SOURCES } from "../lib/summarySources";
 
@@ -66,6 +68,34 @@ router.get("/dashboard", async (req: Request, res: Response) => {
 
     res.json({ summaries });
   }
+});
+
+// Daily HHI history for the trend-line chart on the happiness card — a
+// separate endpoint from /dashboard because this data only changes once a
+// day and there's no reason to re-send a growing history array on every
+// page-load poll. Same private-zone password gate as /dashboard.
+router.get("/happiness/history", async (req: Request, res: Response) => {
+  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  if (!unlocked) {
+    return res.status(403).json({ message: "需要解鎖私領域才能查看" });
+  }
+
+  const daysParam = Number(req.query["days"]);
+  const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 365) : 30;
+
+  const rows = await db
+    .select({
+      date: happinessIndexHistoryTable.date,
+      finalScore: happinessIndexHistoryTable.finalScore,
+      displayedScore: happinessIndexHistoryTable.displayedScore,
+    })
+    .from(happinessIndexHistoryTable)
+    .orderBy(desc(happinessIndexHistoryTable.date))
+    .limit(days);
+
+  // Reverse to chronological order (oldest first) — easier for the frontend
+  // chart to plot left-to-right without re-sorting.
+  return res.json({ history: rows.reverse() });
 });
 
 export default router;
