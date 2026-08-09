@@ -23,6 +23,5 @@ FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/artifacts/api-server/dist ./dist
-COPY data/ ./data/
 EXPOSE 8080
 CMD ["node", "--enable-source-maps", "./dist/index.mjs"]

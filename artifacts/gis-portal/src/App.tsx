@@ -25,6 +25,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.19.0',
+    date: '2026-08-09',
+    summary: '心智指標改成 HERMES 推送到 API，不再讀 NAS 檔案',
+    changes: [
+      '心智指標的資料來源從「容器直接讀 NAS 上的 心智指標.md」改成「HERMES 的 daily-life-score.py 算完後 POST 到新的 POST /api/admin/mind-index」，寫進新的 mind_index_history 表——原本的檔案讀取方案在部署時發現 Docker Desktop 的 WSL2 backend 沒辦法穩定 bind mount UNC 路徑（掛上了但容器內是空的），退而求其次把檔案 COPY 進 image 又會讓分數只在每次部署時才更新，不是真的每日更新，所以改成直接 push',
+      '心智指標卡片的歷史趨勢線改讀新的 GET /api/mind-index/history（跟 HHI 卡片的 /api/happiness/history 同一套模式），不再依賴 心智指標-history.jsonl 檔案',
+      '這個改動需要 daily-life-score.py 那邊配合改一個小地方：跑完之後多一個 POST 請求，把 score/conversion/link_health/vitality/rhythm/rhythm_trend_pct/partial 送到 Aiportal 的新端點（帶 x-admin-password header），細節另外交代',
+    ],
+  },
+  {
     version: '1.18.0',
     date: '2026-08-09',
     summary: '新增心智指標卡片，翰翰仔幸福指數擴充為四維度',
@@ -317,6 +327,20 @@ async function apiFetchHappinessHistory(adminPassword: string, days = 30): Promi
   })
   if (!r.ok) throw new Error('Failed to fetch happiness history')
   const data = await r.json() as { history: HappinessHistoryPoint[] }
+  return data.history
+}
+
+interface MindIndexHistoryPoint {
+  date: string
+  score: number
+}
+
+async function apiFetchMindIndexHistory(adminPassword: string, days = 30): Promise<MindIndexHistoryPoint[]> {
+  const r = await fetch(`${API_BASE}api/mind-index/history?days=${days}`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch mind-index history')
+  const data = await r.json() as { history: MindIndexHistoryPoint[] }
   return data.history
 }
 
@@ -1663,14 +1687,29 @@ const RHYTHM_BANDS: Band[] = [[80, '#34d399', '穩定'], [40, '#fbbf24', '普通
 function MindIndexCard({
   summary,
   unlocked,
+  unlockedPassword,
   onRequestUnlock,
 }: {
   summary: DashboardSummary | undefined
   unlocked: boolean
+  unlockedPassword: string | null
   onRequestUnlock: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [history, setHistory] = useState<MindIndexHistoryPoint[] | null>(null)
+  const [historyError, setHistoryError] = useState(false)
   const isLocked = !unlocked
+
+  // Lazy-loaded on first expand, same reasoning as HappinessHeroCard's own
+  // history fetch: most page views never open this panel.
+  useEffect(() => {
+    if (!expanded || !unlockedPassword || history !== null) return
+    let cancelled = false
+    apiFetchMindIndexHistory(unlockedPassword)
+      .then(rows => { if (!cancelled) setHistory(rows) })
+      .catch(() => { if (!cancelled) setHistoryError(true) })
+    return () => { cancelled = true }
+  }, [expanded, unlockedPassword, history])
 
   const data = summary?.data
   const score = typeof data?.['score'] === 'number' ? data['score'] as number : null
@@ -1680,7 +1719,6 @@ function MindIndexCard({
   const rhythm = typeof data?.['rhythm'] === 'number' ? data['rhythm'] as number : null
   const stale = data?.['stale'] === true
   const partial = data?.['partial'] === true
-  const historyRaw = Array.isArray(data?.['history']) ? data!['history'] as Array<{ date: string; score: number }> : []
 
   const cardStyle: React.CSSProperties = {
     position: 'relative',
@@ -1729,7 +1767,6 @@ function MindIndexCard({
     { label: '活化度', value: vitality !== null ? String(vitality) : '—', color: vitalityTone.color, tier: vitality !== null ? vitalityTone.label : undefined, formula: 'SYNTHESIZE 層：min(100, 近30天被修改條目比例 × 400)；近14天無 L3 綜整產出則 × 0.8' },
     { label: '本週節奏', value: rhythm !== null ? String(rhythm) : '—', color: rhythmTone.color, tier: rhythm !== null ? rhythmTone.label : undefined, formula: '近7天加權積分（豐化2分/新條目1分/新連結0.5分/L3綜整5分，每日上限20分）÷ 30 × 100' },
   ]
-  const historyPoints = historyRaw.map(h => ({ date: h.date, value: h.score }))
 
   return (
     <div style={cardStyle}>
@@ -1771,7 +1808,13 @@ function MindIndexCard({
           {expanded && (
             <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
               <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>歷史趨勢</div>
-              <TrendLineChart points={historyPoints} color={tone.color} height={70} />
+              {historyError ? (
+                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
+              ) : history === null ? (
+                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
+              ) : (
+                <TrendLineChart points={history.map(h => ({ date: h.date, value: h.score }))} color={tone.color} height={70} />
+              )}
             </div>
           )}
         </div>
@@ -2221,6 +2264,7 @@ function GlassPortalView({
             <MindIndexCard
               summary={dashboard.find(d => d.subsystemId === 'mind-index')}
               unlocked={unlocked}
+              unlockedPassword={unlockedPassword}
               onRequestUnlock={onRequestUnlock}
             />
           </div>

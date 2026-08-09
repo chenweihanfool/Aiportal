@@ -8,6 +8,13 @@
       "when": 1786146422037,
       "tag": "0000_nosy_mongoose",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786250772203,
+      "tag": "0001_hot_chronomancer",
+      "breakpoints": true
     }
   ]
 }

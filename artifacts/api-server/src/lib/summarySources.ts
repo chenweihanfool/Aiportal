@@ -50,7 +50,7 @@ async function fetchVikunjaBusynessFromHistory(): Promise<unknown> {
   };
 }
 
-function taipeiDateString(date: Date): string {
+export function taipeiDateString(date: Date): string {
   // en-CA formats as YYYY-MM-DD, which is both what Postgres DATE columns
   // expect and directly sortable/comparable as a string.
   return new Intl.DateTimeFormat("en-CA", {
