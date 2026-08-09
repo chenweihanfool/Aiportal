@@ -16,6 +16,8 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    volumes:
+      - "//NASD723/home/SynologyDrive/obsidian/Vault/AI/知識:/mnt/knowledge:ro"
     networks:
       - default
       # Uncomment and set to whatever network the shared self-hosted Postgres
