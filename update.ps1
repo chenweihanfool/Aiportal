@@ -5,12 +5,20 @@
     Steps:
       1. git pull (from chenweihanfool/Aiportal on GitHub)
       2. docker compose up -d --build (build + (re)create both api-server and gis-portal)
-      3. docker compose --profile migrate run --rm db-migrate (drizzle-kit schema
-         sync, run INSIDE a Linux container -- safe to run every deploy).
-         Deliberately not `pnpm --filter db push` on this Windows host: drizzle-kit
-         has known Windows glob/path resolution bugs ("No schema files found")
-         that silently no-op the push, which let a real deploy ship with a
-         missing table and crash-loop api-server (2026-08-03 incident).
+      3. docker compose --profile migrate run --build --rm db-migrate (applies
+         versioned SQL migrations from lib/db/migrations/, run INSIDE a Linux
+         container -- safe to run every deploy). The --build is required, not
+         optional: `docker compose run` (unlike `up`) does not rebuild a
+         service whose image already exists, so without --build this silently
+         runs migrate.mjs against whatever migration files were baked into
+         the last-built db-migrate image and reports "already up to date"
+         even when new migrations exist in the repo -- confirmed hitting this
+         exact silent-no-op on 2026-08-09 (mind_index_history never got
+         created on the first attempt). Deliberately not `pnpm --filter db
+         push`/`generate` on this Windows host either way: drizzle-kit has
+         known Windows glob/path resolution bugs ("No schema files found")
+         that silently no-op it, which let a real deploy ship with a missing
+         table and crash-loop api-server once before (2026-08-03 incident).
       4. health check (verify /api/healthz responds)
 
     Same pattern as pf-cwh/fitnessforge on this host. Postgres itself is NOT
@@ -118,7 +126,10 @@ catch {
 Write-Host "[3/4] Syncing database schema..." -ForegroundColor Yellow
 try {
     Push-Location $RepoDir
-    $pushResult = cmd /c "docker compose --profile migrate run --rm db-migrate 2>&1"
+    # --build is required here -- see header comment: `docker compose run`
+    # doesn't rebuild an already-built service, so omitting it can silently
+    # apply a stale set of migrations (or none) while reporting success.
+    $pushResult = cmd /c "docker compose --profile migrate run --build --rm db-migrate 2>&1"
     Write-Host $pushResult
     if ($LASTEXITCODE -ne 0) {
         throw "db-migrate failed (exit code: $LASTEXITCODE)"
@@ -128,7 +139,7 @@ try {
 }
 catch {
     Write-Host "ERROR schema sync: $_" -ForegroundColor Red
-    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose --profile migrate run --rm db-migrate" -ForegroundColor Yellow
+    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose --profile migrate run --build --rm db-migrate" -ForegroundColor Yellow
     Pop-Location
     Write-Host "  Schema sync failure is treated as fatal -- a missing table will crash-loop api-server." -ForegroundColor Red
     exit 1

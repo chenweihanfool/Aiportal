@@ -27,7 +27,16 @@ services:
   # Uses the api-server Dockerfile's intermediate `build` stage (full pnpm
   # workspace incl. drizzle-kit), not the slim `runtime` stage, since the
   # runtime image has no node_modules. Run explicitly on every deploy:
-  #   docker compose --profile migrate run --rm db-migrate
+  #   docker compose --profile migrate run --build --rm db-migrate
+  #
+  # The --build is not optional/cosmetic: `docker compose run` (unlike `up`)
+  # does NOT rebuild a service whose image already exists, even if the repo
+  # (and therefore lib/db/migrations/) has moved on since that image was
+  # built. Without --build this silently runs migrate.mjs against whatever
+  # migration files happened to be baked into the last-built image, reports
+  # "already up to date" using a stale view of what migrations exist, and
+  # the new table/column just never appears — confirmed hitting exactly
+  # this on 2026-08-09 (mind_index_history) before adding --build here.
   #
   # Applies versioned SQL files from lib/db/migrations/ (generate them with
   # `pnpm --filter @workspace/db run generate` after changing schema.ts,
