@@ -25,6 +25,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.21.0',
+    date: '2026-08-09',
+    summary: '雷達圖補上軸線名稱與分數標籤，運動 APP 系統改用跟主站一致的刻度',
+    changes: [
+      '新增共用的 LabeledRadarChart 元件：每個軸自動標示維度名稱＋分數（例如「人生自由 79」），取代原本兩張雷達圖各自土砲、完全沒有標示的空白多邊形——之前看起來太空洞是因為真的什麼標示都沒有',
+      '運動 APP 系統卡片的雷達圖改讀 FitnessForge 新回傳的 muscleComposites（跟它自己網站上的雷達圖同一組 0-150% 複合分，維持基準=100% 用虛線標示），不再是拿原始組數/容量數字自己重新正規化——原本每週都會自我填滿到 100%，跟主站雷達圖的形狀、刻度都對不上，也是先前「雷達圖看起來沒在更新」的部分原因',
+      '翰翰仔幸福指數卡片重新排版：雷達圖放大到 260px，跟主指數＋四個貢獻度數字放在同一行左側，不再用 space-between 把兩者推到卡片兩端留一大片空白',
+    ],
+  },
+  {
     version: '1.20.0',
     date: '2026-08-09',
     summary: 'HHI 卡片新增大型四維雷達圖，API 回應一律禁止快取',
@@ -1562,6 +1572,64 @@ function PfCwhSummaryBody({ data, expanded, onToggleExpand }: { data: Record<str
   )
 }
 
+// Shared radar chart with axis labels + values — used by both the
+// FitnessForge card's muscle-composite radar and the HHI card's 4-dimension
+// radar. Absolute scale (0..maxValue, not "whatever's biggest right now"):
+// self-relative scaling always fills the chart to 100% regardless of actual
+// progress, which is both misleading and makes the shape barely change
+// visit to visit. `baselineFraction` (0-1 of maxValue) optionally draws a
+// dashed reference ring, matching FitnessForge's own "維持基準" dashed line.
+function LabeledRadarChart({
+  axes,
+  maxValue,
+  baselineFraction,
+  size = 240,
+  color,
+}: {
+  axes: Array<{ label: string; value: number | null }>
+  maxValue: number
+  baselineFraction?: number
+  size?: number
+  color: string
+}) {
+  const cx = size / 2, cy = size / 2
+  const r = size * 0.30
+  const n = axes.length
+  const angleAt = (i: number) => (Math.PI * 2 * i) / n - Math.PI / 2
+  const pointAt = (i: number, radius: number) => [cx + radius * Math.cos(angleAt(i)), cy + radius * Math.sin(angleAt(i))] as const
+  const ringPoints = (frac: number) => axes.map((_, i) => pointAt(i, r * frac)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const dataPoints = axes
+    .map((a, i) => pointAt(i, r * (Math.max(0, Math.min(maxValue, a.value ?? 0)) / maxValue)))
+    .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(' ')
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0, overflow: 'visible' }}>
+      <polygon points={ringPoints(1)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+      <polygon points={ringPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+      {baselineFraction !== undefined && (
+        <polygon points={ringPoints(baselineFraction)} fill="none" stroke="#d4a900" strokeWidth={1.3} strokeDasharray="4 3" />
+      )}
+      {axes.map((_, i) => {
+        const [x, y] = pointAt(i, r)
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+      })}
+      <polygon points={dataPoints} fill={`${color}33`} stroke={color} strokeWidth={2} />
+      {axes.map((a, i) => {
+        const ang = angleAt(i)
+        const [x, y] = pointAt(i, r + 20)
+        const cos = Math.cos(ang)
+        const anchor = cos > 0.35 ? 'start' : cos < -0.35 ? 'end' : 'middle'
+        return (
+          <text key={a.label} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fontSize="11" fill="rgba(255,255,255,0.6)">
+            {a.label}{a.value !== null ? ` ${Math.round(a.value)}` : ''}
+          </text>
+        )
+      })}
+    </svg>
+  )
+}
+
 const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌']
 
 function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) {
@@ -1570,24 +1638,16 @@ function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Rec
   const trendPct = typeof data['trendPct'] === 'number' ? data['trendPct'] : null
   const balanceScore = typeof data['balanceScore'] === 'number' ? data['balanceScore'] : null
   const coverageScore = typeof data['coverageScore'] === 'number' ? data['coverageScore'] : null
-  const muscleGroups = Array.isArray(data['muscleGroups'])
-    ? data['muscleGroups'] as Array<{ muscleGroup: string; totalVolume: number }>
+  // 跟主站自己的雷達圖同一組複合分（0-150%，維持基準=100%），不是拿
+  // muscleGroups 的原始組數/容量數字自己重新正規化——那樣每次都會填滿雷達圖，
+  // 跟主站雷達圖對不上，也看不出真的有沒有進步（見 FitnessForge v3.15）。
+  const muscleComposites = Array.isArray(data['muscleComposites'])
+    ? data['muscleComposites'] as Array<{ name: string; composite: number }>
     : []
-
-  const values = MUSCLE_GROUP_AXES.map(name => muscleGroups.find(m => m.muscleGroup === name)?.totalVolume ?? 0)
-  const maxValue = Math.max(1, ...values)
-  const cx = 46, cy = 46, r = 32
-  const n = MUSCLE_GROUP_AXES.length
-  const axisPoint = (i: number, radius: number) => {
-    const angle = (Math.PI * 2 * i) / n - Math.PI / 2
-    return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)] as const
-  }
-  const polygonPoints = values
-    .map((v, i) => axisPoint(i, r * (v / maxValue)))
-    .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
-    .join(' ')
-  const gridPoints = (frac: number) =>
-    MUSCLE_GROUP_AXES.map((_, i) => axisPoint(i, r * frac)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const radarAxes = MUSCLE_GROUP_AXES.map(name => ({
+    label: name,
+    value: muscleComposites.find(m => m.name === name)?.composite ?? null,
+  }))
 
   const items = [
     { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—', formula: '本週各筆訓練紀錄的加權分數總和（原始累積量，未經配速調整）' },
@@ -1599,13 +1659,9 @@ function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Rec
   return (
     <div style={{ flex: 1 }}>
       <HeroIndex label="運動習慣指數" score={habitIndex} />
-      <div style={{ display: 'flex', gap: '1.6rem', alignItems: 'center' }}>
-        <SupportStats items={items} />
-        <svg width="130" height="130" viewBox="0 0 92 92" style={{ flexShrink: 0, marginLeft: 'auto' }}>
-          <polygon points={gridPoints(1)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-          <polygon points={gridPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-          <polygon points={polygonPoints} fill="rgba(192,132,252,0.28)" stroke="#c084fc" strokeWidth={1.6} />
-        </svg>
+      <SupportStats items={items} />
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+        <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={230} color="#c084fc" />
       </div>
       <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
       {expanded && (
@@ -1987,32 +2043,14 @@ function HappinessHeroCard({
     { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.20) * 100) },
   ]
 
-  // 跟運動 APP 系統的肌群雷達圖不同，這裡四個維度本來就是 0-100 分，用固定的
-  // 絕對刻度（100 分 = 頂到最外圈），不是像肌群雷達圖那樣每次都用「本週自己
-  // 的最大值」重新縮放——這樣同一個分數在不同天看起來大小才會一致，才看得出
-  // 真的有沒有變化，不會因為自我正規化而每次都長得差不多滿版。
-  const radarAxes = contributions
-  const radarValues = radarAxes.map(c => c.value ?? 0)
-  const radarSize = 200
-  const rcx = radarSize / 2, rcy = radarSize / 2, rr = radarSize * 0.38
-  const rn = radarAxes.length
-  const radarAxisPoint = (i: number, radius: number) => {
-    const angle = (Math.PI * 2 * i) / rn - Math.PI / 2
-    return [rcx + radius * Math.cos(angle), rcy + radius * Math.sin(angle)] as const
-  }
-  const radarPolygonPoints = radarValues
-    .map((v, i) => radarAxisPoint(i, rr * (Math.max(0, Math.min(100, v)) / 100)))
-    .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
-    .join(' ')
-  const radarGridPoints = (frac: number) =>
-    radarAxes.map((_, i) => radarAxisPoint(i, rr * frac)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
 
   return (
     <div style={cardStyle} onClick={() => setExpanded(x => !x)}>
       <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: `linear-gradient(90deg, transparent, ${tone.color}99, transparent)` }} />
 
-      <div className="hhi-top-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ minWidth: 0, flex: '1 1 240px' }}>
+      <div className="hhi-top-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '2.4rem', alignItems: 'center', justifyContent: 'flex-start' }}>
+        <div style={{ minWidth: 0, flex: '0 1 260px' }}>
           <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
             翰翰仔幸福指數 · Hanhan Happiness Index
           </div>
@@ -2027,29 +2065,24 @@ function HappinessHeroCard({
               目前最需要照顧：<span style={{ color: '#fbbf24', fontWeight: '600' }}>{weakestComponent}</span>
             </div>
           )}
+          <div className="hhi-contributions" style={{ display: 'flex', gap: '1.4rem', flexWrap: 'wrap', marginTop: '1.2rem' }}>
+            {contributions.map(c => (
+              <div key={c.label}>
+                <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', marginBottom: '3px' }}>
+                  {c.label} · {c.weightPct}%
+                </div>
+                <div style={{ fontSize: '19px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>
+                  {c.value !== null ? Math.round(c.value) : '—'}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* 跟運動 APP 系統卡片的肌群雷達圖同一套 SVG polygon 手法，尺寸放大到
-            200px（那張是 130px）——這裡只有 4 軸、沒有塞其他大量文字內容跟它
-            搶版面，值得放大當作卡片的視覺重心。 */}
-        <svg width={radarSize} height={radarSize} viewBox={`0 0 ${radarSize} ${radarSize}`} style={{ flexShrink: 0 }}>
-          <polygon points={radarGridPoints(1)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
-          <polygon points={radarGridPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
-          <polygon points={radarPolygonPoints} fill={`${tone.color}33`} stroke={tone.color} strokeWidth={2} />
-        </svg>
-      </div>
-
-      <div className="hhi-contributions" style={{ display: 'flex', gap: '1.6rem', flexWrap: 'wrap', marginTop: '1.2rem' }}>
-        {contributions.map(c => (
-          <div key={c.label}>
-            <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', marginBottom: '3px' }}>
-              {c.label} · {c.weightPct}%
-            </div>
-            <div style={{ fontSize: '19px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>
-              {c.value !== null ? Math.round(c.value) : '—'}
-            </div>
-          </div>
-        ))}
+        {/* 四個維度標軸名稱＋分數，跟運動 APP 系統卡片同一套 LabeledRadarChart。
+            固定 0-100 絕對刻度（不像肌群雷達圖那樣依本週最大值重新縮放）——
+            同一個分數在不同天看起來大小要一致，才看得出真的有沒有變化。 */}
+        <LabeledRadarChart axes={radarAxes} maxValue={100} size={260} color={tone.color} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.8rem', marginTop: '1.1rem', borderTop: '1px solid rgba(192,132,252,0.15)' }}>
