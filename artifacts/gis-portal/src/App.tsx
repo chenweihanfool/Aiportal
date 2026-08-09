@@ -25,6 +25,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.20.0',
+    date: '2026-08-09',
+    summary: 'HHI 卡片新增大型四維雷達圖，API 回應一律禁止快取',
+    changes: [
+      '翰翰仔幸福指數卡片新增四維雷達圖（人生自由/健身習慣/生活從容/心智指標），200px、跟主指數並排在卡片最上方，是卡片視覺重心；跟運動 APP 系統卡片的肌群雷達圖同一套 SVG 手法，但用固定 0-100 絕對刻度而非每次依本週最大值重新縮放——同一個分數在不同天看起來大小要一致，才看得出真的有沒有變化',
+      '所有 /api/* 回應統一加上 Cache-Control: no-store、關掉 Express 預設的 ETag——原本沒有明講快取策略，Express 預設會生成 ETag 但沒有搭配 Cache-Control，這個組合正是會讓瀏覽器或中間的反向代理誤快取回應的典型情況；正式站後端本身確認過是即時運算（每次 fetchedAt 都不同），這次是防禦性補強，避免中間層快取造成使用者端偶爾看到舊資料',
+    ],
+  },
+  {
     version: '1.19.0',
     date: '2026-08-09',
     summary: '心智指標改成 HERMES 推送到 API，不再讀 NAS 檔案',
@@ -1978,12 +1987,32 @@ function HappinessHeroCard({
     { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.20) * 100) },
   ]
 
+  // 跟運動 APP 系統的肌群雷達圖不同，這裡四個維度本來就是 0-100 分，用固定的
+  // 絕對刻度（100 分 = 頂到最外圈），不是像肌群雷達圖那樣每次都用「本週自己
+  // 的最大值」重新縮放——這樣同一個分數在不同天看起來大小才會一致，才看得出
+  // 真的有沒有變化，不會因為自我正規化而每次都長得差不多滿版。
+  const radarAxes = contributions
+  const radarValues = radarAxes.map(c => c.value ?? 0)
+  const radarSize = 200
+  const rcx = radarSize / 2, rcy = radarSize / 2, rr = radarSize * 0.38
+  const rn = radarAxes.length
+  const radarAxisPoint = (i: number, radius: number) => {
+    const angle = (Math.PI * 2 * i) / rn - Math.PI / 2
+    return [rcx + radius * Math.cos(angle), rcy + radius * Math.sin(angle)] as const
+  }
+  const radarPolygonPoints = radarValues
+    .map((v, i) => radarAxisPoint(i, rr * (Math.max(0, Math.min(100, v)) / 100)))
+    .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(' ')
+  const radarGridPoints = (frac: number) =>
+    radarAxes.map((_, i) => radarAxisPoint(i, rr * frac)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+
   return (
     <div style={cardStyle} onClick={() => setExpanded(x => !x)}>
       <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: `linear-gradient(90deg, transparent, ${tone.color}99, transparent)` }} />
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div style={{ minWidth: 0 }}>
+      <div className="hhi-top-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ minWidth: 0, flex: '1 1 240px' }}>
           <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
             翰翰仔幸福指數 · Hanhan Happiness Index
           </div>
@@ -2000,18 +2029,27 @@ function HappinessHeroCard({
           )}
         </div>
 
-        <div className="hhi-contributions" style={{ display: 'flex', gap: '1.6rem', flexWrap: 'wrap' }}>
-          {contributions.map(c => (
-            <div key={c.label}>
-              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', marginBottom: '3px' }}>
-                {c.label} · {c.weightPct}%
-              </div>
-              <div style={{ fontSize: '19px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>
-                {c.value !== null ? Math.round(c.value) : '—'}
-              </div>
+        {/* 跟運動 APP 系統卡片的肌群雷達圖同一套 SVG polygon 手法，尺寸放大到
+            200px（那張是 130px）——這裡只有 4 軸、沒有塞其他大量文字內容跟它
+            搶版面，值得放大當作卡片的視覺重心。 */}
+        <svg width={radarSize} height={radarSize} viewBox={`0 0 ${radarSize} ${radarSize}`} style={{ flexShrink: 0 }}>
+          <polygon points={radarGridPoints(1)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+          <polygon points={radarGridPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+          <polygon points={radarPolygonPoints} fill={`${tone.color}33`} stroke={tone.color} strokeWidth={2} />
+        </svg>
+      </div>
+
+      <div className="hhi-contributions" style={{ display: 'flex', gap: '1.6rem', flexWrap: 'wrap', marginTop: '1.2rem' }}>
+        {contributions.map(c => (
+          <div key={c.label}>
+            <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', marginBottom: '3px' }}>
+              {c.label} · {c.weightPct}%
             </div>
-          ))}
-        </div>
+            <div style={{ fontSize: '19px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>
+              {c.value !== null ? Math.round(c.value) : '—'}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.8rem', marginTop: '1.1rem', borderTop: '1px solid rgba(192,132,252,0.15)' }}>
