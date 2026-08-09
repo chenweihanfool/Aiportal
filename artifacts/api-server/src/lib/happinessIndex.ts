@@ -1,8 +1,8 @@
 // 翰翰仔幸福指數 (Hanhan Happiness Index / HHI) — a reflective dashboard-navigation
-// metric, not a medical, psychological, or scientific diagnosis. Combines the
-// three existing composite indices (人生自由/運動習慣/忙碌→從容) into one
-// number via a weighted average with a "weakest link" correction and
-// day-over-day smoothing.
+// metric, not a medical, psychological, or scientific diagnosis. Combines four
+// composite indices (人生自由/運動習慣/忙碌→從容/心智指標) into one number via
+// a weighted average with a "weakest link" correction and day-over-day
+// smoothing.
 //
 // WARNING — changing any weight below breaks longitudinal comparability
 // (today's "62" is no longer comparable to last week's "62" once the
@@ -17,15 +17,21 @@ export interface HappinessConfig {
   lifeFreedomWeight: number;
   fitnessWeight: number;
   calmWeight: number;
+  mindWeight: number;
   weakestLinkWeight: number;
   smoothingTodayWeight: number;
   smoothingYesterdayWeight: number;
 }
 
+// 2026-08-09: added mindWeight (心智指標). Existing three weights scaled down
+// proportionally to make room (45/30/25 -> 36/24/20) rather than picked
+// fresh, so their relative balance to each other is unchanged — only "how
+// much of the pie" shrank to fit the new dimension.
 export const HAPPINESS_CONFIG: HappinessConfig = {
-  lifeFreedomWeight: 0.45,
-  fitnessWeight: 0.30,
-  calmWeight: 0.25,
+  lifeFreedomWeight: 0.36,
+  fitnessWeight: 0.24,
+  calmWeight: 0.20,
+  mindWeight: 0.20,
   weakestLinkWeight: 0.15,
   smoothingTodayWeight: 0.70,
   smoothingYesterdayWeight: 0.30,
@@ -33,10 +39,14 @@ export const HAPPINESS_CONFIG: HappinessConfig = {
 
 if (
   Math.abs(
-    HAPPINESS_CONFIG.lifeFreedomWeight + HAPPINESS_CONFIG.fitnessWeight + HAPPINESS_CONFIG.calmWeight - 1
+    HAPPINESS_CONFIG.lifeFreedomWeight +
+      HAPPINESS_CONFIG.fitnessWeight +
+      HAPPINESS_CONFIG.calmWeight +
+      HAPPINESS_CONFIG.mindWeight -
+      1
   ) > 1e-9
 ) {
-  throw new Error("HAPPINESS_CONFIG base weights (lifeFreedom+fitness+calm) must sum to 1.0");
+  throw new Error("HAPPINESS_CONFIG base weights (lifeFreedom+fitness+calm+mind) must sum to 1.0");
 }
 if (
   Math.abs(HAPPINESS_CONFIG.smoothingTodayWeight + HAPPINESS_CONFIG.smoothingYesterdayWeight - 1) > 1e-9
@@ -67,10 +77,11 @@ export interface HappinessInputs {
   lifeFreedomScore: number | null;
   fitnessHabitScore: number | null;
   busynessScore: number | null; // lower is better; converted to calmScore below
+  mindScore: number | null; // HERMES knowledge-base daily score (心智指標), already 0-100, higher is better
 }
 
 interface Dimension {
-  key: "lifeFreedom" | "fitness" | "calm";
+  key: "lifeFreedom" | "fitness" | "calm" | "mind";
   label: string;
   value: number;
   weight: number;
@@ -80,11 +91,12 @@ export interface HappinessComponents {
   lifeFreedomScore: number | null;
   fitnessHabitScore: number | null;
   calmScore: number | null; // clamp(100 - busynessScore, 0, 100)
-  availableComponents: Array<"lifeFreedom" | "fitness" | "calm">;
+  mindScore: number | null;
+  availableComponents: Array<"lifeFreedom" | "fitness" | "calm" | "mind">;
 }
 
 export interface HappinessResult {
-  finalScore: number | null; // null when all three inputs are missing — "資料準備中", never a fake score
+  finalScore: number | null; // null when all inputs are missing — "資料準備中", never a fake score
   finalRaw: number | null;
   baseScore: number | null;
   weakestScore: number | null;
@@ -92,7 +104,7 @@ export interface HappinessResult {
   components: HappinessComponents;
 }
 
-const DIMENSION_LABELS = { lifeFreedom: "人生自由", fitness: "健身習慣", calm: "生活從容" } as const;
+const DIMENSION_LABELS = { lifeFreedom: "人生自由", fitness: "健身習慣", calm: "生活從容", mind: "心智指標" } as const;
 
 /** Pure calculation — no DB/network access, so it's directly unit-testable
  * against the spec's worked examples without mocking anything. */
@@ -106,6 +118,7 @@ export function computeHappinessComponents(
     { key: "lifeFreedom", value: inputs.lifeFreedomScore, weight: config.lifeFreedomWeight },
     { key: "fitness", value: inputs.fitnessHabitScore, weight: config.fitnessWeight },
     { key: "calm", value: calmScore, weight: config.calmWeight },
+    { key: "mind", value: inputs.mindScore, weight: config.mindWeight },
   ];
   const available: Dimension[] = allDimensions
     .filter((d): d is { key: Dimension["key"]; value: number; weight: number } => d.value !== null)
@@ -115,6 +128,7 @@ export function computeHappinessComponents(
     lifeFreedomScore: inputs.lifeFreedomScore,
     fitnessHabitScore: inputs.fitnessHabitScore,
     calmScore,
+    mindScore: inputs.mindScore,
     availableComponents: available.map((d) => d.key),
   };
 

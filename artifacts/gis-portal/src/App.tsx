@@ -25,6 +25,18 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.18.0',
+    date: '2026-08-09',
+    summary: '新增心智指標卡片，翰翰仔幸福指數擴充為四維度',
+    changes: [
+      '新增「心智指標」卡片：讀取 HERMES 每天寫在 NAS（Obsidian Vault）上的 心智指標.md，顯示轉化率／連結健康度／活化度／本週節奏四個子分數，各自級距標籤用 HERMES 自己定義的門檻（例如轉化率 ≥90 順暢、活化度 ≥80 活躍），不是套用其他卡片的通用色階',
+      '資料超過 36 小時沒更新（HERMES 計分腳本沒跑）時整張卡降低飽和度標示「資料已超過 36 小時未更新」，但還是顯示最後已知分數，不會憑空消失',
+      '翰翰仔幸福指數（HHI）從三維度擴充為四維度：人生自由 45%→36%、健身習慣 30%→24%、生活從容 25%→20%，三者依原比例等比縮小；心智指標新佔 20%——原本三項的相對比例完全不變，只是整體讓出五分之一空間給新維度',
+      '心智指標卡片沒有對應的 portal_sites 列（沒有外部網址可連），比照翰翰仔幸福指數的做法直接掛進私領域 bento grid，不透過 GlassSummaryCard／SUMMARY_BODIES 那條路徑',
+      '「展開明細」內附近 5-30 天歷史趨勢線（若 HERMES 有寫 心智指標-history.jsonl），跟 HHI 卡片同一顆 TrendLineChart 元件，這次順便把它從只認 HHI 的 displayedScore 欄位改成通用的 {date, value} 格式',
+    ],
+  },
+  {
     version: '1.17.0',
     date: '2026-08-09',
     summary: '任務追蹤系統子分數加註級距標籤，不再只看到裸數字',
@@ -1626,6 +1638,154 @@ const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown>; ex
 }
 
 // ─────────────────────────────────────────────
+// 心智指標 — HERMES's own daily-computed knowledge-base score, read from a
+// file on the NAS (services/api-server/src/lib/mindIndex.ts), not computed
+// here. No portal_sites row / external URL to link to (same situation as
+// HHI), so it's a standalone card rendered directly into the bento grid
+// rather than going through GlassSummaryCard + SUMMARY_BODIES.
+// ─────────────────────────────────────────────
+type Band = [threshold: number, color: string, label: string]
+
+function bandTone(score: number | null, bands: Band[]): { color: string; label: string } {
+  if (score === null) return { color: 'rgba(255,255,255,0.4)', label: '資料不足' }
+  for (const [threshold, color, label] of bands) {
+    if (score >= threshold) return { color, label }
+  }
+  return { color: 'rgba(255,255,255,0.4)', label: '資料不足' }
+}
+
+const MIND_SCORE_BANDS: Band[] = [[80, '#34d399', '優良'], [60, '#fbbf24', '普通'], [40, '#fb923c', '偏弱'], [0, '#f87171', '停滯']]
+const CONVERSION_BANDS: Band[] = [[90, '#34d399', '順暢'], [70, '#fbbf24', '普通'], [0, '#f87171', '淤積']]
+const LINK_HEALTH_BANDS: Band[] = [[90, '#34d399', '緊密'], [75, '#fbbf24', '普通'], [0, '#f87171', '孤立']]
+const VITALITY_BANDS: Band[] = [[80, '#34d399', '活躍'], [40, '#fbbf24', '普通'], [0, '#f87171', '停滯']]
+const RHYTHM_BANDS: Band[] = [[80, '#34d399', '穩定'], [40, '#fbbf24', '普通'], [0, '#f87171', '低迷']]
+
+function MindIndexCard({
+  summary,
+  unlocked,
+  onRequestUnlock,
+}: {
+  summary: DashboardSummary | undefined
+  unlocked: boolean
+  onRequestUnlock: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isLocked = !unlocked
+
+  const data = summary?.data
+  const score = typeof data?.['score'] === 'number' ? data['score'] as number : null
+  const conversion = typeof data?.['conversion'] === 'number' ? data['conversion'] as number : null
+  const linkHealth = typeof data?.['linkHealth'] === 'number' ? data['linkHealth'] as number : null
+  const vitality = typeof data?.['vitality'] === 'number' ? data['vitality'] as number : null
+  const rhythm = typeof data?.['rhythm'] === 'number' ? data['rhythm'] as number : null
+  const stale = data?.['stale'] === true
+  const partial = data?.['partial'] === true
+  const historyRaw = Array.isArray(data?.['history']) ? data!['history'] as Array<{ date: string; score: number }> : []
+
+  const cardStyle: React.CSSProperties = {
+    position: 'relative',
+    background: 'rgba(255,255,255,0.055)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(192,132,252,0.22)',
+    borderRadius: '18px',
+    padding: '1.5rem 1.6rem 1.2rem',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+    // 資料過期（HERMES 的計分腳本超過 36 小時沒跑）不當成錯誤或缺席，還是
+    // 顯示最後已知分數，但整張卡降低飽和度/透明度，一眼就能看出「這是舊的」。
+    opacity: stale ? 0.55 : 1,
+    filter: stale ? 'saturate(0.5)' : undefined,
+  }
+
+  if (isLocked) {
+    return (
+      <div style={{ ...cardStyle, cursor: 'pointer' }} onClick={onRequestUnlock}>
+        <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.6), transparent)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.1rem' }}>
+          <span style={{ fontSize: '26px', filter: 'drop-shadow(0 0 8px rgba(192,132,252,0.55))' }}>🔒</span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ color: '#c084fc', fontSize: '16px', fontWeight: '600' }}>心智指標</div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>HERMES Knowledge Base</div>
+          </div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '1.2rem 0' }}>
+          <div style={{ fontSize: '18px', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)' }}>••••••</div>
+          <div style={{ fontSize: '11.5px', color: '#fbbf24', letterSpacing: '0.05em' }}>🔒 解鎖後顯示</div>
+        </div>
+      </div>
+    )
+  }
+
+  const tone = bandTone(score, MIND_SCORE_BANDS)
+  const conversionTone = bandTone(conversion, CONVERSION_BANDS)
+  const linkHealthTone = bandTone(linkHealth, LINK_HEALTH_BANDS)
+  const vitalityTone = bandTone(vitality, VITALITY_BANDS)
+  const rhythmTone = bandTone(rhythm, RHYTHM_BANDS)
+  const items = [
+    { label: '轉化率', value: conversion !== null ? String(conversion) : '—', color: conversionTone.color, tier: conversion !== null ? conversionTone.label : undefined, formula: 'CREATE 層：100 × 近30天編譯進 wiki 的條目數 ÷ (近30天編譯數 + inbox 超過7天未編譯的積壓數)' },
+    { label: '連結健康度', value: linkHealth !== null ? String(linkHealth) : '—', color: linkHealthTone.color, tier: linkHealth !== null ? linkHealthTone.label : undefined, formula: 'ENRICH 層：100 × (1 − 孤兒條目數 ÷ 總條目數)，孤兒 = wiki 連結出入度皆為 0（不含模板/索引）' },
+    { label: '活化度', value: vitality !== null ? String(vitality) : '—', color: vitalityTone.color, tier: vitality !== null ? vitalityTone.label : undefined, formula: 'SYNTHESIZE 層：min(100, 近30天被修改條目比例 × 400)；近14天無 L3 綜整產出則 × 0.8' },
+    { label: '本週節奏', value: rhythm !== null ? String(rhythm) : '—', color: rhythmTone.color, tier: rhythm !== null ? rhythmTone.label : undefined, formula: '近7天加權積分（豐化2分/新條目1分/新連結0.5分/L3綜整5分，每日上限20分）÷ 30 × 100' },
+  ]
+  const historyPoints = historyRaw.map(h => ({ date: h.date, value: h.score }))
+
+  return (
+    <div style={cardStyle}>
+      <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: `linear-gradient(90deg, transparent, ${tone.color}99, transparent)` }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.1rem' }}>
+        <span style={{ fontSize: '26px', filter: `drop-shadow(0 0 8px ${tone.color}88)` }}>🧠</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ color: '#c084fc', fontSize: '16px', fontWeight: '600' }}>心智指標</div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>HERMES Knowledge Base</div>
+        </div>
+      </div>
+
+      {score === null ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>
+          {summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中…'}
+        </div>
+      ) : (
+        <div style={{ flex: 1 }}>
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+              <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>{score}</div>
+              <div style={{ fontSize: '15px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
+            </div>
+            {(stale || partial) && (
+              <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '4px' }}>
+                {stale ? '資料已超過 36 小時未更新' : ''}{stale && partial ? '・' : ''}{partial ? '部分子分數缺項' : ''}
+              </div>
+            )}
+          </div>
+          <SupportStats items={items} />
+          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} />
+          {expanded && (
+            <FormulaPanel rows={[
+              { label: '心智指標', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均，任一維度崩壞會拖累總分；缺項用可用的算並標記 partial' },
+              ...items,
+            ]} />
+          )}
+          {expanded && (
+            <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>歷史趨勢</div>
+              <TrendLineChart points={historyPoints} color={tone.color} height={70} />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.7rem', marginTop: '1rem', borderTop: '1px solid rgba(192,132,252,0.13)' }}>
+        <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.04em' }}>{formatMinutesAgo(summary?.fetchedAt ?? null)}</span>
+        <span style={{ fontSize: '10.5px', color: 'rgba(192,132,252,0.8)', letterSpacing: '0.05em', fontWeight: '500' }}>PRIVATE</span>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // 翰翰仔幸福指數 (Hanhan Happiness Index) — full-width hero card, top of the
 // private zone. Not tied to any portal_sites row (there's no external
 // system to link to), so it's rendered separately from the site-mapped
@@ -1645,7 +1805,7 @@ function hhiTone(score: number): { color: string; label: string } {
 // units with preserveAspectRatio="none" + CSS width:100%, so it stretches
 // to whatever container width it's given without needing to measure the
 // container in JS.
-function TrendLineChart({ points, color = '#c084fc', height = 90 }: { points: HappinessHistoryPoint[]; color?: string; height?: number }) {
+function TrendLineChart({ points, color = '#c084fc', height = 90 }: { points: Array<{ date: string; value: number }>; color?: string; height?: number }) {
   if (points.length < 2) {
     return (
       <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)', padding: '0.6rem 0' }}>
@@ -1655,7 +1815,7 @@ function TrendLineChart({ points, color = '#c084fc', height = 90 }: { points: Ha
   }
 
   const width = 100
-  const values = points.map(p => p.displayedScore)
+  const values = points.map(p => p.value)
   const minV = Math.min(...values)
   const maxV = Math.max(...values)
   const range = maxV - minV || 1
@@ -1664,7 +1824,7 @@ function TrendLineChart({ points, color = '#c084fc', height = 90 }: { points: Ha
   const stepX = width / (points.length - 1)
   const coords = points.map((p, i) => {
     const x = i * stepX
-    const y = padY + innerH - ((p.displayedScore - minV) / range) * innerH
+    const y = padY + innerH - ((p.value - minV) / range) * innerH
     return [x, y] as const
   })
   const linePath = coords.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ')
@@ -1723,8 +1883,9 @@ function HappinessHeroCard({
   const lifeFreedomScore = typeof data?.['lifeFreedomScore'] === 'number' ? data['lifeFreedomScore'] as number : null
   const fitnessHabitScore = typeof data?.['fitnessHabitScore'] === 'number' ? data['fitnessHabitScore'] as number : null
   const calmScore = typeof data?.['calmScore'] === 'number' ? data['calmScore'] as number : null
+  const mindScore = typeof data?.['mindScore'] === 'number' ? data['mindScore'] as number : null
   const usingStaleData = data?.['usingStaleData'] === true
-  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number } | undefined
+  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number; mindWeight?: number } | undefined
 
   const cardStyle: React.CSSProperties = {
     position: 'relative',
@@ -1768,9 +1929,10 @@ function HappinessHeroCard({
 
   const tone = hhiTone(displayedScore)
   const contributions: Array<{ label: string; value: number | null; weightPct: number }> = [
-    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.45) * 100) },
-    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.30) * 100) },
-    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.25) * 100) },
+    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.36) * 100) },
+    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.24) * 100) },
+    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.20) * 100) },
+    { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.20) * 100) },
   ]
 
   return (
@@ -1838,7 +2000,7 @@ function HappinessHeroCard({
             ) : history === null ? (
               <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
             ) : (
-              <TrendLineChart points={history} color={tone.color} />
+              <TrendLineChart points={history.map(h => ({ date: h.date, value: h.displayedScore }))} color={tone.color} />
             )}
           </div>
         </div>
@@ -2053,6 +2215,14 @@ function GlassPortalView({
                 })
               : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
             }
+            {/* 心智指標沒有 portal_sites 對應列（沒有外部網址可連），所以不透過
+                上面 privateSites.map() 那條路徑，直接掛進同一個 bento grid 當
+                額外一格 */}
+            <MindIndexCard
+              summary={dashboard.find(d => d.subsystemId === 'mind-index')}
+              unlocked={unlocked}
+              onRequestUnlock={onRequestUnlock}
+            />
           </div>
         </div>
 

@@ -6,6 +6,7 @@ import {
   computeHappinessComponents,
   getHappinessConfigVersion,
 } from "./happinessIndex";
+import { fetchMindIndex } from "./mindIndex";
 
 export interface SummarySource {
   id: string;
@@ -87,6 +88,12 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     isPrivate: true,
     fetch: fetchVikunjaBusynessFromHistory,
   },
+  {
+    id: "mind-index",
+    name: "心智指標",
+    isPrivate: true,
+    fetch: fetchMindIndex,
+  },
 ];
 // REAL-TIME FETCH — for /api/dashboard on page load (not cached)
 // ─────────────────────────────────────────────
@@ -145,18 +152,25 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   const pf = results.get("pf-cwh");
   const ff = results.get("fitnessforge");
   const vk = results.get("vikunja");
+  const mi = results.get("mind-index");
 
   const lifeFreedomScore = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
   const fitnessHabitScore = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
   const busynessScore = vk?.status === "ok" ? (vk.data)?.busyIndex as number | null : null;
+  const mindScore = mi?.status === "ok" ? (mi.data)?.score as number | null : null;
+  // The file read can succeed while HERMES's own scoring script hasn't run
+  // in a while — that's a stale *score*, not a fetch failure, so it doesn't
+  // show up as mi.status === "error". Surfaced via usingStaleData instead.
+  const mindStale = mi?.status === "ok" ? (mi.data)?.stale === true : false;
 
   const result = computeHappinessComponents({
     lifeFreedomScore,
     fitnessHabitScore,
     busynessScore,
+    mindScore,
   });
 
-  const hhiData = await computeHappinessIndexFresh(result, busynessScore);
+  const hhiData = await computeHappinessIndexFresh(result, busynessScore, mindStale);
   const hhiEntry: DashboardSummary = {
     subsystemId: "hhi",
     name: "翰翰仔幸福指數",
@@ -179,18 +193,25 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
  *  from the DB so day-over-day smoothing keeps working. */
 async function computeHappinessIndexFresh(
   result: import("./happinessIndex").HappinessResult,
-  busynessScore: number | null
+  busynessScore: number | null,
+  mindStale: boolean
 ): Promise<Record<string, unknown>> {
-  const usingStaleData = false; // fresh fetch is never stale
+  // Every other input here is a genuinely fresh live fetch — the one
+  // exception is mind-index, where a successful file read can still carry a
+  // score HERMES's own scoring script hasn't updated in a while (see
+  // mindIndex.ts). That's the only source of staleness left since the
+  // real-time-fetch switch, so it drives this directly.
+  const usingStaleData = mindStale;
   const configVersion = getHappinessConfigVersion();
   const weights = {
     lifeFreedomWeight: HAPPINESS_CONFIG.lifeFreedomWeight,
     fitnessWeight: HAPPINESS_CONFIG.fitnessWeight,
     calmWeight: HAPPINESS_CONFIG.calmWeight,
+    mindWeight: HAPPINESS_CONFIG.mindWeight,
   };
 
   if (result.finalScore === null) {
-    // All three inputs missing — nothing to persist, nothing fake to show.
+    // All inputs missing — nothing to persist, nothing fake to show.
     return {
       finalScore: null,
       displayedScore: null,
@@ -200,6 +221,7 @@ async function computeHappinessIndexFresh(
       lifeFreedomScore: null,
       fitnessHabitScore: null,
       calmScore: null,
+      mindScore: null,
       busynessScore: null,
       availableComponents: [],
       usingStaleData,
@@ -248,6 +270,7 @@ async function computeHappinessIndexFresh(
     lifeFreedomScore: result.components.lifeFreedomScore,
     fitnessHabitScore: result.components.fitnessHabitScore,
     calmScore: result.components.calmScore,
+    mindScore: result.components.mindScore,
     busynessScore,
     availableComponents: result.components.availableComponents,
     usingStaleData,
