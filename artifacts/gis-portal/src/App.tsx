@@ -25,6 +25,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.17.0',
+    date: '2026-08-09',
+    summary: '任務追蹤系統子分數加註級距標籤，不再只看到裸數字',
+    changes: [
+      '逾期壓力／近期負荷／停滯程度／拖延程度四個子分數旁邊加上級距標籤（輕鬆／普通／緊繃），跟從容指數卡片主指數同一套色階與門檻——原本只看到「近期負荷 100」不知道是高是低，現在直接標「緊繃」',
+      'SupportStats 共用元件新增可選的 tier 欄位，之後其他卡片的數字如果也想加級距標籤可以直接沿用，不用重複做一套',
+    ],
+  },
+  {
     version: '1.16.0',
     date: '2026-08-08',
     summary: '子系統卡片公式說明改成點擊展開，不再依賴滑鼠 hover（手機也能用）',
@@ -1432,13 +1441,16 @@ function HeroIndex({ label, score, invert = false }: { label: string; score: num
   )
 }
 
-function SupportStats({ items }: { items: Array<{ label: string; value: string; color?: string; formula?: string }> }) {
+function SupportStats({ items }: { items: Array<{ label: string; value: string; color?: string; formula?: string; tier?: string }> }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem 2rem' }}>
       {items.map(it => (
         <div key={it.label}>
           <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}</div>
-          <div style={{ fontSize: '18px', fontWeight: '600', color: it.color ?? 'rgba(255,255,255,0.9)' }}>{it.value}</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <span style={{ fontSize: '18px', fontWeight: '600', color: it.color ?? 'rgba(255,255,255,0.9)' }}>{it.value}</span>
+            {it.tier && <span style={{ fontSize: '10.5px', fontWeight: '600', color: it.color }}>{it.tier}</span>}
+          </div>
         </div>
       ))}
     </div>
@@ -1577,11 +1589,19 @@ function VikunjaSummaryBody({ data, expanded, onToggleExpand }: { data: Record<s
   const stagnationScore = typeof data['stagnationScore'] === 'number' ? data['stagnationScore'] : null
   const completionScore = typeof data['completionScore'] === 'number' ? data['completionScore'] : null
 
+  // 這四個子分數都是「數字越高代表這個問題越嚴重」的診斷分數，用跟主指數同一套
+  // heroTone 色階/字級（invert=true：0 分=輕鬆，100 分=緊繃），單看數字看不出
+  // 是高是低的問題，級距標籤直接告訴你 100 分是「緊繃」還是「還好」。
+  const diagItem = (label: string, score: number | null, formula: string) => {
+    const tone = heroTone(score, true)
+    return { label, value: score !== null ? String(score) : '—', formula, color: score !== null ? tone.color : undefined, tier: score !== null ? tone.label : undefined }
+  }
+
   const items = [
-    { label: '逾期壓力', value: overdueScore !== null ? String(overdueScore) : '—', formula: '目前逾期任務的嚴重程度（數量、逾期天數），對比近三個月基準' },
-    { label: '近期負荷', value: loadScore !== null ? String(loadScore) : '—', formula: '近期任務負荷 ÷ 長期平均負荷（ACWR 概念），比值越高代表最近突然變忙' },
-    { label: '停滯程度', value: stagnationScore !== null ? String(stagnationScore) : '—', formula: '任務長期沒有進展、卡住不動的程度' },
-    { label: '拖延程度', value: completionScore !== null ? String(completionScore) : '—', formula: '過去 90 天準時完成率的反向指標（指數衰減加權，越近期權重越高），數字越高代表越常拖延' },
+    diagItem('逾期壓力', overdueScore, '目前逾期任務的嚴重程度（數量、逾期天數），對比近三個月基準'),
+    diagItem('近期負荷', loadScore, '近期任務負荷 ÷ 長期平均負荷（ACWR 概念），比值越高代表最近突然變忙'),
+    diagItem('停滯程度', stagnationScore, '任務長期沒有進展、卡住不動的程度'),
+    diagItem('拖延程度', completionScore, '過去 90 天準時完成率的反向指標（指數衰減加權，越近期權重越高），數字越高代表越常拖延'),
   ]
 
   return (
