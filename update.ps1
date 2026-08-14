@@ -4,24 +4,17 @@
 .DESCRIPTION
     Steps:
       1. git pull (from chenweihanfool/Aiportal on GitHub)
-      2. docker compose up -d --build (build + (re)create both api-server and gis-portal)
-      3. docker compose --profile migrate run --build --rm db-migrate (applies
-         versioned SQL migrations from lib/db/migrations/, run INSIDE a Linux
-         container -- safe to run every deploy). The --build is required, not
-         optional: `docker compose run` (unlike `up`) does not rebuild a
-         service whose image already exists, so without --build this silently
-         runs migrate.mjs against whatever migration files were baked into
-         the last-built db-migrate image and reports "already up to date"
-         even when new migrations exist in the repo -- confirmed hitting this
-         exact silent-no-op on 2026-08-09 (mind_index_history never got
-         created on the first attempt). Deliberately not `pnpm --filter db
-         push`/`generate` on this Windows host either way: drizzle-kit has
-         known Windows glob/path resolution bugs ("No schema files found")
-         that silently no-op it, which let a real deploy ship with a missing
-         table and crash-loop api-server once before (2026-08-03 incident).
+      2. docker compose build --no-cache + rm -sf + up -d (two-step forced
+         recreate, avoids the stale-image trap #12a where --force-recreate
+         alone doesn't guarantee the container picks up the freshly-built
+         image on this Windows Docker Desktop host)
+      3. docker compose exec -T api-server npx drizzle-kit push (runs inside
+         the running api-server container, which can resolve host.docker.internal
+         to the Windows host; avoids the standalone db-migrate service that
+         gets ENOTFOUND "base" on this host's WSL networking)
       4. health check (verify /api/healthz responds)
 
-    Same pattern as pf-cwh/fitnessforge on this host. Postgres itself is NOT
+    Same pattern as pf-cwh/FitnessForge on this host. Postgres itself is NOT
     managed by this docker-compose file -- it's an existing instance shared with
     other apps (see DATABASE_URL in .env), so there's no "postgres" service
     to restart here.
@@ -34,7 +27,7 @@
       - Double-click this .ps1 file
       - Or run in PowerShell: & "F:\WEBAPP\SRC\Aiportal\update.ps1"
 .NOTES
-    Version: 1.0
+    Version: 1.1
 #>
 
 $ErrorActionPreference = "Continue"
@@ -93,12 +86,16 @@ catch {
 }
 
 # ==============================================
-# Step 2: docker compose up -d --build (build + start in one shot)
+# Step 2: docker compose build + rm + up (two-step forced recreate)
 # ==============================================
 Write-Host "[2/4] Building + starting containers..." -ForegroundColor Yellow
 try {
     Push-Location $RepoDir
-    $upResult = cmd /c "docker compose up -d --build --force-recreate 2>&1"
+    $buildResult = cmd /c "docker compose build --no-cache 2>&1"
+    Write-Host $buildResult
+    $rmResult = cmd /c "docker compose rm -sf api-server gis-portal 2>&1"
+    Write-Host $rmResult
+    $upResult = cmd /c "docker compose up -d api-server gis-portal 2>&1"
     Write-Host $upResult
     # Skip LASTEXITCODE here -- Docker Desktop on this Windows host can emit a
     # false-positive .hermes-tmp cleanup warning (non-zero exit) after an
@@ -120,26 +117,27 @@ catch {
 }
 
 # ==============================================
-# Step 3: schema sync (drizzle-kit push, run inside a Linux container --
-# NOT on this Windows host, see note in the header above)
+# Step 3: schema sync (drizzle-kit push inside api-server container)
 # ==============================================
 Write-Host "[3/4] Syncing database schema..." -ForegroundColor Yellow
 try {
     Push-Location $RepoDir
-    # --build is required here -- see header comment: `docker compose run`
-    # doesn't rebuild an already-built service, so omitting it can silently
-    # apply a stale set of migrations (or none) while reporting success.
-    $pushResult = cmd /c "docker compose --profile migrate run --build --rm db-migrate 2>&1"
+    # Use api-server container (not db-migrate service) because db-migrate's
+    # migrate.mjs cannot resolve host.docker.internal in this Windows Docker
+    # Desktop setup, while api-server (same image) connects to Postgres fine.
+    # --no-tty (-T) prevents interactive prompts; additive schema changes are
+    # safe non-interactive, renames are handled manually.
+    $pushResult = cmd /c "docker compose exec -T api-server npx drizzle-kit push --config ./drizzle.config.ts 2>&1"
     Write-Host $pushResult
     if ($LASTEXITCODE -ne 0) {
-        throw "db-migrate failed (exit code: $LASTEXITCODE)"
+        throw "drizzle-kit push failed (exit code: $LASTEXITCODE)"
     }
     Write-Host "  >> Schema synced" -ForegroundColor Green
     Pop-Location
 }
 catch {
     Write-Host "ERROR schema sync: $_" -ForegroundColor Red
-    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose --profile migrate run --build --rm db-migrate" -ForegroundColor Yellow
+    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose exec api-server npx drizzle-kit push --config ./drizzle.config.ts" -ForegroundColor Yellow
     Pop-Location
     Write-Host "  Schema sync failure is treated as fatal -- a missing table will crash-loop api-server." -ForegroundColor Red
     exit 1
