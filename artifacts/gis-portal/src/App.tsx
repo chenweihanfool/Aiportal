@@ -25,6 +25,14 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.24.0',
+    date: '2026-08-14',
+    summary: '私領域卡片版面修正：矮卡片不再被拉伸成跟旁邊高卡片一樣高',
+    changes: [
+      '私領域 bento grid 少了 alignItems: start，同一列的卡片預設會被拉伸成一樣高（CSS Grid 預設 align-items: stretch）——例如人生自由指數（沒有雷達圖，內容矮）跟運動 APP 系統（有雷達圖，內容高）同一列時，前者會被硬撐出一大片空白去配合後者，看起來版面很不一致。實測正式站當時矮卡片被撐到 501px（自然高度只要約 280px），改完後各自長到自己內容需要的高度就好',
+    ],
+  },
+  {
     version: '1.23.0',
     date: '2026-08-14',
     summary: '運動 APP 系統覆蓋率補上活動量加成，跟主站顯示一致',
@@ -2335,11 +2343,16 @@ function GlassPortalView({
             unlockedPassword={unlockedPassword}
             onRequestUnlock={onRequestUnlock}
           />
+          {/* alignItems: 'start' — 沒有這行，同一列的卡片預設會被拉伸成一樣高
+              （grid 預設 align-items: stretch），矮的卡片（例如沒雷達圖的人生
+              自由指數）就會被硬撐出一大片空白去配合旁邊塞了雷達圖的高卡片。
+              改成 start 後每張卡各自長到自己內容需要的高度就好。 */}
           <div className="glass-portal-bento" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
             gridAutoRows: 'auto',
             gap: '0.9rem',
+            alignItems: 'start',
           }}>
             {privateSites.length > 0
               ? privateSites.map((s, i) => {
