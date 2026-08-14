@@ -25,6 +25,14 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.23.0',
+    date: '2026-08-14',
+    summary: '運動 APP 系統覆蓋率補上活動量加成，跟主站顯示一致',
+    changes: [
+      'FitnessForge 主站的覆蓋分數會依步數等活動量加成（封頂 +10%，例如「覆蓋 66%（含活動量 +10%）」），但 /api/public/summary 原本沒有套用這個加成，入口網卡片顯示的覆蓋率因此一直比主站自己頁面少了這一截——現在改讀新回傳的 activityBonusPoints，一樣用「XX%（含活動量 +Y%）」的格式顯示，不是把加成暗中併進去看不出來源',
+    ],
+  },
+  {
     version: '1.22.0',
     date: '2026-08-14',
     summary: '運動 APP 系統雷達圖同步主站新增的第 9 軸「有氧」',
@@ -1646,6 +1654,7 @@ function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Rec
   const trendPct = typeof data['trendPct'] === 'number' ? data['trendPct'] : null
   const balanceScore = typeof data['balanceScore'] === 'number' ? data['balanceScore'] : null
   const coverageScore = typeof data['coverageScore'] === 'number' ? data['coverageScore'] : null
+  const activityBonusPoints = typeof data['activityBonusPoints'] === 'number' ? data['activityBonusPoints'] : 0
   // 跟主站自己的雷達圖同一組複合分（0-150%，維持基準=100%），不是拿
   // muscleGroups 的原始組數/容量數字自己重新正規化——那樣每次都會填滿雷達圖，
   // 跟主站雷達圖對不上，也看不出真的有沒有進步（見 FitnessForge v3.15）。
@@ -1660,7 +1669,11 @@ function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Rec
   const items = [
     { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—', formula: '本週各筆訓練紀錄的加權分數總和（原始累積量，未經配速調整）' },
     { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? '#34d399' : '#f87171'), formula: '本週至今 vs 上週同一段等長時間至今；上週那段時間剛好沒資料時，改比「目前配速 vs 個人平均配速」' },
-    { label: '覆蓋率', value: coverageScore !== null ? `${coverageScore}%` : '—', formula: '本週肌群雷達圖多邊形面積 ÷ 每軸都達 100% 維持量時的面積，越高代表整體訓練量越飽滿' },
+    {
+      label: '覆蓋率',
+      value: coverageScore !== null ? `${coverageScore}%${activityBonusPoints > 0 ? `（含活動量 +${activityBonusPoints}%）` : ''}` : '—',
+      formula: '本週肌群雷達圖多邊形面積 ÷ 每軸都達 100% 維持量時的面積，越高代表整體訓練量越飽滿；活動量（例如步數）另外加成，封頂 +10%，跟主站自己頁面同一套算法',
+    },
     { label: '均衡度', value: balanceScore !== null ? `${balanceScore}%` : '—', formula: '最弱肌群複合分 ÷ 最強肌群複合分（複合分 = 組數 40% + 容量 60%），數字越低代表落差越大' },
   ]
 
