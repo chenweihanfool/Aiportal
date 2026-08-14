@@ -25,6 +25,14 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.22.0',
+    date: '2026-08-14',
+    summary: '運動 APP 系統雷達圖同步主站新增的第 9 軸「有氧」',
+    changes: [
+      'FitnessForge 主站雷達圖新增「有氧」軸（純有氧運動如跑步原本肌群佔比全是 0，做再多也不會反映在雷達圖上），/api/public/summary 的 muscleComposites 已經一併補上這一軸，入口網卡片只需要把軸列表從 8 項改成 9 項（跟著加上「有氧」）就會自動同步，不用改其他邏輯',
+    ],
+  },
+  {
     version: '1.21.0',
     date: '2026-08-09',
     summary: '雷達圖補上軸線名稱與分數標籤，運動 APP 系統改用跟主站一致的刻度',
@@ -1630,7 +1638,7 @@ function LabeledRadarChart({
   )
 }
 
-const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌']
+const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌', '有氧']
 
 function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) {
   const habitIndex = typeof data['habitIndex'] === 'number' ? data['habitIndex'] : null
