@@ -113,11 +113,24 @@ try {
         # and can silently mangle the argument docker.exe actually receives).
         # Project grouping isn't displayed by the frontend anyway, so it's
         # not worth the fragility -- name/status alone is enough.
+        # Confirmed via local repro: with $ErrorActionPreference = "Stop" (set
+        # script-wide, above), a native command writing ANYTHING to stderr --
+        # even on a clean exit 0 -- gets promoted to a terminating
+        # NativeCommandError by PowerShell 5.1, silently short-circuiting the
+        # stdout capture below to empty even though `2>$stderrFile` redirects
+        # the stderr text itself into a file rather than $null. Docker
+        # Desktop is known to occasionally emit deprecation/update notices to
+        # stderr on an otherwise-successful `docker ps`, so this native call
+        # specifically needs $ErrorActionPreference relaxed around it.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         $stderrFile = Join-Path $env:TEMP "hermes-status-docker-stderr.txt"
         $psLines = @(docker ps -a --format "{{.Names}}||{{.Status}}" 2>$stderrFile)
-        if ($LASTEXITCODE -ne 0) {
+        $dockerExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+        if ($dockerExitCode -ne 0) {
             $dockerAvailable = $false
-            Write-ErrorLog "docker ps exited $LASTEXITCODE : $(Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue)"
+            Write-ErrorLog "docker ps exited $dockerExitCode : $(Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue)"
         }
         Remove-Item $stderrFile -ErrorAction SilentlyContinue
     } catch {

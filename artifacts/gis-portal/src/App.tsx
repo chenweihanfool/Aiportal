@@ -26,6 +26,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.26.2',
+    date: '2026-08-15',
+    summary: '修正容器健康仍是 0/0：PowerShell 5.1 把 docker 寫到 stderr 的內容誤判成中斷錯誤',
+    changes: [
+      '正式主機上手動測試 docker ps 本身完全正常（7 個容器都抓得到），但透過 collect.ps1 執行卻還是 0/0——用本機重現後確認：整支腳本開頭設了 $ErrorActionPreference = "Stop"，PowerShell 5.1 在這個設定下，只要原生指令（docker.exe）寫任何東西到 stderr，即使 exit code 是 0，也會被拉高成中斷錯誤，讓 docker ps 那行直接被當例外處理掉，即使有用 2>檔案 把 stderr 導到檔案而不是 $null 也一樣',
+      'Docker Desktop 偶爾會在乾淨執行時也印一些提示/棄用訊息到 stderr，剛好就會踩到這個地雷。修法是呼叫 docker 那一行前後暫時把 $ErrorActionPreference 切成 Continue，執行完再切回 Stop，其餘腳本的失敗即停紀律不受影響',
+    ],
+  },
+  {
     version: '1.26.1',
     date: '2026-08-15',
     summary: '修正 HERMES 戰情室三個實測發現的問題：容器健康 0/0、近期活動亂碼、排程任務誤判失敗',
