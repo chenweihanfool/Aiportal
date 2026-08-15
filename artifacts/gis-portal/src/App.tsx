@@ -26,6 +26,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.27.0',
+    date: '2026-08-15',
+    summary: '私領域卡片版面重整：雷達圖卡片獨佔一列，純連結卡另外分組，不再跟高度差很多的卡片同列硬湊',
+    changes: [
+      '2 欄 bento grid 裡混雜了三種天生高度差很多的卡片：有雷達圖的（目前是運動 APP 系統，最高）、HeroIndex+支援數字的摘要卡（人生進度管理系統／任務追蹤系統／心智指標，中等）、純連結卡（例如 Duplicati 狀態，很矮）。同一列配對到高度差很大的鄰居時，矮的那張下面會空出一大片沒對齊的空白，看起來很不整齊',
+      '改成：有雷達圖的卡片（GlassSummaryCard 新增 wide 參數）獨佔一整列（grid-column: 1 / -1）；其餘摘要卡（高度天生接近）留在 2 欄 grid；純連結卡另外用跟公領域同一套緊湊 2 欄格線，自成一列，不再跟摘要卡混在一起比高度',
+    ],
+  },
+  {
     version: '1.26.2',
     date: '2026-08-15',
     summary: '修正容器健康仍是 0/0：PowerShell 5.1 把 docker 寫到 stderr 的內容誤判成中斷錯誤',
@@ -2395,12 +2404,14 @@ function GlassSummaryCard({
   index,
   unlocked,
   onSelect,
+  wide = false,
 }: {
   site: SiteData
   summary: DashboardSummary
   index: number
   unlocked: boolean
   onSelect: (site: SiteData) => void
+  wide?: boolean
 }) {
   const isLocked = site.isPrivate && !unlocked
   const rgb = site.isPrivate ? '192,132,252' : '0,229,255'
@@ -2435,6 +2446,7 @@ function GlassSummaryCard({
         display: 'flex',
         flexDirection: 'column',
         boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+        ...(wide ? { gridColumn: '1 / -1' } : {}),
         ...hueVar(site.isPrivate ? CARD_HUE.purple : CARD_HUE.cyan),
       }}
     >
@@ -2841,36 +2853,74 @@ function GlassPortalView({
             unlockedPassword={unlockedPassword}
             onRequestUnlock={onRequestUnlock}
           />
-          {/* alignItems: 'start' — 沒有這行，同一列的卡片預設會被拉伸成一樣高
-              （grid 預設 align-items: stretch），矮的卡片（例如沒雷達圖的人生
-              自由指數）就會被硬撐出一大片空白去配合旁邊塞了雷達圖的高卡片。
-              改成 start 後每張卡各自長到自己內容需要的高度就好。 */}
-          <div className="glass-portal-bento" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gridAutoRows: 'auto',
-            gap: '0.9rem',
-            alignItems: 'start',
-          }}>
-            {privateSites.length > 0
-              ? privateSites.map((s, i) => {
-                  const summary = s.subsystemId ? dashboard.find(d => d.subsystemId === s.subsystemId) : undefined
-                  return summary && SUMMARY_BODIES[summary.subsystemId]
-                    ? <GlassSummaryCard key={s.id} site={s} summary={summary} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
-                    : <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
-                })
-              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: FONT_STACK, letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
-            }
-            {/* 心智指標沒有 portal_sites 對應列（沒有外部網址可連），所以不透過
-                上面 privateSites.map() 那條路徑，直接掛進同一個 bento grid 當
-                額外一格 */}
-            <MindIndexCard
-              summary={dashboard.find(d => d.subsystemId === 'mind-index')}
-              unlocked={unlocked}
-              unlockedPassword={unlockedPassword}
-              onRequestUnlock={onRequestUnlock}
-            />
-          </div>
+          {(() => {
+            // 分成兩群，不是把所有私領域項目塞進同一個 2 欄 grid——有雷達圖的
+            // 卡片（目前只有運動 APP 系統）內容天生就比其他卡片高很多，跟旁邊
+            // 矮卡片同一列會空出一大片沒對齊的空白；純連結卡（沒有 summary
+            // body，例如 Duplicati 狀態）內容天生就短很多，跟中等高度的摘要卡
+            // 放一起也不對齊。改成：有雷達圖的卡片自己獨佔一整列；其餘摘要卡
+            // （HeroIndex + 4 個支援數字，高度天生就接近）留在 2 欄 grid 裡；
+            // 純連結卡另外用跟公領域一樣的緊湊 2 欄格線，彼此高度也接近。
+            const richSites: SiteData[] = []
+            const plainSites: SiteData[] = []
+            privateSites.forEach(s => {
+              const summary = s.subsystemId ? dashboard.find(d => d.subsystemId === s.subsystemId) : undefined
+              if (summary && SUMMARY_BODIES[summary.subsystemId]) richSites.push(s)
+              else plainSites.push(s)
+            })
+            return (
+              <>
+                {/* alignItems: 'start' — 沒有這行，同一列的卡片預設會被拉伸成一樣高
+                    （grid 預設 align-items: stretch）。改成 start 後每張卡各自長到
+                    自己內容需要的高度就好。 */}
+                <div className="glass-portal-bento" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gridAutoRows: 'auto',
+                  gap: '0.9rem',
+                  alignItems: 'start',
+                }}>
+                  {richSites.map((s, i) => {
+                    const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
+                    return (
+                      <GlassSummaryCard
+                        key={s.id}
+                        site={s}
+                        summary={summary}
+                        index={i + publicSites.length}
+                        unlocked={unlocked}
+                        onSelect={onSiteSelect}
+                        wide={summary.subsystemId === 'fitnessforge'}
+                      />
+                    )
+                  })}
+                  {/* 心智指標沒有 portal_sites 對應列（沒有外部網址可連），所以不
+                      透過上面 richSites 那條路徑，直接掛進同一個 bento grid 當
+                      額外一格——跟其他摘要卡同樣是 HeroIndex + 支援數字的形狀，
+                      高度天生接近，放在一起不會不對齊。 */}
+                  <MindIndexCard
+                    summary={dashboard.find(d => d.subsystemId === 'mind-index')}
+                    unlocked={unlocked}
+                    unlockedPassword={unlockedPassword}
+                    onRequestUnlock={onRequestUnlock}
+                  />
+                </div>
+                {plainSites.length > 0 && (
+                  <div className="glass-portal-cards" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gridAutoRows: 'auto',
+                    gap: '0.7rem',
+                    marginTop: '0.9rem',
+                  }}>
+                    {plainSites.map((s, i) => (
+                      <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
+                    ))}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
 
         {/* Horizontal divider */}
