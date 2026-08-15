@@ -13,96 +13,158 @@ body,
   box-sizing: border-box;
 }
 
-/* ─── Arcade Mode ─── */
-
-.arcade-bg {
-  background:
-    radial-gradient(ellipse at 25% 50%, rgba(0,229,255,0.04) 0%, transparent 60%),
-    radial-gradient(ellipse at 75% 50%, rgba(192,132,252,0.04) 0%, transparent 60%),
-    #050814;
-}
-
-.arcade-bg::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
-  background-size: 32px 32px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.arcade-scanlines {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgba(0,0,0,0.08) 3px,
-    rgba(0,0,0,0.08) 4px
-  );
-}
-
-.arcade-card {
-  border-radius: 4px;
-  overflow: hidden;
-  position: relative;
-  z-index: 2;
-  background: rgba(5, 8, 20, 0.9);
-  cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.arcade-card:hover {
-  transform: translateY(-3px) scale(1.035);
-}
-
-.arcade-card-cyan {
-  border: 1px solid rgba(0, 229, 255, 0.35);
-  animation: pixel-glow-cyan 2.5s ease-in-out infinite;
-}
-
-.arcade-card-cyan:hover {
-  box-shadow: 0 0 20px rgba(0,229,255,0.45), 0 8px 24px rgba(0,0,0,0.5) !important;
-}
-
-.arcade-card-purple {
-  border: 1px solid rgba(192, 132, 252, 0.35);
-  animation: pixel-glow-purple 2.5s ease-in-out infinite;
-}
-
-.arcade-card-purple:hover {
-  box-shadow: 0 0 20px rgba(192,132,252,0.45), 0 8px 24px rgba(0,0,0,0.5) !important;
-}
-
-.arcade-fight-flash {
+/* ─── Background: dark gradient + blurred accent orbs ───
+   Scoped absolute (not fixed) inside GlassPortalView's own inset:0
+   container — it already fills the viewport, this just avoids assuming so. */
+.bg-gradient {
   position: absolute;
   inset: 0;
-  background: white;
-  z-index: 10;
-  animation: fight-flash 0.35s ease forwards;
+  z-index: 0;
   pointer-events: none;
-  border-radius: 4px;
+  background: radial-gradient(ellipse at 25% 30%, rgba(0,229,255,0.05) 0%, transparent 55%),
+              radial-gradient(ellipse at 75% 70%, rgba(192,132,252,0.05) 0%, transparent 55%),
+              #050814;
 }
 
-@keyframes pixel-glow-cyan {
-  0%, 100% { box-shadow: 0 0 6px rgba(0,229,255,0.25), inset 0 0 6px rgba(0,229,255,0.03); }
-  50%       { box-shadow: 0 0 14px rgba(0,229,255,0.5), inset 0 0 10px rgba(0,229,255,0.07); }
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  z-index: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.orb-1 {
+  width: 420px; height: 420px;
+  background: radial-gradient(circle, rgba(0,229,255,0.4), transparent 70%);
+  top: -120px; left: -80px;
+  opacity: 0.3;
+  animation: drift1 18s ease-in-out infinite;
+}
+.orb-2 {
+  width: 380px; height: 380px;
+  background: radial-gradient(circle, rgba(192,132,252,0.4), transparent 70%);
+  bottom: -120px; right: -80px;
+  opacity: 0.28;
+  animation: drift2 22s ease-in-out infinite;
+}
+@keyframes drift1 { 50% { transform: translate(60px, 40px) scale(1.08); } }
+@keyframes drift2 { 50% { transform: translate(-50px, -60px) scale(1.12); } }
+
+/* ─── Glass card shell: silk light sweep + comet-trail border + spotlight ───
+   Shared surface language for the primary cards (GlassCard, GlassSummaryCard,
+   HappinessHeroCard, MindIndexCard). Each card keeps its own
+   background/border/backdrop-filter/box-shadow inline (unchanged) — these
+   layers just add the light-band sweep, rotating border highlight and
+   mouse-spotlight on top, driven by a per-card `--card-hue` custom property.
+   Both `.silk`/`.beam` are inserted as the FIRST children (before real
+   content) with no explicit z-index, so normal stacking order alone puts
+   them below the card's actual text/icons — no z-index juggling needed. */
+.glass-shell {
+  position: relative;
 }
 
-@keyframes pixel-glow-purple {
-  0%, 100% { box-shadow: 0 0 6px rgba(192,132,252,0.25), inset 0 0 6px rgba(192,132,252,0.03); }
-  50%       { box-shadow: 0 0 14px rgba(192,132,252,0.5), inset 0 0 10px rgba(192,132,252,0.07); }
+.silk {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.silk::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background: linear-gradient(115deg,
+    transparent 32%,
+    hsla(var(--card-hue, 200), 85%, 65%, .06) 45%,
+    hsla(var(--card-hue, 200), 85%, 72%, .12) 50%,
+    hsla(var(--card-hue, 200), 85%, 65%, .06) 55%,
+    transparent 68%);
+  animation: silkFlow 9s ease-in-out infinite;
+}
+@keyframes silkFlow {
+  0%, 100% { transform: translate(-14%, -7%); }
+  50%      { transform: translate(14%, 7%); }
+}
+/* Bottom wave-mask sliver — SVG wave shape used as a mask so the fill color
+   (via --card-hue) can differ per card without needing a separate SVG per hue. */
+.silk i {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 42px;
+  background: linear-gradient(180deg,
+    hsla(var(--card-hue, 200), 85%, 66%, 0),
+    hsla(var(--card-hue, 200), 85%, 60%, .5));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath d='M0 20 Q25 2 50 20 T100 20 T150 20 T200 20 V40 H0 Z' fill='black'/%3E%3C/svg%3E") repeat-x left bottom / 200px 42px;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath d='M0 20 Q25 2 50 20 T100 20 T150 20 T200 20 V40 H0 Z' fill='black'/%3E%3C/svg%3E") repeat-x left bottom / 200px 42px;
+  animation: waveSlide 7s linear infinite;
+}
+.silk .w2 {
+  height: 34px; opacity: .55;
+  -webkit-mask-size: 200px 34px; mask-size: 200px 34px;
+  animation-duration: 11s;
+  animation-direction: reverse;
+}
+@keyframes waveSlide {
+  from { -webkit-mask-position-x: 0;      mask-position-x: 0; }
+  to   { -webkit-mask-position-x: -200px; mask-position-x: -200px; }
 }
 
-@keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
+.beam {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  background: conic-gradient(from var(--angle, 0deg),
+    transparent 0%, transparent 72%,
+    hsla(var(--card-hue, 200), 90%, 70%, .9) 84%,
+    hsla(calc(var(--card-hue, 200) + 40), 90%, 72%, .7) 88%,
+    transparent 96%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+}
+.beam-on .beam { opacity: 1; animation: beamSpin 6s linear infinite; }
+@keyframes beamSpin { to { --angle: 360deg; } }
+
+/* Mouse spotlight — a pseudo-element naturally paints after all real
+   children, so it sits on top as a soft highlight glaze without needing
+   z-index. `--gx`/`--gy` are set imperatively on mousemove (see App.tsx). */
+.glass-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,.14), transparent 55%);
+  opacity: 0;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
+.glass-shell:hover::after { opacity: 1; }
+
+/* ─── HERMES 戰情室 list panels ─── */
+.list-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+.dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.dot-ok {
+  background: var(--dot-ok, #34d399);
+  box-shadow: 0 0 8px var(--dot-ok, #34d399);
+}
+.dot-warn {
+  background: var(--dot-warn, #fbbf24);
+  box-shadow: 0 0 8px var(--dot-warn, #fbbf24);
+}
+.dot-run {
+  background: var(--dot-run, #00e5ff);
+  box-shadow: 0 0 8px var(--dot-run, #00e5ff);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% { opacity: 0.3; transform: scale(0.8); }
 }
 
 @keyframes fight-flash {
@@ -118,13 +180,6 @@ body,
   95%  { opacity: 1; }
   97%  { opacity: 0.25; }
   98%  { opacity: 1; }
-}
-
-@keyframes mode-flash {
-  0%   { opacity: 0; }
-  25%  { opacity: 1; }
-  75%  { opacity: 1; }
-  100% { opacity: 0; }
 }
 
 /* ─── Glass Portal — mobile layout ───
@@ -151,11 +206,20 @@ body,
     gap: 0.8rem !important;
     width: 100%;
   }
+
+  .hermes-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .hermes-panels-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 480px) {
   .glass-portal-bento,
-  .glass-portal-cards {
+  .glass-portal-cards,
+  .hermes-stats-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -164,5 +228,11 @@ body,
      doesn't have room for. */
   .glass-portal-bento > * {
     grid-column: 1 / -1 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-1, .orb-2, .silk::before, .silk i, .beam-on .beam, .dot-run {
+    animation: none !important;
   }
 }

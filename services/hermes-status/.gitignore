@@ -1,0 +1,3 @@
+.env
+logs/
+activity_cursor.json

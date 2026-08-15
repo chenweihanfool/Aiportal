@@ -3,6 +3,7 @@ import { OrbitControls, Html } from '@react-three/drei'
 import { useRef, useState, useMemo, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
 import { motion, AnimatePresence } from 'framer-motion'
+import { CARD_HUE, COLOR, FONT_STACK } from './theme'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -24,6 +25,27 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '1.26.0',
+    date: '2026-08-15',
+    summary: '新增 HERMES 戰情室：CPU/RAM/磁碟、容器健康、排程任務狀態、近期部署活動',
+    changes: [
+      '入口網私領域新增獨立區塊「HERMES 戰情室」，顯示部署主機的即時運維狀態：CPU/記憶體/磁碟使用率、Docker 容器健康、Windows 排程任務最近執行結果、近期部署/備份活動——這些不是幸福指數的一個維度，是純粹的維運監控，所以獨立成一區、不進 HHI 合成分數',
+      '資料來自新的 services/hermes-status/collect.ps1（部署主機上每 10 分鐘跑一次的排程任務），POST 到新的 /api/admin/hermes-status（快照）與 /api/admin/hermes-activity（單筆事件）端點，跟心智指標同一套 x-admin-password push-to-API 模式',
+      '排程任務結果直接讀 Windows 原生的 Get-ScheduledTaskInfo，近期活動則是讀 update.ps1 本來就會寫的 update.log 尾端新增行——不用另外要求 HERMES 改自己的行為去插點記錄',
+      '30 分鐘沒更新就視為過期（比心智指標的 36 小時門檻短很多，因為這裡資料本來就該幾分鐘更新一次），過期時整區降低飽和度顯示，不是當成錯誤',
+    ],
+  },
+  {
+    version: '1.25.0',
+    date: '2026-08-15',
+    summary: '入口網視覺改版：深色玻璃絲綢風格，波浪背景取代粒子場，卡片加上光帶+彗星邊框',
+    changes: [
+      '背景改成 PS4 風格的多層 sine 波浪 + 漂浮塵埃粒子（取代原本滑鼠吸附的粒子場），色相沿用既有的青(公領域)→紫(私領域)語意；加上兩顆模糊光暈球做深度感',
+      '主要卡片（幸福指數、心智指標、各子系統摘要卡）套上絲綢光帶掃過 + 旋轉彗星邊框 + 滑鼠光斑的玻璃殼效果；幸福指數卡跟心智指標卡（純 div，沒有既有的 framer-motion 動畫）額外有 3D 滑鼠傾斜，圖卡類的卡片維持原本 framer-motion 的 hover 上浮不疊加，避免兩套 transform 系統互搶',
+      '字型全面換成 Noto Sans TC，順手清掉沒在用的舊 8-bit 街機殘留 CSS（.arcade-card / pixel-glow 動畫 / cursor-blink），新增 theme.ts 統一色票常數，取代原本散落各處的顏色字面值',
+    ],
+  },
   {
     version: '1.24.0',
     date: '2026-08-14',
@@ -387,6 +409,40 @@ async function apiFetchMindIndexHistory(adminPassword: string, days = 30): Promi
   return data.history
 }
 
+interface HermesDiskInfo { drive: string; percentUsed: number; freeGb: number; totalGb: number }
+interface HermesContainerInfo { name: string; project: string | null; status: string; health: string | null }
+interface HermesScheduledTaskInfo { name: string; lastRunTime: string | null; lastTaskResult: number | null }
+
+interface HermesStatusData {
+  available: boolean
+  cpuPercent: number | null
+  memPercent: number | null
+  disks: HermesDiskInfo[]
+  containers: HermesContainerInfo[]
+  scheduledTasks: HermesScheduledTaskInfo[]
+  computedAt: string | null
+  stale: boolean
+}
+
+async function apiFetchHermesStatus(adminPassword: string): Promise<HermesStatusData> {
+  const r = await fetch(`${API_BASE}api/hermes-status`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch hermes status')
+  return r.json() as Promise<HermesStatusData>
+}
+
+interface HermesActivityEntry { id: number; occurredAt: string; source: string; message: string }
+
+async function apiFetchHermesActivity(adminPassword: string, limit = 20): Promise<HermesActivityEntry[]> {
+  const r = await fetch(`${API_BASE}api/hermes-activity?limit=${limit}`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch hermes activity')
+  const data = await r.json() as { activity: HermesActivityEntry[] }
+  return data.activity
+}
+
 async function apiVerifyPassword(password: string): Promise<boolean> {
   const r = await fetch(`${API_BASE}api/auth/verify`, {
     method: 'POST',
@@ -608,7 +664,7 @@ function ZoneLabel({ position, text, color }: { position: [number, number, numbe
         fontWeight: '300',
         letterSpacing: '0.45em',
         textTransform: 'uppercase',
-        fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+        fontFamily: FONT_STACK,
         whiteSpace: 'nowrap',
         opacity: 0.38,
         userSelect: 'none',
@@ -716,7 +772,7 @@ function Landmark({
           color: labelColor,
           fontSize: '11px',
           fontWeight: '500',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           letterSpacing: '0.06em',
           whiteSpace: 'nowrap',
           textShadow: `0 0 10px ${labelGlow}`,
@@ -746,7 +802,7 @@ function Landmark({
               padding: '16px 20px',
               width: '210px',
               color: 'white',
-              fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+              fontFamily: FONT_STACK,
               boxShadow: '0 0 40px rgba(0, 229, 255, 0.12), inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
           >
@@ -871,7 +927,7 @@ function PasswordModal({
     background: 'rgba(255,255,255,0.06)',
     border: '1px solid rgba(255,255,255,0.14)',
     borderRadius: '20px', padding: '40px 44px', width: '340px',
-    color: 'white', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    color: 'white', fontFamily: FONT_STACK,
     boxShadow: '0 0 80px rgba(192,132,252,0.18), inset 0 1px 0 rgba(255,255,255,0.08)',
   }
 
@@ -924,7 +980,7 @@ const inputSt: React.CSSProperties = {
   padding: '9px 12px', background: 'rgba(0,0,0,0.3)',
   border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px',
   color: 'white', fontSize: '13px',
-  fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+  fontFamily: FONT_STACK,
   outline: 'none', boxSizing: 'border-box', width: '100%',
 }
 
@@ -1019,7 +1075,7 @@ function AdminPanel({ sites, adminPassword, onAdd, onEdit, onDelete, onClose }: 
         backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
         background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
         borderRadius: '20px', padding: '32px 36px',
-        color: 'white', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+        color: 'white', fontFamily: FONT_STACK,
       }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
@@ -1198,7 +1254,7 @@ function AdminAuthModal({ onSuccess, onCancel }: { onSuccess: (pw: string) => vo
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5,8,20,0.88)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
-      <div style={{ backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: '20px', padding: '36px 40px', width: '320px', color: 'white', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
+      <div style={{ backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: '20px', padding: '36px 40px', width: '320px', color: 'white', fontFamily: FONT_STACK }}>
         <div style={{ fontSize: '10px', color: 'rgba(0,229,255,0.6)', letterSpacing: '0.22em', textTransform: 'uppercase', marginBottom: '12px' }}>⚙ 管理後台</div>
         <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '20px' }}>輸入通行碼</div>
         <form onSubmit={e => { void handleSubmit(e) }}>
@@ -1226,7 +1282,7 @@ function VersionHistory() {
   const [expanded, setExpanded] = useState(false)
   const latest = VERSION_HISTORY[0]
   return (
-    <div style={{ position: 'absolute', bottom: '1.5rem', left: '1.5rem', zIndex: 100, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
+    <div style={{ position: 'absolute', bottom: '1.5rem', left: '1.5rem', zIndex: 100, fontFamily: FONT_STACK }}>
       <button onClick={() => setExpanded(x => !x)} style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         background: 'rgba(5,8,20,0.75)', backdropFilter: 'blur(8px)',
@@ -1269,9 +1325,22 @@ function VersionHistory() {
 const PORTAL_ICONS = ['⚡', '🔮', '🌐', '📊', '🗺️', '💫', '🎯', '🏆', '⚔️', '🛡️', '🧭', '🔬']
 
 // Floating particle canvas — mouse-attracted dots + connecting lines
+// PS4 風格波浪背景 — 五層疊加的 sine 波面 + 漂浮塵埃粒子，取代原本的滑鼠吸附
+// 粒子場。色相沿著入口網既有的青(186°，公領域) → 紫(270°，私領域) 語意漸層排列，
+// 不是隨機配色。維持跟舊版一樣的掛載介面（無 props、absolute inset:0 canvas），
+// 呼叫方（GlassPortalView）完全不用改。
+const WAVE_LAYERS = [
+  { base: 0.40, a: [46, 24, 12], k: [0.0018, 0.0038, 0.0072], s: [0.35, -0.28, 0.45], p: [0.0, 2.1, 4.2], hue: CARD_HUE.cyan, alpha: 0.10, par: 24 },
+  { base: 0.50, a: [60, 30, 15], k: [0.0015, 0.0031, 0.0063], s: [-0.30, 0.36, -0.50], p: [1.3, 3.7, 0.6], hue: 210, alpha: 0.12, par: 38 },
+  { base: 0.60, a: [66, 32, 17], k: [0.0013, 0.0028, 0.0058], s: [0.26, -0.40, 0.55], p: [2.6, 0.9, 5.1], hue: 235, alpha: 0.13, par: 54 },
+  { base: 0.70, a: [56, 27, 13], k: [0.0016, 0.0034, 0.0068], s: [-0.32, 0.30, -0.42], p: [4.0, 5.5, 1.8], hue: 255, alpha: 0.12, par: 72 },
+  { base: 0.80, a: [50, 23, 11], k: [0.0014, 0.0030, 0.0060], s: [0.28, -0.34, 0.48], p: [5.2, 1.6, 3.3], hue: CARD_HUE.purple, alpha: 0.10, par: 92 },
+] as const
+
+const WAVE_DUST_HUES = [CARD_HUE.cyan, 210, 235, CARD_HUE.purple]
+
 function ParticleCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const mouseRef = useRef({ x: -9999, y: -9999 })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -1279,70 +1348,200 @@ function ParticleCanvas() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     let animId: number
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
+    let W = 0, H = 0, HS = 1
+    const resize = () => {
+      const DPR = Math.min(window.devicePixelRatio || 1, 1.5)
+      W = window.innerWidth
+      H = window.innerHeight
+      canvas.width = W * DPR
+      canvas.height = H * DPR
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
+      HS = Math.min(1.4, Math.max(0.7, H / 800))
+    }
+
+    let dust: Array<{ x: number; y: number; r: number; vy: number; sway: number; swaySpd: number; hue: number; tw: number }> = []
+    const initDust = () => {
+      const n = Math.min(90, Math.floor((W * H) / 22000))
+      dust = Array.from({ length: n }, () => ({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: 0.6 + Math.random() * 1.5,
+        vy: 0.08 + Math.random() * 0.28,
+        sway: Math.random() * Math.PI * 2,
+        swaySpd: 0.3 + Math.random() * 0.6,
+        hue: WAVE_DUST_HUES[(Math.random() * WAVE_DUST_HUES.length) | 0]!,
+        tw: Math.random() * Math.PI * 2,
+      }))
+    }
+
     resize()
-    window.addEventListener('resize', resize)
-    const onMouse = (e: MouseEvent) => { mouseRef.current = { x: e.clientX, y: e.clientY } }
+    initDust()
+
+    let mx = 0, my = 0, smx = 0, smy = 0
+    const onMouse = (e: MouseEvent) => {
+      mx = (e.clientX / W - 0.5) * 2
+      my = (e.clientY / H - 0.5) * 2
+    }
     window.addEventListener('mousemove', onMouse)
 
-    const pts = Array.from({ length: 72 }, () => ({
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-      vx: (Math.random() - 0.5) * 0.38,
-      vy: (Math.random() - 0.5) * 0.38,
-      r: Math.random() * 1.3 + 0.5,
-      op: Math.random() * 0.32 + 0.10,
-    }))
+    let t = 0
 
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      const { x: mx, y: my } = mouseRef.current
+    const waveY = (L: typeof WAVE_LAYERS[number], x: number, phaseShift: number, yOff: number) =>
+      L.base * H + yOff
+      + Math.sin(x * L.k[0] + t * L.s[0] + L.p[0] + phaseShift) * L.a[0] * HS
+      + Math.sin(x * L.k[1] - t * L.s[1] + L.p[1] + phaseShift * 0.6) * L.a[1] * HS
+      + Math.sin(x * L.k[2] + t * L.s[2] + L.p[2]) * L.a[2] * HS
 
-      for (const p of pts) {
-        const dx = mx - p.x, dy = my - p.y
-        const d = Math.hypot(dx, dy)
-        if (d < 170) { const f = (1 - d / 170) * 0.016; p.vx += dx * f; p.vy += dy * f }
-        const spd = Math.hypot(p.vx, p.vy)
-        if (spd > 1.5) { p.vx = p.vx / spd * 1.5; p.vy = p.vy / spd * 1.5 }
-        p.vx *= 0.987; p.vy *= 0.987
-        p.x += p.vx; p.y += p.vy
-        if (p.x < 0) p.x = canvas.width
-        if (p.x > canvas.width) p.x = 0
-        if (p.y < 0) p.y = canvas.height
-        if (p.y > canvas.height) p.y = 0
+    const drawFrame = () => {
+      ctx.clearRect(0, 0, W, H)
+      smx += (mx - smx) * 0.03
+      smy += (my - smy) * 0.03
+
+      ctx.globalCompositeOperation = 'lighter'
+
+      const STEP = 6
+      for (const L of WAVE_LAYERS) {
+        const yOff = smy * L.par
+        const phaseShift = smx * L.par * 0.02
 
         ctx.beginPath()
-        ctx.arc(p.x, p.y, d < 130 ? p.r * 1.9 : p.r, 0, Math.PI * 2)
-        ctx.fillStyle = d < 130 ? `rgba(0,229,255,${p.op * 2.4})` : `rgba(160,210,255,${p.op})`
+        ctx.moveTo(-10, waveY(L, -10, phaseShift, yOff))
+        for (let x = 0; x <= W + STEP; x += STEP) {
+          ctx.lineTo(x, waveY(L, x, phaseShift, yOff))
+        }
+
+        const top = L.base * H - 140 * HS + yOff
+        const grad = ctx.createLinearGradient(0, top, 0, H)
+        grad.addColorStop(0, `hsla(${L.hue}, 85%, 62%, ${L.alpha})`)
+        grad.addColorStop(0.55, `hsla(${L.hue}, 80%, 55%, ${L.alpha * 0.35})`)
+        grad.addColorStop(1, `hsla(${L.hue}, 80%, 50%, 0)`)
+        ctx.lineTo(W + 10, H + 10)
+        ctx.lineTo(-10, H + 10)
+        ctx.closePath()
+        ctx.fillStyle = grad
+        ctx.fill()
+
+        ctx.beginPath()
+        ctx.moveTo(-10, waveY(L, -10, phaseShift, yOff))
+        for (let x = 0; x <= W + STEP; x += STEP) {
+          ctx.lineTo(x, waveY(L, x, phaseShift, yOff))
+        }
+        ctx.strokeStyle = `hsla(${L.hue}, 90%, 74%, ${L.alpha * 1.6})`
+        ctx.lineWidth = 1.4
+        ctx.stroke()
+      }
+
+      for (const d of dust) {
+        d.y -= d.vy
+        d.x += Math.sin(t * d.swaySpd + d.sway) * 0.25
+        if (d.y < -12) { d.y = H + 12; d.x = Math.random() * W }
+        if (d.x < -12) d.x = W + 12
+        if (d.x > W + 12) d.x = -12
+        const twinkle = 0.22 + 0.22 * Math.sin(t * 2 + d.tw)
+        ctx.beginPath()
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2)
+        ctx.fillStyle = `hsla(${d.hue}, 85%, 82%, ${twinkle})`
         ctx.fill()
       }
 
-      for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
-          const d = Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y)
-          if (d < 112) {
-            ctx.beginPath()
-            ctx.moveTo(pts[i].x, pts[i].y)
-            ctx.lineTo(pts[j].x, pts[j].y)
-            ctx.strokeStyle = `rgba(0,229,255,${(1 - d / 112) * 0.12})`
-            ctx.lineWidth = 0.55
-            ctx.stroke()
-          }
-        }
-      }
-      animId = requestAnimationFrame(draw)
+      ctx.globalCompositeOperation = 'source-over'
     }
-    draw()
+
+    if (reduced) {
+      drawFrame()
+    } else {
+      const loop = () => {
+        t += 0.012
+        drawFrame()
+        animId = requestAnimationFrame(loop)
+      }
+      loop()
+    }
+
+    const handleResize = () => { resize(); initDust(); if (reduced) drawFrame() }
+    window.addEventListener('resize', handleResize)
 
     return () => {
       cancelAnimationFrame(animId)
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', handleResize)
       window.removeEventListener('mousemove', onMouse)
     }
   }, [])
 
   return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }} />
+}
+
+// Mouse-spotlight only (no tilt) — used on the motion.div-based cards
+// (GlassCard/GlassSummaryCard) whose hover lift is already driven by
+// framer-motion's `whileHover`; writing raw `element.style.transform` from
+// a separate rAF loop (as useTilt3D below does) would fight framer-motion's
+// own transform management, so those two cards get the spotlight/silk/beam
+// surface treatment but not the imperative 3D tilt.
+function handleSpotlightMove(e: React.MouseEvent<HTMLElement>) {
+  const el = e.currentTarget
+  const r = el.getBoundingClientRect()
+  const px = (e.clientX - r.left) / r.width
+  const py = (e.clientY - r.top) / r.height
+  el.style.setProperty('--gx', `${(px * 100).toFixed(1)}%`)
+  el.style.setProperty('--gy', `${(py * 100).toFixed(1)}%`)
+}
+
+// Vanilla-JS 3D tilt + spotlight — for the plain-<div> cards (HappinessHeroCard,
+// MindIndexCard) which don't go through framer-motion, so there's no
+// competing transform system to fight. Small max angle (content-heavy cards
+// with a radar chart/text, not a single stat number — a big tilt would be
+// distracting, matching the demo's own gentler ".panel" tilt config rather
+// than its small ".stat-card" tilt config).
+function useTilt3D(maxDeg = 3, scale = 1.008) {
+  const ref = useRef<HTMLDivElement>(null)
+  const state = useRef({ rx: 0, ry: 0, trx: 0, try_: 0, hov: false, raf: 0 })
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const s = state.current
+    const loop = () => {
+      s.rx += (s.trx - s.rx) * 0.12
+      s.ry += (s.try_ - s.ry) * 0.12
+      const el = ref.current
+      if (el) {
+        const sc = s.hov ? scale : 1
+        el.style.transform = `perspective(900px) rotateX(${s.rx.toFixed(2)}deg) rotateY(${s.ry.toFixed(2)}deg) scale3d(${sc},${sc},${sc})`
+      }
+      s.raf = requestAnimationFrame(loop)
+    }
+    s.raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(s.raf)
+  }, [maxDeg, scale])
+
+  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const px = (e.clientX - r.left) / r.width - 0.5
+    const py = (e.clientY - r.top) / r.height - 0.5
+    state.current.try_ = px * maxDeg
+    state.current.trx = -py * maxDeg
+    state.current.hov = true
+    el.style.setProperty('--gx', `${((px + 0.5) * 100).toFixed(1)}%`)
+    el.style.setProperty('--gy', `${((py + 0.5) * 100).toFixed(1)}%`)
+  }, [maxDeg])
+
+  const onMouseLeave = useCallback(() => {
+    state.current.trx = 0
+    state.current.try_ = 0
+    state.current.hov = false
+  }, [])
+
+  return { ref, onMouseMove, onMouseLeave }
+}
+
+// `--card-hue` custom property lookup for the glass shell's silk/beam
+// layers (portal.css) — React style objects allow custom properties via a
+// plain string key, just needs a cast since CSSProperties doesn't type them.
+function hueVar(hue: number): React.CSSProperties {
+  return { '--card-hue': hue } as React.CSSProperties
 }
 
 function GlassCard({
@@ -1369,11 +1568,13 @@ function GlassCard({
 
   return (
     <motion.div
+      className="glass-shell"
       initial={{ opacity: 0, y: 18, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: index * 0.05, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.18 } }}
       onClick={handleClick}
+      onMouseMove={handleSpotlightMove}
       style={{
         position: 'relative',
         cursor: 'pointer',
@@ -1388,8 +1589,11 @@ function GlassCard({
         flexDirection: 'column',
         boxShadow: `0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)`,
         zIndex: 2,
+        ...hueVar(site.isPrivate ? CARD_HUE.purple : CARD_HUE.cyan),
       }}
     >
+      <div className="silk"><i className="w1" /><i className="w2" /></div>
+      <div className="beam" />
       {clicked && (
         <div style={{
           position: 'absolute', inset: 0, borderRadius: '18px',
@@ -1418,7 +1622,7 @@ function GlassCard({
         color: accent,
         fontSize: 'clamp(0.95rem, 1.3vw, 1.15rem)',
         fontWeight: '600',
-        fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+        fontFamily: FONT_STACK,
         letterSpacing: '0.02em',
         marginBottom: '0.25rem',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -1431,7 +1635,7 @@ function GlassCard({
         <div style={{
           color: 'rgba(255,255,255,0.4)',
           fontSize: 'clamp(0.75rem, 1vw, 0.85rem)',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           marginBottom: '0.5rem', lineHeight: 1.3,
         }}>{site.subtitle}</div>
@@ -1449,7 +1653,7 @@ function GlassCard({
         <span style={{
           color: 'rgba(255,255,255,0.3)',
           fontSize: 'clamp(0.68rem, 0.9vw, 0.78rem)',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           letterSpacing: '0.06em',
         }}>
           {site.links.length} LINK{site.links.length !== 1 ? 'S' : ''}
@@ -1457,7 +1661,7 @@ function GlassCard({
         <span style={{
           color: isLocked ? '#fbbf24' : `rgba(${rgb},0.8)`,
           fontSize: 'clamp(0.68rem, 0.9vw, 0.78rem)',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           letterSpacing: '0.05em', fontWeight: '500',
         }}>
           {isLocked ? '🔐 LOCKED' : (site.isPrivate ? 'PRIVATE' : 'PUBLIC')}
@@ -1632,7 +1836,7 @@ function LabeledRadarChart({
       <polygon points={ringPoints(1)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
       <polygon points={ringPoints(0.5)} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
       {baselineFraction !== undefined && (
-        <polygon points={ringPoints(baselineFraction)} fill="none" stroke="#d4a900" strokeWidth={1.3} strokeDasharray="4 3" />
+        <polygon points={ringPoints(baselineFraction)} fill="none" stroke={COLOR.gold} strokeWidth={1.3} strokeDasharray="4 3" />
       )}
       {axes.map((_, i) => {
         const [x, y] = pointAt(i, r)
@@ -1792,6 +1996,7 @@ function MindIndexCard({
   const [expanded, setExpanded] = useState(false)
   const [history, setHistory] = useState<MindIndexHistoryPoint[] | null>(null)
   const [historyError, setHistoryError] = useState(false)
+  const tilt = useTilt3D()
   const isLocked = !unlocked
 
   // Lazy-loaded on first expand, same reasoning as HappinessHeroCard's own
@@ -1829,11 +2034,14 @@ function MindIndexCard({
     // 顯示最後已知分數，但整張卡降低飽和度/透明度，一眼就能看出「這是舊的」。
     opacity: stale ? 0.55 : 1,
     filter: stale ? 'saturate(0.5)' : undefined,
+    ...hueVar(CARD_HUE.purple),
   }
 
   if (isLocked) {
     return (
-      <div style={{ ...cardStyle, cursor: 'pointer' }} onClick={onRequestUnlock}>
+      <div ref={tilt.ref} className="glass-shell" style={{ ...cardStyle, cursor: 'pointer' }} onClick={onRequestUnlock} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
+        <div className="silk"><i className="w1" /><i className="w2" /></div>
+        <div className="beam" />
         <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.6), transparent)' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.1rem' }}>
           <span style={{ fontSize: '26px', filter: 'drop-shadow(0 0 8px rgba(192,132,252,0.55))' }}>🔒</span>
@@ -1863,7 +2071,9 @@ function MindIndexCard({
   ]
 
   return (
-    <div style={cardStyle}>
+    <div ref={tilt.ref} className="glass-shell" style={cardStyle} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
+      <div className="silk"><i className="w1" /><i className="w2" /></div>
+      <div className="beam" />
       <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: `linear-gradient(90deg, transparent, ${tone.color}99, transparent)` }} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.1rem' }}>
@@ -1942,7 +2152,7 @@ function hhiTone(score: number): { color: string; label: string } {
 // units with preserveAspectRatio="none" + CSS width:100%, so it stretches
 // to whatever container width it's given without needing to measure the
 // container in JS.
-function TrendLineChart({ points, color = '#c084fc', height = 90 }: { points: Array<{ date: string; value: number }>; color?: string; height?: number }) {
+function TrendLineChart({ points, color = COLOR.purple, height = 90 }: { points: Array<{ date: string; value: number }>; color?: string; height?: number }) {
   if (points.length < 2) {
     return (
       <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)', padding: '0.6rem 0' }}>
@@ -1997,6 +2207,7 @@ function HappinessHeroCard({
   const [expanded, setExpanded] = useState(false)
   const [history, setHistory] = useState<HappinessHistoryPoint[] | null>(null)
   const [historyError, setHistoryError] = useState(false)
+  const tilt = useTilt3D()
   const isLocked = !unlocked // hhi is always isPrivate — see summarySources.ts
 
   // Lazy-load history only once the card is actually expanded — most page
@@ -2035,11 +2246,14 @@ function HappinessHeroCard({
     padding: '1.6rem 1.8rem',
     marginBottom: '1.2rem',
     boxShadow: '0 4px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
+    ...hueVar(CARD_HUE.purple),
   }
 
   if (isLocked) {
     return (
-      <div style={cardStyle} onClick={onRequestUnlock}>
+      <div ref={tilt.ref} className="glass-shell" style={cardStyle} onClick={onRequestUnlock} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
+        <div className="silk"><i className="w1" /><i className="w2" /></div>
+        <div className="beam" />
         <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.6), transparent)' }} />
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
           翰翰仔幸福指數 · Hanhan Happiness Index
@@ -2054,7 +2268,9 @@ function HappinessHeroCard({
 
   if (!data || displayedScore === null) {
     return (
-      <div style={cardStyle}>
+      <div ref={tilt.ref} className="glass-shell" style={cardStyle} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
+        <div className="silk"><i className="w1" /><i className="w2" /></div>
+        <div className="beam" />
         <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.6), transparent)' }} />
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
           翰翰仔幸福指數 · Hanhan Happiness Index
@@ -2075,7 +2291,9 @@ function HappinessHeroCard({
   const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
 
   return (
-    <div style={cardStyle} onClick={() => setExpanded(x => !x)}>
+    <div ref={tilt.ref} className="glass-shell" style={cardStyle} onClick={() => setExpanded(x => !x)} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
+      <div className="silk"><i className="w1" /><i className="w2" /></div>
+      <div className="beam" />
       <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: `linear-gradient(90deg, transparent, ${tone.color}99, transparent)` }} />
 
       <div className="hhi-top-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '2.4rem', alignItems: 'center', justifyContent: 'flex-start' }}>
@@ -2179,11 +2397,13 @@ function GlassSummaryCard({
 
   return (
     <motion.div
+      className="glass-shell"
       initial={{ opacity: 0, y: 18, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: index * 0.05, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ scale: 1.03, y: -5, transition: { duration: 0.18 } }}
       onClick={() => onSelect(site)}
+      onMouseMove={handleSpotlightMove}
       style={{
         position: 'relative',
         cursor: 'pointer',
@@ -2196,8 +2416,11 @@ function GlassSummaryCard({
         display: 'flex',
         flexDirection: 'column',
         boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+        ...hueVar(site.isPrivate ? CARD_HUE.purple : CARD_HUE.cyan),
       }}
     >
+      <div className="silk"><i className="w1" /><i className="w2" /></div>
+      <div className="beam" />
       <div style={{
         position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px',
         background: `linear-gradient(90deg, transparent, rgba(${rgb},0.6), transparent)`,
@@ -2242,6 +2465,237 @@ function GlassSummaryCard({
   )
 }
 
+// ─────────────────────────────────────────────
+// HERMES 戰情室 — operational monitoring (CPU/RAM/disk, container health,
+// scheduled-task results, recent deploy/backup activity), collected by
+// services/hermes-status/collect.ps1 on the deploy host and POSTed to
+// /api/admin/hermes-status + /api/admin/hermes-activity. Not a
+// SUMMARY_SOURCES entry / doesn't feed the HHI composite — this is
+// infrastructure monitoring, not a happiness dimension, so it's a standalone
+// section rendered directly into GlassPortalView rather than going through
+// GlassSummaryCard.
+// ─────────────────────────────────────────────
+function formatGb(n: number): string {
+  return `${n.toFixed(1)} GB`
+}
+
+function pctTone(pct: number | null): string {
+  if (pct === null) return 'rgba(255,255,255,0.4)'
+  if (pct >= 90) return COLOR.red
+  if (pct >= 75) return COLOR.amber
+  return COLOR.green
+}
+
+function HermesStatCard({ icon, label, value, sub, hue, valueColor }: { icon: string; label: string; value: string; sub?: string; hue: number; valueColor?: string }) {
+  return (
+    <div
+      className="glass-shell"
+      style={{
+        position: 'relative',
+        background: 'rgba(255,255,255,0.055)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: `1px solid hsla(${hue}, 70%, 65%, 0.25)`,
+        borderRadius: '16px',
+        padding: '1.1rem 1.2rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '14px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+        ...hueVar(hue),
+      }}
+    >
+      <div className="silk"><i className="w1" /><i className="w2" /></div>
+      <div className="beam" />
+      <div style={{
+        width: '46px', height: '46px', borderRadius: '12px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px',
+        background: `hsla(${hue}, 80%, 60%, 0.15)`,
+        boxShadow: `0 0 20px hsla(${hue}, 80%, 60%, 0.3)`,
+      }}>{icon}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '2px' }}>{label}</div>
+        <div style={{ fontSize: '20px', fontWeight: '700', color: valueColor ?? 'rgba(255,255,255,0.92)' }}>{value}</div>
+        {sub && <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>{sub}</div>}
+      </div>
+    </div>
+  )
+}
+
+function HermesPanel({ title, sub, hue, children }: { title: string; sub: string; hue: number; children: React.ReactNode }) {
+  return (
+    <div
+      className="glass-shell"
+      style={{
+        position: 'relative',
+        background: 'rgba(255,255,255,0.055)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: `1px solid hsla(${hue}, 70%, 65%, 0.22)`,
+        borderRadius: '18px',
+        padding: '1.3rem 1.4rem',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+        ...hueVar(hue),
+      }}
+    >
+      <div className="silk"><i className="w1" /><i className="w2" /></div>
+      <div className="beam" />
+      <div style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginBottom: '2px' }}>{title}</div>
+      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginBottom: '0.9rem' }}>{sub}</div>
+      {children}
+    </div>
+  )
+}
+
+function HermesTaskRow({ name, lastRunTime, lastTaskResult }: HermesScheduledTaskInfo) {
+  const dotClass = lastTaskResult === 0 ? 'dot-ok' : 'dot-warn'
+  return (
+    <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.55rem 0.2rem', fontSize: '12.5px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <span className={`dot ${dotClass}`} />
+      <span style={{ color: 'rgba(255,255,255,0.8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', flexShrink: 0 }}>
+        {lastRunTime ? formatMinutesAgo(lastRunTime) : '尚未執行'}
+        {lastTaskResult !== null && lastTaskResult !== 0 ? ` · 失敗 (${lastTaskResult})` : ''}
+      </span>
+    </div>
+  )
+}
+
+function HermesActivityRow({ occurredAt, source, message }: HermesActivityEntry) {
+  return (
+    <div className="list-item" style={{ display: 'flex', alignItems: 'baseline', gap: '10px', padding: '0.55rem 0.2rem', fontSize: '12.5px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <span style={{ color: 'rgba(255,255,255,0.8)', flex: 1, minWidth: 0 }}>
+        <span style={{ color: COLOR.cyan, fontWeight: 600 }}>{source}</span> {message}
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', flexShrink: 0 }}>{formatMinutesAgo(occurredAt)}</span>
+    </div>
+  )
+}
+
+function HermesWarRoomSection({
+  unlocked,
+  unlockedPassword,
+  onRequestUnlock,
+}: {
+  unlocked: boolean
+  unlockedPassword: string | null
+  onRequestUnlock: () => void
+}) {
+  const [status, setStatus] = useState<HermesStatusData | null>(null)
+  const [statusError, setStatusError] = useState(false)
+  const [activity, setActivity] = useState<HermesActivityEntry[] | null>(null)
+  const [activityError, setActivityError] = useState(false)
+
+  useEffect(() => {
+    if (!unlocked || !unlockedPassword) return
+    let cancelled = false
+    apiFetchHermesStatus(unlockedPassword)
+      .then(d => { if (!cancelled) setStatus(d) })
+      .catch(() => { if (!cancelled) setStatusError(true) })
+    apiFetchHermesActivity(unlockedPassword)
+      .then(d => { if (!cancelled) setActivity(d) })
+      .catch(() => { if (!cancelled) setActivityError(true) })
+    return () => { cancelled = true }
+  }, [unlocked, unlockedPassword])
+
+  if (!unlocked) {
+    return (
+      <div
+        className="glass-shell"
+        style={{
+          position: 'relative', cursor: 'pointer',
+          background: 'rgba(255,255,255,0.055)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(192,132,252,0.28)',
+          borderRadius: '20px',
+          padding: '1.6rem 1.8rem',
+          boxShadow: '0 4px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
+          ...hueVar(CARD_HUE.purple),
+        }}
+        onClick={onRequestUnlock}
+      >
+        <div className="silk"><i className="w1" /><i className="w2" /></div>
+        <div className="beam" />
+        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+          HERMES 戰情室
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0' }}>
+          <span style={{ fontSize: '20px', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)' }}>••••••</span>
+          <span style={{ fontSize: '12px', color: '#fbbf24', letterSpacing: '0.05em' }}>🔒 解鎖後顯示</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (statusError || !status || !status.available) {
+    return (
+      <div style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1rem 0.2rem' }}>
+        {statusError ? 'HERMES 戰情室：暫時無法取得資料' : 'HERMES 戰情室：尚無資料，collect.ps1 還沒在主機上跑過'}
+      </div>
+    )
+  }
+
+  const worstDisk = status.disks.reduce<HermesDiskInfo | null>(
+    (worst, d) => (!worst || d.percentUsed > worst.percentUsed ? d : worst),
+    null,
+  )
+  const containersOk = status.containers.filter(c => /up/i.test(c.status) && c.health !== 'unhealthy').length
+  const opacity = status.stale ? 0.55 : 1
+  const filter = status.stale ? 'saturate(0.5)' : undefined
+
+  return (
+    <div style={{ opacity, filter }}>
+      <div className="hermes-stats-grid" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '0.9rem',
+        marginBottom: '0.9rem',
+      }}>
+        <HermesStatCard icon="🖥️" label="CPU 負載" value={status.cpuPercent !== null ? `${Math.round(status.cpuPercent)}%` : '—'} valueColor={pctTone(status.cpuPercent)} hue={CARD_HUE.cyan} />
+        <HermesStatCard icon="🧠" label="記憶體" value={status.memPercent !== null ? `${Math.round(status.memPercent)}%` : '—'} valueColor={pctTone(status.memPercent)} hue={210} />
+        <HermesStatCard
+          icon="💾"
+          label={worstDisk ? `磁碟 ${worstDisk.drive}` : '磁碟'}
+          value={worstDisk ? `${Math.round(worstDisk.percentUsed)}%` : '—'}
+          sub={worstDisk ? `剩餘 ${formatGb(worstDisk.freeGb)}` : undefined}
+          valueColor={worstDisk ? pctTone(worstDisk.percentUsed) : undefined}
+          hue={255}
+        />
+        <HermesStatCard
+          icon="📦"
+          label="容器健康"
+          value={`${containersOk} / ${status.containers.length}`}
+          sub={status.containers.length > 0 && containersOk < status.containers.length ? '有容器異常' : undefined}
+          hue={CARD_HUE.purple}
+        />
+      </div>
+
+      <div className="hermes-panels-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
+        <HermesPanel title="排程任務狀態" sub="Windows Task Scheduler · 最近執行" hue={CARD_HUE.cyan}>
+          {status.scheduledTasks.length === 0
+            ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無排程任務資料</div>
+            : status.scheduledTasks.map(t => <HermesTaskRow key={t.name} {...t} />)}
+        </HermesPanel>
+        <HermesPanel title="近期活動" sub="部署 / 備份紀錄" hue={CARD_HUE.purple}>
+          {activityError
+            ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>活動紀錄讀取失敗</div>
+            : activity === null
+              ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>載入中…</div>
+              : activity.length === 0
+                ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無活動紀錄</div>
+                : activity.map(a => <HermesActivityRow key={a.id} {...a} />)}
+        </HermesPanel>
+      </div>
+
+      <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', marginTop: '0.7rem', textAlign: 'right' }}>
+        {status.computedAt ? formatMinutesAgo(status.computedAt) : ''}
+        {status.stale ? <span style={{ color: '#fbbf24', marginLeft: '8px' }}>· 資料已超過 30 分鐘未更新</span> : null}
+      </div>
+    </div>
+  )
+}
+
 function GlassPortalView({
   sites,
   dashboard,
@@ -2260,12 +2714,27 @@ function GlassPortalView({
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
 
+  // Comet-border beam animation needs `--angle` registered as a proper
+  // <angle> custom property (so the browser can smoothly interpolate it in
+  // the conic-gradient) — unsupported browsers just keep `.beam` at
+  // opacity:0 (no `beam-on` class added), a silent no-op degrade rather
+  // than a broken/frozen gradient.
+  const [beamSupported, setBeamSupported] = useState(false)
+  useEffect(() => {
+    try {
+      CSS.registerProperty({ name: '--angle', syntax: '<angle>', initialValue: '0deg', inherits: false })
+      setBeamSupported(true)
+    } catch {
+      // older browsers: comet border stays hidden, silk sweep + spotlight still work
+    }
+  }, [])
+
   const ZoneLabel = ({ label, color, rgb }: { label: string; color: string; rgb: string }) => (
     <div style={{
       color, letterSpacing: '0.32em',
       fontSize: 'clamp(0.58rem, 0.9vw, 0.72rem)',
       fontWeight: '300',
-      fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+      fontFamily: FONT_STACK,
       textTransform: 'uppercase',
       textAlign: 'center',
       paddingBottom: '0.5rem',
@@ -2277,21 +2746,19 @@ function GlassPortalView({
   )
 
   return (
-    <div style={{
+    <div className={beamSupported ? 'beam-on' : undefined} style={{
       width: '100%', height: '100%',
       position: 'absolute', inset: 0,
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
-      background: 'radial-gradient(ellipse at 25% 50%, rgba(0,229,255,0.045) 0%, transparent 55%), radial-gradient(ellipse at 75% 50%, rgba(192,132,252,0.045) 0%, transparent 55%), #050814',
+      background: COLOR.bg,
     }}>
+      {/* 深色漸層 + 兩顆模糊光暈球，取代原本的 pixel grid 疊層——跟新的絲綢玻璃
+          卡片殼是同一套柔和光暈語彙，8-bit 網格線的復古電玩感留在舊版就好。 */}
+      <div className="bg-gradient" />
+      <div className="orb orb-1" />
+      <div className="orb orb-2" />
       <ParticleCanvas />
-
-      {/* Pixel grid */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1,
-        backgroundImage: 'linear-gradient(rgba(0,229,255,0.016) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.016) 1px, transparent 1px)',
-        backgroundSize: '42px 42px',
-      }} />
 
       {/* Header */}
       <div style={{
@@ -2307,7 +2774,7 @@ function GlassPortalView({
           color: '#00e5ff', margin: 0,
           fontSize: 'clamp(1rem, 2.2vw, 1.4rem)',
           fontWeight: '200',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           letterSpacing: '0.38em',
           textTransform: 'uppercase',
           textShadow: '0 0 28px rgba(0,229,255,0.7), 0 0 56px rgba(0,229,255,0.3)',
@@ -2317,7 +2784,7 @@ function GlassPortalView({
           margin: '0.3rem 0 0',
           color: 'rgba(255,255,255,0.26)',
           fontSize: 'clamp(0.48rem, 0.85vw, 0.6rem)',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           letterSpacing: '0.22em',
           textTransform: 'uppercase',
         }}>
@@ -2361,7 +2828,7 @@ function GlassPortalView({
                     ? <GlassSummaryCard key={s.id} site={s} summary={summary} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
                     : <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
                 })
-              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
+              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: FONT_STACK, letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
             }
             {/* 心智指標沒有 portal_sites 對應列（沒有外部網址可連），所以不透過
                 上面 privateSites.map() 那條路徑，直接掛進同一個 bento grid 當
@@ -2381,6 +2848,18 @@ function GlassPortalView({
           background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.08), rgba(0,229,255,0.16), rgba(255,255,255,0.08), transparent)',
         }} />
 
+        {/* HERMES 戰情室 — operational monitoring, not a happiness dimension,
+            so it's its own zone rather than folded into 私領域's bento grid. */}
+        <div className="glass-portal-zone">
+          <ZoneLabel label="⬡  H E R M E S  戰  情  室" color="#c084fc" rgb="192,132,252" />
+          <HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
+        </div>
+
+        <div className="glass-portal-hr" style={{
+          height: '1px', flexShrink: 0,
+          background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.08), rgba(0,229,255,0.16), rgba(255,255,255,0.08), transparent)',
+        }} />
+
         {/* Public zone */}
         <div className="glass-portal-zone">
           <ZoneLabel label="◆  公  領  域" color="#00e5ff" rgb="0,229,255" />
@@ -2394,7 +2873,7 @@ function GlassPortalView({
               ? publicSites.map((s, i) => (
                   <GlassCard key={s.id} site={s} index={i} unlocked={unlocked} onSelect={onSiteSelect} />
                 ))
-              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: '"Helvetica Neue", sans-serif', letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
+              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: FONT_STACK, letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
             }
           </div>
         </div>
@@ -2408,7 +2887,7 @@ function GlassPortalView({
         <div style={{
           color: 'rgba(255,255,255,0.11)',
           fontSize: '0.58rem',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           letterSpacing: '0.18em', textTransform: 'uppercase',
         }}>
           Click to enter  ·  🔐 Private requires password
@@ -2546,7 +3025,7 @@ export default function App() {
               style={{ display: 'block' }}
               gl={{ antialias: true }}
               fallback={
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#00e5ff', fontFamily: 'Helvetica Neue, sans-serif', textAlign: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#00e5ff', fontFamily: FONT_STACK, textAlign: 'center' }}>
                   <div>
                     <div style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>WebGL Not Available</div>
                     <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)' }}>Please use a modern browser with WebGL support.</div>
@@ -2566,7 +3045,7 @@ export default function App() {
               <h1 style={{
                 color: '#00e5ff', fontSize: 'clamp(1.2rem, 3vw, 2rem)',
                 fontWeight: '300', letterSpacing: '0.3em', textTransform: 'uppercase',
-                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                fontFamily: FONT_STACK,
                 margin: 0, textShadow: '0 0 40px rgba(0, 229, 255, 0.45)',
               }}>
                 AI工具入口網
@@ -2574,7 +3053,7 @@ export default function App() {
               <p style={{
                 color: 'rgba(255,255,255,0.38)', fontSize: '0.7rem',
                 letterSpacing: '0.28em', textTransform: 'uppercase',
-                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                fontFamily: FONT_STACK,
                 marginTop: '0.55rem', marginBottom: 0,
               }}>
                 點擊地標 · 立即進入
@@ -2583,7 +3062,7 @@ export default function App() {
 
             {/* Bottom hint */}
             <div style={{ position: 'absolute', bottom: '1.5rem', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
-              <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif', margin: 0 }}>
+              <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontFamily: FONT_STACK, margin: 0 }}>
                 Drag to orbit · Scroll to zoom
               </p>
             </div>
@@ -2627,7 +3106,7 @@ export default function App() {
             }}
           >
             <div style={{
-              fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+              fontFamily: FONT_STACK,
               fontWeight: '100',
               fontSize: 'clamp(2rem, 5vw, 4rem)',
               color: isArcade ? '#c084fc' : '#00e5ff',
@@ -2664,7 +3143,7 @@ export default function App() {
           border: `1px solid ${isArcade ? 'rgba(192,132,252,0.35)' : 'rgba(0,229,255,0.28)'}`,
           borderRadius: '8px',
           color: isArcade ? '#c084fc' : '#00e5ff',
-          fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+          fontFamily: FONT_STACK,
           fontWeight: '300',
           fontSize: 'clamp(0.6rem, 1vw, 0.72rem)',
           letterSpacing: '0.15em',
