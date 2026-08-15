@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Collects host system status (CPU/RAM/disk, Docker container health,
     scheduled-task results, recent deploy activity) and pushes it to
@@ -103,13 +103,24 @@ try {
     $containers = @()
     $dockerAvailable = $true
     try {
-        # Backtick, not backslash, escapes a double quote inside a PowerShell
-        # double-quoted string -- backslash isn't a PS escape character, so a
-        # literal \" here would break the Go template's `"com.docker.compose.project"` syntax.
-        $psLines = @(docker ps -a --format "{{.Names}}||{{.Status}}||{{.Label `"com.docker.compose.project`"}}" 2>$null)
-        if ($LASTEXITCODE -ne 0) { $dockerAvailable = $false }
+        # No quotes inside the --format string -- an earlier version tried to
+        # extract the compose-project label via {{.Label "..."}} , but a
+        # quoted Go-template argument inside a native command's argument list
+        # is a known Windows PowerShell 5.1 landmine (PowerShell's own
+        # backtick-escaping and the Win32 argv re-quoting rules disagree,
+        # and can silently mangle the argument docker.exe actually receives).
+        # Project grouping isn't displayed by the frontend anyway, so it's
+        # not worth the fragility -- name/status alone is enough.
+        $stderrFile = Join-Path $env:TEMP "hermes-status-docker-stderr.txt"
+        $psLines = @(docker ps -a --format "{{.Names}}||{{.Status}}" 2>$stderrFile)
+        if ($LASTEXITCODE -ne 0) {
+            $dockerAvailable = $false
+            Write-ErrorLog "docker ps exited $LASTEXITCODE : $(Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue)"
+        }
+        Remove-Item $stderrFile -ErrorAction SilentlyContinue
     } catch {
         $dockerAvailable = $false
+        Write-ErrorLog "docker ps threw: $_"
     }
     if ($dockerAvailable -and $psLines) {
         foreach ($line in $psLines) {
@@ -120,7 +131,7 @@ try {
             if ($status -match '\((healthy|unhealthy|starting)\)') { $health = $matches[1] }
             $containers += @{
                 name    = $parts[0]
-                project = if ($parts.Count -ge 3 -and $parts[2]) { $parts[2] } else { $null }
+                project = $null
                 status  = $status
                 health  = $health
             }
@@ -182,17 +193,29 @@ foreach ($source in $UpdateLogPaths.Keys) {
         # Get-Content otherwise returns a bare string for a single-line file,
         # which has no reliable .Count/range-slicing behavior.
         $lines = @(Get-Content $logPath)
-        $alreadySeen = if ($cursor.ContainsKey($source)) { [int]$cursor[$source] } else { 0 }
-        if ($lines.Count -le $alreadySeen) { continue }
+        # First time seeing this log file (no cursor entry yet): skip
+        # straight to the current end-of-file instead of backfilling every
+        # historical line as an individual HTTP POST. update.log can already
+        # hold weeks of deploy history by the time this script first runs --
+        # posting all of it in one go is both a multi-minute stall (each
+        # line is a separate round-trip) and floods "近期活動" with entries
+        # from days ago on first run.
+        $alreadySeen = if ($cursor.ContainsKey($source)) { [int]$cursor[$source] } else { $lines.Count }
+        if ($lines.Count -le $alreadySeen) { $cursor[$source] = $lines.Count; continue }
 
         $newLines = $lines[$alreadySeen..($lines.Count - 1)]
         foreach ($line in $newLines) {
             # update.ps1 writes: "yyyy-MM-dd HH:mm:ss | Ns | Done"
             $occurredAt = $null
+            $durationText = $null
             if ($line -match '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})') {
                 $occurredAt = [datetime]::ParseExact($matches[1], "yyyy-MM-dd HH:mm:ss", $null).ToString("o")
             }
-            $body = @{ source = $source; message = "已更新部署 ($line)"; occurredAt = $occurredAt } | ConvertTo-Json
+            if ($line -match '\|\s*([\d.]+)s\s*\|') {
+                $durationText = $matches[1]
+            }
+            $message = if ($durationText) { "deploy finished in ${durationText}s" } else { "deploy finished ($line)" }
+            $body = @{ source = $source; message = $message; occurredAt = $occurredAt } | ConvertTo-Json
             try {
                 Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-activity" -Method Post -Headers $Headers -Body $body | Out-Null
             } catch {

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Registers a Windows Scheduled Task that runs collect.ps1 every 10 minutes.
 .DESCRIPTION

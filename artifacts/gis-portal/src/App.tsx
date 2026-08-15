@@ -26,6 +26,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.26.1',
+    date: '2026-08-15',
+    summary: '修正 HERMES 戰情室三個實測發現的問題：容器健康 0/0、近期活動亂碼、排程任務誤判失敗',
+    changes: [
+      '容器健康顯示 0/0：collect.ps1 原本用 docker ps --format 搭配跳脫雙引號去抓 compose 專案名稱，Windows PowerShell 5.1 對含雙引號的原生命令參數有已知的跳脫地雷，會在傳給 docker.exe 之前就把參數弄壞。改成不帶引號的格式字串，不抓專案名稱（反正前端也沒用到這欄）',
+      '近期活動文字亂碼：collect.ps1 檔案本身沒有 UTF-8 BOM，Windows PowerShell 5.1 在沒有 BOM 時會用系統內碼（不是 UTF-8）解析 .ps1 原始碼裡的中文字面值，導致腳本裡寫死的「已更新部署」字串在執行時就已經是亂碼，不是傳輸或資料庫的問題。已補上 BOM，訊息文字也順手改成不依賴中文字面值的格式',
+      '排程任務顯示「失敗 (267009)」：267009 其實是 Windows Task Scheduler 的 SCHED_S_TASK_RUNNING（工作還在執行中），不是真的失敗——因為 update.log 已經累積好幾週的部署紀錄，第一次執行 collect.ps1 時逐行 POST 歷史紀錄卡了很久，查詢當下剛好抓到「執行中」狀態。改成只從目前檔案結尾開始追蹤新的一行，不倒灌歷史紀錄；前端也把「執行中」跟「尚未觸發過」這兩個正常狀態碼跟真的失敗分開顯示',
+    ],
+  },
+  {
     version: '1.26.0',
     date: '2026-08-15',
     summary: '新增 HERMES 戰情室：CPU/RAM/磁碟、容器健康、排程任務狀態、近期部署活動',
@@ -2547,15 +2557,27 @@ function HermesPanel({ title, sub, hue, children }: { title: string; sub: string
   )
 }
 
+// Windows Task Scheduler result codes that mean "not actually done yet",
+// not a failure -- 0x41301 (still running) is the common one a poller can
+// catch mid-execution; 0x41303 (task has not yet run) shows up right after
+// registration, before its first trigger fires. Anything else non-zero is a
+// genuine failure/exit code.
+const TASK_RUNNING_RESULT = 267009 // 0x41301 SCHED_S_TASK_RUNNING
+const TASK_NOT_YET_RUN_RESULT = 267011 // 0x41303 SCHED_S_TASK_HAS_NOT_RUN
+
 function HermesTaskRow({ name, lastRunTime, lastTaskResult }: HermesScheduledTaskInfo) {
-  const dotClass = lastTaskResult === 0 ? 'dot-ok' : 'dot-warn'
+  const isRunning = lastTaskResult === TASK_RUNNING_RESULT
+  const isPending = lastTaskResult === TASK_NOT_YET_RUN_RESULT
+  const isFailed = lastTaskResult !== null && !isRunning && !isPending && lastTaskResult !== 0
+  const dotClass = isRunning ? 'dot-run' : isFailed ? 'dot-warn' : 'dot-ok'
+  const statusSuffix = isRunning ? ' · 執行中' : isPending ? ' · 尚未觸發過' : isFailed ? ` · 失敗 (${lastTaskResult})` : ''
   return (
     <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.55rem 0.2rem', fontSize: '12.5px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
       <span className={`dot ${dotClass}`} />
       <span style={{ color: 'rgba(255,255,255,0.8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', flexShrink: 0 }}>
         {lastRunTime ? formatMinutesAgo(lastRunTime) : '尚未執行'}
-        {lastTaskResult !== null && lastTaskResult !== 0 ? ` · 失敗 (${lastTaskResult})` : ''}
+        {statusSuffix}
       </span>
     </div>
   )
