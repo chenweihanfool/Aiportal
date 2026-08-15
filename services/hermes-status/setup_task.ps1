@@ -36,7 +36,7 @@ $Action = New-ScheduledTaskAction `
 # Every 10 minutes, indefinitely -- Windows Task Scheduler triggers don't
 # have a native "every N minutes forever" trigger, so this is expressed as
 # a one-time trigger with a repetition pattern that has no explicit end.
-$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 10) -RepetitionDuration ([TimeSpan]::MaxValue)
+$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 10) -RepetitionDuration (New-TimeSpan -Days 365)
 
 $Settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `

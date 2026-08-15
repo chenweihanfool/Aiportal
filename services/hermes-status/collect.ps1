@@ -34,7 +34,7 @@ $ScriptDir = $PSScriptRoot
 # ── Config ──────────────────────────────────────────────────────────────
 # Wildcard patterns, not exact names — adjust once you can see the real
 # task names on the deploy host (`Get-ScheduledTask | Select TaskName`).
-$TaskNamePatterns = @("*Aiportal*", "*Busyness*", "*Hermes*", "*FitnessForge*", "*pf-cwh*", "*ScheduledHealthCheck*")
+$TaskNamePatterns = @("*Aiportal*", "*Busyness*", "*Hermes*", "*Fitness*", "*pf-cwh*", "*Health*", "*Duplicati*", "*SyncBack*")
 
 # repo name -> update.log path, same file update.ps1 already writes via
 # `Add-Content -Path $LogFile`. Missing paths are skipped, not fatal —
@@ -43,6 +43,8 @@ $UpdateLogPaths = @{
     "Aiportal"     = "F:\WEBAPP\SRC\Aiportal\update.log"
     "pf-cwh"       = "F:\WEBAPP\SRC\pf-cwh\update.log"
     "FitnessForge" = "F:\WEBAPP\SRC\FitnessForge\update.log"
+    "Geospatial"   = "F:\WEBAPP\SRC\Geospatial\update.log"
+    "vikunja"      = "F:\WEBAPP\SRC\vikunja\update.log"
 }
 
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
