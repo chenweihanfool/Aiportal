@@ -39,6 +39,13 @@ router.post("/admin/mind-index", async (req: Request, res: Response) => {
     rhythm: num("rhythm"),
     rhythmTrendPct: num("rhythm_trend_pct"),
     partial: body["partial"] === true,
+    // 2026-08-20 起，翰翰仔幸福指數的心智維度改讀這三個欄位（當天日記篇數＋
+    // 完成任務數算出來的基本分），不再讀上面的知識庫健康分數 score——那組
+    // 分數還是照樣存、照樣顯示，只是不計入 HHI 了。這三個欄位由
+    // daily-life-score.py 一起 POST 過來，還沒實作前就是 null。
+    dailyEngagementScore: num("dailyEngagementScore"),
+    diaryEntryCount: num("diaryEntryCount"),
+    tasksCompletedCount: num("tasksCompletedCount"),
   };
 
   await db

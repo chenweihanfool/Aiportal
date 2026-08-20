@@ -18,6 +18,7 @@ import { desc } from "drizzle-orm";
 const STALE_THRESHOLD_MS = 36 * 60 * 60 * 1000;
 
 export interface MindIndexData {
+  // 知識庫健康分數 — 保留顯示用，2026-08-20 起不再計入翰翰仔幸福指數。
   score: number | null;
   conversion: number | null;
   linkHealth: number | null;
@@ -25,6 +26,10 @@ export interface MindIndexData {
   rhythm: number | null;
   rhythmTrendPct: number | null;
   partial: boolean;
+  // HHI 心智維度改讀這三個——當天日記篇數＋完成任務數算出來的基本分。
+  dailyEngagementScore: number | null;
+  diaryEntryCount: number | null;
+  tasksCompletedCount: number | null;
   updatedAt: string | null;
   stale: boolean;
 }
@@ -52,6 +57,9 @@ export async function fetchMindIndex(): Promise<MindIndexData> {
     rhythm: row.rhythm,
     rhythmTrendPct: row.rhythmTrendPct,
     partial: row.partial,
+    dailyEngagementScore: row.dailyEngagementScore,
+    diaryEntryCount: row.diaryEntryCount,
+    tasksCompletedCount: row.tasksCompletedCount,
     updatedAt: row.computedAt.toISOString(),
     stale,
   };

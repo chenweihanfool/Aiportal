@@ -7,6 +7,7 @@ import {
   getHappinessConfigVersion,
 } from "./happinessIndex";
 import { fetchMindIndex } from "./mindIndex";
+import { fetchTravelIndex } from "./adventureLog";
 
 export interface SummarySource {
   id: string;
@@ -94,6 +95,12 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     isPrivate: true,
     fetch: fetchMindIndex,
   },
+  {
+    id: "travel",
+    name: "旅遊生活",
+    isPrivate: true,
+    fetch: fetchTravelIndex,
+  },
 ];
 // REAL-TIME FETCH — for /api/dashboard on page load (not cached)
 // ─────────────────────────────────────────────
@@ -153,21 +160,28 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   const ff = results.get("fitnessforge");
   const vk = results.get("vikunja");
   const mi = results.get("mind-index");
+  const tv = results.get("travel");
 
   const lifeFreedomScore = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
   const fitnessHabitScore = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
   const busynessScore = vk?.status === "ok" ? (vk.data)?.busyIndex as number | null : null;
-  const mindScore = mi?.status === "ok" ? (mi.data)?.score as number | null : null;
+  // 2026-08-20 起改讀 dailyEngagementScore（當天日記篇數＋完成任務數），不再
+  // 讀知識庫健康分數 score——那組分數還留著給 MindIndexCard 顯示，只是不計
+  // 入 HHI 了。daily-life-score.py 補這個欄位之前，這裡會是 null，跟其他
+  // 缺資料的維度一樣走重新正規化，不會顯示假分數。
+  const mindScore = mi?.status === "ok" ? (mi.data)?.dailyEngagementScore as number | null : null;
   // The file read can succeed while HERMES's own scoring script hasn't run
   // in a while — that's a stale *score*, not a fetch failure, so it doesn't
   // show up as mi.status === "error". Surfaced via usingStaleData instead.
   const mindStale = mi?.status === "ok" ? (mi.data)?.stale === true : false;
+  const travelScore = tv?.status === "ok" ? (tv.data)?.travelScore as number | null : null;
 
   const result = computeHappinessComponents({
     lifeFreedomScore,
     fitnessHabitScore,
     busynessScore,
     mindScore,
+    travelScore,
   });
 
   const hhiData = await computeHappinessIndexFresh(result, busynessScore, mindStale);
@@ -208,6 +222,7 @@ async function computeHappinessIndexFresh(
     fitnessWeight: HAPPINESS_CONFIG.fitnessWeight,
     calmWeight: HAPPINESS_CONFIG.calmWeight,
     mindWeight: HAPPINESS_CONFIG.mindWeight,
+    travelWeight: HAPPINESS_CONFIG.travelWeight,
   };
 
   if (result.finalScore === null) {
@@ -222,6 +237,7 @@ async function computeHappinessIndexFresh(
       fitnessHabitScore: null,
       calmScore: null,
       mindScore: null,
+      travelScore: null,
       busynessScore: null,
       availableComponents: [],
       usingStaleData,
@@ -271,6 +287,7 @@ async function computeHappinessIndexFresh(
     fitnessHabitScore: result.components.fitnessHabitScore,
     calmScore: result.components.calmScore,
     mindScore: result.components.mindScore,
+    travelScore: result.components.travelScore,
     busynessScore,
     availableComponents: result.components.availableComponents,
     usingStaleData,

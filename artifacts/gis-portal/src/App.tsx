@@ -26,6 +26,17 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.28.0',
+    date: '2026-08-20',
+    summary: '幸福指數新增旅遊生活維度，心智指標改成「日記＋任務完成度」，知識庫健康分數保留顯示但移出計算',
+    changes: [
+      '新增「旅遊生活」維度（權重 15%）：讀自架 AdventureLog 的行程資料，反映「最近有沒有出去玩」——3 天內剛玩回來 100 分，之後線性遞減，約 93 天沒出去玩降到 0 分，只看已結束的行程，還沒發生的計畫不算。即時計算，不用另外存歷史表',
+      '心智指標改版：原本的心智指標其實是 HERMES 知識庫的健康分數，跟翰翰仔本人的心智狀態關係不大，這次拆成兩塊——知識庫健康度保留顯示，但移出幸福指數；新的「心智基本分」= min(50,當天日記篇數×25) + min(50,當天完成任務數×10) 才計入幸福指數。日記/任務資料由 HERMES 的 daily-life-score.py 一起 push 過來（還沒實作前這個維度會顯示「資料準備中」，用其餘 4 維重新正規化計算，不影響其他分數）',
+      '5 個維度權重重新分配：人生自由 36→31%、健身習慣 24→20%、生活從容 20→17%、心智指標 20→17%、旅遊生活 新增 15%（等比例縮小舊 4 維權重騰出空間，跟上次新增心智指標時同一套做法）',
+      '私領域卡片版面照「有計入幸福指數的系統優先」固定排序（人生自由→健身習慣→生活從容→旅遊生活→心智指標），不再依賴資料庫插入順序',
+    ],
+  },
+  {
     version: '1.27.0',
     date: '2026-08-15',
     summary: '私領域卡片版面重整：雷達圖卡片獨佔一列，純連結卡另外分組，不再跟高度差很多的卡片同列硬湊',
@@ -1981,18 +1992,56 @@ function VikunjaSummaryBody({ data, expanded, onToggleExpand }: { data: Record<s
   )
 }
 
+// Field names match artifacts/api-server/src/lib/adventureLog.ts's
+// fetchTravelIndex() return shape. travelScore null just means no completed
+// visit exists yet (brand-new AdventureLog account, or every logged visit
+// is still upcoming) — HeroIndex already renders that as "資料不足", same
+// as every other card's missing-data state.
+function AdventureLogSummaryBody({ data, expanded, onToggleExpand }: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) {
+  const travelScore = typeof data['travelScore'] === 'number' ? data['travelScore'] : null
+  const daysSinceLastTrip = typeof data['daysSinceLastTrip'] === 'number' ? data['daysSinceLastTrip'] : null
+  const lastTripEndDate = typeof data['lastTripEndDate'] === 'string' ? data['lastTripEndDate'] : null
+
+  const items = [
+    { label: '距上次旅行', value: daysSinceLastTrip !== null ? `${daysSinceLastTrip} 天` : '尚無紀錄', formula: '距離最近一次已結束行程的天數（還沒發生的計畫中行程不算）' },
+    { label: '最近一次行程結束', value: lastTripEndDate ? new Date(lastTripEndDate).toLocaleDateString('zh-TW') : '—', formula: 'AdventureLog 裡最近一筆已結束行程的結束日期' },
+  ]
+
+  return (
+    <div style={{ flex: 1 }}>
+      <HeroIndex label="旅遊生活" score={travelScore} />
+      <SupportStats items={items} />
+      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
+      {expanded && (
+        <FormulaPanel rows={[
+          { label: '旅遊生活', formula: '3 天內剛玩回來 = 100 分，之後線性遞減，約 93 天沒出去玩 = 0 分；只看已結束的行程，反映「最近有沒有出去玩」，不是「有沒有計畫」' },
+          ...items,
+        ]} />
+      )}
+    </div>
+  )
+}
+
 const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown>; expanded: boolean; onToggleExpand: (e: React.MouseEvent) => void }) => React.ReactElement> = {
   'pf-cwh': PfCwhSummaryBody,
   'fitnessforge': FitnessForgeSummaryBody,
+  'travel': AdventureLogSummaryBody,
   'vikunja': VikunjaSummaryBody,
 }
 
 // ─────────────────────────────────────────────
-// 心智指標 — HERMES's own daily-computed knowledge-base score, read from a
-// file on the NAS (services/api-server/src/lib/mindIndex.ts), not computed
-// here. No portal_sites row / external URL to link to (same situation as
-// HHI), so it's a standalone card rendered directly into the bento grid
-// rather than going through GlassSummaryCard + SUMMARY_BODIES.
+// 心智指標 — this card now shows TWO independently-sourced scores that used
+// to be one:
+//   1. dailyEngagementScore (hero number, 計入 HHI) — 當天日記篇數＋完成任務數
+//      算出來的基本分，2026-08-20 新增，由 HERMES 的 daily-life-score.py 算好
+//      一起 push 過來。這才是翰翰仔幸福指數實際在用的「心智」維度。
+//   2. score (知識庫健康度，不計入 HHI) — 原本唯一的心智指標，是 HERMES 自己
+//      知識庫的健康度而不是翰翰仔本人的心智狀態，所以移出 HHI 計算，但數字
+//      本身還有參考價值，保留顯示在卡片下半部，明確標註不計入幸福指數。
+// 兩者都存在同一個 mind_index_history row，同一次 push，所以共用同一個
+// stale/computedAt。No portal_sites row / external URL to link to (same
+// situation as HHI), so it's a standalone card rendered directly into the
+// bento grid rather than going through GlassSummaryCard + SUMMARY_BODIES.
 // ─────────────────────────────────────────────
 type Band = [threshold: number, color: string, label: string]
 
@@ -2039,6 +2088,9 @@ function MindIndexCard({
   }, [expanded, unlockedPassword, history])
 
   const data = summary?.data
+  const dailyEngagementScore = typeof data?.['dailyEngagementScore'] === 'number' ? data['dailyEngagementScore'] as number : null
+  const diaryEntryCount = typeof data?.['diaryEntryCount'] === 'number' ? data['diaryEntryCount'] as number : null
+  const tasksCompletedCount = typeof data?.['tasksCompletedCount'] === 'number' ? data['tasksCompletedCount'] as number : null
   const score = typeof data?.['score'] === 'number' ? data['score'] as number : null
   const conversion = typeof data?.['conversion'] === 'number' ? data['conversion'] as number : null
   const linkHealth = typeof data?.['linkHealth'] === 'number' ? data['linkHealth'] as number : null
@@ -2086,12 +2138,17 @@ function MindIndexCard({
     )
   }
 
-  const tone = bandTone(score, MIND_SCORE_BANDS)
+  const tone = bandTone(dailyEngagementScore, MIND_SCORE_BANDS)
+  const oldTone = bandTone(score, MIND_SCORE_BANDS)
   const conversionTone = bandTone(conversion, CONVERSION_BANDS)
   const linkHealthTone = bandTone(linkHealth, LINK_HEALTH_BANDS)
   const vitalityTone = bandTone(vitality, VITALITY_BANDS)
   const rhythmTone = bandTone(rhythm, RHYTHM_BANDS)
-  const items = [
+  const engagementItems = [
+    { label: '日記篇數', value: diaryEntryCount !== null ? String(diaryEntryCount) : '—', formula: 'min(50, 當天日記篇數 × 25)——寫 2 篇以上就封頂' },
+    { label: '完成任務數', value: tasksCompletedCount !== null ? String(tasksCompletedCount) : '—', formula: 'min(50, 當天完成任務數 × 10)——完成 5 個以上就封頂' },
+  ]
+  const knowledgeItems = [
     { label: '轉化率', value: conversion !== null ? String(conversion) : '—', color: conversionTone.color, tier: conversion !== null ? conversionTone.label : undefined, formula: 'CREATE 層：100 × 近30天編譯進 wiki 的條目數 ÷ (近30天編譯數 + inbox 超過7天未編譯的積壓數)' },
     { label: '連結健康度', value: linkHealth !== null ? String(linkHealth) : '—', color: linkHealthTone.color, tier: linkHealth !== null ? linkHealthTone.label : undefined, formula: 'ENRICH 層：100 × (1 − 孤兒條目數 ÷ 總條目數)，孤兒 = wiki 連結出入度皆為 0（不含模板/索引）' },
     { label: '活化度', value: vitality !== null ? String(vitality) : '—', color: vitalityTone.color, tier: vitality !== null ? vitalityTone.label : undefined, formula: 'SYNTHESIZE 層：min(100, 近30天被修改條目比例 × 400)；近14天無 L3 綜整產出則 × 0.8' },
@@ -2108,44 +2165,79 @@ function MindIndexCard({
         <span style={{ fontSize: '26px', filter: `drop-shadow(0 0 8px ${tone.color}88)` }}>🧠</span>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ color: '#c084fc', fontSize: '16px', fontWeight: '600' }}>心智指標</div>
-          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>HERMES Knowledge Base</div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>日記＋任務完成度</div>
         </div>
       </div>
 
-      {score === null ? (
+      {dailyEngagementScore === null && score === null ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>
           {summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中…'}
         </div>
       ) : (
         <div style={{ flex: 1 }}>
+          {/* HHI 實際計入的分數——當天日記篇數＋完成任務數。dailyEngagementScore
+              還沒實作前這裡會是「資料準備中」，但下面的知識庫健康度區塊獨立
+              運作，不受影響（兩個分數來源完全分開，不是同一件事）。 */}
           <div style={{ marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-              <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>{score}</div>
-              <div style={{ fontSize: '15px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
-            </div>
-            {(stale || partial) && (
-              <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '4px' }}>
-                {stale ? '資料已超過 36 小時未更新' : ''}{stale && partial ? '・' : ''}{partial ? '部分子分數缺項' : ''}
+            {dailyEngagementScore === null ? (
+              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)' }}>心智基本分：資料準備中…</div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>{dailyEngagementScore}</div>
+                <div style={{ fontSize: '15px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
+                <span style={{ fontSize: '10px', color: 'rgba(52,211,153,0.85)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: '999px', padding: '2px 8px', letterSpacing: '0.03em' }}>計入幸福指數</span>
               </div>
             )}
+            {stale && (
+              <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '4px' }}>資料已超過 36 小時未更新</div>
+            )}
           </div>
-          <SupportStats items={items} />
+          <SupportStats items={engagementItems} />
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} />
           {expanded && (
             <FormulaPanel rows={[
-              { label: '心智指標', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均，任一維度崩壞會拖累總分；缺項用可用的算並標記 partial' },
-              ...items,
+              { label: '心智指標（計入幸福指數）', formula: 'dailyEngagementScore = min(50,日記篇數×25) + min(50,完成任務數×10)，寫日記／完成任務同等重要，任一項掛零不會拖累另一項' },
+              ...engagementItems,
             ]} />
           )}
+
+          {/* 知識庫健康度——原本唯一的「心智指標」，2026-08-20 起移出 HHI，只
+              保留顯示。獨立區塊、獨立虛線分隔，避免使用者誤以為這個數字也
+              算進幸福指數。 */}
+          <div style={{ marginTop: '1rem', paddingTop: '0.9rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>知識庫健康度</span>
+              <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '999px', padding: '1px 7px' }}>不計入幸福指數</span>
+            </div>
+            {score === null ? (
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>資料準備中…</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '0.8rem' }}>
+                  <div style={{ fontSize: '1.6rem', fontWeight: '700', lineHeight: 1, color: oldTone.color }}>{score}</div>
+                  <div style={{ fontSize: '12.5px', fontWeight: '600', color: oldTone.color }}>{oldTone.label}</div>
+                  {partial && <span style={{ fontSize: '10.5px', color: '#fbbf24' }}>部分子分數缺項</span>}
+                </div>
+                <SupportStats items={knowledgeItems} />
+                {expanded && (
+                  <FormulaPanel rows={[
+                    { label: '知識庫健康度', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均，任一維度崩壞會拖累總分；缺項用可用的算並標記 partial' },
+                    ...knowledgeItems,
+                  ]} />
+                )}
+              </>
+            )}
+          </div>
+
           {expanded && (
             <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>歷史趨勢</div>
+              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>知識庫健康度歷史趨勢</div>
               {historyError ? (
                 <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
               ) : history === null ? (
                 <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
               ) : (
-                <TrendLineChart points={history.map(h => ({ date: h.date, value: h.score }))} color={tone.color} height={70} />
+                <TrendLineChart points={history.map(h => ({ date: h.date, value: h.score }))} color={oldTone.color} height={70} />
               )}
             </div>
           )}
@@ -2260,8 +2352,9 @@ function HappinessHeroCard({
   const fitnessHabitScore = typeof data?.['fitnessHabitScore'] === 'number' ? data['fitnessHabitScore'] as number : null
   const calmScore = typeof data?.['calmScore'] === 'number' ? data['calmScore'] as number : null
   const mindScore = typeof data?.['mindScore'] === 'number' ? data['mindScore'] as number : null
+  const travelScore = typeof data?.['travelScore'] === 'number' ? data['travelScore'] as number : null
   const usingStaleData = data?.['usingStaleData'] === true
-  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number; mindWeight?: number } | undefined
+  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number; mindWeight?: number; travelWeight?: number } | undefined
 
   const cardStyle: React.CSSProperties = {
     position: 'relative',
@@ -2310,10 +2403,11 @@ function HappinessHeroCard({
 
   const tone = hhiTone(displayedScore)
   const contributions: Array<{ label: string; value: number | null; weightPct: number }> = [
-    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.36) * 100) },
-    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.24) * 100) },
-    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.20) * 100) },
-    { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.20) * 100) },
+    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.31) * 100) },
+    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.20) * 100) },
+    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.17) * 100) },
+    { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.17) * 100) },
+    { label: '旅遊生活', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.15) * 100) },
   ]
 
   const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
@@ -2868,6 +2962,12 @@ function GlassPortalView({
               if (summary && SUMMARY_BODIES[summary.subsystemId]) richSites.push(s)
               else plainSites.push(s)
             })
+            // 排序照翰翰仔幸福指數的維度順序（人生自由／健身習慣／生活從容／
+            // 旅遊生活——心智指標是 MindIndexCard，固定排在 richSites 後面，不
+            // 用排進這個清單），不依賴資料庫的插入順序，確保「有計入 HHI 的
+            // 系統」永遠照同一個順序排最前面。
+            const HHI_SITE_PRIORITY: Record<string, number> = { 'pf-cwh': 0, fitnessforge: 1, vikunja: 2, travel: 3 }
+            richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
             return (
               <>
                 {/* alignItems: 'start' — 沒有這行，同一列的卡片預設會被拉伸成一樣高
