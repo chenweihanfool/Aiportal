@@ -26,6 +26,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.29.0',
+    date: '2026-08-20',
+    summary: '版面調整：運動 APP 系統雷達圖放大、人生自由指數卡片旁邊補上鄰卡、容器健康補上名稱清單',
+    changes: [
+      '運動 APP 系統卡片全寬獨佔一列後，原本雷達圖跟數字直式堆疊、雷達圖置中固定 230px 的排法沒有跟著調整，卡片變寬但雷達圖沒有變大，兩側留白一大片。改成左右並排（跟翰翰仔幸福指數卡片同一套排法），雷達圖放大到 340px',
+      '私領域 2 欄 bento grid 補上 grid-auto-flow: dense——原本全寬卡片（運動 APP 系統）夾在兩張一般卡片中間時，CSS Grid 不會自動把後面的卡片回填到前面卡片旁邊的空格，導致人生自由指數卡片旁邊空出一大塊。dense 讓瀏覽器優先填滿前面留下的空格',
+      'HERMES 戰情室的「容器健康」原本只在小卡顯示 6/7 這種計數，看不出是哪些容器。新增「容器清單」面板，跟排程任務/近期活動一樣用清單列出每個容器的名稱＋執行狀態',
+    ],
+  },
+  {
     version: '1.28.1',
     date: '2026-08-20',
     summary: '修正輸入正確密碼卻立刻被鎖回去的問題',
@@ -1937,19 +1947,24 @@ function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Rec
   ]
 
   return (
-    <div style={{ flex: 1 }}>
-      <HeroIndex label="運動習慣指數" score={habitIndex} />
-      <SupportStats items={items} />
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
-        <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={230} color="#c084fc" />
+    // FitnessForge 這張卡永遠是 wide（見 GlassPortalView 裡 wide={summary.subsystemId
+    // === 'fitnessforge'}），獨佔一整列——原本雷達圖跟數字直式堆疊、雷達圖置中
+    // 固定 230px 的排法是給正常 2 欄寬度卡片設計的，卡片變全寬之後兩側留白一大片、
+    // 雷達圖相對顯得很小。改成左右並排（跟翰翰仔幸福指數卡片同一套 flex-wrap
+    // 排法），雷達圖放大到 340px 把多出來的橫向空間用掉。
+    <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'center' }}>
+      <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+        <HeroIndex label="運動習慣指數" score={habitIndex} />
+        <SupportStats items={items} />
+        <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
+        {expanded && (
+          <FormulaPanel rows={[
+            { label: '運動習慣指數', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）；訓練量分等三項已依「本週已過幾分之幾」配速調整，不是單純比對整週終點' },
+            ...items,
+          ]} />
+        )}
       </div>
-      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
-      {expanded && (
-        <FormulaPanel rows={[
-          { label: '運動習慣指數', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）；訓練量分等三項已依「本週已過幾分之幾」配速調整，不是單純比對整週終點' },
-          ...items,
-        ]} />
-      )}
+      <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={340} color="#c084fc" />
     </div>
   )
 }
@@ -2717,6 +2732,21 @@ function HermesActivityRow({ occurredAt, source, message }: HermesActivityEntry)
   )
 }
 
+function HermesContainerRow({ name, status, health }: HermesContainerInfo) {
+  const isFailed = !/up/i.test(status)
+  const isUnhealthy = health === 'unhealthy'
+  const dotClass = isFailed || isUnhealthy ? 'dot-warn' : 'dot-ok'
+  return (
+    <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.55rem 0.2rem', fontSize: '12.5px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <span className={`dot ${dotClass}`} />
+      <span style={{ color: 'rgba(255,255,255,0.8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', flexShrink: 0 }}>
+        {status}{health ? ` · ${health}` : ''}
+      </span>
+    </div>
+  )
+}
+
 function HermesWarRoomSection({
   unlocked,
   unlockedPassword,
@@ -2830,6 +2860,16 @@ function HermesWarRoomSection({
               : activity.length === 0
                 ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無活動紀錄</div>
                 : activity.map(a => <HermesActivityRow key={a.id} {...a} />)}
+        </HermesPanel>
+      </div>
+
+      {/* 容器清單獨立一個全寬面板——原本只在 stat 卡顯示 9/9 這種計數，看不出
+          是「哪些」容器，跟排程任務/近期活動一樣改成列表顯示名稱＋狀態。 */}
+      <div style={{ marginTop: '0.9rem' }}>
+        <HermesPanel title="容器清單" sub="Docker · 目前執行狀態" hue={CARD_HUE.purple}>
+          {status.containers.length === 0
+            ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無容器資料</div>
+            : status.containers.map(c => <HermesContainerRow key={c.name} {...c} />)}
         </HermesPanel>
       </div>
 
@@ -2987,6 +3027,12 @@ function GlassPortalView({
                   gridAutoRows: 'auto',
                   gap: '0.9rem',
                   alignItems: 'start',
+                  // dense：沒有這個，全寬卡片（運動 APP 系統）夾在兩張一般卡片
+                  // 中間時，瀏覽器會直接把它後面那張卡片推到下一列，前面那張卡
+                  // 旁邊留一整格空白（例如人生自由指數卡片旁邊空出一大塊）——
+                  // grid 預設不會「回頭」把後面的卡片填進這個空格。dense 讓瀏覽
+                  // 器優先填滿前面留下的空格，全寬卡片改成自己找下一個空列插入。
+                  gridAutoFlow: 'dense',
                 }}>
                   {richSites.map((s, i) => {
                     const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
