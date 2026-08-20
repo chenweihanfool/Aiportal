@@ -34,7 +34,16 @@ router.get("/dashboard", async (req: Request, res: Response) => {
       data: row.isPrivate && !unlocked ? null : row.data,
     }));
 
-    res.json({ summaries });
+    // Explicit signal for "was the caller's password actually accepted",
+    // separate from any individual private source's data being null — a
+    // private source's own fetch can fail (wrong/missing token, origin
+    // down, ...) for a correctly-unlocked caller too, and `data === null`
+    // looks identical in both cases. The frontend used to *infer* a
+    // rejected password from "some private summary has data === null",
+    // which was wrong the moment any private source could fail on its own
+    // (first hit by the travel/AdventureLog source) — it would silently
+    // clear a perfectly valid stored password and re-lock the UI.
+    res.json({ summaries, unlocked });
   } catch (err) {
     // If the real-time fetch itself crashes (e.g. DB unreachable), fall back
     // to the old cached rows so the page isn't completely blank.
@@ -66,7 +75,7 @@ router.get("/dashboard", async (req: Request, res: Response) => {
       };
     });
 
-    res.json({ summaries });
+    res.json({ summaries, unlocked });
   }
 });
 

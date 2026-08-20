@@ -26,6 +26,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.28.1',
+    date: '2026-08-20',
+    summary: '修正輸入正確密碼卻立刻被鎖回去的問題',
+    changes: [
+      '入口網原本靠「私領域有任何一項資料是 null，就當作密碼過期」來自動清掉存在瀏覽器裡的密碼——這個判斷法在只有 4 個私領域來源、彼此都相對穩定時沒出過問題，但這次新增的旅遊生活來源第一次上線很容易因為 .env 還沒填 token 之類的原因抓資料失敗，失敗時資料一樣是 null，跟「密碼被拒絕」長得一模一樣，導致密碼明明是對的，畫面卻立刻跳回鎖定狀態',
+      '改成後端直接回傳一個 unlocked 布林值（就是伺服器自己驗證 x-admin-password header 對不對的那個判斷結果），前端不用再用資料有沒有缺來猜密碼對不對，兩件事徹底分開，不會再互相干擾',
+    ],
+  },
+  {
     version: '1.28.0',
     date: '2026-08-20',
     summary: '幸福指數新增旅遊生活維度，心智指標改成「日記＋任務完成度」，知識庫健康分數保留顯示但移出計算',
@@ -410,13 +419,12 @@ async function apiFetchSites(): Promise<SiteData[]> {
   return data.sites
 }
 
-async function apiFetchDashboard(adminPassword: string | null): Promise<DashboardSummary[]> {
+async function apiFetchDashboard(adminPassword: string | null): Promise<{ summaries: DashboardSummary[]; unlocked: boolean }> {
   const r = await fetch(`${API_BASE}api/dashboard`, {
     headers: adminPassword ? { 'x-admin-password': adminPassword } : {},
   })
   if (!r.ok) throw new Error('Failed to fetch dashboard')
-  const data = await r.json() as { summaries: DashboardSummary[] }
-  return data.summaries
+  return r.json() as Promise<{ summaries: DashboardSummary[]; unlocked: boolean }>
 }
 
 interface HappinessHistoryPoint {
@@ -3110,15 +3118,18 @@ export default function App() {
 
   useEffect(() => {
     apiFetchDashboard(unlockedPassword)
-      .then(data => {
-        setDashboard(data)
-        // The server only ever sends `data: null` for a private summary when
-        // it rejects the caller's password (a genuine fetch failure keeps the
-        // last cached value instead). If the client still thinks it's
-        // unlocked but every private summary came back redacted, the stored
-        // password is stale — clear it so the UI drops back to the real
-        // locked state instead of silently showing "暫時無法取得資料" forever.
-        if (unlockedPassword && data.some(s => s.isPrivate && s.data === null)) {
+      .then(({ summaries, unlocked }) => {
+        setDashboard(summaries)
+        // Trust the server's explicit `unlocked` flag, not "did some private
+        // summary come back with data: null" — that used to be the proxy,
+        // but it broke the moment any private SOURCE could fail on its own
+        // for a correctly-unlocked caller (first hit by the travel/
+        // AdventureLog source): a stale/misconfigured token there also
+        // yields data: null, which was wrongly read as "the password must be
+        // stale", clearing a perfectly valid stored password and re-locking
+        // the UI. The server always knows for certain whether the header it
+        // received matched ADMIN_PASSWORD, so ask it directly instead.
+        if (unlockedPassword && !unlocked) {
           localStorage.removeItem(UNLOCK_KEY)
           setUnlockedPassword(null)
         }
