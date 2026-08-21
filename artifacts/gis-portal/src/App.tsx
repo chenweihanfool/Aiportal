@@ -26,6 +26,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.32.1',
+    date: '2026-08-21',
+    summary: '「近 30 天洞察」搬出展開明細，卡片一打開就直接看到，不用點開',
+    changes: [
+      '雷達圖下面本來就有空間，洞察這種「看了有感覺」的內容藏在收合面板裡等於白做，改成常駐顯示在卡片主體（雷達圖下方、卡片頁尾上方），不用點「展開明細」才看得到。基礎分/最弱項分數這些偏 debug 性質的數字跟趨勢線圖還是留在展開明細裡',
+      '連帶把歷史資料的抓取時機從「展開才抓」改成「解鎖就抓」——洞察現在一開始就要顯示，不能再等使用者點開才去要資料',
+    ],
+  },
+  {
     version: '1.32.0',
     date: '2026-08-21',
     summary: '翰翰仔幸福指數展開明細新增「近 30 天洞察」：最常見短板、最佳/最差單日、連續漲跌、星期幾規律、波動度',
@@ -2495,11 +2504,13 @@ function HappinessHeroCard({
   const tilt = useTilt3D()
   const isLocked = !unlocked // hhi is always isPrivate — see summarySources.ts
 
-  // Lazy-load history only once the card is actually expanded — most page
-  // views never open this panel, no reason to fetch 30 days of history on
-  // every load just in case.
+  // Fetches on unlock, not gated behind `expanded` — the "近 30 天洞察" row
+  // is now always visible in the card body (not tucked behind 展開明細), so
+  // it needs history data before the user ever expands anything. Used to be
+  // lazy specifically because "most page views never open this panel" no
+  // longer holds now that insights show unconditionally.
   useEffect(() => {
-    if (!expanded || !unlockedPassword || history !== null) return
+    if (!unlockedPassword || history !== null) return
     let cancelled = false
     apiFetchHappinessHistory(unlockedPassword)
       .then(rows => { if (!cancelled) setHistory(rows) })
@@ -2619,6 +2630,41 @@ function HappinessHeroCard({
         <LabeledRadarChart axes={radarAxes} maxValue={100} size={260} color={tone.color} />
       </div>
 
+      {/* 一眼就看到，不用點「展開明細」——卡片本身在雷達圖下面本來就有空間，
+          洞察是「看了有感覺」的內容，藏在收合面板裡等於白做。細項數字（基礎分
+          /最弱項分數等偏 debug 性質的東西）跟趨勢線圖還是留在展開明細裡，只有
+          這 5 行洞察搬出來常駐顯示。 */}
+      {history !== null && history.length > 0 && (() => {
+        const insights = computeHappinessInsights(history)
+        const rows: string[] = []
+        if (insights.weakestFrequency) {
+          rows.push(`📉 最常見短板：${insights.weakestFrequency.label}（${insights.weakestFrequency.count}/${insights.weakestFrequency.total} 天）`)
+        }
+        if (insights.bestDay && insights.worstDay && insights.bestDay.date !== insights.worstDay.date) {
+          rows.push(`📊 最高 ${insights.bestDay.date}（${insights.bestDay.score} 分）· 最低 ${insights.worstDay.date}（${insights.worstDay.score} 分）`)
+        }
+        if (insights.streak && insights.streak.days >= 2) {
+          rows.push(`${insights.streak.direction === 'up' ? '📈' : '📉'} 連續 ${insights.streak.days} 天${insights.streak.direction === 'up' ? '上升' : '下降'}`)
+        }
+        if (insights.weekdayPattern) {
+          rows.push(`📅 ${insights.weekdayPattern.bestWeekday}通常最高（${insights.weekdayPattern.bestAvg} 分）· ${insights.weekdayPattern.worstWeekday}通常最低（${insights.weekdayPattern.worstAvg} 分）`)
+        }
+        if (insights.volatility) {
+          rows.push(`〰️ 波動度：${insights.volatility.label}（標準差 ${insights.volatility.stdDev}）`)
+        }
+        if (rows.length === 0) return null
+        return (
+          <div style={{ marginTop: '1rem', paddingTop: '0.9rem', borderTop: '1px solid rgba(192,132,252,0.15)' }}>
+            <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.5rem' }}>近 30 天洞察</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {rows.map(r => (
+                <div key={r} style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>{r}</div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.8rem', marginTop: '1.1rem', borderTop: '1px solid rgba(192,132,252,0.15)' }}>
         <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)' }}>
           {formatMinutesAgo(summary?.fetchedAt ?? null)}
@@ -2640,37 +2686,6 @@ function HappinessHeroCard({
               <span style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '500' }}>{value}</span>
             </div>
           ))}
-
-          {history !== null && history.length > 0 && (() => {
-            const insights = computeHappinessInsights(history)
-            const rows: string[] = []
-            if (insights.weakestFrequency) {
-              rows.push(`📉 最常見短板：${insights.weakestFrequency.label}（${insights.weakestFrequency.count}/${insights.weakestFrequency.total} 天）`)
-            }
-            if (insights.bestDay && insights.worstDay && insights.bestDay.date !== insights.worstDay.date) {
-              rows.push(`📊 最高 ${insights.bestDay.date}（${insights.bestDay.score} 分）· 最低 ${insights.worstDay.date}（${insights.worstDay.score} 分）`)
-            }
-            if (insights.streak && insights.streak.days >= 2) {
-              rows.push(`${insights.streak.direction === 'up' ? '📈' : '📉'} 連續 ${insights.streak.days} 天${insights.streak.direction === 'up' ? '上升' : '下降'}`)
-            }
-            if (insights.weekdayPattern) {
-              rows.push(`📅 ${insights.weekdayPattern.bestWeekday}通常最高（${insights.weekdayPattern.bestAvg} 分）· ${insights.weekdayPattern.worstWeekday}通常最低（${insights.weekdayPattern.worstAvg} 分）`)
-            }
-            if (insights.volatility) {
-              rows.push(`〰️ 波動度：${insights.volatility.label}（標準差 ${insights.volatility.stdDev}）`)
-            }
-            if (rows.length === 0) return null
-            return (
-              <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-                <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.5rem' }}>近 30 天洞察</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {rows.map(r => (
-                    <div key={r} style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>{r}</div>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
 
           <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
             <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>近 30 天趨勢（每日顯示值）</div>
