@@ -281,11 +281,20 @@ async function buildHappinessDisplayData(
   }
 
   const today = taipeiDateString(new Date());
-  const [todayRow] = await db
+  const [rawTodayRow] = await db
     .select()
     .from(happinessIndexHistoryTable)
     .where(eq(happinessIndexHistoryTable.date, today))
     .limit(1);
+
+  // 只有 configVersion 跟現在這版公式一致，才算是「今天已經快照過」——不然
+  // 舊版程式碼在改版部署前寫的「今天」那筆（舊版是每次開頁面就即時 upsert，
+  // 不是固定 23:55 才寫）會被誤當成這版的快照凍結顯示，六個原始維度分數是
+  // 用新公式即時算的，但 weakestComponent/baseScore 卻是舊公式（例如少了
+  // 社交指標）算出來的舊值，兩邊對不上。改版部署後的第一天，直到當晚 23:55
+  // 計時器真的用新公式寫入前，都會走下面的即時計算分支，這是預期行為。
+  const todayRow =
+    rawTodayRow && rawTodayRow.configVersion === getHappinessConfigVersion() ? rawTodayRow : undefined;
 
   let finalScore: number;
   let displayedScore: number;
