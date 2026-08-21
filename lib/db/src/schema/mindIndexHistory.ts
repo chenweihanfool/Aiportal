@@ -24,13 +24,16 @@ export const mindIndexHistoryTable = pgTable("mind_index_history", {
   rhythm: real("rhythm"),
   rhythmTrendPct: real("rhythm_trend_pct"),
   partial: boolean("partial").notNull().default(false),
-  // HHI 心智維度改用的新分數：當天日記篇數 + 當天完成任務數，取代上面知識庫
-  // 分數在幸福指數裡的角色。三個都 nullable——HERMES 的 daily-life-score.py
+  // HHI 心智維度改用的新分數：純看當天日記篇數，取代上面知識庫分數在幸福指數
+  // 裡的角色。2026-08-20 起不再把 tasksCompletedCount 算進 dailyEngagementScore
+  // ——任務完成度已經是從容指數（busynessScore）在算的東西，兩個維度算同一件
+  // 事會重複；這個欄位保留只是因為刪掉要動 daily-life-score.py 跟 migration，
+  // 沒必要，單純不再被讀取而已。三個都 nullable——HERMES 的 daily-life-score.py
   // 還沒實作這段公式之前會是 null，HHI 那邊會照既有的缺資料重新正規化邏輯
   // 處理，不會顯示假分數。
   dailyEngagementScore: real("daily_engagement_score"),
   diaryEntryCount: integer("diary_entry_count"),
-  tasksCompletedCount: integer("tasks_completed_count"),
+  tasksCompletedCount: integer("tasks_completed_count"), // 不再影響 dailyEngagementScore，見上方說明
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

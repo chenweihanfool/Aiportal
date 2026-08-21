@@ -26,6 +26,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.30.0',
+    date: '2026-08-21',
+    summary: '心智指標拿掉完成任務數（跟從容指數重複），改成純看日記篇數、邊際效用遞減的算法',
+    changes: [
+      '心智指標原本的公式是「日記篇數 + 完成任務數」各自封頂 50 分相加，但完成任務數這件事從容指數（Vikunja 忙碌指數的反向）本來就已經在算了，兩個 HHI 維度算同一件事會重複。改成純看日記篇數，不再看任務完成',
+      '新公式 dailyEngagementScore = round(100 × 日記篇數 ÷ (日記篇數 + 3))——前幾篇日記的邊際效用最大，篇數越多效果越平緩但沒有硬性封頂（例如 1 篇 25 分、3 篇 50 分、5 篇 63 分、10 篇 77 分），符合「多寫一點總是有幫助，但效果會遞減」的直覺。這個公式改在 HERMES 的 daily-life-score.py 那邊實作，Aiportal 這邊只是更新卡片顯示（拿掉「完成任務數」欄位、副標題改成「日記書寫」）',
+    ],
+  },
+  {
     version: '1.29.0',
     date: '2026-08-20',
     summary: '版面調整：運動 APP 系統雷達圖放大、人生自由指數卡片旁邊補上鄰卡、容器健康補上名稱清單',
@@ -2055,9 +2064,10 @@ const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown>; ex
 // ─────────────────────────────────────────────
 // 心智指標 — this card now shows TWO independently-sourced scores that used
 // to be one:
-//   1. dailyEngagementScore (hero number, 計入 HHI) — 當天日記篇數＋完成任務數
-//      算出來的基本分，2026-08-20 新增，由 HERMES 的 daily-life-score.py 算好
-//      一起 push 過來。這才是翰翰仔幸福指數實際在用的「心智」維度。
+//   1. dailyEngagementScore (hero number, 計入 HHI) — 純看當天日記篇數算出來
+//      的基本分，2026-08-20 新增、2026-08-20 拿掉完成任務數（跟從容指數算的
+//      東西重複了），由 HERMES 的 daily-life-score.py 算好一起 push 過來。
+//      這才是翰翰仔幸福指數實際在用的「心智」維度。
 //   2. score (知識庫健康度，不計入 HHI) — 原本唯一的心智指標，是 HERMES 自己
 //      知識庫的健康度而不是翰翰仔本人的心智狀態，所以移出 HHI 計算，但數字
 //      本身還有參考價值，保留顯示在卡片下半部，明確標註不計入幸福指數。
@@ -2113,7 +2123,6 @@ function MindIndexCard({
   const data = summary?.data
   const dailyEngagementScore = typeof data?.['dailyEngagementScore'] === 'number' ? data['dailyEngagementScore'] as number : null
   const diaryEntryCount = typeof data?.['diaryEntryCount'] === 'number' ? data['diaryEntryCount'] as number : null
-  const tasksCompletedCount = typeof data?.['tasksCompletedCount'] === 'number' ? data['tasksCompletedCount'] as number : null
   const score = typeof data?.['score'] === 'number' ? data['score'] as number : null
   const conversion = typeof data?.['conversion'] === 'number' ? data['conversion'] as number : null
   const linkHealth = typeof data?.['linkHealth'] === 'number' ? data['linkHealth'] as number : null
@@ -2168,8 +2177,7 @@ function MindIndexCard({
   const vitalityTone = bandTone(vitality, VITALITY_BANDS)
   const rhythmTone = bandTone(rhythm, RHYTHM_BANDS)
   const engagementItems = [
-    { label: '日記篇數', value: diaryEntryCount !== null ? String(diaryEntryCount) : '—', formula: 'min(50, 當天日記篇數 × 25)——寫 2 篇以上就封頂' },
-    { label: '完成任務數', value: tasksCompletedCount !== null ? String(tasksCompletedCount) : '—', formula: 'min(50, 當天完成任務數 × 10)——完成 5 個以上就封頂' },
+    { label: '日記篇數', value: diaryEntryCount !== null ? String(diaryEntryCount) : '—', formula: '100 × 篇數 ÷ (篇數 + 3)——前幾篇效用最大，篇數越多邊際效果越平緩，沒有硬性封頂' },
   ]
   const knowledgeItems = [
     { label: '轉化率', value: conversion !== null ? String(conversion) : '—', color: conversionTone.color, tier: conversion !== null ? conversionTone.label : undefined, formula: 'CREATE 層：100 × 近30天編譯進 wiki 的條目數 ÷ (近30天編譯數 + inbox 超過7天未編譯的積壓數)' },
@@ -2188,7 +2196,7 @@ function MindIndexCard({
         <span style={{ fontSize: '26px', filter: `drop-shadow(0 0 8px ${tone.color}88)` }}>🧠</span>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ color: '#c084fc', fontSize: '16px', fontWeight: '600' }}>心智指標</div>
-          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>日記＋任務完成度</div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>日記書寫</div>
         </div>
       </div>
 
@@ -2198,9 +2206,11 @@ function MindIndexCard({
         </div>
       ) : (
         <div style={{ flex: 1 }}>
-          {/* HHI 實際計入的分數——當天日記篇數＋完成任務數。dailyEngagementScore
-              還沒實作前這裡會是「資料準備中」，但下面的知識庫健康度區塊獨立
-              運作，不受影響（兩個分數來源完全分開，不是同一件事）。 */}
+          {/* HHI 實際計入的分數——純看當天日記篇數，不看任務完成（任務完成度
+              已經是從容指數在算的東西，兩個指標算同一件事就重複了）。
+              dailyEngagementScore 還沒實作前這裡會是「資料準備中」，但下面的
+              知識庫健康度區塊獨立運作，不受影響（兩個分數來源完全分開，不是
+              同一件事）。 */}
           <div style={{ marginBottom: '1rem' }}>
             {dailyEngagementScore === null ? (
               <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)' }}>心智基本分：資料準備中…</div>
@@ -2219,7 +2229,7 @@ function MindIndexCard({
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} />
           {expanded && (
             <FormulaPanel rows={[
-              { label: '心智指標（計入幸福指數）', formula: 'dailyEngagementScore = min(50,日記篇數×25) + min(50,完成任務數×10)，寫日記／完成任務同等重要，任一項掛零不會拖累另一項' },
+              { label: '心智指標（計入幸福指數）', formula: 'dailyEngagementScore = round(100 × 日記篇數 ÷ (日記篇數 + 3))，前幾篇日記效用最大，篇數越多邊際效果越平緩（沒有完成任務數了——任務完成度已經是從容指數在算，不重複計）' },
               ...engagementItems,
             ]} />
           )}
