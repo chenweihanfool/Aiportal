@@ -26,6 +26,18 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.33.0',
+    date: '2026-08-21',
+    summary: '翰翰仔幸福指數 v2：新增「社交指標」第六維度，心智指標改滾動窗口，旅遊生活加頻率與期待加分，權重全面調整',
+    changes: [
+      '新增社交指標（權重 13%）：全被動日記萃取，不用問卷——廣度（近 7 天不重複互動人數，5 人封頂）、互動強度（面對面/通話/訊息加權，見面分量最重）、連結率（有互動的天數佔觀測天數比例）三項合成，資料源自 HERMES 自己的 L1/L2 日記處理流程額外寫出的 social_interactions.jsonl（collect.ps1 只讀不寫）',
+      '心智指標改成滾動 3 天窗口（今天+前 2 天日記篇數總和），不再每天歸零重算——原本每天歸零，寫日記較少的那天最弱項修正會把心智指標的有效權重放大到接近 30%，過度主導總分',
+      '旅遊生活加入「頻率分」（180 天內累積行程天數，20 天封頂）跟「期待加分」（有已排定但還沒發生的行程 +5 分），不再只看距上次行程結束天數這單一維度',
+      '六維權重全面調整：人生自由 31→27／健身習慣 20→18／生活從容 17→15／心智指標 17→15／旅遊生活 15→12／社交指標新增 13（最弱項修正 15% 與日對日平滑 70/30 不變）',
+      '每日快照時機從「每次開頁面即時寫入歷史」改成 api-server 容器內常駐計時器固定 23:55（台北時間）觸發——23:55 之前卡片顯示的是即時重算、尚未寫入歷史的「今日暫定」值（有明確標籤），過了才凍結成當天最終分數，之後不再跳動，也不會被開頁面的時間點影響歷史紀錄',
+    ],
+  },
+  {
     version: '1.32.1',
     date: '2026-08-21',
     summary: '「近 30 天洞察」搬出展開明細，卡片一打開就直接看到，不用點開',
@@ -520,6 +532,20 @@ async function apiFetchMindIndexHistory(adminPassword: string, days = 30): Promi
   })
   if (!r.ok) throw new Error('Failed to fetch mind-index history')
   const data = await r.json() as { history: MindIndexHistoryPoint[] }
+  return data.history
+}
+
+interface SocialIndexHistoryPoint {
+  date: string
+  socialScore: number
+}
+
+async function apiFetchSocialIndexHistory(adminPassword: string, days = 30): Promise<SocialIndexHistoryPoint[]> {
+  const r = await fetch(`${API_BASE}api/social-index/history?days=${days}`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch social-index history')
+  const data = await r.json() as { history: SocialIndexHistoryPoint[] }
   return data.history
 }
 
@@ -2334,6 +2360,163 @@ function MindIndexCard({
 }
 
 // ─────────────────────────────────────────────
+// 社交指標 (HHI v2, 2026-08-21) — 全被動日記萃取，資料來源是 HERMES 自己的
+// L1/L2 日記處理流程額外寫出的 social_interactions.jsonl（Aiportal 只讀不
+// 寫），collect.ps1 每 ~10 分鐘聚合近 7 天的觀測日/互動統計並 POST 過來，
+// 實際的三個子分數/綜合分數在 api-server 算（見 lib/socialIndex.ts）。
+// 跟心智指標同樣沒有對應的 portal_sites row，獨立渲染，不走
+// GlassSummaryCard + SUMMARY_BODIES 那套。結構完全比照 MindIndexCard，但
+// 少了「知識庫健康度」那個獨立子區塊——社交指標本身沒有第二個不計入 HHI
+// 的舊分數要顯示。
+// ─────────────────────────────────────────────
+const SOCIAL_SCORE_BANDS: Band[] = [[80, '#34d399', '熱絡'], [60, '#fbbf24', '普通'], [40, '#fb923c', '偏冷'], [0, '#f87171', '疏離']]
+
+function SocialIndexCard({
+  summary,
+  unlocked,
+  unlockedPassword,
+  onRequestUnlock,
+}: {
+  summary: DashboardSummary | undefined
+  unlocked: boolean
+  unlockedPassword: string | null
+  onRequestUnlock: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [history, setHistory] = useState<SocialIndexHistoryPoint[] | null>(null)
+  const [historyError, setHistoryError] = useState(false)
+  const tilt = useTilt3D()
+  const isLocked = !unlocked
+
+  useEffect(() => {
+    if (!expanded || !unlockedPassword || history !== null) return
+    let cancelled = false
+    apiFetchSocialIndexHistory(unlockedPassword)
+      .then(rows => { if (!cancelled) setHistory(rows) })
+      .catch(() => { if (!cancelled) setHistoryError(true) })
+    return () => { cancelled = true }
+  }, [expanded, unlockedPassword, history])
+
+  const data = summary?.data
+  const observedDayCount = typeof data?.['observedDayCount'] === 'number' ? data['observedDayCount'] as number : null
+  const distinctPersonCount = typeof data?.['distinctPersonCount'] === 'number' ? data['distinctPersonCount'] as number : null
+  const daysWithInteraction = typeof data?.['daysWithInteraction'] === 'number' ? data['daysWithInteraction'] as number : null
+  const breadthScore = typeof data?.['breadthScore'] === 'number' ? data['breadthScore'] as number : null
+  const intensityScore = typeof data?.['intensityScore'] === 'number' ? data['intensityScore'] as number : null
+  const connectionRateScore = typeof data?.['connectionRateScore'] === 'number' ? data['connectionRateScore'] as number : null
+  const socialScore = typeof data?.['socialScore'] === 'number' ? data['socialScore'] as number : null
+  const stale = data?.['stale'] === true
+
+  const cardStyle: React.CSSProperties = {
+    position: 'relative',
+    background: 'rgba(255,255,255,0.055)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(192,132,252,0.22)',
+    borderRadius: '18px',
+    padding: '1.5rem 1.6rem 1.2rem',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+    opacity: stale ? 0.55 : 1,
+    filter: stale ? 'saturate(0.5)' : undefined,
+    ...hueVar(CARD_HUE.purple),
+  }
+
+  if (isLocked) {
+    return (
+      <div ref={tilt.ref} className="glass-shell" style={{ ...cardStyle, cursor: 'pointer' }} onClick={onRequestUnlock} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
+        <div className="silk"><i className="w1" /><i className="w2" /></div>
+        <div className="beam" />
+        <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(192,132,252,0.6), transparent)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.1rem' }}>
+          <span style={{ fontSize: '26px', filter: 'drop-shadow(0 0 8px rgba(192,132,252,0.55))' }}>🤝</span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ color: '#c084fc', fontSize: '16px', fontWeight: '600' }}>社交指標</div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>近 7 天社交活動</div>
+          </div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '1.2rem 0' }}>
+          <div style={{ fontSize: '18px', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)' }}>••••••</div>
+          <div style={{ fontSize: '11.5px', color: '#fbbf24', letterSpacing: '0.05em' }}>🔒 解鎖後顯示</div>
+        </div>
+      </div>
+    )
+  }
+
+  const tone = bandTone(socialScore, SOCIAL_SCORE_BANDS)
+  const socialItems = [
+    { label: '廣度', value: breadthScore !== null ? String(breadthScore) : '—', formula: 'min(100, 近 7 天不重複互動人數 × 20)——5 人封頂' },
+    { label: '互動強度', value: intensityScore !== null ? String(intensityScore) : '—', formula: 'min(100, round(近 7 天加權互動點數 ÷ 15 × 100))——見面 3 點／通話 2 點／訊息 1 點' },
+    { label: '連結率', value: connectionRateScore !== null ? String(connectionRateScore) : '—', formula: 'round(近 7 天有互動的觀測日數 ÷ 近 7 天觀測日數 × 100)' },
+    { label: '觀測日／互動天數', value: observedDayCount !== null ? `${daysWithInteraction ?? 0} / ${observedDayCount}` : '—', formula: '觀測日＝當天有寫日記（≥1 篇），區分「沒寫日記」跟「沒社交」' },
+  ]
+
+  return (
+    <div ref={tilt.ref} className="glass-shell" style={cardStyle} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
+      <div className="silk"><i className="w1" /><i className="w2" /></div>
+      <div className="beam" />
+      <div style={{ position: 'absolute', top: 0, left: '18%', right: '18%', height: '1px', background: `linear-gradient(90deg, transparent, ${tone.color}99, transparent)` }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.1rem' }}>
+        <span style={{ fontSize: '26px', filter: `drop-shadow(0 0 8px ${tone.color}88)` }}>🤝</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ color: '#c084fc', fontSize: '16px', fontWeight: '600' }}>社交指標</div>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11.5px' }}>近 7 天社交活動</div>
+        </div>
+      </div>
+
+      {observedDayCount === null || observedDayCount === 0 || socialScore === null ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>
+          {summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中…（近 7 天沒有日記可供觀測）'}
+        </div>
+      ) : (
+        <div style={{ flex: 1 }}>
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>{socialScore}</div>
+              <div style={{ fontSize: '15px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
+              <span style={{ fontSize: '10px', color: 'rgba(52,211,153,0.85)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: '999px', padding: '2px 8px', letterSpacing: '0.03em' }}>計入幸福指數</span>
+            </div>
+            {stale && (
+              <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '4px' }}>資料已超過 36 小時未更新</div>
+            )}
+            {distinctPersonCount === 0 && (
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>這幾天有寫日記，但沒有社交互動紀錄——真實的 0 分，不是缺資料</div>
+            )}
+          </div>
+          <SupportStats items={socialItems} />
+          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} />
+          {expanded && (
+            <FormulaPanel rows={[
+              { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)——全被動日記萃取，沒有問卷；跟心智指標一樣源自日記，寫作頻率會造成部分共線' },
+              ...socialItems,
+            ]} />
+          )}
+          {expanded && (
+            <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>社交指標歷史趨勢</div>
+              {historyError ? (
+                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
+              ) : history === null ? (
+                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
+              ) : (
+                <TrendLineChart points={history.map(h => ({ date: h.date, value: h.socialScore }))} color={tone.color} height={70} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.7rem', marginTop: '1rem', borderTop: '1px solid rgba(192,132,252,0.13)' }}>
+        <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.04em' }}>{formatMinutesAgo(summary?.fetchedAt ?? null)}</span>
+        <span style={{ fontSize: '10.5px', color: 'rgba(192,132,252,0.8)', letterSpacing: '0.05em', fontWeight: '500' }}>PRIVATE</span>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // 翰翰仔幸福指數 (Hanhan Happiness Index) — full-width hero card, top of the
 // private zone. Not tied to any portal_sites row (there's no external
 // system to link to), so it's rendered separately from the site-mapped
@@ -2529,8 +2712,15 @@ function HappinessHeroCard({
   const calmScore = typeof data?.['calmScore'] === 'number' ? data['calmScore'] as number : null
   const mindScore = typeof data?.['mindScore'] === 'number' ? data['mindScore'] as number : null
   const travelScore = typeof data?.['travelScore'] === 'number' ? data['travelScore'] as number : null
+  const socialScore = typeof data?.['socialScore'] === 'number' ? data['socialScore'] as number : null
   const usingStaleData = data?.['usingStaleData'] === true
-  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number; mindWeight?: number; travelWeight?: number } | undefined
+  // isSnapshotFinal：今天是否已經過了 23:55 的每日快照——過了之前這裡回傳的
+  // 是即時重算、尚未寫入 happiness_index_history 的「今日暫定」值（跟昨天
+  // 的 displayedScore 平滑，但不是最終存進歷史的那筆）；過了之後直接凍結用
+  // 已存的快照，數字整天不再跳動。前端直接讀這個明確欄位，不用時間戳/時鐘
+  // 推斷，見 summarySources.ts 的 buildHappinessDisplayData。
+  const isSnapshotFinal = data?.['isSnapshotFinal'] === true
+  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number; mindWeight?: number; travelWeight?: number; socialWeight?: number } | undefined
 
   const cardStyle: React.CSSProperties = {
     position: 'relative',
@@ -2578,12 +2768,14 @@ function HappinessHeroCard({
   }
 
   const tone = hhiTone(displayedScore)
+  // 依權重由高到低排列（HHI v2，2026-08-21）：27/18/15/15/13/12。
   const contributions: Array<{ label: string; value: number | null; weightPct: number }> = [
-    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.31) * 100) },
-    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.20) * 100) },
-    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.17) * 100) },
-    { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.17) * 100) },
-    { label: '旅遊生活', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.15) * 100) },
+    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.27) * 100) },
+    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.18) * 100) },
+    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.15) * 100) },
+    { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.15) * 100) },
+    { label: '社交指標', value: socialScore, weightPct: Math.round((weights?.socialWeight ?? 0.13) * 100) },
+    { label: '旅遊生活', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.12) * 100) },
   ]
 
   const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
@@ -2604,6 +2796,11 @@ function HappinessHeroCard({
               {displayedScore}
             </div>
             <div style={{ fontSize: '16px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
+            {!isSnapshotFinal && (
+              <span style={{ fontSize: '10px', color: 'rgba(251,191,36,0.9)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: '999px', padding: '2px 8px', letterSpacing: '0.03em' }}>
+                今日暫定
+              </span>
+            )}
           </div>
           {weakestComponent && (
             <div style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.5)', marginTop: '0.5rem' }}>
@@ -2676,7 +2873,7 @@ function HappinessHeroCard({
       {expanded && (
         <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {[
-            ['基礎分（三項加權平均）', baseScore !== null ? baseScore.toFixed(2) : '—'],
+            ['基礎分（加權平均）', baseScore !== null ? baseScore.toFixed(2) : '—'],
             ['最弱項分數', weakestScore !== null ? weakestScore.toFixed(2) : '—'],
             ['短板修正後（平滑前）', finalScore !== null ? String(finalScore) : '—'],
             ['平滑後（目前顯示值）', String(displayedScore)],
@@ -3236,12 +3433,18 @@ function GlassPortalView({
                       />
                     )
                   })}
-                  {/* 心智指標沒有 portal_sites 對應列（沒有外部網址可連），所以不
-                      透過上面 richSites 那條路徑，直接掛進同一個 bento grid 當
-                      額外一格——跟其他摘要卡同樣是 HeroIndex + 支援數字的形狀，
-                      高度天生接近，放在一起不會不對齊。 */}
+                  {/* 心智指標／社交指標都沒有 portal_sites 對應列（沒有外部網址可
+                      連），所以不透過上面 richSites 那條路徑，直接掛進同一個
+                      bento grid 當額外兩格——跟其他摘要卡同樣是 HeroIndex + 支援
+                      數字的形狀，高度天生接近，放在一起不會不對齊。 */}
                   <MindIndexCard
                     summary={dashboard.find(d => d.subsystemId === 'mind-index')}
+                    unlocked={unlocked}
+                    unlockedPassword={unlockedPassword}
+                    onRequestUnlock={onRequestUnlock}
+                  />
+                  <SocialIndexCard
+                    summary={dashboard.find(d => d.subsystemId === 'social-index')}
                     unlocked={unlocked}
                     unlockedPassword={unlockedPassword}
                     onRequestUnlock={onRequestUnlock}
