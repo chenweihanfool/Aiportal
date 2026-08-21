@@ -1,0 +1,552 @@
+{
+  "id": "d2e7dbf7-e031-445f-8444-5bd1d6906883",
+  "prevId": "627cb890-2b5e-4989-b989-3a6494d1425a",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.portal_sites": {
+      "name": "portal_sites",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subtitle": {
+          "name": "subtitle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "links": {
+          "name": "links",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "world_x": {
+          "name": "world_x",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "world_z": {
+          "name": "world_z",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_private": {
+          "name": "is_private",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "subsystem_id": {
+          "name": "subsystem_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.subsystem_summaries": {
+      "name": "subsystem_summaries",
+      "schema": "",
+      "columns": {
+        "subsystem_id": {
+          "name": "subsystem_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_private": {
+          "name": "is_private",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.busyness_index_history": {
+      "name": "busyness_index_history",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "score": {
+          "name": "score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "overdue_score": {
+          "name": "overdue_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "load_score": {
+          "name": "load_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stagnation_score": {
+          "name": "stagnation_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completion_score": {
+          "name": "completion_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approximated_count": {
+          "name": "approximated_count",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "null_components": {
+          "name": "null_components",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "config_version": {
+          "name": "config_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.happiness_index_history": {
+      "name": "happiness_index_history",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "final_score": {
+          "name": "final_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "displayed_score": {
+          "name": "displayed_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_score": {
+          "name": "base_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weakest_score": {
+          "name": "weakest_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weakest_component": {
+          "name": "weakest_component",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "available_components": {
+          "name": "available_components",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config_version": {
+          "name": "config_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mind_index_history": {
+      "name": "mind_index_history",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "score": {
+          "name": "score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conversion": {
+          "name": "conversion",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "link_health": {
+          "name": "link_health",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vitality": {
+          "name": "vitality",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rhythm": {
+          "name": "rhythm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rhythm_trend_pct": {
+          "name": "rhythm_trend_pct",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "partial": {
+          "name": "partial",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "daily_engagement_score": {
+          "name": "daily_engagement_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diary_entry_count": {
+          "name": "diary_entry_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diary_entry_count_3day": {
+          "name": "diary_entry_count_3day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tasks_completed_count": {
+          "name": "tasks_completed_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.social_index_history": {
+      "name": "social_index_history",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "observed_day_count": {
+          "name": "observed_day_count",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "distinct_person_count": {
+          "name": "distinct_person_count",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weighted_interaction_points": {
+          "name": "weighted_interaction_points",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "days_with_interaction": {
+          "name": "days_with_interaction",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "breadth_score": {
+          "name": "breadth_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "intensity_score": {
+          "name": "intensity_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "connection_rate_score": {
+          "name": "connection_rate_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "social_score": {
+          "name": "social_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.hermes_status_snapshot": {
+      "name": "hermes_status_snapshot",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "'latest'"
+        },
+        "cpu_percent": {
+          "name": "cpu_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mem_percent": {
+          "name": "mem_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disks": {
+          "name": "disks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "containers": {
+          "name": "containers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scheduled_tasks": {
+          "name": "scheduled_tasks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.hermes_activity_log": {
+      "name": "hermes_activity_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

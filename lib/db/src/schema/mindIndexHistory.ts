@@ -36,8 +36,16 @@ export const mindIndexHistoryTable = pgTable("mind_index_history", {
   // 沒必要，單純不再被讀取而已。三個都 nullable——HERMES 的 daily-life-score.py
   // 還沒實作這段公式之前會是 null，HHI 那邊會照既有的缺資料重新正規化邏輯
   // 處理，不會顯示假分數。
+  // 2026-08-21 起（HHI v2）：dailyEngagementScore 的算法改成滾動 3 天窗口，
+  // 不再是「只看今天」——每天歸零重來會讓最弱項修正在寫日記較少的當天把心智
+  // 指標的有效權重放大到接近 30%，過度主導幸福指數。diaryEntryCount3Day 是
+  // 這個新公式實際依據的輸入（今天+前 2 天符合計數規則的篇數總和），
+  // diaryEntryCount 保留不變、繼續只算今天，純粹給卡片「日記篇數」那格顯示
+  // 統計用，兩者故意分開。欄位名稱 dailyEngagementScore 沒有跟著改，避免牽動
+  // routes/mindIndex.ts、summarySources.ts、App.tsx 三處只為了命名精確。
   dailyEngagementScore: real("daily_engagement_score"),
   diaryEntryCount: integer("diary_entry_count"),
+  diaryEntryCount3Day: integer("diary_entry_count_3day"),
   tasksCompletedCount: integer("tasks_completed_count"), // 不再影響 dailyEngagementScore，見上方說明
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
