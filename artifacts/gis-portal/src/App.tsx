@@ -26,6 +26,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.31.1',
+    date: '2026-08-21',
+    summary: '修正 update.ps1 的 schema sync 步驟其實整段沒真的在運作',
+    changes: [
+      '這次部署 v1.31.0（score 欄位改 nullable 的 migration）時，HERMES 回報 update.ps1 的 schema sync 步驟要手動繞過才能過。查了才發現不是路徑打錯這麼單純：api-server 的 Dockerfile 執行階段（runtime stage）只有 COPY esbuild 打包後的單一 dist/index.mjs，完全沒有 node_modules、drizzle-kit、drizzle.config.ts，docker compose exec api-server npx drizzle-kit push 這個指令從一開始就不可能真的執行過，不管給的路徑對不對',
+      '改回 docker-compose.yml 裡本來就完整定義好的 db-migrate service（docker compose --profile migrate run --build --rm db-migrate）——這個 service 用的是 Dockerfile 的 build 階段，有完整 pnpm workspace 跟 drizzle-kit，套用的是 lib/db/migrations/ 底下版本化的 SQL 檔案，這整個 session 生成的每一份 migration 檔案本來就是為了配合這套機制。之前改走 api-server exec 是為了繞開 db-migrate 曾經遇到的 ENOTFOUND "base" DNS 問題，但 exec 那條路根本沒真的通過，如果 DNS 問題還在，需要在正式主機上重新排查',
+    ],
+  },
+  {
     version: '1.31.0',
     date: '2026-08-21',
     summary: '日記篇數改成每 10 分鐘自動更新，不用等 HERMES 每天跑一次的知識庫分數腳本',

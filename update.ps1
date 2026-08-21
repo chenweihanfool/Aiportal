@@ -8,10 +8,12 @@
          recreate, avoids the stale-image trap #12a where --force-recreate
          alone doesn't guarantee the container picks up the freshly-built
          image on this Windows Docker Desktop host)
-      3. docker compose exec -T api-server npx drizzle-kit push (runs inside
-         the running api-server container, which can resolve host.docker.internal
-         to the Windows host; avoids the standalone db-migrate service that
-         gets ENOTFOUND "base" on this host's WSL networking)
+      3. docker compose --profile migrate run --build --rm db-migrate (applies
+         lib/db/migrations/*.sql via a one-off container built from the
+         Dockerfile's `build` stage, which has the full pnpm workspace incl.
+         drizzle-kit -- the api-server *runtime* image does not, it's just
+         the esbuild-bundled dist/index.mjs, so exec'ing into it can't run
+         drizzle-kit at all)
       4. health check (verify /api/healthz responds)
 
     Same pattern as pf-cwh/FitnessForge on this host. Postgres itself is NOT
@@ -117,27 +119,42 @@ catch {
 }
 
 # ==============================================
-# Step 3: schema sync (drizzle-kit push inside api-server container)
+# Step 3: schema sync (db-migrate service, applies lib/db/migrations/*.sql)
 # ==============================================
+# 2026-08-21: reverted from "docker compose exec api-server npx drizzle-kit
+# push" back to the db-migrate service. That exec approach could never have
+# actually worked -- artifacts/api-server/Dockerfile's runtime stage (the
+# one api-server actually runs) only COPYs the esbuild-bundled dist/index.mjs;
+# there's no node_modules, no drizzle-kit, no drizzle.config.ts anywhere in
+# that image, so `npx drizzle-kit push --config ./drizzle.config.ts` had
+# nothing to find or run regardless of what path was passed. Confirmed hit
+# on 2026-08-21's deploy, worked around manually that time.
+#
+# db-migrate targets the Dockerfile's `build` stage instead (full pnpm
+# workspace, has drizzle-kit + lib/db/drizzle.config.ts + lib/db/migrations/),
+# which is why it's the one that can actually run this. It was swapped away
+# from earlier over an ENOTFOUND "base" DNS error -- if that recurs, it needs
+# debugging on the real host (not reproducible from a dev checkout), but the
+# exec-based replacement was never a working alternative, so reverting is a
+# strict improvement either way.
 Write-Host "[3/4] Syncing database schema..." -ForegroundColor Yellow
 try {
     Push-Location $RepoDir
-    # Use api-server container (not db-migrate service) because db-migrate's
-    # migrate.mjs cannot resolve host.docker.internal in this Windows Docker
-    # Desktop setup, while api-server (same image) connects to Postgres fine.
-    # --no-tty (-T) prevents interactive prompts; additive schema changes are
-    # safe non-interactive, renames are handled manually.
-    $pushResult = cmd /c "docker compose exec -T api-server npx drizzle-kit push --config ./drizzle.config.ts 2>&1"
-    Write-Host $pushResult
+    # --build is not optional: `docker compose run` (unlike `up`) does not
+    # rebuild a service whose image already exists, even if lib/db/migrations/
+    # has moved on since that image was built -- see the db-migrate comment
+    # in docker-compose.yml for the exact incident this bit before.
+    $migrateResult = cmd /c "docker compose --profile migrate run --build --rm db-migrate 2>&1"
+    Write-Host $migrateResult
     if ($LASTEXITCODE -ne 0) {
-        throw "drizzle-kit push failed (exit code: $LASTEXITCODE)"
+        throw "db-migrate failed (exit code: $LASTEXITCODE)"
     }
     Write-Host "  >> Schema synced" -ForegroundColor Green
     Pop-Location
 }
 catch {
     Write-Host "ERROR schema sync: $_" -ForegroundColor Red
-    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose exec api-server npx drizzle-kit push --config ./drizzle.config.ts" -ForegroundColor Yellow
+    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose --profile migrate run --build --rm db-migrate" -ForegroundColor Yellow
     Pop-Location
     Write-Host "  Schema sync failure is treated as fatal -- a missing table will crash-loop api-server." -ForegroundColor Red
     exit 1
