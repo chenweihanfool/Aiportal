@@ -26,6 +26,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.32.0',
+    date: '2026-08-21',
+    summary: '翰翰仔幸福指數展開明細新增「近 30 天洞察」：最常見短板、最佳/最差單日、連續漲跌、星期幾規律、波動度',
+    changes: [
+      '「展開明細」原本只有基礎分/最弱項分數/短板修正/平滑後四個數字加一條趨勢線，這次補上五項從既有 happiness_index_history 資料算出來、但一直沒被用過的洞察：最常見短板（weakestComponent 本來就每天在存，只是沒統計過）、本月最高/最低單日分數、連續上升/下降天數、星期幾規律（哪天通常最高/最低）、分數波動度（標準差）',
+      '全部不用改 schema、不用等新資料累積——weakestComponent 這次額外從 GET /api/happiness/history 帶出來（原本只回傳 date/finalScore/displayedScore），其餘都是對現有 30 天歷史資料做不同角度的統計，純前端計算',
+      '星期幾規律至少要同一個星期幾出現 2 次以上才會顯示，避免單一天的數字被平均出來誤導成「規律」',
+    ],
+  },
+  {
     version: '1.31.2',
     date: '2026-08-21',
     summary: '修正日記篇數算法：一天只有一個 MD 檔，篇數要看內容裡的時間戳記條目，不是檔案數',
@@ -478,6 +488,7 @@ interface HappinessHistoryPoint {
   date: string
   finalScore: number
   displayedScore: number
+  weakestComponent: string | null
 }
 
 async function apiFetchHappinessHistory(adminPassword: string, days = 30): Promise<HappinessHistoryPoint[]> {
@@ -2374,6 +2385,99 @@ function TrendLineChart({ points, color = COLOR.purple, height = 90 }: { points:
   )
 }
 
+// 這幾個洞察全部從既有的 happiness_index_history 資料算出來，不需要新的
+// schema／新的每日累積期——weakestComponent 本來就每天在算、在存，只是從來
+// 沒被拿出來用過；最佳/最差單日、連續漲跌、星期幾規律、波動度都只是對現有
+// 30 天歷史資料做不同角度的統計，純函式、不碰網路，方便單獨測試。
+interface HappinessInsights {
+  weakestFrequency: { label: string; count: number; total: number } | null
+  bestDay: { date: string; score: number } | null
+  worstDay: { date: string; score: number } | null
+  streak: { direction: 'up' | 'down'; days: number } | null
+  weekdayPattern: { bestWeekday: string; bestAvg: number; worstWeekday: string; worstAvg: number } | null
+  volatility: { stdDev: number; label: string } | null
+}
+
+function computeHappinessInsights(history: HappinessHistoryPoint[]): HappinessInsights {
+  if (history.length === 0) {
+    return { weakestFrequency: null, bestDay: null, worstDay: null, streak: null, weekdayPattern: null, volatility: null }
+  }
+
+  const weakestCounts = new Map<string, number>()
+  let weakestTotal = 0
+  for (const h of history) {
+    if (h.weakestComponent) {
+      weakestCounts.set(h.weakestComponent, (weakestCounts.get(h.weakestComponent) ?? 0) + 1)
+      weakestTotal += 1
+    }
+  }
+  let weakestFrequency: HappinessInsights['weakestFrequency'] = null
+  if (weakestCounts.size > 0) {
+    const [label, count] = [...weakestCounts.entries()].sort((a, b) => b[1] - a[1])[0]!
+    weakestFrequency = { label, count, total: weakestTotal }
+  }
+
+  // API 已經回傳照日期由舊到新排序，sort 只是不假設呼叫端沒動過順序。
+  // Array.sort 是穩定排序（ES2019+），同分數平手時會保留原本的時間先後。
+  const byScore = [...history].sort((a, b) => a.displayedScore - b.displayedScore)
+  const worstDay = { date: byScore[0]!.date, score: byScore[0]!.displayedScore }
+  const bestDay = { date: byScore[byScore.length - 1]!.date, score: byScore[byScore.length - 1]!.displayedScore }
+
+  const chronological = [...history].sort((a, b) => a.date.localeCompare(b.date))
+  let streak: HappinessInsights['streak'] = null
+  if (chronological.length >= 2) {
+    let direction: 'up' | 'down' | null = null
+    let days = 1
+    for (let i = chronological.length - 1; i > 0; i--) {
+      const diff = chronological[i]!.displayedScore - chronological[i - 1]!.displayedScore
+      if (diff === 0) break
+      const dir: 'up' | 'down' = diff > 0 ? 'up' : 'down'
+      if (direction === null) { direction = dir; days = 2 }
+      else if (dir === direction) { days += 1 }
+      else break
+    }
+    if (direction !== null) streak = { direction, days }
+  }
+
+  const weekdayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六']
+  const weekdaySums = new Array<number>(7).fill(0)
+  const weekdayCounts = new Array<number>(7).fill(0)
+  for (const h of history) {
+    const wd = new Date(`${h.date}T00:00:00`).getDay()
+    weekdaySums[wd] += h.displayedScore
+    weekdayCounts[wd] += 1
+  }
+  // 每個星期幾至少要 2 筆資料才夠格算「規律」，不然單一天的數字被平均出來很
+  // 容易誤導（例如某個週三剛好只出現過一次、那天剛好分數特別高）。
+  const weekdayAverages = weekdayNames
+    .map((_, wd) => ({ wd, avg: weekdayCounts[wd]! > 0 ? weekdaySums[wd]! / weekdayCounts[wd]! : null, count: weekdayCounts[wd]! }))
+    .filter((w): w is { wd: number; avg: number; count: number } => w.avg !== null && w.count >= 2)
+  let weekdayPattern: HappinessInsights['weekdayPattern'] = null
+  if (weekdayAverages.length >= 2) {
+    const best = weekdayAverages.reduce((a, b) => (b.avg > a.avg ? b : a))
+    const worst = weekdayAverages.reduce((a, b) => (b.avg < a.avg ? b : a))
+    if (best.wd !== worst.wd) {
+      weekdayPattern = {
+        bestWeekday: weekdayNames[best.wd]!,
+        bestAvg: Math.round(best.avg),
+        worstWeekday: weekdayNames[worst.wd]!,
+        worstAvg: Math.round(worst.avg),
+      }
+    }
+  }
+
+  let volatility: HappinessInsights['volatility'] = null
+  if (history.length >= 3) {
+    const mean = history.reduce((sum, h) => sum + h.displayedScore, 0) / history.length
+    const variance = history.reduce((sum, h) => sum + (h.displayedScore - mean) ** 2, 0) / history.length
+    const stdDev = Math.round(Math.sqrt(variance) * 10) / 10
+    const label = stdDev < 5 ? '穩定' : stdDev < 12 ? '普通' : '起伏大'
+    volatility = { stdDev, label }
+  }
+
+  return { weakestFrequency, bestDay, worstDay, streak, weekdayPattern, volatility }
+}
+
 function HappinessHeroCard({
   summary,
   unlocked,
@@ -2536,6 +2640,37 @@ function HappinessHeroCard({
               <span style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '500' }}>{value}</span>
             </div>
           ))}
+
+          {history !== null && history.length > 0 && (() => {
+            const insights = computeHappinessInsights(history)
+            const rows: string[] = []
+            if (insights.weakestFrequency) {
+              rows.push(`📉 最常見短板：${insights.weakestFrequency.label}（${insights.weakestFrequency.count}/${insights.weakestFrequency.total} 天）`)
+            }
+            if (insights.bestDay && insights.worstDay && insights.bestDay.date !== insights.worstDay.date) {
+              rows.push(`📊 最高 ${insights.bestDay.date}（${insights.bestDay.score} 分）· 最低 ${insights.worstDay.date}（${insights.worstDay.score} 分）`)
+            }
+            if (insights.streak && insights.streak.days >= 2) {
+              rows.push(`${insights.streak.direction === 'up' ? '📈' : '📉'} 連續 ${insights.streak.days} 天${insights.streak.direction === 'up' ? '上升' : '下降'}`)
+            }
+            if (insights.weekdayPattern) {
+              rows.push(`📅 ${insights.weekdayPattern.bestWeekday}通常最高（${insights.weekdayPattern.bestAvg} 分）· ${insights.weekdayPattern.worstWeekday}通常最低（${insights.weekdayPattern.worstAvg} 分）`)
+            }
+            if (insights.volatility) {
+              rows.push(`〰️ 波動度：${insights.volatility.label}（標準差 ${insights.volatility.stdDev}）`)
+            }
+            if (rows.length === 0) return null
+            return (
+              <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.5rem' }}>近 30 天洞察</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {rows.map(r => (
+                    <div key={r} style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>{r}</div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
 
           <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
             <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>近 30 天趨勢（每日顯示值）</div>

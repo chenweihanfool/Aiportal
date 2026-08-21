@@ -92,11 +92,15 @@ router.get("/happiness/history", async (req: Request, res: Response) => {
   const daysParam = Number(req.query["days"]);
   const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 365) : 30;
 
+  // weakestComponent included so the frontend can derive "本月最常見短板"
+  // and similar stats without a new endpoint — it's already computed and
+  // stored here daily, just never surfaced past the single day it's for.
   const rows = await db
     .select({
       date: happinessIndexHistoryTable.date,
       finalScore: happinessIndexHistoryTable.finalScore,
       displayedScore: happinessIndexHistoryTable.displayedScore,
+      weakestComponent: happinessIndexHistoryTable.weakestComponent,
     })
     .from(happinessIndexHistoryTable)
     .orderBy(desc(happinessIndexHistoryTable.date))
