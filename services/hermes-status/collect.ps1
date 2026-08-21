@@ -58,8 +58,8 @@ $UpdateLogPaths = @{
     "vikunja"      = "F:\WEBAPP\SRC\vikunja\update.log"
 }
 
-# 心智指標的日記篇數——同一天可能不只一篇（例如手機同步的補充檔），所以是
-# 「今天日期開頭、.md 結尾」的檔案數，不是單純檢查一個檔案存不存在。
+# 心智指標的日記篇數——一天只有一個 YYYY-MM-DD.md 檔，篇數是看檔案「內容」
+# 裡有幾個時間點記錄，不是檔案數量（處理邏輯見下面 dailyEngagementScore 那段）。
 $DiaryFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\日記"
 
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
@@ -270,13 +270,64 @@ foreach ($source in $UpdateLogPaths.Keys) {
 # ── 心智指標：今天的日記篇數 → dailyEngagementScore ──────────────────────
 # 獨立的關注點，跟上面兩段一樣不互相阻擋——這裡失敗不影響快照/近期活動已經
 # 送出去的結果，反之亦然。
+#
+# 一天只有一個 YYYY-MM-DD.md 檔，不是「檔案數 = 篇數」——篇數要看檔案「內容」
+# 裡有幾個時間點記錄。實際格式（由 HERMES 的 collector 寫入）：
+#   ## 👤 人類編輯區          <- 使用者親自寫的，未寫則是預留位置文字
+#   （你在這裡寫日記內容）
+#   ## 🤖 AI 處理區            <- collector 自動 patch 追加的時間戳記條目
+#   ### 05:34 🌅 早安報告 2026-08-20（四）
+#   ### 06:56 需歸檔：AdventureLog 部署與 DB 備份方案
+# 算法：人類編輯區有真的寫內容（不是預留位置文字）就 +1，獨立算一篇；AI 處理
+# 區底下每個 ### 時間戳記條目都 +1，但標題含「早安報告／週報／月報／季報／
+# 年報／L1／L2／L3／L4／知識庫維護報告」這些關鍵字的（腳本自動產生的定期
+# 報告類）不算——「V 任務評論」「需歸檔：...」這種即使是 AI 寫入的，只要不是
+# 定期報告類，一樣算數。
 try {
     $today = Get-Date -Format "yyyy-MM-dd"
     $diaryEntryCount = 0
-    if (Test-Path $DiaryFolderPath) {
-        $diaryEntryCount = @(Get-ChildItem -Path $DiaryFolderPath -Filter "$today*.md" -File -ErrorAction SilentlyContinue).Count
+    $todayDiaryFile = Join-Path $DiaryFolderPath "$today.md"
+    if (Test-Path $todayDiaryFile) {
+        # -Raw + 明確指定 Encoding UTF8——不指定的話 Windows PowerShell 5.1
+        # 對沒有 BOM 的檔案會用系統內碼讀取，這裡要拿檔案內容的中文字串去跟
+        # 下面 script 自己內嵌的中文關鍵字比對，編碼對不上比對永遠不會中，
+        # 跟之前 collect.ps1 自己缺 BOM 導致中文字面值亂碼是同一類地雷。
+        $diaryContent = Get-Content -Path $todayDiaryFile -Raw -Encoding UTF8
+
+        $humanMatch = [regex]::Match($diaryContent, '(?ms)^##\s*👤\s*人類編輯區\s*\r?\n(.*?)(?=^##\s|\z)')
+        if ($humanMatch.Success) {
+            $humanText = $humanMatch.Groups[1].Value
+            $humanText = $humanText -replace '（你在這裡寫日記內容）', ''
+            $humanText = $humanText -replace '(?m)^-{3,}\s*$', ''
+            if ($humanText.Trim().Length -gt 0) { $diaryEntryCount += 1 }
+        }
+
+        $aiMatch = [regex]::Match($diaryContent, '(?ms)^##\s*🤖\s*AI\s*處理區\s*\r?\n(.*?)(?=^##\s|\z)')
+        if ($aiMatch.Success) {
+            # 不能用裸的 "L1"/"L2"/"L3"/"L4" 當關鍵字——實測對到真的日記發現會
+            # 誤殺「需歸檔：L3 架構釐清與 no_agent cron 清理」這種只是提到 L3
+            # 這個詞、內容其實是正常工作筆記的條目，不是「L3 知識庫維護報告」
+            # 那種定期報告。只用「知識庫維護報告」這個完整詞組去比對，四個等
+            # 級的報告標題都會含這個詞組，不需要另外比對 L1-L4。
+            $reportKeywords = @('早安報告', '週報', '月報', '季報', '年報', '知識庫維護報告')
+            # 一定要「開頭是 HH:MM」才算一個獨立條目——實測對到真的日記發現，
+            # 篇幅比較長的技術類條目內部會再用 ### 分好幾個子段落（例如
+            # 「問題」「處理」「狀態」「改動腳本」這種沒有時間戳的子標題），
+            # 那些不是獨立的一篇，只是同一篇裡面的段落結構，不能全部算成
+            # 各自一篇，會把分數灌得不合理的高。使用者原話「開頭都是時間戳」
+            # 就是這個判斷依據。
+            $headings = [regex]::Matches($aiMatch.Groups[1].Value, '(?m)^###\s+(\d{1,2}:\d{2}\s.+)$')
+            foreach ($h in $headings) {
+                $headingText = $h.Groups[1].Value
+                $isReport = $false
+                foreach ($kw in $reportKeywords) {
+                    if ($headingText -like "*$kw*") { $isReport = $true; break }
+                }
+                if (-not $isReport) { $diaryEntryCount += 1 }
+            }
+        }
     } else {
-        Write-ErrorLog "Diary folder not reachable: $DiaryFolderPath"
+        Write-ErrorLog "Today's diary file not found: $todayDiaryFile"
     }
     # 前幾篇日記效用最大，篇數越多邊際效果越平緩，沒有硬性封頂
     # （1篇=25分／2篇=40分／3篇=50分／5篇=62分／10篇=77分）。
