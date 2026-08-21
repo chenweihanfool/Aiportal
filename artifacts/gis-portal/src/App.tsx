@@ -26,6 +26,16 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.31.0',
+    date: '2026-08-21',
+    summary: '日記篇數改成每 10 分鐘自動更新，不用等 HERMES 每天跑一次的知識庫分數腳本',
+    changes: [
+      '心智指標的 dailyEngagementScore（日記篇數算出來、計入幸福指數的分數）原本規劃要讓 HERMES 的 daily-life-score.py 每天算一次，這次改成直接併進已經存在、每 10 分鐘跑一次的 services/hermes-status/collect.ps1——不新增腳本，單純多一段掃 NAS 日記資料夾算篇數。daily-life-score.py 完全不用改，繼續只管知識庫健康分數',
+      '/api/admin/mind-index 端點改成支援「部分欄位」推送——知識庫健康分數（daily-life-score.py 每天推一次）跟心智基本分（collect.ps1 每 10 分鐘推一次）現在是兩個各自獨立、互不覆蓋的推送來源，共用同一張表、同一個日期列，各自只更新自己負責的欄位',
+      '順手修掉一個連帶發現的問題：collect.ps1 原本只要系統快照那段推送失敗（例如先前的 SSL/DNS 故障）就會整支腳本直接結束，導致近期活動、心智指標這些後面的段落完全不會執行到——這正是「近期活動永遠空白」的真正原因。改成三個段落各自獨立失敗，一個掛掉不會連帶擋住其他兩個',
+    ],
+  },
+  {
     version: '1.30.0',
     date: '2026-08-21',
     summary: '心智指標拿掉完成任務數（跟從容指數重複），改成純看日記篇數、邊際效用遞減的算法',

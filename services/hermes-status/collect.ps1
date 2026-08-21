@@ -24,12 +24,23 @@
     tracks what's already been posted so re-running this script doesn't
     re-post the same lines.
 
+    Also pushes 心智指標's dailyEngagementScore every run (~every 10 min,
+    same cadence as everything else here) by counting today's diary files on
+    the NAS — folded into this existing script rather than a new one, since
+    it already runs frequently and already has the .env/auth/POST plumbing.
+    This intentionally reuses /api/admin/mind-index (not a new endpoint) via
+    a partial push (score-only fields omitted) -- see routes/mindIndex.ts's
+    "two independent pushers" comment. daily-life-score.py keeps owning the
+    heavier once-daily 知識庫健康度 score; this script no longer needs to
+    ask it to compute dailyEngagementScore at all.
+
     Prerequisite (not done by this script): a `.env` file in this same
     directory (copy .env.example, fill in ADMIN_PASSWORD / API_BASE_URL).
 #>
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
+$ScriptHadError = $false
 
 # ── Config ──────────────────────────────────────────────────────────────
 # Wildcard patterns, not exact names — adjust once you can see the real
@@ -46,6 +57,10 @@ $UpdateLogPaths = @{
     "Geospatial"   = "F:\WEBAPP\SRC\Geospatial\update.log"
     "vikunja"      = "F:\WEBAPP\SRC\vikunja\update.log"
 }
+
+# 心智指標的日記篇數——同一天可能不只一篇（例如手機同步的補充檔），所以是
+# 「今天日期開頭、.md 結尾」的檔案數，不是單純檢查一個檔案存不存在。
+$DiaryFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\日記"
 
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
 $LogDir = Join-Path $ScriptDir "logs"
@@ -182,7 +197,12 @@ try {
 }
 catch {
     Write-ErrorLog "Status snapshot collection/POST failed: $_"
-    exit 1
+    # 不再 exit 1——以前這裡失敗會讓整支腳本直接結束，導致下面的近期活動/
+    # 心智指標段落完全不會執行到（這是先前 SSL/DNS 故障期間「近期活動永遠
+    # 空白」的真正原因，不是活動追蹤邏輯本身有問題）。三個段落是各自獨立的
+    # 關注點，一個失敗不該連帶擋住其他兩個，改成記錄錯誤、繼續往下跑，最後
+    # 再統一用 $ScriptHadError 反映整體是否有失敗。
+    $ScriptHadError = $true
 }
 
 # ── Recent activity: tail update.log files, POST new lines only ─────────
@@ -235,12 +255,40 @@ foreach ($source in $UpdateLogPaths.Keys) {
                 Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-activity" -Method Post -Headers $Headers -Body $body | Out-Null
             } catch {
                 Write-ErrorLog "Activity POST failed for $source : $_"
+                $ScriptHadError = $true
             }
         }
         $cursor[$source] = $lines.Count
     } catch {
         Write-ErrorLog "Reading $logPath failed: $_"
+        $ScriptHadError = $true
     }
 }
 
 ($cursor | ConvertTo-Json) | Set-Content -Path $CursorPath -Encoding UTF8
+
+# ── 心智指標：今天的日記篇數 → dailyEngagementScore ──────────────────────
+# 獨立的關注點，跟上面兩段一樣不互相阻擋——這裡失敗不影響快照/近期活動已經
+# 送出去的結果，反之亦然。
+try {
+    $today = Get-Date -Format "yyyy-MM-dd"
+    $diaryEntryCount = 0
+    if (Test-Path $DiaryFolderPath) {
+        $diaryEntryCount = @(Get-ChildItem -Path $DiaryFolderPath -Filter "$today*.md" -File -ErrorAction SilentlyContinue).Count
+    } else {
+        Write-ErrorLog "Diary folder not reachable: $DiaryFolderPath"
+    }
+    # 前幾篇日記效用最大，篇數越多邊際效果越平緩，沒有硬性封頂
+    # （1篇=25分／2篇=40分／3篇=50分／5篇=62分／10篇=77分）。
+    # [math]::Round 是 .NET 的 banker's rounding（四捨六入五取偶，不是常見的
+    # 四捨五入）——5篇算出來剛好卡在 62.5 這個整數邊界，會被捨去變 62 不是
+    # 進位變 63，這裡照實際算出來的值寫，不是隨口舉例。
+    $dailyEngagementScore = [math]::Round(100 * $diaryEntryCount / ($diaryEntryCount + 3))
+    $mindBody = @{ dailyEngagementScore = $dailyEngagementScore; diaryEntryCount = $diaryEntryCount } | ConvertTo-Json
+    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/mind-index" -Method Post -Headers $Headers -Body $mindBody | Out-Null
+} catch {
+    Write-ErrorLog "Diary engagement score collection/POST failed: $_"
+    $ScriptHadError = $true
+}
+
+if ($ScriptHadError) { exit 1 }

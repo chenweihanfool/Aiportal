@@ -17,7 +17,12 @@ export const mindIndexHistoryTable = pgTable("mind_index_history", {
   date: date("date").primaryKey(),
   // 這四個是 HERMES 知識庫健康分數（原本唯一的心智指標）——2026-08-20 起改成
   // 只留著顯示用，不再計入翰翰仔幸福指數（見 dailyEngagementScore 的說明）。
-  score: real("score").notNull(),
+  // score 從 notNull 改 nullable（2026-08-21）：/api/admin/mind-index 現在
+  // 支援「只 push 部分欄位」（見 routes/mindIndex.ts），collect.ps1 每 10
+  // 分鐘只 push dailyEngagementScore/diaryEntryCount，如果那次剛好是當天
+  // 第一筆寫入（daily-life-score.py 還沒跑過），score 欄位就會先是 null，
+  // 等 daily-life-score.py 當天跑完才會補上，不能再要求 notNull。
+  score: real("score"),
   conversion: real("conversion"),
   linkHealth: real("link_health"),
   vitality: real("vitality"),

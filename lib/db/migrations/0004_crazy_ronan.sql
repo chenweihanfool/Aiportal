@@ -1,0 +1,1 @@
+ALTER TABLE "mind_index_history" ALTER COLUMN "score" DROP NOT NULL;
