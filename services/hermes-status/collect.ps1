@@ -25,14 +25,23 @@
     re-post the same lines.
 
     Also pushes 心智指標's dailyEngagementScore every run (~every 10 min,
-    same cadence as everything else here) by counting today's diary files on
-    the NAS — folded into this existing script rather than a new one, since
-    it already runs frequently and already has the .env/auth/POST plumbing.
+    same cadence as everything else here) by counting diary files on the
+    NAS — folded into this existing script rather than a new one, since it
+    already runs frequently and already has the .env/auth/POST plumbing.
     This intentionally reuses /api/admin/mind-index (not a new endpoint) via
     a partial push (score-only fields omitted) -- see routes/mindIndex.ts's
     "two independent pushers" comment. daily-life-score.py keeps owning the
     heavier once-daily 知識庫健康度 score; this script no longer needs to
     ask it to compute dailyEngagementScore at all.
+
+    2026-08-21（HHI v2）: dailyEngagementScore now sums a rolling 3-day
+    window (today + 2 preceding days) instead of just today — a daily
+    reset-to-zero was letting the weakest-link correction's effective
+    weight balloon toward ~30% on any low-writing day. Also pushes a new
+    社交指標（social）POST to /api/admin/social-index, computed from a
+    separate NAS file (social_interactions.jsonl, written by HERMES's own
+    L1/L2 diary pipeline — this script only reads it, never writes it) plus
+    the same diary-based "觀測日" check used for the mind score.
 
     Prerequisite (not done by this script): a `.env` file in this same
     directory (copy .env.example, fill in ADMIN_PASSWORD / API_BASE_URL).
@@ -61,6 +70,12 @@ $UpdateLogPaths = @{
 # 心智指標的日記篇數——一天只有一個 YYYY-MM-DD.md 檔，篇數是看檔案「內容」
 # 裡有幾個時間點記錄，不是檔案數量（處理邏輯見下面 dailyEngagementScore 那段）。
 $DiaryFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\日記"
+
+# 社交指標（HHI v2）的原始資料——HERMES 自己的 L1/L2 日記處理流程額外寫出
+# 的 append-only JSONL，這支腳本只讀不寫，alias 正規化成 person_id 是
+# HERMES 自己的責任（見 social_interactions.jsonl 交接文件）。
+$SocialFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\社交"
+$SocialInteractionsPath = Join-Path $SocialFolderPath "social_interactions.jsonl"
 
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
 $LogDir = Join-Path $ScriptDir "logs"
@@ -267,10 +282,7 @@ foreach ($source in $UpdateLogPaths.Keys) {
 
 ($cursor | ConvertTo-Json) | Set-Content -Path $CursorPath -Encoding UTF8
 
-# ── 心智指標：今天的日記篇數 → dailyEngagementScore ──────────────────────
-# 獨立的關注點，跟上面兩段一樣不互相阻擋——這裡失敗不影響快照/近期活動已經
-# 送出去的結果，反之亦然。
-#
+# ── 日記篇數計算（心智指標的滾動窗口、社交指標的觀測日判定都要用） ──────
 # 一天只有一個 YYYY-MM-DD.md 檔，不是「檔案數 = 篇數」——篇數要看檔案「內容」
 # 裡有幾個時間點記錄。實際格式（由 HERMES 的 collector 寫入）：
 #   ## 👤 人類編輯區          <- 使用者親自寫的，未寫則是預留位置文字
@@ -280,65 +292,139 @@ foreach ($source in $UpdateLogPaths.Keys) {
 #   ### 06:56 需歸檔：AdventureLog 部署與 DB 備份方案
 # 算法：人類編輯區有真的寫內容（不是預留位置文字）就 +1，獨立算一篇；AI 處理
 # 區底下每個 ### 時間戳記條目都 +1，但標題含「早安報告／週報／月報／季報／
-# 年報／L1／L2／L3／L4／知識庫維護報告」這些關鍵字的（腳本自動產生的定期
-# 報告類）不算——「V 任務評論」「需歸檔：...」這種即使是 AI 寫入的，只要不是
-# 定期報告類，一樣算數。
-try {
-    $today = Get-Date -Format "yyyy-MM-dd"
-    $diaryEntryCount = 0
-    $todayDiaryFile = Join-Path $DiaryFolderPath "$today.md"
-    if (Test-Path $todayDiaryFile) {
-        # -Raw + 明確指定 Encoding UTF8——不指定的話 Windows PowerShell 5.1
-        # 對沒有 BOM 的檔案會用系統內碼讀取，這裡要拿檔案內容的中文字串去跟
-        # 下面 script 自己內嵌的中文關鍵字比對，編碼對不上比對永遠不會中，
-        # 跟之前 collect.ps1 自己缺 BOM 導致中文字面值亂碼是同一類地雷。
-        $diaryContent = Get-Content -Path $todayDiaryFile -Raw -Encoding UTF8
+# 年報／知識庫維護報告」這些關鍵字的（腳本自動產生的定期報告類）不算——
+# 「V 任務評論」「需歸檔：...」這種即使是 AI 寫入的，只要不是定期報告類，一
+# 樣算數。2026-08-21（HHI v2）起抽成函式——心智指標的滾動 3 天窗口跟社交指標
+# 的觀測日判定都要對多個檔案重跑同一套邏輯，不只算今天這一個檔案了。
+$ReportKeywords = @('早安報告', '週報', '月報', '季報', '年報', '知識庫維護報告')
 
-        $humanMatch = [regex]::Match($diaryContent, '(?ms)^##\s*👤\s*人類編輯區\s*\r?\n(.*?)(?=^##\s|\z)')
-        if ($humanMatch.Success) {
-            $humanText = $humanMatch.Groups[1].Value
-            $humanText = $humanText -replace '（你在這裡寫日記內容）', ''
-            $humanText = $humanText -replace '(?m)^-{3,}\s*$', ''
-            if ($humanText.Trim().Length -gt 0) { $diaryEntryCount += 1 }
+function Get-DiaryEntryCount {
+    param([string]$FilePath)
+    if (-not (Test-Path $FilePath)) { return 0 }
+    # -Raw + 明確指定 Encoding UTF8——不指定的話 Windows PowerShell 5.1 對沒
+    # 有 BOM 的檔案會用系統內碼讀取，這裡要拿檔案內容的中文字串去跟本檔案自
+    # 己內嵌的中文關鍵字比對，編碼對不上比對永遠不會中，跟之前 collect.ps1
+    # 自己缺 BOM 導致中文字面值亂碼是同一類地雷。
+    $diaryContent = Get-Content -Path $FilePath -Raw -Encoding UTF8
+    $count = 0
+
+    $humanMatch = [regex]::Match($diaryContent, '(?ms)^##\s*👤\s*人類編輯區\s*\r?\n(.*?)(?=^##\s|\z)')
+    if ($humanMatch.Success) {
+        $humanText = $humanMatch.Groups[1].Value
+        $humanText = $humanText -replace '（你在這裡寫日記內容）', ''
+        $humanText = $humanText -replace '(?m)^-{3,}\s*$', ''
+        if ($humanText.Trim().Length -gt 0) { $count += 1 }
+    }
+
+    $aiMatch = [regex]::Match($diaryContent, '(?ms)^##\s*🤖\s*AI\s*處理區\s*\r?\n(.*?)(?=^##\s|\z)')
+    if ($aiMatch.Success) {
+        # 一定要「開頭是 HH:MM」才算一個獨立條目——實測對到真的日記發現，篇
+        # 幅比較長的技術類條目內部會再用 ### 分好幾個子段落（例如「問題」
+        # 「處理」「狀態」「改動腳本」這種沒有時間戳的子標題），那些不是獨
+        # 立的一篇，只是同一篇裡面的段落結構，不能全部算成各自一篇，會把分
+        # 數灌得不合理的高。使用者原話「開頭都是時間戳」就是這個判斷依據。
+        $headings = [regex]::Matches($aiMatch.Groups[1].Value, '(?m)^###\s+(\d{1,2}:\d{2}\s.+)$')
+        foreach ($h in $headings) {
+            $headingText = $h.Groups[1].Value
+            $isReport = $false
+            foreach ($kw in $ReportKeywords) {
+                if ($headingText -like "*$kw*") { $isReport = $true; break }
+            }
+            if (-not $isReport) { $count += 1 }
         }
+    }
 
-        $aiMatch = [regex]::Match($diaryContent, '(?ms)^##\s*🤖\s*AI\s*處理區\s*\r?\n(.*?)(?=^##\s|\z)')
-        if ($aiMatch.Success) {
-            # 不能用裸的 "L1"/"L2"/"L3"/"L4" 當關鍵字——實測對到真的日記發現會
-            # 誤殺「需歸檔：L3 架構釐清與 no_agent cron 清理」這種只是提到 L3
-            # 這個詞、內容其實是正常工作筆記的條目，不是「L3 知識庫維護報告」
-            # 那種定期報告。只用「知識庫維護報告」這個完整詞組去比對，四個等
-            # 級的報告標題都會含這個詞組，不需要另外比對 L1-L4。
-            $reportKeywords = @('早安報告', '週報', '月報', '季報', '年報', '知識庫維護報告')
-            # 一定要「開頭是 HH:MM」才算一個獨立條目——實測對到真的日記發現，
-            # 篇幅比較長的技術類條目內部會再用 ### 分好幾個子段落（例如
-            # 「問題」「處理」「狀態」「改動腳本」這種沒有時間戳的子標題），
-            # 那些不是獨立的一篇，只是同一篇裡面的段落結構，不能全部算成
-            # 各自一篇，會把分數灌得不合理的高。使用者原話「開頭都是時間戳」
-            # 就是這個判斷依據。
-            $headings = [regex]::Matches($aiMatch.Groups[1].Value, '(?m)^###\s+(\d{1,2}:\d{2}\s.+)$')
-            foreach ($h in $headings) {
-                $headingText = $h.Groups[1].Value
-                $isReport = $false
-                foreach ($kw in $reportKeywords) {
-                    if ($headingText -like "*$kw*") { $isReport = $true; break }
-                }
-                if (-not $isReport) { $diaryEntryCount += 1 }
+    return $count
+}
+
+# ── 心智指標：近 3 天滾動窗口篇數總和 → dailyEngagementScore（HHI v2） ────
+# 獨立的關注點，跟上面兩段一樣不互相阻擋——這裡失敗不影響快照/近期活動已經
+# 送出去的結果，反之亦然。
+#
+# 2026-08-21 起改成滾動 3 天窗口（今天+前 2 天），不再只看今天——每天歸零
+# 重來會讓最弱項修正在寫日記較少的當天把心智指標的有效權重放大到接近 30%，
+# 過度主導幸福指數。
+try {
+    $today = Get-Date
+    $n3 = 0
+    $todayDiaryEntryCount = 0
+    for ($i = 0; $i -lt 3; $i++) {
+        # .AddDays 是對底層 DateTime 做運算，不是字串運算，跨月/跨年份界線
+        # 由 .NET 本身正確處理（例如 8/31 往前推會正確落到 7/31 那個月）。
+        $d = $today.AddDays(-$i)
+        $filePath = Join-Path $DiaryFolderPath "$($d.ToString('yyyy-MM-dd')).md"
+        $count = Get-DiaryEntryCount -FilePath $filePath
+        if ($i -eq 0) {
+            $todayDiaryEntryCount = $count
+            if ($count -eq 0 -and -not (Test-Path $filePath)) {
+                Write-ErrorLog "Today's diary file not found: $filePath"
             }
         }
-    } else {
-        Write-ErrorLog "Today's diary file not found: $todayDiaryFile"
+        $n3 += $count
     }
     # 前幾篇日記效用最大，篇數越多邊際效果越平緩，沒有硬性封頂
-    # （1篇=25分／2篇=40分／3篇=50分／5篇=62分／10篇=77分）。
+    # （n3=0→0／5→33／10→50／20→67／30→75／40→80）。
     # [math]::Round 是 .NET 的 banker's rounding（四捨六入五取偶，不是常見的
-    # 四捨五入）——5篇算出來剛好卡在 62.5 這個整數邊界，會被捨去變 62 不是
-    # 進位變 63，這裡照實際算出來的值寫，不是隨口舉例。
-    $dailyEngagementScore = [math]::Round(100 * $diaryEntryCount / ($diaryEntryCount + 3))
-    $mindBody = @{ dailyEngagementScore = $dailyEngagementScore; diaryEntryCount = $diaryEntryCount } | ConvertTo-Json
+    # 四捨五入），但這幾個校準值都沒有剛好卡在 .5 邊界上，跟舊公式一樣安全。
+    $dailyEngagementScore = [math]::Round(100 * $n3 / ($n3 + 10))
+    $mindBody = @{
+        dailyEngagementScore = $dailyEngagementScore
+        diaryEntryCount = $todayDiaryEntryCount   # 不變：只算今天，給卡片顯示統計用
+        diaryEntryCount3Day = $n3                  # 新增：分數實際依據的滾動總和
+    } | ConvertTo-Json
     Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/mind-index" -Method Post -Headers $Headers -Body $mindBody | Out-Null
 } catch {
-    Write-ErrorLog "Diary engagement score collection/POST failed: $_"
+    Write-ErrorLog "Diary engagement score (rolling window) collection/POST failed: $_"
+    $ScriptHadError = $true
+}
+
+# ── 社交指標：近 7 天觀測日/互動統計 → socialScore（HHI v2，新增） ────────
+# 資料來源是 HERMES 自己 L1/L2 日記處理流程額外寫出的 social_interactions.jsonl
+# （見檔頭 $SocialInteractionsPath）——這支腳本只做檔案解析、產出聚合計數，
+# 實際的「聚合計數 -> 三個子分數 -> 綜合分數」算術在 api-server 那邊做（見
+# lib/socialIndex.ts 的 computeSocialIndex），不在這裡重算一次。
+# people.yaml 完全不讀——alias 正規化成標準 person_id 是 HERMES 自己在寫入
+# social_interactions.jsonl 之前就該做完的事，這裡讀到的 person_id 應該已經
+# 是正規化過的值。
+try {
+    $now = Get-Date
+    $windowDates = 0..6 | ForEach-Object { $now.AddDays(-$_).ToString("yyyy-MM-dd") }  # 今天+前 6 天
+
+    # 觀測日：跟心智指標同一套 Get-DiaryEntryCount，>=1 篇就算觀測到——區分
+    # 「沒寫日記」（觀測缺失）跟「沒社交」（真實的 0 訊號）。
+    $observedDayCount = ($windowDates | Where-Object {
+        (Get-DiaryEntryCount -FilePath (Join-Path $DiaryFolderPath "$_.md")) -ge 1
+    }).Count
+
+    $distinctPersonCount = 0
+    $weightedInteractionPoints = 0
+    $daysWithInteraction = 0
+
+    if (Test-Path $SocialInteractionsPath) {
+        $lines = (Get-Content -Path $SocialInteractionsPath -Raw -Encoding UTF8) -split "`n" |
+            Where-Object { $_.Trim().Length -gt 0 }
+        $records = $lines | ForEach-Object {
+            try { $_ | ConvertFrom-Json } catch { $null }  # 格式錯的單行跳過，不整支腳本失敗
+        } | Where-Object { $_ -and $windowDates -contains $_.date }
+
+        $distinctPersonCount = ($records | Select-Object -ExpandProperty person_id -Unique).Count
+        $weightPerType = @{ face_to_face = 3; call = 2; text = 1 }
+        $weightedInteractionPoints = ($records | ForEach-Object {
+            if ($weightPerType.ContainsKey($_.type)) { $weightPerType[$_.type] } else { 0 }
+        } | Measure-Object -Sum).Sum
+        if (-not $weightedInteractionPoints) { $weightedInteractionPoints = 0 }
+        $daysWithInteraction = ($records | Select-Object -ExpandProperty date -Unique).Count
+    }
+
+    $socialBody = @{
+        observedDayCount = $observedDayCount
+        distinctPersonCount = $distinctPersonCount
+        weightedInteractionPoints = $weightedInteractionPoints
+        daysWithInteraction = $daysWithInteraction
+    } | ConvertTo-Json
+    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/social-index" -Method Post -Headers $Headers -Body $socialBody | Out-Null
+} catch {
+    Write-ErrorLog "Social index collection/POST failed: $_"
     $ScriptHadError = $true
 }
 
