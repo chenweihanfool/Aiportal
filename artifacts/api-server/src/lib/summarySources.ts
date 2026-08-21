@@ -1,13 +1,15 @@
 import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, lt } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,
   computeDisplayedScore,
   computeHappinessComponents,
   getHappinessConfigVersion,
+  type HappinessResult,
 } from "./happinessIndex";
 import { fetchMindIndex } from "./mindIndex";
 import { fetchTravelIndex } from "./adventureLog";
+import { fetchSocialIndex } from "./socialIndex";
 
 export interface SummarySource {
   id: string;
@@ -101,6 +103,12 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     isPrivate: true,
     fetch: fetchTravelIndex,
   },
+  {
+    id: "social-index",
+    name: "社交指標",
+    isPrivate: true,
+    fetch: fetchSocialIndex,
+  },
 ];
 // REAL-TIME FETCH — for /api/dashboard on page load (not cached)
 // ─────────────────────────────────────────────
@@ -115,16 +123,15 @@ export interface DashboardSummary {
   data: Record<string, unknown> | null;
 }
 
-/** Fetch all subsystem data directly from their origin APIs (or DB history
- *  for sources like Vikunja that are already persisted). Returns a map
- *  keyed by subsystemId so the dashboard route can assemble the response.
- *  On failure, returns the error as the data payload so the UI shows
- *  "暫時無法取得資料" rather than crashing. */
-export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummary>> {
+/** Fetches every raw subsystem source (pf-cwh, fitnessforge, vikunja,
+ *  mind-index, travel, social-index, ...) concurrently and returns the
+ *  results keyed by subsystemId — no "hhi" entry, no DB write. Shared by
+ *  both fetchFreshSummaries (display path, below) and
+ *  computeAndPersistDailySnapshot (23:55 persist path, further below) so
+ *  neither has to duplicate the fetch-and-catch loop or trigger it twice. */
+async function fetchRawSummaryResults(): Promise<Map<string, DashboardSummary>> {
   const results = new Map<string, DashboardSummary>();
 
-  // Fetch the three raw sources concurrently (pf-cwh, fitnessforge, vikunja)
-  // hhi is derived from them, so it's computed after.
   const rawSources = SUMMARY_SOURCES.filter((s) => s.id !== "hhi");
   const fetchPromises = rawSources.map(async (source) => {
     try {
@@ -154,37 +161,19 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
 
   const rawResults = await Promise.all(fetchPromises);
   rawResults.forEach((r) => results.set(r.subsystemId, r));
+  return results;
+}
 
-  // Compute HHI from the raw results we just fetched (not from DB cache).
-  const pf = results.get("pf-cwh");
-  const ff = results.get("fitnessforge");
-  const vk = results.get("vikunja");
-  const mi = results.get("mind-index");
-  const tv = results.get("travel");
+/** Fetch all subsystem data directly from their origin APIs (or DB history
+ *  for sources like Vikunja that are already persisted). Returns a map
+ *  keyed by subsystemId so the dashboard route can assemble the response.
+ *  On failure, returns the error as the data payload so the UI shows
+ *  "暫時無法取得資料" rather than crashing. */
+export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummary>> {
+  const results = await fetchRawSummaryResults();
 
-  const lifeFreedomScore = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
-  const fitnessHabitScore = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
-  const busynessScore = vk?.status === "ok" ? (vk.data)?.busyIndex as number | null : null;
-  // 2026-08-20 起改讀 dailyEngagementScore（當天日記篇數＋完成任務數），不再
-  // 讀知識庫健康分數 score——那組分數還留著給 MindIndexCard 顯示，只是不計
-  // 入 HHI 了。daily-life-score.py 補這個欄位之前，這裡會是 null，跟其他
-  // 缺資料的維度一樣走重新正規化，不會顯示假分數。
-  const mindScore = mi?.status === "ok" ? (mi.data)?.dailyEngagementScore as number | null : null;
-  // The file read can succeed while HERMES's own scoring script hasn't run
-  // in a while — that's a stale *score*, not a fetch failure, so it doesn't
-  // show up as mi.status === "error". Surfaced via usingStaleData instead.
-  const mindStale = mi?.status === "ok" ? (mi.data)?.stale === true : false;
-  const travelScore = tv?.status === "ok" ? (tv.data)?.travelScore as number | null : null;
-
-  const result = computeHappinessComponents({
-    lifeFreedomScore,
-    fitnessHabitScore,
-    busynessScore,
-    mindScore,
-    travelScore,
-  });
-
-  const hhiData = await computeHappinessIndexFresh(result, busynessScore, mindStale);
+  const { result, busynessScore, usingStaleData } = extractHappinessResult(results);
+  const hhiData = await buildHappinessDisplayData(result, busynessScore, usingStaleData);
   const hhiEntry: DashboardSummary = {
     subsystemId: "hhi",
     name: "翰翰仔幸福指數",
@@ -199,31 +188,74 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   return results;
 }
 
-/** Recompute HHI from a live fetch and upsert today's row to
- *  happiness_index_history, keyed by date — safe to call on every page load
- *  since it's idempotent, not just once a day. This is now the only place
- *  that writes to that table (the old cron-based writer was removed when the
- *  dashboard switched to real-time fetch). Reads yesterday's displayedScore
- *  from the DB so day-over-day smoothing keeps working. */
-async function computeHappinessIndexFresh(
-  result: import("./happinessIndex").HappinessResult,
+/** Pure extraction step shared by the display path (fetchFreshSummaries,
+ *  above) and the 23:55 daily-persist path (computeAndPersistDailySnapshot,
+ *  below) — pulls each dimension's score out of the already-fetched raw
+ *  results and runs computeHappinessComponents. No DB write happens here. */
+function extractHappinessResult(
+  results: Map<string, DashboardSummary>
+): { result: HappinessResult; busynessScore: number | null; usingStaleData: boolean } {
+  const pf = results.get("pf-cwh");
+  const ff = results.get("fitnessforge");
+  const vk = results.get("vikunja");
+  const mi = results.get("mind-index");
+  const tv = results.get("travel");
+  const si = results.get("social-index");
+
+  const lifeFreedomScore = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
+  const fitnessHabitScore = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
+  const busynessScore = vk?.status === "ok" ? (vk.data)?.busyIndex as number | null : null;
+  // 2026-08-20 起改讀 dailyEngagementScore（2026-08-21 起是近 3 天滾動窗口日
+  // 記篇數，見 HHI v2），不再讀知識庫健康分數 score——那組分數還留著給
+  // MindIndexCard 顯示，只是不計入 HHI 了。daily-life-score.py 補這個欄位之
+  // 前，這裡會是 null，跟其他缺資料的維度一樣走重新正規化，不會顯示假分數。
+  const mindScore = mi?.status === "ok" ? (mi.data)?.dailyEngagementScore as number | null : null;
+  const travelScore = tv?.status === "ok" ? (tv.data)?.travelScore as number | null : null;
+  const socialScore = si?.status === "ok" ? (si.data)?.socialScore as number | null : null;
+
+  // 心智指標／社交指標都是同一種「檔案讀取成功，但值本身可能是舊的」情境
+  // （collect.ps1 停止推送一段時間），跟其他來源的 fetch 失敗（status ===
+  // "error"）是不同概念——兩者都算進 usingStaleData，避免只有心智過期會顯
+  // 示過期警示、社交過期卻默默不顯示的不一致。
+  const mindStale = mi?.status === "ok" ? (mi.data)?.stale === true : false;
+  const socialStale = si?.status === "ok" ? (si.data)?.stale === true : false;
+  const usingStaleData = mindStale || socialStale;
+
+  const result = computeHappinessComponents({
+    lifeFreedomScore,
+    fitnessHabitScore,
+    busynessScore,
+    mindScore,
+    travelScore,
+    socialScore,
+  });
+
+  return { result, busynessScore, usingStaleData };
+}
+
+const HAPPINESS_WEIGHTS = {
+  lifeFreedomWeight: HAPPINESS_CONFIG.lifeFreedomWeight,
+  fitnessWeight: HAPPINESS_CONFIG.fitnessWeight,
+  calmWeight: HAPPINESS_CONFIG.calmWeight,
+  mindWeight: HAPPINESS_CONFIG.mindWeight,
+  travelWeight: HAPPINESS_CONFIG.travelWeight,
+  socialWeight: HAPPINESS_CONFIG.socialWeight,
+};
+
+/** Builds the /api/dashboard display payload — reads happiness_index_history
+ *  but never writes it (writing is now exclusively jobs/dailySnapshotJob.ts's
+ *  job, once/day at 23:55 Taipei). Before today's row has been snapshotted,
+ *  this returns a live recompute (isSnapshotFinal: false, "今日暫定") smoothed
+ *  against the most recent already-persisted day; once today's snapshot
+ *  exists, it freezes on that exact stored row (isSnapshotFinal: true) so the
+ *  number stops moving for the rest of the day and stays byte-identical to
+ *  what /api/happiness/history will later show for today. */
+async function buildHappinessDisplayData(
+  result: HappinessResult,
   busynessScore: number | null,
-  mindStale: boolean
+  usingStaleData: boolean
 ): Promise<Record<string, unknown>> {
-  // Every other input here is a genuinely fresh live fetch — the one
-  // exception is mind-index, where a successful file read can still carry a
-  // score HERMES's own scoring script hasn't updated in a while (see
-  // mindIndex.ts). That's the only source of staleness left since the
-  // real-time-fetch switch, so it drives this directly.
-  const usingStaleData = mindStale;
   const configVersion = getHappinessConfigVersion();
-  const weights = {
-    lifeFreedomWeight: HAPPINESS_CONFIG.lifeFreedomWeight,
-    fitnessWeight: HAPPINESS_CONFIG.fitnessWeight,
-    calmWeight: HAPPINESS_CONFIG.calmWeight,
-    mindWeight: HAPPINESS_CONFIG.mindWeight,
-    travelWeight: HAPPINESS_CONFIG.travelWeight,
-  };
 
   if (result.finalScore === null) {
     // All inputs missing — nothing to persist, nothing fake to show.
@@ -233,30 +265,110 @@ async function computeHappinessIndexFresh(
       baseScore: null,
       weakestScore: null,
       weakestComponent: null,
+      isSnapshotFinal: false,
       lifeFreedomScore: null,
       fitnessHabitScore: null,
       calmScore: null,
       mindScore: null,
       travelScore: null,
+      socialScore: null,
       busynessScore: null,
       availableComponents: [],
       usingStaleData,
       configVersion,
-      weights,
+      weights: HAPPINESS_WEIGHTS,
     };
   }
 
-  const now = new Date();
-  const today = taipeiDateString(now);
-  const yesterday = taipeiDateString(new Date(now.getTime() - 24 * 60 * 60 * 1000));
-
-  const [yesterdayRow] = await db
-    .select({ displayedScore: happinessIndexHistoryTable.displayedScore })
+  const today = taipeiDateString(new Date());
+  const [todayRow] = await db
+    .select()
     .from(happinessIndexHistoryTable)
-    .where(eq(happinessIndexHistoryTable.date, yesterday))
+    .where(eq(happinessIndexHistoryTable.date, today))
     .limit(1);
 
-  const displayedScore = computeDisplayedScore(result.finalScore, yesterdayRow?.displayedScore ?? null);
+  let finalScore: number;
+  let displayedScore: number;
+  let baseScore: number;
+  let weakestScore: number;
+  let weakestComponent: string;
+  let isSnapshotFinal: boolean;
+
+  if (todayRow) {
+    // 今天 23:55 已經快照過了——直接凍結用已存的那筆，不要再即時重算，這樣
+    // 數字整天不會跳動，也保證跟 /api/happiness/history 之後顯示的今天完全
+    // 一致。這正是「今日暫定」語意的關鍵：一旦快照過，就不再是暫定的。
+    finalScore = todayRow.finalScore;
+    displayedScore = todayRow.displayedScore;
+    baseScore = todayRow.baseScore;
+    weakestScore = todayRow.weakestScore;
+    weakestComponent = todayRow.weakestComponent;
+    isSnapshotFinal = true;
+  } else {
+    // 今天還沒被快照——這就是「今日暫定」：即時 finalScore，跟「最近一筆已
+    // 存在的 displayedScore」平滑（不是嚴格等於「昨天」日期，見
+    // computeAndPersistDailySnapshot 旁的穩健性說明，這裡是同一個查詢）。
+    const [priorRow] = await db
+      .select({ displayedScore: happinessIndexHistoryTable.displayedScore })
+      .from(happinessIndexHistoryTable)
+      .where(lt(happinessIndexHistoryTable.date, today))
+      .orderBy(desc(happinessIndexHistoryTable.date))
+      .limit(1);
+    finalScore = result.finalScore;
+    displayedScore = computeDisplayedScore(finalScore, priorRow?.displayedScore ?? null);
+    baseScore = result.baseScore!;
+    weakestScore = result.weakestScore!;
+    weakestComponent = result.weakestComponent!;
+    isSnapshotFinal = false;
+  }
+
+  return {
+    finalScore,
+    displayedScore,
+    baseScore,
+    weakestScore,
+    weakestComponent,
+    isSnapshotFinal,
+    lifeFreedomScore: result.components.lifeFreedomScore,
+    fitnessHabitScore: result.components.fitnessHabitScore,
+    calmScore: result.components.calmScore,
+    mindScore: result.components.mindScore,
+    travelScore: result.components.travelScore,
+    socialScore: result.components.socialScore,
+    busynessScore,
+    availableComponents: result.components.availableComponents,
+    usingStaleData,
+    configVersion,
+    weights: HAPPINESS_WEIGHTS,
+  };
+}
+
+/** Called ONLY by jobs/dailySnapshotJob.ts's 23:55 Asia/Taipei timer — the
+ *  only writer of happiness_index_history going forward (previously
+ *  /api/dashboard upserted on every page load; see this module's other
+ *  functions for why that changed).
+ *
+ *  穩健性說明（刻意的小偏離，不是隨口改動）：把「找昨天」從 `date = yesterday`
+ *  的精確比對改成 `date < today ORDER BY date DESC LIMIT 1`。這是必要的，不
+ *  只是順手更好：以前每次開頁面都會重新 upsert，就算漏了一天，下次請求就自
+ *  我修復；改成一天只快照一次之後，如果剛好某天 23:55 那次計時器失敗，嚴格
+ *  比對「昨天」會找不到任何 row，永久打斷平滑鏈——即使更早之前明明有資料。
+ *  `<` + `ORDER BY DESC LIMIT 1` 在正常情況下行為完全一樣，但在計時器偶爾
+ *  失敗時更正確。 */
+export async function computeAndPersistDailySnapshot(): Promise<void> {
+  const results = await fetchRawSummaryResults();
+  const { result } = extractHappinessResult(results);
+
+  if (result.finalScore === null) return; // 沒東西可存，維持「資料準備中」
+
+  const today = taipeiDateString(new Date());
+  const [priorRow] = await db
+    .select({ displayedScore: happinessIndexHistoryTable.displayedScore })
+    .from(happinessIndexHistoryTable)
+    .where(lt(happinessIndexHistoryTable.date, today))
+    .orderBy(desc(happinessIndexHistoryTable.date))
+    .limit(1);
+  const displayedScore = computeDisplayedScore(result.finalScore, priorRow?.displayedScore ?? null);
 
   const historyRow = {
     date: today,
@@ -266,7 +378,7 @@ async function computeHappinessIndexFresh(
     weakestScore: result.weakestScore!,
     weakestComponent: result.weakestComponent!,
     availableComponents: result.components.availableComponents,
-    configVersion,
+    configVersion: getHappinessConfigVersion(),
   };
 
   await db
@@ -276,22 +388,4 @@ async function computeHappinessIndexFresh(
       target: happinessIndexHistoryTable.date,
       set: { ...historyRow, computedAt: new Date() },
     });
-
-  return {
-    finalScore: result.finalScore,
-    displayedScore,
-    baseScore: result.baseScore,
-    weakestScore: result.weakestScore,
-    weakestComponent: result.weakestComponent,
-    lifeFreedomScore: result.components.lifeFreedomScore,
-    fitnessHabitScore: result.components.fitnessHabitScore,
-    calmScore: result.components.calmScore,
-    mindScore: result.components.mindScore,
-    travelScore: result.components.travelScore,
-    busynessScore,
-    availableComponents: result.components.availableComponents,
-    usingStaleData,
-    configVersion,
-    weights,
-  };
 }

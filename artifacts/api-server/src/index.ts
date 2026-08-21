@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startSummaryFetchJob } from "./jobs/summaryFetchJob";
+import { startDailySnapshotJob } from "./jobs/dailySnapshotJob";
 
 const rawPort = process.env["PORT"];
 
@@ -26,3 +27,4 @@ app.listen(port, (err) => {
 });
 
 startSummaryFetchJob();
+startDailySnapshotJob();

@@ -1,7 +1,7 @@
 // 翰翰仔幸福指數 (Hanhan Happiness Index / HHI) — a reflective dashboard-navigation
-// metric, not a medical, psychological, or scientific diagnosis. Combines five
-// composite indices (人生自由/運動習慣/忙碌→從容/心智指標/旅遊生活) into one
-// number via a weighted average with a "weakest link" correction and
+// metric, not a medical, psychological, or scientific diagnosis. Combines six
+// composite indices (人生自由/運動習慣/忙碌→從容/心智指標/社交指標/旅遊生活)
+// into one number via a weighted average with a "weakest link" correction and
 // day-over-day smoothing.
 //
 // WARNING — changing any weight below breaks longitudinal comparability
@@ -19,6 +19,7 @@ export interface HappinessConfig {
   calmWeight: number;
   mindWeight: number;
   travelWeight: number;
+  socialWeight: number;
   weakestLinkWeight: number;
   smoothingTodayWeight: number;
   smoothingYesterdayWeight: number;
@@ -36,12 +37,22 @@ export interface HappinessConfig {
 // score, which is more "did HERMES's vault stay healthy" than "how is
 // 翰翰仔 doing today". The knowledge-base score is still computed and
 // displayed (MindIndexCard), just no longer part of this composite.
+//
+// 2026-08-21 (HHI v2): added socialWeight (社交指標，全被動日記萃取，見
+// lib/socialIndex.ts). Weights rebalanced to make room: lifeFreedom
+// 31->27, fitness 20->18, calm 17->15, mind 17->15, travel 15->12, social
+// new at 13. Also switched mindWeight's input from a single-day count to a
+// rolling 3-day sum (still reads dailyEngagementScore, see
+// mind_index_history's diaryEntryCount3Day) — a daily reset-to-zero was
+// letting the weakest-link correction's effective weight balloon toward
+// ~30% on any low-writing day, over-dominating the composite.
 export const HAPPINESS_CONFIG: HappinessConfig = {
-  lifeFreedomWeight: 0.31,
-  fitnessWeight: 0.20,
-  calmWeight: 0.17,
-  mindWeight: 0.17,
-  travelWeight: 0.15,
+  lifeFreedomWeight: 0.27,
+  fitnessWeight: 0.18,
+  calmWeight: 0.15,
+  mindWeight: 0.15,
+  travelWeight: 0.12,
+  socialWeight: 0.13,
   weakestLinkWeight: 0.15,
   smoothingTodayWeight: 0.70,
   smoothingYesterdayWeight: 0.30,
@@ -53,11 +64,14 @@ if (
       HAPPINESS_CONFIG.fitnessWeight +
       HAPPINESS_CONFIG.calmWeight +
       HAPPINESS_CONFIG.mindWeight +
-      HAPPINESS_CONFIG.travelWeight -
+      HAPPINESS_CONFIG.travelWeight +
+      HAPPINESS_CONFIG.socialWeight -
       1
   ) > 1e-9
 ) {
-  throw new Error("HAPPINESS_CONFIG base weights (lifeFreedom+fitness+calm+mind+travel) must sum to 1.0");
+  throw new Error(
+    "HAPPINESS_CONFIG base weights (lifeFreedom+fitness+calm+mind+travel+social) must sum to 1.0"
+  );
 }
 if (
   Math.abs(HAPPINESS_CONFIG.smoothingTodayWeight + HAPPINESS_CONFIG.smoothingYesterdayWeight - 1) > 1e-9
@@ -88,12 +102,13 @@ export interface HappinessInputs {
   lifeFreedomScore: number | null;
   fitnessHabitScore: number | null;
   busynessScore: number | null; // lower is better; converted to calmScore below
-  mindScore: number | null; // dailyEngagementScore（當天日記篇數＋完成任務數），0-100，higher is better
-  travelScore: number | null; // AdventureLog 最近一次已結束行程的天數換算，0-100，higher is better
+  mindScore: number | null; // dailyEngagementScore（近 3 天滾動窗口日記篇數），0-100，higher is better
+  travelScore: number | null; // AdventureLog recency+頻率+期待加分換算，0-100，higher is better
+  socialScore: number | null; // 近 7 天廣度/互動強度/連結率換算，0-100，higher is better
 }
 
 interface Dimension {
-  key: "lifeFreedom" | "fitness" | "calm" | "mind" | "travel";
+  key: "lifeFreedom" | "fitness" | "calm" | "mind" | "travel" | "social";
   label: string;
   value: number;
   weight: number;
@@ -105,7 +120,8 @@ export interface HappinessComponents {
   calmScore: number | null; // clamp(100 - busynessScore, 0, 100)
   mindScore: number | null;
   travelScore: number | null;
-  availableComponents: Array<"lifeFreedom" | "fitness" | "calm" | "mind" | "travel">;
+  socialScore: number | null;
+  availableComponents: Array<"lifeFreedom" | "fitness" | "calm" | "mind" | "travel" | "social">;
 }
 
 export interface HappinessResult {
@@ -117,7 +133,14 @@ export interface HappinessResult {
   components: HappinessComponents;
 }
 
-const DIMENSION_LABELS = { lifeFreedom: "人生自由", fitness: "健身習慣", calm: "生活從容", mind: "心智指標", travel: "旅遊生活" } as const;
+const DIMENSION_LABELS = {
+  lifeFreedom: "人生自由",
+  fitness: "健身習慣",
+  calm: "生活從容",
+  mind: "心智指標",
+  travel: "旅遊生活",
+  social: "社交指標",
+} as const;
 
 /** Pure calculation — no DB/network access, so it's directly unit-testable
  * against the spec's worked examples without mocking anything. */
@@ -133,6 +156,7 @@ export function computeHappinessComponents(
     { key: "calm", value: calmScore, weight: config.calmWeight },
     { key: "mind", value: inputs.mindScore, weight: config.mindWeight },
     { key: "travel", value: inputs.travelScore, weight: config.travelWeight },
+    { key: "social", value: inputs.socialScore, weight: config.socialWeight },
   ];
   const available: Dimension[] = allDimensions
     .filter((d): d is { key: Dimension["key"]; value: number; weight: number } => d.value !== null)
@@ -144,6 +168,7 @@ export function computeHappinessComponents(
     calmScore,
     mindScore: inputs.mindScore,
     travelScore: inputs.travelScore,
+    socialScore: inputs.socialScore,
     availableComponents: available.map((d) => d.key),
   };
 

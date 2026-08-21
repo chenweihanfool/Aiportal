@@ -26,9 +26,13 @@ export interface MindIndexData {
   rhythm: number | null;
   rhythmTrendPct: number | null;
   partial: boolean;
-  // HHI 心智維度改讀這三個——當天日記篇數＋完成任務數算出來的基本分。
+  // HHI 心智維度改讀 dailyEngagementScore——2026-08-21 起（HHI v2）是近 3 天
+  // 滾動窗口（diaryEntryCount3Day）算出來的，不再是單看當天。diaryEntryCount
+  // 保留只算今天，給卡片「日記篇數」顯示統計用；tasksCompletedCount 已不影
+  // 響 dailyEngagementScore（跟從容指數重複，見 mind_index_history schema）。
   dailyEngagementScore: number | null;
   diaryEntryCount: number | null;
+  diaryEntryCount3Day: number | null;
   tasksCompletedCount: number | null;
   updatedAt: string | null;
   stale: boolean;
@@ -59,6 +63,7 @@ export async function fetchMindIndex(): Promise<MindIndexData> {
     partial: row.partial,
     dailyEngagementScore: row.dailyEngagementScore,
     diaryEntryCount: row.diaryEntryCount,
+    diaryEntryCount3Day: row.diaryEntryCount3Day,
     tasksCompletedCount: row.tasksCompletedCount,
     updatedAt: row.computedAt.toISOString(),
     stale,

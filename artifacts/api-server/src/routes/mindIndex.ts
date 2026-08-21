@@ -55,6 +55,8 @@ router.post("/admin/mind-index", async (req: Request, res: Response) => {
   if (dailyEngagementScore !== undefined) fields.dailyEngagementScore = dailyEngagementScore;
   const diaryEntryCount = num("diaryEntryCount");
   if (diaryEntryCount !== undefined) fields.diaryEntryCount = diaryEntryCount;
+  const diaryEntryCount3Day = num("diaryEntryCount3Day");
+  if (diaryEntryCount3Day !== undefined) fields.diaryEntryCount3Day = diaryEntryCount3Day;
   const tasksCompletedCount = num("tasksCompletedCount");
   if (tasksCompletedCount !== undefined) fields.tasksCompletedCount = tasksCompletedCount;
 
