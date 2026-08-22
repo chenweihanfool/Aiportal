@@ -1885,13 +1885,27 @@ function SupportStats({ items }: { items: Array<{ label: string; value: string; 
 // label/formula rows. Works identically on mouse and touch, unlike the
 // native `title` hover tooltip this replaced (which never triggers on
 // mobile since there's no hover state to trigger it).
-function FormulaToggle({ expanded, onToggle }: { expanded: boolean; onToggle: (e: React.MouseEvent) => void }) {
+// labelCollapsed/labelExpanded 預設是「公式說明」——2026-08-21 起大部分卡片
+// 的 FormulaPanel 已經改成一律顯示、不用點開了（見各卡片自己的說明），這個
+// 元件現在只剩「還有歷史趨勢圖要不要展開」這種用途在用，所以留了可自訂文字
+// 的空間，不是每個呼叫點都還在講「公式說明」。
+function FormulaToggle({
+  expanded,
+  onToggle,
+  labelCollapsed = '公式說明 ▼',
+  labelExpanded = '收起公式說明 ▲',
+}: {
+  expanded: boolean
+  onToggle: (e: React.MouseEvent) => void
+  labelCollapsed?: string
+  labelExpanded?: string
+}) {
   return (
     <div
       onClick={onToggle}
       style={{ marginTop: '0.6rem', textAlign: 'right', fontSize: '10.5px', color: 'rgba(192,132,252,0.7)', cursor: 'pointer' }}
     >
-      {expanded ? '收起公式說明 ▲' : '公式說明 ▼'}
+      {expanded ? labelExpanded : labelCollapsed}
     </div>
   )
 }
@@ -1929,13 +1943,13 @@ function PfCwhSummaryBody({ data, expanded, onToggleExpand }: { data: Record<str
     <div style={{ flex: 1 }}>
       <HeroIndex label="人生自由指數" score={lifeFreedomIndex} />
       <SupportStats items={items} />
-      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
-      {expanded && (
-        <FormulaPanel rows={[
-          { label: '人生自由指數', formula: '資產分／報酬分／休假配速分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均，不會整個是 0）' },
-          ...items,
-        ]} />
-      )}
+      {/* 2026-08-21 起打分原因一律直接顯示，不用點「公式說明」才看得到——旅遊
+          生活卡片曾經因為算法改版但公式說明藏在收合面板裡，使用者看著低分完
+          全查不出原因，才發現這個問題。 */}
+      <FormulaPanel rows={[
+        { label: '人生自由指數', formula: '資產分／報酬分／休假配速分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均，不會整個是 0）' },
+        ...items,
+      ]} />
     </div>
   )
 }
@@ -2039,13 +2053,10 @@ function FitnessForgeSummaryBody({ data, expanded, onToggleExpand }: { data: Rec
       <div style={{ flex: '1 1 320px', minWidth: 0 }}>
         <HeroIndex label="運動習慣指數" score={habitIndex} />
         <SupportStats items={items} />
-        <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
-        {expanded && (
-          <FormulaPanel rows={[
-            { label: '運動習慣指數', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）；訓練量分等三項已依「本週已過幾分之幾」配速調整，不是單純比對整週終點' },
-            ...items,
-          ]} />
-        )}
+        <FormulaPanel rows={[
+          { label: '運動習慣指數', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）；訓練量分等三項已依「本週已過幾分之幾」配速調整，不是單純比對整週終點' },
+          ...items,
+        ]} />
       </div>
       <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={340} color="#c084fc" />
     </div>
@@ -2087,13 +2098,10 @@ function VikunjaSummaryBody({ data, expanded, onToggleExpand }: { data: Record<s
     <div style={{ flex: 1 }}>
       <HeroIndex label="從容指數" score={calmIndex} />
       <SupportStats items={items} />
-      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
-      {expanded && (
-        <FormulaPanel rows={[
-          { label: '從容指數', formula: '100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容，跟其他卡片方向一致' },
-          ...items,
-        ]} />
-      )}
+      <FormulaPanel rows={[
+        { label: '從容指數', formula: '100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容，跟其他卡片方向一致' },
+        ...items,
+      ]} />
     </div>
   )
 }
@@ -2107,23 +2115,34 @@ function AdventureLogSummaryBody({ data, expanded, onToggleExpand }: { data: Rec
   const travelScore = typeof data['travelScore'] === 'number' ? data['travelScore'] : null
   const daysSinceLastTrip = typeof data['daysSinceLastTrip'] === 'number' ? data['daysSinceLastTrip'] : null
   const lastTripEndDate = typeof data['lastTripEndDate'] === 'string' ? data['lastTripEndDate'] : null
+  // HHI v2（2026-08-21）新增：recencyScore/frequencyScore/tripDaysLast180/
+  // anticipationBonus/hasUpcomingTrip 這幾個欄位 adventureLog.ts 那邊早就在
+  // 回傳了，但這個卡片一直沒更新去顯示——導致使用者看著「距上次旅行 14 天」
+  // 這種偏高的 recency 卻搭配偏低的總分，完全看不出來是 frequencyScore（近
+  // 180 天累積行程天數，20 天封頂）在拉低分數，只補了這裡，不影響任何計分
+  // 邏輯本身。
+  const recencyScore = typeof data['recencyScore'] === 'number' ? data['recencyScore'] : null
+  const frequencyScore = typeof data['frequencyScore'] === 'number' ? data['frequencyScore'] : null
+  const tripDaysLast180 = typeof data['tripDaysLast180'] === 'number' ? data['tripDaysLast180'] : null
+  const anticipationBonus = typeof data['anticipationBonus'] === 'number' ? data['anticipationBonus'] : 0
+  const hasUpcomingTrip = data['hasUpcomingTrip'] === true
 
   const items = [
-    { label: '距上次旅行', value: daysSinceLastTrip !== null ? `${daysSinceLastTrip} 天` : '尚無紀錄', formula: '距離最近一次已結束行程的天數（還沒發生的計畫中行程不算）' },
+    { label: '距上次旅行', value: daysSinceLastTrip !== null ? `${daysSinceLastTrip} 天` : '尚無紀錄', formula: '距離最近一次已結束行程的天數（還沒發生的計畫中行程不算）——換算成 recency 子分數' },
     { label: '最近一次行程結束', value: lastTripEndDate ? new Date(lastTripEndDate).toLocaleDateString('zh-TW') : '—', formula: 'AdventureLog 裡最近一筆已結束行程的結束日期' },
+    { label: 'Recency 子分數', value: recencyScore !== null ? String(recencyScore) : '—', formula: '3 天內剛玩回來 = 100 分，之後線性遞減，約 93 天沒出去玩 = 0 分' },
+    { label: 'Frequency 子分數', value: frequencyScore !== null ? String(frequencyScore) : '—', formula: `min(100, round(近 180 天累積行程天數 ÷ 20 × 100))——只去過一次短行程，就算剛回來，這項也會偏低${tripDaysLast180 !== null ? `（目前近 180 天累積 ${tripDaysLast180} 天）` : ''}` },
+    { label: '期待加分', value: hasUpcomingTrip ? `+${anticipationBonus}` : '無', formula: '有已排定但還沒發生的行程 +5 分（開關預設開啟）' },
   ]
 
   return (
     <div style={{ flex: 1 }}>
       <HeroIndex label="旅遊生活" score={travelScore} />
       <SupportStats items={items} />
-      <FormulaToggle expanded={expanded} onToggle={onToggleExpand} />
-      {expanded && (
-        <FormulaPanel rows={[
-          { label: '旅遊生活', formula: '3 天內剛玩回來 = 100 分，之後線性遞減，約 93 天沒出去玩 = 0 分；只看已結束的行程，反映「最近有沒有出去玩」，不是「有沒有計畫」' },
-          ...items,
-        ]} />
-      )}
+      <FormulaPanel rows={[
+        { label: '旅遊生活（HHI v2）', formula: 'travelScore = clamp(round(0.5 × Recency + 0.5 × Frequency) + 期待加分, 0, 100)——不再只看距上次旅行天數，只去過一次短行程即使剛回來，總分也不會滿分，要維持一定的整體旅遊頻率才行' },
+        ...items,
+      ]} />
     </div>
   )
 }
@@ -2300,13 +2319,10 @@ function MindIndexCard({
             )}
           </div>
           <SupportStats items={engagementItems} />
-          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} />
-          {expanded && (
-            <FormulaPanel rows={[
-              { label: '心智指標（計入幸福指數）', formula: 'dailyEngagementScore = round(100 × 日記篇數 ÷ (日記篇數 + 3))，前幾篇日記效用最大，篇數越多邊際效果越平緩（沒有完成任務數了——任務完成度已經是從容指數在算，不重複計）' },
-              ...engagementItems,
-            ]} />
-          )}
+          <FormulaPanel rows={[
+            { label: '心智指標（計入幸福指數，HHI v2 滾動 3 天窗口）', formula: 'dailyEngagementScore = round(100 × 近 3 天篇數總和 ÷ (近 3 天篇數總和 + 10))，不再只看今天——每天歸零重算會讓某天寫得少時被最弱項修正過度放大' },
+            ...engagementItems,
+          ]} />
 
           {/* 知識庫健康度——原本唯一的「心智指標」，2026-08-20 起移出 HHI，只
               保留顯示。獨立區塊、獨立虛線分隔，避免使用者誤以為這個數字也
@@ -2326,16 +2342,15 @@ function MindIndexCard({
                   {partial && <span style={{ fontSize: '10.5px', color: '#fbbf24' }}>部分子分數缺項</span>}
                 </div>
                 <SupportStats items={knowledgeItems} />
-                {expanded && (
-                  <FormulaPanel rows={[
-                    { label: '知識庫健康度', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均，任一維度崩壞會拖累總分；缺項用可用的算並標記 partial' },
-                    ...knowledgeItems,
-                  ]} />
-                )}
+                <FormulaPanel rows={[
+                  { label: '知識庫健康度', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均，任一維度崩壞會拖累總分；缺項用可用的算並標記 partial' },
+                  ...knowledgeItems,
+                ]} />
               </>
             )}
           </div>
 
+          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="歷史趨勢 ▼" labelExpanded="收起歷史趨勢 ▲" />
           {expanded && (
             <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
               <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>知識庫健康度歷史趨勢</div>
@@ -2486,13 +2501,11 @@ function SocialIndexCard({
             )}
           </div>
           <SupportStats items={socialItems} />
-          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} />
-          {expanded && (
-            <FormulaPanel rows={[
-              { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)——全被動日記萃取，沒有問卷；跟心智指標一樣源自日記，寫作頻率會造成部分共線' },
-              ...socialItems,
-            ]} />
-          )}
+          <FormulaPanel rows={[
+            { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)——全被動日記萃取，沒有問卷；跟心智指標一樣源自日記，寫作頻率會造成部分共線' },
+            ...socialItems,
+          ]} />
+          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="歷史趨勢 ▼" labelExpanded="收起歷史趨勢 ▲" />
           {expanded && (
             <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
               <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>社交指標歷史趨勢</div>
@@ -2867,33 +2880,37 @@ function HappinessHeroCard({
           {formatMinutesAgo(summary?.fetchedAt ?? null)}
           {usingStaleData ? <span style={{ color: '#fbbf24', marginLeft: '8px' }}>· 部分資料為最近可用值</span> : null}
         </span>
-        <span style={{ fontSize: '10.5px', color: 'rgba(192,132,252,0.7)' }}>{expanded ? '收起 ▲' : '展開明細 ▼'}</span>
+        <span style={{ fontSize: '10.5px', color: 'rgba(192,132,252,0.7)' }}>{expanded ? '收起趨勢圖 ▲' : '歷史趨勢圖 ▼'}</span>
+      </div>
+
+      {/* 基礎分/最弱項分數這幾個數字 2026-08-21 起一律直接顯示，不用點開才看
+          得到——這就是「短板修正後」怎麼從六個原始分數算出來的過程，藏在收合
+          面板裡等於是把打分原因藏起來，跟這次補齊各張卡片公式說明的理由一致。
+          只有歷史趨勢圖還留在展開面板裡，那是額外的深入資訊，不是「為什麼」。 */}
+      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {[
+          ['基礎分（加權平均）', baseScore !== null ? baseScore.toFixed(2) : '—'],
+          ['最弱項分數', weakestScore !== null ? weakestScore.toFixed(2) : '—'],
+          ['短板修正後（平滑前）', finalScore !== null ? String(finalScore) : '—'],
+          ['平滑後（目前顯示值）', String(displayedScore)],
+        ].map(([label, value]) => (
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
+            <span style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</span>
+            <span style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '500' }}>{value}</span>
+          </div>
+        ))}
       </div>
 
       {expanded && (
-        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {[
-            ['基礎分（加權平均）', baseScore !== null ? baseScore.toFixed(2) : '—'],
-            ['最弱項分數', weakestScore !== null ? weakestScore.toFixed(2) : '—'],
-            ['短板修正後（平滑前）', finalScore !== null ? String(finalScore) : '—'],
-            ['平滑後（目前顯示值）', String(displayedScore)],
-          ].map(([label, value]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
-              <span style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</span>
-              <span style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '500' }}>{value}</span>
-            </div>
-          ))}
-
-          <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-            <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>近 30 天趨勢（每日顯示值）</div>
-            {historyError ? (
-              <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
-            ) : history === null ? (
-              <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
-            ) : (
-              <TrendLineChart points={history.map(h => ({ date: h.date, value: h.displayedScore }))} color={tone.color} />
-            )}
-          </div>
+        <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+          <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>近 30 天趨勢（每日顯示值）</div>
+          {historyError ? (
+            <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
+          ) : history === null ? (
+            <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
+          ) : (
+            <TrendLineChart points={history.map(h => ({ date: h.date, value: h.displayedScore }))} color={tone.color} />
+          )}
         </div>
       )}
     </div>
