@@ -1432,30 +1432,33 @@ function VersionHistory() {
   const [expanded, setExpanded] = useState(false)
   const latest = VERSION_HISTORY[0]
   return (
-    <div style={{ position: 'absolute', bottom: '1.5rem', left: '1.5rem', zIndex: 100, fontFamily: FONT_STACK }}>
+    <div style={{ position: 'absolute', bottom: '1.5rem', left: '1.5rem', zIndex: 100, fontFamily: FONT_STACK, maxWidth: 'calc(50vw - 2rem)' }}>
+      {/* 收合狀態只留版本號，不再把整行 summary 塞進按鈕——手機窄螢幕上這行
+          文字沒有寬度限制，會一路延伸到蓋住畫面中間的 3D MODE 按鈕、右邊的
+          ⚙ 齒輪，甚至超出螢幕邊緣顯示不全。完整說明改放進展開面板裡。 */}
       <button onClick={() => setExpanded(x => !x)} style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
+        display: 'flex', alignItems: 'center', gap: '6px',
         background: 'rgba(5,8,20,0.75)', backdropFilter: 'blur(8px)',
         border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
-        padding: '8px 14px', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit',
-        color: 'rgba(255,255,255,0.7)',
+        padding: '8px 12px', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit',
+        color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap',
       }}>
         <span style={{ color: '#00e5ff', fontWeight: '600' }}>v{latest.version}</span>
-        <span style={{ color: 'rgba(255,255,255,0.38)' }}>{latest.summary}</span>
-        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '9px', marginLeft: '2px' }}>{expanded ? '▲' : '▼'}</span>
+        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '9px' }}>{expanded ? '▲' : '▼'}</span>
       </button>
       {expanded && (
         <div style={{
           marginTop: '8px', background: 'rgba(5,8,20,0.88)', backdropFilter: 'blur(14px)',
           border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
-          padding: '18px 20px', width: '290px', maxHeight: '60vh', overflowY: 'auto',
+          padding: '18px 20px', width: 'min(290px, calc(100vw - 3rem))', maxHeight: '60vh', overflowY: 'auto',
         }}>
           {VERSION_HISTORY.map((v, vi) => (
             <div key={v.version} style={{ marginBottom: vi < VERSION_HISTORY.length - 1 ? '18px' : 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '7px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '12px', fontWeight: '600', color: '#00e5ff' }}>v{v.version}</span>
                 <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.32)', letterSpacing: '0.04em' }}>{v.date}</span>
               </div>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', lineHeight: '1.6', marginBottom: '7px' }}>{v.summary}</div>
               <ul style={{ margin: 0, padding: '0 0 0 14px' }}>
                 {v.changes.map((c, ci) => (
                   <li key={ci} style={{ fontSize: '11px', color: 'rgba(255,255,255,0.58)', lineHeight: '1.7' }}>{c}</li>
