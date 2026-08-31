@@ -16,10 +16,11 @@ export const socialIndexHistoryTable = pgTable("social_index_history", {
   date: date("date").primaryKey(),
   observedDayCount: smallint("observed_day_count").notNull(), // 0-7，一定有值
   distinctPersonCount: smallint("distinct_person_count"),
-  // 近 7 天窗口內不重複的 person_id 清單（已經是 HERMES 正規化過的 alias，
-  // 不是原始暱稱）——跟 distinctPersonCount 同一批資料，只是把「人數」換成
-  // 「是誰」，給卡片列出計分對象用。跟 distinctPersonCount 一樣，
-  // observedDayCount === 0 時存 null。
+  // 近 7 天窗口內不重複的計分對象中文顯示名稱（collect.ps1 拿 person_id 去
+  // 查 people.yaml 的 aliases 換回來的，查不到才會是原始 person_id）——跟
+  // distinctPersonCount 同一批資料，只是把「人數」換成「是誰」，給卡片列出
+  // 計分對象用。跟 distinctPersonCount 一樣，observedDayCount === 0 時存
+  // null。
   personNames: text("person_names").array(),
   weightedInteractionPoints: real("weighted_interaction_points"),
   daysWithInteraction: smallint("days_with_interaction"),

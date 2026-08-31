@@ -76,6 +76,13 @@ $DiaryFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\日記"
 # HERMES 自己的責任（見 social_interactions.jsonl 交接文件）。
 $SocialFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\社交"
 $SocialInteractionsPath = Join-Path $SocialFolderPath "social_interactions.jsonl"
+# person_id -> 中文顯示名稱同樣讀自 HERMES 這邊，不是另外在 Aiportal 前端
+# 維護一份會失聯的複本——2026-08-31 起卡片上「計分對象」要顯示中文，資料
+# 只有這裡有（people.yaml 是 HERMES 自己 alias 正規化用的對照表），所以這
+# 支腳本從「完全不讀 people.yaml」改成唯讀查詢顯示名稱；不重算/不驗證
+# alias 正規化邏輯，那仍然是 HERMES 的責任，這裡只是多開一個它已經摸得到
+# 的 NAS 檔案。
+$PeopleYamlPath = Join-Path $SocialFolderPath "people.yaml"
 
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
 $LogDir = Join-Path $ScriptDir "logs"
@@ -378,14 +385,35 @@ try {
     $ScriptHadError = $true
 }
 
+# people_id -> 中文顯示名稱（people.yaml 的 aliases 陣列取第一個當代表）。
+# 不是完整的 YAML 解析器——HERMES 寫出來的 people.yaml 格式很單純（每個
+# person_id 頂格、底下縮排 aliases/needs_review 兩個 key，沒有更深的巢
+# 狀），用正則表達式手刻剛好夠用，不用為此多裝一個 YAML 模組依賴。alias
+# 正規化成 person_id 那件事本身還是 HERMES 的責任，這裡完全不做也不驗證那
+# 段邏輯，只是唯讀查「這個 id 對應的中文是什麼」給卡片顯示用。檔案不存在或
+# 格式對不上的 id，呼叫端自己 fallback 回原始 person_id，不會整支腳本失敗。
+function Get-PersonDisplayNames {
+    param([string]$FilePath)
+    $map = @{}
+    if (-not (Test-Path $FilePath)) { return $map }
+    $currentId = $null
+    foreach ($line in (Get-Content -Path $FilePath -Encoding UTF8)) {
+        if ($line -match '^(\S+):\s*$') {
+            $currentId = $Matches[1]
+        } elseif ($currentId -and $line -match '^\s+aliases:\s*\[(.*)\]\s*$') {
+            $firstAlias = [regex]::Match($Matches[1], '"([^"]*)"')
+            if ($firstAlias.Success) { $map[$currentId] = $firstAlias.Groups[1].Value }
+            $currentId = $null  # 名稱抓到了，避免同一個 id 底下後面的 needs_review 行誤觸更新
+        }
+    }
+    return $map
+}
+
 # ── 社交指標：近 7 天觀測日/互動統計 → socialScore（HHI v2，新增） ────────
 # 資料來源是 HERMES 自己 L1/L2 日記處理流程額外寫出的 social_interactions.jsonl
 # （見檔頭 $SocialInteractionsPath）——這支腳本只做檔案解析、產出聚合計數，
 # 實際的「聚合計數 -> 三個子分數 -> 綜合分數」算術在 api-server 那邊做（見
 # lib/socialIndex.ts 的 computeSocialIndex），不在這裡重算一次。
-# people.yaml 完全不讀——alias 正規化成標準 person_id 是 HERMES 自己在寫入
-# social_interactions.jsonl 之前就該做完的事，這裡讀到的 person_id 應該已經
-# 是正規化過的值。
 try {
     $now = Get-Date
     $windowDates = 0..6 | ForEach-Object { $now.AddDays(-$_).ToString("yyyy-MM-dd") }  # 今天+前 6 天
@@ -412,8 +440,15 @@ try {
         # person — same reasoning as the $lines assignment above, otherwise
         # ConvertTo-Json below would serialize a lone name as a bare string
         # instead of a one-element JSON array.
-        $distinctPersonNames = @($records | Select-Object -ExpandProperty person_id -Unique)
-        $distinctPersonCount = $distinctPersonNames.Count
+        $distinctPersonIds = @($records | Select-Object -ExpandProperty person_id -Unique)
+        $distinctPersonCount = $distinctPersonIds.Count
+        # 卡片顯示用中文名字，不是原始 person_id——查不到對照（people.yaml
+        # 還沒收錄這個 id，或檔案格式對不上）就照原樣顯示英文 id，不擋分數
+        # 計算，也不讓整支腳本失敗。
+        $personDisplayNames = Get-PersonDisplayNames -FilePath $PeopleYamlPath
+        $distinctPersonNames = @($distinctPersonIds | ForEach-Object {
+            if ($personDisplayNames.ContainsKey($_)) { $personDisplayNames[$_] } else { $_ }
+        })
         $weightPerType = @{ face_to_face = 3; call = 2; text = 1 }
         $weightedInteractionPoints = ($records | ForEach-Object {
             if ($weightPerType.ContainsKey($_.type)) { $weightPerType[$_.type] } else { 0 }

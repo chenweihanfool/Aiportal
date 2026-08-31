@@ -32,9 +32,10 @@ router.post("/admin/social-index", async (req: Request, res: Response) => {
   const distinctPersonCount = num("distinctPersonCount") ?? 0;
   const weightedInteractionPoints = num("weightedInteractionPoints") ?? 0;
   const daysWithInteraction = num("daysWithInteraction") ?? 0;
-  // collect.ps1 送的是已經正規化過的 person_id 字串陣列（跟 distinctPersonCount
-  // 同一批資料，只是把「人數」換成「是誰」）——不是必填欄位，舊版 collect.ps1
-  // 沒送這個欄位時要能照舊運作，不因此整個請求 400。
+  // collect.ps1 送的是拿 person_id 查 people.yaml 換回來的中文顯示名稱（查
+  // 不到才會是原始 person_id）——跟 distinctPersonCount 同一批資料，只是把
+  // 「人數」換成「是誰」。不是必填欄位，舊版 collect.ps1 沒送這個欄位時要
+  // 能照舊運作，不因此整個請求 400。
   const rawPersonNames = body["personNames"];
   const personNames = Array.isArray(rawPersonNames)
     ? rawPersonNames.filter((v): v is string => typeof v === "string")
