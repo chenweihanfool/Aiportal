@@ -2188,7 +2188,7 @@ const RHYTHM_BANDS: Band[] = [[80, '#34d399', '穩定'], [40, '#fbbf24', '普通
 function MindIndexCard({
   summary,
   unlocked,
-  unlockedPassword,
+  unlockedPassword: _unlockedPassword,
   onRequestUnlock,
 }: {
   summary: DashboardSummary | undefined
@@ -2196,33 +2196,13 @@ function MindIndexCard({
   unlockedPassword: string | null
   onRequestUnlock: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const [history, setHistory] = useState<MindIndexHistoryPoint[] | null>(null)
-  const [historyError, setHistoryError] = useState(false)
   const tilt = useTilt3D()
   const isLocked = !unlocked
-
-  // Lazy-loaded on first expand, same reasoning as HappinessHeroCard's own
-  // history fetch: most page views never open this panel.
-  useEffect(() => {
-    if (!expanded || !unlockedPassword || history !== null) return
-    let cancelled = false
-    apiFetchMindIndexHistory(unlockedPassword)
-      .then(rows => { if (!cancelled) setHistory(rows) })
-      .catch(() => { if (!cancelled) setHistoryError(true) })
-    return () => { cancelled = true }
-  }, [expanded, unlockedPassword, history])
 
   const data = summary?.data
   const dailyEngagementScore = typeof data?.['dailyEngagementScore'] === 'number' ? data['dailyEngagementScore'] as number : null
   const diaryEntryCount = typeof data?.['diaryEntryCount'] === 'number' ? data['diaryEntryCount'] as number : null
-  const score = typeof data?.['score'] === 'number' ? data['score'] as number : null
-  const conversion = typeof data?.['conversion'] === 'number' ? data['conversion'] as number : null
-  const linkHealth = typeof data?.['linkHealth'] === 'number' ? data['linkHealth'] as number : null
-  const vitality = typeof data?.['vitality'] === 'number' ? data['vitality'] as number : null
-  const rhythm = typeof data?.['rhythm'] === 'number' ? data['rhythm'] as number : null
   const stale = data?.['stale'] === true
-  const partial = data?.['partial'] === true
 
   const cardStyle: React.CSSProperties = {
     position: 'relative',
@@ -2264,19 +2244,8 @@ function MindIndexCard({
   }
 
   const tone = bandTone(dailyEngagementScore, MIND_SCORE_BANDS)
-  const oldTone = bandTone(score, MIND_SCORE_BANDS)
-  const conversionTone = bandTone(conversion, CONVERSION_BANDS)
-  const linkHealthTone = bandTone(linkHealth, LINK_HEALTH_BANDS)
-  const vitalityTone = bandTone(vitality, VITALITY_BANDS)
-  const rhythmTone = bandTone(rhythm, RHYTHM_BANDS)
   const engagementItems = [
     { label: '日記篇數', value: diaryEntryCount !== null ? String(diaryEntryCount) : '—', formula: '100 × 篇數 ÷ (篇數 + 3)——前幾篇效用最大，篇數越多邊際效果越平緩，沒有硬性封頂' },
-  ]
-  const knowledgeItems = [
-    { label: '轉化率', value: conversion !== null ? String(conversion) : '—', color: conversionTone.color, tier: conversion !== null ? conversionTone.label : undefined, formula: 'CREATE 層：100 × 近30天編譯進 wiki 的條目數 ÷ (近30天編譯數 + inbox 超過7天未編譯的積壓數)' },
-    { label: '連結健康度', value: linkHealth !== null ? String(linkHealth) : '—', color: linkHealthTone.color, tier: linkHealth !== null ? linkHealthTone.label : undefined, formula: 'ENRICH 層：100 × (1 − 孤兒條目數 ÷ 總條目數)，孤兒 = wiki 連結出入度皆為 0（不含模板/索引）' },
-    { label: '活化度', value: vitality !== null ? String(vitality) : '—', color: vitalityTone.color, tier: vitality !== null ? vitalityTone.label : undefined, formula: 'SYNTHESIZE 層：min(100, 近30天被修改條目比例 × 400)；近14天無 L3 綜整產出則 × 0.8' },
-    { label: '本週節奏', value: rhythm !== null ? String(rhythm) : '—', color: rhythmTone.color, tier: rhythm !== null ? rhythmTone.label : undefined, formula: '近7天加權積分（豐化2分/新條目1分/新連結0.5分/L3綜整5分，每日上限20分）÷ 30 × 100' },
   ]
 
   return (
@@ -2293,27 +2262,23 @@ function MindIndexCard({
         </div>
       </div>
 
-      {dailyEngagementScore === null && score === null ? (
+      {dailyEngagementScore === null ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1.2rem 0' }}>
           {summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中…'}
         </div>
       ) : (
         <div style={{ flex: 1 }}>
           {/* HHI 實際計入的分數——純看當天日記篇數，不看任務完成（任務完成度
-              已經是從容指數在算的東西，兩個指標算同一件事就重複了）。
-              dailyEngagementScore 還沒實作前這裡會是「資料準備中」，但下面的
-              知識庫健康度區塊獨立運作，不受影響（兩個分數來源完全分開，不是
-              同一件事）。 */}
+              已經是從容指數在算的東西，兩個指標算同一件事就重複了）。知識庫
+              健康度是完全獨立的另一個分數（HERMES 自己的知識庫健康狀況，不是
+              翰翰仔本人的心智狀態），2026-08-31 起搬去 HERMES 戰情室當第 4 個
+              面板顯示，不再擠在這張卡片裡。 */}
           <div style={{ marginBottom: '1rem' }}>
-            {dailyEngagementScore === null ? (
-              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)' }}>心智基本分：資料準備中…</div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>{dailyEngagementScore}</div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
-                <span style={{ fontSize: '10px', color: 'rgba(52,211,153,0.85)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: '999px', padding: '2px 8px', letterSpacing: '0.03em' }}>計入幸福指數</span>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 'clamp(2.4rem, 4vw, 3.2rem)', fontWeight: '700', lineHeight: 1, color: tone.color, textShadow: `0 0 26px ${tone.color}66` }}>{dailyEngagementScore}</div>
+              <div style={{ fontSize: '15px', fontWeight: '600', color: tone.color }}>{tone.label}</div>
+              <span style={{ fontSize: '10px', color: 'rgba(52,211,153,0.85)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: '999px', padding: '2px 8px', letterSpacing: '0.03em' }}>計入幸福指數</span>
+            </div>
             {stale && (
               <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '4px' }}>資料已超過 36 小時未更新</div>
             )}
@@ -2323,46 +2288,6 @@ function MindIndexCard({
             { label: '心智指標（計入幸福指數，HHI v2 滾動 3 天窗口）', formula: 'dailyEngagementScore = round(100 × 近 3 天篇數總和 ÷ (近 3 天篇數總和 + 10))，不再只看今天——每天歸零重算會讓某天寫得少時被最弱項修正過度放大' },
             ...engagementItems,
           ]} />
-
-          {/* 知識庫健康度——原本唯一的「心智指標」，2026-08-20 起移出 HHI，只
-              保留顯示。獨立區塊、獨立虛線分隔，避免使用者誤以為這個數字也
-              算進幸福指數。 */}
-          <div style={{ marginTop: '1rem', paddingTop: '0.9rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>知識庫健康度</span>
-              <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '999px', padding: '1px 7px' }}>不計入幸福指數</span>
-            </div>
-            {score === null ? (
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>資料準備中…</div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '0.8rem' }}>
-                  <div style={{ fontSize: '1.6rem', fontWeight: '700', lineHeight: 1, color: oldTone.color }}>{score}</div>
-                  <div style={{ fontSize: '12.5px', fontWeight: '600', color: oldTone.color }}>{oldTone.label}</div>
-                  {partial && <span style={{ fontSize: '10.5px', color: '#fbbf24' }}>部分子分數缺項</span>}
-                </div>
-                <SupportStats items={knowledgeItems} />
-                <FormulaPanel rows={[
-                  { label: '知識庫健康度', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均，任一維度崩壞會拖累總分；缺項用可用的算並標記 partial' },
-                  ...knowledgeItems,
-                ]} />
-              </>
-            )}
-          </div>
-
-          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="歷史趨勢 ▼" labelExpanded="收起歷史趨勢 ▲" />
-          {expanded && (
-            <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', marginBottom: '0.4rem' }}>知識庫健康度歷史趨勢</div>
-              {historyError ? (
-                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
-              ) : history === null ? (
-                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
-              ) : (
-                <TrendLineChart points={history.map(h => ({ date: h.date, value: h.score }))} color={oldTone.color} height={70} />
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -3097,6 +3022,90 @@ function HermesPanel({ title, sub, hue, children }: { title: string; sub: string
   )
 }
 
+// 知識庫健康度 — 2026-08-31 起從 MindIndexCard 搬過來，跟排程任務/近期活動/
+// 容器清單一樣是 HERMES 戰情室的第 4 個面板。這個分數的資料來源（mind-index
+// 這個 DashboardSummary）跟 HERMES 戰情室其餘面板（CPU/RAM/容器）完全不同
+// 一批 API（分別是 /api/dashboard 的 mind-index 條目 vs /api/admin/hermes-
+// status），所以就算 collect.ps1 還沒在主機上跑過、戰情室其餘面板顯示「尚無
+// 資料」，這個面板還是能獨立顯示自己的分數。
+function HermesKnowledgeHealthPanel({
+  summary,
+  unlockedPassword,
+}: {
+  summary: DashboardSummary | undefined
+  unlockedPassword: string | null
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [history, setHistory] = useState<MindIndexHistoryPoint[] | null>(null)
+  const [historyError, setHistoryError] = useState(false)
+
+  // Lazy-loaded on first expand, same reasoning as HappinessHeroCard's own
+  // history fetch: most page views never open this panel.
+  useEffect(() => {
+    if (!expanded || !unlockedPassword || history !== null) return
+    let cancelled = false
+    apiFetchMindIndexHistory(unlockedPassword)
+      .then(rows => { if (!cancelled) setHistory(rows) })
+      .catch(() => { if (!cancelled) setHistoryError(true) })
+    return () => { cancelled = true }
+  }, [expanded, unlockedPassword, history])
+
+  const data = summary?.data
+  const score = typeof data?.['score'] === 'number' ? data['score'] as number : null
+  const conversion = typeof data?.['conversion'] === 'number' ? data['conversion'] as number : null
+  const linkHealth = typeof data?.['linkHealth'] === 'number' ? data['linkHealth'] as number : null
+  const vitality = typeof data?.['vitality'] === 'number' ? data['vitality'] as number : null
+  const rhythm = typeof data?.['rhythm'] === 'number' ? data['rhythm'] as number : null
+  const partial = data?.['partial'] === true
+
+  const oldTone = bandTone(score, MIND_SCORE_BANDS)
+  const conversionTone = bandTone(conversion, CONVERSION_BANDS)
+  const linkHealthTone = bandTone(linkHealth, LINK_HEALTH_BANDS)
+  const vitalityTone = bandTone(vitality, VITALITY_BANDS)
+  const rhythmTone = bandTone(rhythm, RHYTHM_BANDS)
+  const knowledgeItems = [
+    { label: '轉化率', value: conversion !== null ? String(conversion) : '—', color: conversionTone.color, tier: conversion !== null ? conversionTone.label : undefined, formula: 'CREATE 層：100 × 近30天編譯進 wiki 的條目數 ÷ (近30天編譯數 + inbox 超過7天未編譯的積壓數)' },
+    { label: '連結健康度', value: linkHealth !== null ? String(linkHealth) : '—', color: linkHealthTone.color, tier: linkHealth !== null ? linkHealthTone.label : undefined, formula: 'ENRICH 層：100 × (1 − 孤兒條目數 ÷ 總條目數)，孤兒 = wiki 連結出入度皆為 0（不含模板/索引）' },
+    { label: '活化度', value: vitality !== null ? String(vitality) : '—', color: vitalityTone.color, tier: vitality !== null ? vitalityTone.label : undefined, formula: 'SYNTHESIZE 層：min(100, 近30天被修改條目比例 × 400)；近14天無 L3 綜整產出則 × 0.8' },
+    { label: '本週節奏', value: rhythm !== null ? String(rhythm) : '—', color: rhythmTone.color, tier: rhythm !== null ? rhythmTone.label : undefined, formula: '近7天加權積分（豐化2分/新條目1分/新連結0.5分/L3綜整5分，每日上限20分）÷ 30 × 100' },
+  ]
+
+  return (
+    <HermesPanel title="知識庫健康度" sub="HERMES Knowledge Base · 不計入幸福指數" hue={CARD_HUE.purple}>
+      {score === null ? (
+        <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>
+          {summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中…'}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '0.9rem' }}>
+            <div style={{ fontSize: '1.9rem', fontWeight: '700', lineHeight: 1, color: oldTone.color }}>{score}</div>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: oldTone.color }}>{oldTone.label}</div>
+            {partial && <span style={{ fontSize: '10.5px', color: '#fbbf24' }}>部分子分數缺項</span>}
+          </div>
+          <SupportStats items={knowledgeItems} />
+          <FormulaPanel rows={[
+            { label: '知識庫健康度', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均，任一維度崩壞會拖累總分；缺項用可用的算並標記 partial' },
+            ...knowledgeItems,
+          ]} />
+          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="歷史趨勢 ▼" labelExpanded="收起歷史趨勢 ▲" />
+          {expanded && (
+            <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+              {historyError ? (
+                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>趨勢資料讀取失敗</div>
+              ) : history === null ? (
+                <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.35)' }}>載入中…</div>
+              ) : (
+                <TrendLineChart points={history.map(h => ({ date: h.date, value: h.score }))} color={oldTone.color} height={70} />
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </HermesPanel>
+  )
+}
+
 // Windows Task Scheduler result codes that mean "not actually done yet",
 // not a failure -- 0x41301 (still running) is the common one a poller can
 // catch mid-execution; 0x41303 (task has not yet run) shows up right after
@@ -3153,10 +3162,12 @@ function HermesWarRoomSection({
   unlocked,
   unlockedPassword,
   onRequestUnlock,
+  mindSummary,
 }: {
   unlocked: boolean
   unlockedPassword: string | null
   onRequestUnlock: () => void
+  mindSummary: DashboardSummary | undefined
 }) {
   const [status, setStatus] = useState<HermesStatusData | null>(null)
   const [statusError, setStatusError] = useState(false)
@@ -3205,80 +3216,218 @@ function HermesWarRoomSection({
     )
   }
 
-  if (statusError || !status || !status.available) {
-    return (
-      <div style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1rem 0.2rem' }}>
-        {statusError ? 'HERMES 戰情室：暫時無法取得資料' : 'HERMES 戰情室：尚無資料，collect.ps1 還沒在主機上跑過'}
-      </div>
-    )
-  }
-
-  const worstDisk = status.disks.reduce<HermesDiskInfo | null>(
-    (worst, d) => (!worst || d.percentUsed > worst.percentUsed ? d : worst),
-    null,
-  )
-  const containersOk = status.containers.filter(c => /up/i.test(c.status) && c.health !== 'unhealthy').length
-  const opacity = status.stale ? 0.55 : 1
-  const filter = status.stale ? 'saturate(0.5)' : undefined
+  // 知識庫健康度的資料來源（mind-index）跟這裡其餘面板（hermes-status）是
+  // 兩支完全獨立的 API/collect script，其中一支還沒有資料不該擋住另一支
+  // ——所以「hermes-status 尚無資料」只影響 CPU/RAM/容器/排程/活動這些面
+  // 板，知識庫健康度永遠獨立渲染在最後。
+  const availableStatus: HermesStatusData | null = !statusError && status && status.available ? status : null
 
   return (
-    <div style={{ opacity, filter }}>
-      <div className="hermes-stats-grid" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '0.9rem',
-        marginBottom: '0.9rem',
-      }}>
-        <HermesStatCard icon="🖥️" label="CPU 負載" value={status.cpuPercent !== null ? `${Math.round(status.cpuPercent)}%` : '—'} valueColor={pctTone(status.cpuPercent)} hue={CARD_HUE.cyan} />
-        <HermesStatCard icon="🧠" label="記憶體" value={status.memPercent !== null ? `${Math.round(status.memPercent)}%` : '—'} valueColor={pctTone(status.memPercent)} hue={210} />
-        <HermesStatCard
-          icon="💾"
-          label={worstDisk ? `磁碟 ${worstDisk.drive}` : '磁碟'}
-          value={worstDisk ? `${Math.round(worstDisk.percentUsed)}%` : '—'}
-          sub={worstDisk ? `剩餘 ${formatGb(worstDisk.freeGb)}` : undefined}
-          valueColor={worstDisk ? pctTone(worstDisk.percentUsed) : undefined}
-          hue={255}
-        />
-        <HermesStatCard
-          icon="📦"
-          label="容器健康"
-          value={`${containersOk} / ${status.containers.length}`}
-          sub={status.containers.length > 0 && containersOk < status.containers.length ? '有容器異常' : undefined}
-          hue={CARD_HUE.purple}
-        />
-      </div>
+    <div>
+      {availableStatus === null ? (
+        <div style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', padding: '1rem 0.2rem' }}>
+          {statusError ? 'HERMES 戰情室：暫時無法取得資料' : 'HERMES 戰情室：尚無資料，collect.ps1 還沒在主機上跑過'}
+        </div>
+      ) : (
+        <div style={{ opacity: availableStatus.stale ? 0.55 : 1, filter: availableStatus.stale ? 'saturate(0.5)' : undefined }}>
+          {(() => {
+            const worstDisk = availableStatus.disks.reduce<HermesDiskInfo | null>(
+              (worst, d) => (!worst || d.percentUsed > worst.percentUsed ? d : worst),
+              null,
+            )
+            const containersOk = availableStatus.containers.filter(c => /up/i.test(c.status) && c.health !== 'unhealthy').length
+            return (
+              <div className="hermes-stats-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '0.9rem',
+                marginBottom: '0.9rem',
+              }}>
+                <HermesStatCard icon="🖥️" label="CPU 負載" value={availableStatus.cpuPercent !== null ? `${Math.round(availableStatus.cpuPercent)}%` : '—'} valueColor={pctTone(availableStatus.cpuPercent)} hue={CARD_HUE.cyan} />
+                <HermesStatCard icon="🧠" label="記憶體" value={availableStatus.memPercent !== null ? `${Math.round(availableStatus.memPercent)}%` : '—'} valueColor={pctTone(availableStatus.memPercent)} hue={210} />
+                <HermesStatCard
+                  icon="💾"
+                  label={worstDisk ? `磁碟 ${worstDisk.drive}` : '磁碟'}
+                  value={worstDisk ? `${Math.round(worstDisk.percentUsed)}%` : '—'}
+                  sub={worstDisk ? `剩餘 ${formatGb(worstDisk.freeGb)}` : undefined}
+                  valueColor={worstDisk ? pctTone(worstDisk.percentUsed) : undefined}
+                  hue={255}
+                />
+                <HermesStatCard
+                  icon="📦"
+                  label="容器健康"
+                  value={`${containersOk} / ${availableStatus.containers.length}`}
+                  sub={availableStatus.containers.length > 0 && containersOk < availableStatus.containers.length ? '有容器異常' : undefined}
+                  hue={CARD_HUE.purple}
+                />
+              </div>
+            )
+          })()}
 
-      <div className="hermes-panels-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
-        <HermesPanel title="排程任務狀態" sub="Windows Task Scheduler · 最近執行" hue={CARD_HUE.cyan}>
-          {status.scheduledTasks.length === 0
-            ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無排程任務資料</div>
-            : status.scheduledTasks.map(t => <HermesTaskRow key={t.name} {...t} />)}
-        </HermesPanel>
-        <HermesPanel title="近期活動" sub="部署 / 備份紀錄" hue={CARD_HUE.purple}>
-          {activityError
-            ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>活動紀錄讀取失敗</div>
-            : activity === null
-              ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>載入中…</div>
-              : activity.length === 0
-                ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無活動紀錄</div>
-                : activity.map(a => <HermesActivityRow key={a.id} {...a} />)}
-        </HermesPanel>
-      </div>
+          <div className="hermes-panels-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
+            <HermesPanel title="排程任務狀態" sub="Windows Task Scheduler · 最近執行" hue={CARD_HUE.cyan}>
+              {availableStatus.scheduledTasks.length === 0
+                ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無排程任務資料</div>
+                : availableStatus.scheduledTasks.map(t => <HermesTaskRow key={t.name} {...t} />)}
+            </HermesPanel>
+            <HermesPanel title="近期活動" sub="部署 / 備份紀錄" hue={CARD_HUE.purple}>
+              {activityError
+                ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>活動紀錄讀取失敗</div>
+                : activity === null
+                  ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>載入中…</div>
+                  : activity.length === 0
+                    ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無活動紀錄</div>
+                    : activity.map(a => <HermesActivityRow key={a.id} {...a} />)}
+            </HermesPanel>
+          </div>
 
-      {/* 容器清單獨立一個全寬面板——原本只在 stat 卡顯示 9/9 這種計數，看不出
-          是「哪些」容器，跟排程任務/近期活動一樣改成列表顯示名稱＋狀態。 */}
+          {/* 容器清單獨立一個全寬面板——原本只在 stat 卡顯示 9/9 這種計數，看不出
+              是「哪些」容器，跟排程任務/近期活動一樣改成列表顯示名稱＋狀態。 */}
+          <div style={{ marginTop: '0.9rem' }}>
+            <HermesPanel title="容器清單" sub="Docker · 目前執行狀態" hue={CARD_HUE.purple}>
+              {availableStatus.containers.length === 0
+                ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無容器資料</div>
+                : availableStatus.containers.map(c => <HermesContainerRow key={c.name} {...c} />)}
+            </HermesPanel>
+          </div>
+
+          <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', marginTop: '0.7rem', textAlign: 'right' }}>
+            {availableStatus.computedAt ? formatMinutesAgo(availableStatus.computedAt) : ''}
+            {availableStatus.stale ? <span style={{ color: '#fbbf24', marginLeft: '8px' }}>· 資料已超過 30 分鐘未更新</span> : null}
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: '0.9rem' }}>
-        <HermesPanel title="容器清單" sub="Docker · 目前執行狀態" hue={CARD_HUE.purple}>
-          {status.containers.length === 0
-            ? <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', padding: '0.6rem 0' }}>尚無容器資料</div>
-            : status.containers.map(c => <HermesContainerRow key={c.name} {...c} />)}
-        </HermesPanel>
+        <HermesKnowledgeHealthPanel summary={mindSummary} unlockedPassword={unlockedPassword} />
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// 工具連結 — 合併私領域純連結卡（沒有 dashboard 摘要、只是外部連結，例如
+// Duplicati 狀態）跟公領域全部工具連結，2026-08-31 起改成單一可搜尋、預設
+// 收合的區塊，取代原本兩個各自獨立的格線。搜尋框永遠可見（不受收合狀態影
+// 響），一輸入關鍵字就自動展開比對到的結果，不用先手動點開才能搜尋。
+// ─────────────────────────────────────────────
+function ToolLinksZone({
+  privateSites,
+  publicSites,
+  unlocked,
+  onSelect,
+}: {
+  privateSites: SiteData[]
+  publicSites: SiteData[]
+  unlocked: boolean
+  onSelect: (site: SiteData) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLowerCase()
+  const searchActive = q.length > 0
+  const matches = (s: SiteData) => !searchActive || s.name.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q)
+  const filteredPrivate = privateSites.filter(matches)
+  const filteredPublic = publicSites.filter(matches)
+  const total = privateSites.length + publicSites.length
+  const totalMatched = filteredPrivate.length + filteredPublic.length
+  const isOpen = open || searchActive
+
+  return (
+    <div className="glass-portal-zone">
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+          color: '#00e5ff', letterSpacing: '0.32em',
+          fontSize: 'clamp(0.58rem, 0.9vw, 0.72rem)',
+          fontWeight: '300',
+          fontFamily: FONT_STACK,
+          textTransform: 'uppercase',
+          textAlign: 'center',
+          paddingBottom: '0.5rem',
+          marginBottom: '0.9rem',
+          flexShrink: 0,
+          borderBottom: '1px solid rgba(0,229,255,0.18)',
+          textShadow: '0 0 14px rgba(0,229,255,0.55)',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+      >
+        <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: '0.85em' }}>▶</span>
+        <span>◆  工  具  連  結</span>
+        <span style={{ color: 'rgba(0,229,255,0.5)', letterSpacing: '0.05em' }}>
+          {searchActive ? `${totalMatched} / ${total}` : `${total}`}
+        </span>
       </div>
 
-      <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.3)', marginTop: '0.7rem', textAlign: 'right' }}>
-        {status.computedAt ? formatMinutesAgo(status.computedAt) : ''}
-        {status.stale ? <span style={{ color: '#fbbf24', marginLeft: '8px' }}>· 資料已超過 30 分鐘未更新</span> : null}
+      <div style={{ maxWidth: '440px', margin: '0 auto 1.1rem' }}>
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="🔍  搜尋工具名稱…"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(0,229,255,0.28)',
+            borderRadius: '999px',
+            padding: '0.55rem 1.2rem',
+            color: 'rgba(255,255,255,0.9)',
+            fontSize: '0.85rem',
+            fontFamily: FONT_STACK,
+            letterSpacing: '0.02em',
+            outline: 'none',
+          }}
+        />
       </div>
+
+      {isOpen && (
+        <>
+          {filteredPrivate.length > 0 && (
+            <div style={{ marginBottom: '1.1rem' }}>
+              <div style={{ fontSize: '0.62rem', color: 'rgba(192,132,252,0.6)', letterSpacing: '0.24em', textTransform: 'uppercase', marginBottom: '0.6rem', textAlign: 'center' }}>
+                私 領 域
+              </div>
+              <div className="glass-portal-cards" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gridAutoRows: 'auto',
+                gap: '0.7rem',
+              }}>
+                {filteredPrivate.map((s, i) => (
+                  <GlassCard key={s.id} site={s} index={i} unlocked={unlocked} onSelect={onSelect} />
+                ))}
+              </div>
+            </div>
+          )}
+          {filteredPublic.length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.62rem', color: 'rgba(0,229,255,0.6)', letterSpacing: '0.24em', textTransform: 'uppercase', marginBottom: '0.6rem', textAlign: 'center' }}>
+                公 領 域
+              </div>
+              <div className="glass-portal-cards" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gridAutoRows: 'auto',
+                gap: '0.7rem',
+              }}>
+                {filteredPublic.map((s, i) => (
+                  <GlassCard key={s.id} site={s} index={i} unlocked={unlocked} onSelect={onSelect} />
+                ))}
+              </div>
+            </div>
+          )}
+          {searchActive && totalMatched === 0 && (
+            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: '0.75rem', padding: '1.5rem 0', fontFamily: FONT_STACK, letterSpacing: '0.1em' }}>
+              找不到符合「{query}」的工具
+            </div>
+          )}
+          {!searchActive && total === 0 && (
+            <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: FONT_STACK, letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -3301,6 +3450,31 @@ function GlassPortalView({
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
 
+  // 分成兩群，不是把所有私領域項目塞進同一個 2 欄 grid——有雷達圖的卡片（目前
+  // 只有運動 APP 系統）內容天生就比其他卡片高很多，跟旁邊矮卡片同一列會空出
+  // 一大片沒對齊的空白；純連結卡（沒有 summary body，例如 Duplicati 狀態）
+  // 內容天生就短很多，2026-08-31 起連同公領域一起併進下面可搜尋的「工具連結」
+  // 區塊，不再留在私領域 bento grid 裡佔位。
+  const richSites: SiteData[] = []
+  const plainSites: SiteData[] = []
+  privateSites.forEach(s => {
+    const summary = s.subsystemId ? dashboard.find(d => d.subsystemId === s.subsystemId) : undefined
+    if (summary && SUMMARY_BODIES[summary.subsystemId]) richSites.push(s)
+    else plainSites.push(s)
+  })
+  // 排序照翰翰仔幸福指數的維度順序（人生自由／健身習慣／生活從容／旅遊生活
+  // ——心智指標／社交指標是獨立元件，固定排在 richSites 後面，不用排進這個
+  // 清單），不依賴資料庫的插入順序，確保「有計入 HHI 的系統」永遠照同一個
+  // 順序排最前面。
+  const HHI_SITE_PRIORITY: Record<string, number> = { 'pf-cwh': 0, fitnessforge: 1, vikunja: 2, travel: 3 }
+  richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
+
+  // HHI 六維度（人生自由／健身習慣／從容指數／旅遊生活／心智指標／社交指標）
+  // 跟頂部的翰翰仔幸福指數卡片一樣一律展開、不可折疊——這是使用者最常看的
+  // 核心生活指標。其餘區塊（HERMES 戰情室、工具連結）內容越堆越多、找特定
+  // 資料越來越難找，改成預設收合、點頭部展開。
+  const [hermesOpen, setHermesOpen] = useState(false)
+
   // Comet-border beam animation needs `--angle` registered as a proper
   // <angle> custom property (so the browser can smoothly interpolate it in
   // the conic-gradient) — unsupported browsers just keep `.beam` at
@@ -3316,20 +3490,34 @@ function GlassPortalView({
     }
   }, [])
 
-  const ZoneLabel = ({ label, color, rgb }: { label: string; color: string; rgb: string }) => (
-    <div style={{
-      color, letterSpacing: '0.32em',
-      fontSize: 'clamp(0.58rem, 0.9vw, 0.72rem)',
-      fontWeight: '300',
-      fontFamily: FONT_STACK,
-      textTransform: 'uppercase',
-      textAlign: 'center',
-      paddingBottom: '0.5rem',
-      marginBottom: '0.7rem',
-      flexShrink: 0,
-      borderBottom: `1px solid rgba(${rgb},0.18)`,
-      textShadow: `0 0 14px rgba(${rgb},0.55)`,
-    }}>{label}</div>
+  // `onToggle` 存在時整條標題變成可點擊的收合開關，前面加一個會跟著旋轉的
+  // ▶ 箭頭——沒有 onToggle 的區塊（目前是六維度私領域）維持原本不可收合、
+  // 一律展開的樣子。
+  const ZoneLabel = ({ label, color, rgb, onToggle, open }: { label: string; color: string; rgb: string; onToggle?: () => void; open?: boolean }) => (
+    <div
+      onClick={onToggle}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+        color, letterSpacing: '0.32em',
+        fontSize: 'clamp(0.58rem, 0.9vw, 0.72rem)',
+        fontWeight: '300',
+        fontFamily: FONT_STACK,
+        textTransform: 'uppercase',
+        textAlign: 'center',
+        paddingBottom: '0.5rem',
+        marginBottom: '0.7rem',
+        flexShrink: 0,
+        borderBottom: `1px solid rgba(${rgb},0.18)`,
+        textShadow: `0 0 14px rgba(${rgb},0.55)`,
+        cursor: onToggle ? 'pointer' : undefined,
+        userSelect: onToggle ? 'none' : undefined,
+      }}
+    >
+      {onToggle && (
+        <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: '0.85em' }}>▶</span>
+      )}
+      <span>{label}</span>
+    </div>
   )
 
   return (
@@ -3388,7 +3576,8 @@ function GlassPortalView({
         padding: '1.2rem 1.4rem 4.5rem',
         overflowY: 'auto', overflowX: 'hidden',
       }}>
-        {/* Private zone / system-overview dashboard */}
+        {/* Private zone / system-overview dashboard — HHI 六維度永遠展開，不
+            可收合，是使用者最常看的核心指標。 */}
         <div className="glass-portal-zone">
           <ZoneLabel label="▶  私  領  域" color="#c084fc" rgb="192,132,252" />
           <HappinessHeroCard
@@ -3397,92 +3586,53 @@ function GlassPortalView({
             unlockedPassword={unlockedPassword}
             onRequestUnlock={onRequestUnlock}
           />
-          {(() => {
-            // 分成兩群，不是把所有私領域項目塞進同一個 2 欄 grid——有雷達圖的
-            // 卡片（目前只有運動 APP 系統）內容天生就比其他卡片高很多，跟旁邊
-            // 矮卡片同一列會空出一大片沒對齊的空白；純連結卡（沒有 summary
-            // body，例如 Duplicati 狀態）內容天生就短很多，跟中等高度的摘要卡
-            // 放一起也不對齊。改成：有雷達圖的卡片自己獨佔一整列；其餘摘要卡
-            // （HeroIndex + 4 個支援數字，高度天生就接近）留在 2 欄 grid 裡；
-            // 純連結卡另外用跟公領域一樣的緊湊 2 欄格線，彼此高度也接近。
-            const richSites: SiteData[] = []
-            const plainSites: SiteData[] = []
-            privateSites.forEach(s => {
-              const summary = s.subsystemId ? dashboard.find(d => d.subsystemId === s.subsystemId) : undefined
-              if (summary && SUMMARY_BODIES[summary.subsystemId]) richSites.push(s)
-              else plainSites.push(s)
-            })
-            // 排序照翰翰仔幸福指數的維度順序（人生自由／健身習慣／生活從容／
-            // 旅遊生活——心智指標是 MindIndexCard，固定排在 richSites 後面，不
-            // 用排進這個清單），不依賴資料庫的插入順序，確保「有計入 HHI 的
-            // 系統」永遠照同一個順序排最前面。
-            const HHI_SITE_PRIORITY: Record<string, number> = { 'pf-cwh': 0, fitnessforge: 1, vikunja: 2, travel: 3 }
-            richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
-            return (
-              <>
-                {/* alignItems: 'start' — 沒有這行，同一列的卡片預設會被拉伸成一樣高
-                    （grid 預設 align-items: stretch）。改成 start 後每張卡各自長到
-                    自己內容需要的高度就好。 */}
-                <div className="glass-portal-bento" style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gridAutoRows: 'auto',
-                  gap: '0.9rem',
-                  alignItems: 'start',
-                  // dense：沒有這個，全寬卡片（運動 APP 系統）夾在兩張一般卡片
-                  // 中間時，瀏覽器會直接把它後面那張卡片推到下一列，前面那張卡
-                  // 旁邊留一整格空白（例如人生自由指數卡片旁邊空出一大塊）——
-                  // grid 預設不會「回頭」把後面的卡片填進這個空格。dense 讓瀏覽
-                  // 器優先填滿前面留下的空格，全寬卡片改成自己找下一個空列插入。
-                  gridAutoFlow: 'dense',
-                }}>
-                  {richSites.map((s, i) => {
-                    const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
-                    return (
-                      <GlassSummaryCard
-                        key={s.id}
-                        site={s}
-                        summary={summary}
-                        index={i + publicSites.length}
-                        unlocked={unlocked}
-                        onSelect={onSiteSelect}
-                        wide={summary.subsystemId === 'fitnessforge'}
-                      />
-                    )
-                  })}
-                  {/* 心智指標／社交指標都沒有 portal_sites 對應列（沒有外部網址可
-                      連），所以不透過上面 richSites 那條路徑，直接掛進同一個
-                      bento grid 當額外兩格——跟其他摘要卡同樣是 HeroIndex + 支援
-                      數字的形狀，高度天生接近，放在一起不會不對齊。 */}
-                  <MindIndexCard
-                    summary={dashboard.find(d => d.subsystemId === 'mind-index')}
-                    unlocked={unlocked}
-                    unlockedPassword={unlockedPassword}
-                    onRequestUnlock={onRequestUnlock}
-                  />
-                  <SocialIndexCard
-                    summary={dashboard.find(d => d.subsystemId === 'social-index')}
-                    unlocked={unlocked}
-                    unlockedPassword={unlockedPassword}
-                    onRequestUnlock={onRequestUnlock}
-                  />
-                </div>
-                {plainSites.length > 0 && (
-                  <div className="glass-portal-cards" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
-                    gridAutoRows: 'auto',
-                    gap: '0.7rem',
-                    marginTop: '0.9rem',
-                  }}>
-                    {plainSites.map((s, i) => (
-                      <GlassCard key={s.id} site={s} index={i + publicSites.length} unlocked={unlocked} onSelect={onSiteSelect} />
-                    ))}
-                  </div>
-                )}
-              </>
-            )
-          })()}
+          {/* alignItems: 'start' — 沒有這行，同一列的卡片預設會被拉伸成一樣高
+              （grid 預設 align-items: stretch）。改成 start 後每張卡各自長到
+              自己內容需要的高度就好。 */}
+          <div className="glass-portal-bento" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridAutoRows: 'auto',
+            gap: '0.9rem',
+            alignItems: 'start',
+            // dense：沒有這個，全寬卡片（運動 APP 系統）夾在兩張一般卡片
+            // 中間時，瀏覽器會直接把它後面那張卡片推到下一列，前面那張卡
+            // 旁邊留一整格空白（例如人生自由指數卡片旁邊空出一大塊）——
+            // grid 預設不會「回頭」把後面的卡片填進這個空格。dense 讓瀏覽
+            // 器優先填滿前面留下的空格，全寬卡片改成自己找下一個空列插入。
+            gridAutoFlow: 'dense',
+          }}>
+            {richSites.map((s, i) => {
+              const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
+              return (
+                <GlassSummaryCard
+                  key={s.id}
+                  site={s}
+                  summary={summary}
+                  index={i + publicSites.length}
+                  unlocked={unlocked}
+                  onSelect={onSiteSelect}
+                  wide={summary.subsystemId === 'fitnessforge'}
+                />
+              )
+            })}
+            {/* 心智指標／社交指標都沒有 portal_sites 對應列（沒有外部網址可
+                連），所以不透過上面 richSites 那條路徑，直接掛進同一個
+                bento grid 當額外兩格——跟其他摘要卡同樣是 HeroIndex + 支援
+                數字的形狀，高度天生接近，放在一起不會不對齊。 */}
+            <MindIndexCard
+              summary={dashboard.find(d => d.subsystemId === 'mind-index')}
+              unlocked={unlocked}
+              unlockedPassword={unlockedPassword}
+              onRequestUnlock={onRequestUnlock}
+            />
+            <SocialIndexCard
+              summary={dashboard.find(d => d.subsystemId === 'social-index')}
+              unlocked={unlocked}
+              unlockedPassword={unlockedPassword}
+              onRequestUnlock={onRequestUnlock}
+            />
+          </div>
         </div>
 
         {/* Horizontal divider */}
@@ -3492,10 +3642,23 @@ function GlassPortalView({
         }} />
 
         {/* HERMES 戰情室 — operational monitoring, not a happiness dimension,
-            so it's its own zone rather than folded into 私領域's bento grid. */}
+            so it's its own zone rather than folded into 私領域's bento grid.
+            內容越堆越多（現在還多了知識庫健康度），預設收合，點標題展開。 */}
         <div className="glass-portal-zone">
-          <ZoneLabel label="⬡  H E R M E S  戰  情  室" color="#c084fc" rgb="192,132,252" />
-          <HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
+          <ZoneLabel
+            label={`⬡  H E R M E S  戰  情  室${unlocked ? '' : '  🔒'}`}
+            color="#c084fc" rgb="192,132,252"
+            onToggle={() => setHermesOpen(o => !o)}
+            open={hermesOpen}
+          />
+          {hermesOpen && (
+            <HermesWarRoomSection
+              unlocked={unlocked}
+              unlockedPassword={unlockedPassword}
+              onRequestUnlock={onRequestUnlock}
+              mindSummary={dashboard.find(d => d.subsystemId === 'mind-index')}
+            />
+          )}
         </div>
 
         <div className="glass-portal-hr" style={{
@@ -3503,23 +3666,15 @@ function GlassPortalView({
           background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.08), rgba(0,229,255,0.16), rgba(255,255,255,0.08), transparent)',
         }} />
 
-        {/* Public zone */}
-        <div className="glass-portal-zone">
-          <ZoneLabel label="◆  公  領  域" color="#00e5ff" rgb="0,229,255" />
-          <div className="glass-portal-cards" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gridAutoRows: 'auto',
-            gap: '0.7rem',
-          }}>
-            {publicSites.length > 0
-              ? publicSites.map((s, i) => (
-                  <GlassCard key={s.id} site={s} index={i} unlocked={unlocked} onSelect={onSiteSelect} />
-                ))
-              : <div style={{ color: 'rgba(255,255,255,0.13)', fontSize: '0.72rem', fontFamily: FONT_STACK, letterSpacing: '0.18em', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', padding: '2rem 0' }}>No Data</div>
-            }
-          </div>
-        </div>
+        {/* 工具連結 — 2026-08-31 起把私領域純連結卡（例如 Duplicati 狀態）跟
+            公領域全部合併進這個可搜尋、預設收合的區塊，取代原本各自獨立的
+            私領域純連結格線／公領域區。 */}
+        <ToolLinksZone
+          privateSites={plainSites}
+          publicSites={publicSites}
+          unlocked={unlocked}
+          onSelect={onSiteSelect}
+        />
       </div>
 
       {/* Footer */}
