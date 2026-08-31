@@ -397,6 +397,7 @@ try {
     }).Count
 
     $distinctPersonCount = 0
+    $distinctPersonNames = @()
     $weightedInteractionPoints = 0
     $daysWithInteraction = 0
 
@@ -407,7 +408,12 @@ try {
             try { $_ | ConvertFrom-Json } catch { $null }  # 格式錯的單行跳過，不整支腳本失敗
         } | Where-Object { $_ -and $windowDates -contains $_.date }
 
-        $distinctPersonCount = ($records | Select-Object -ExpandProperty person_id -Unique).Count
+        # @(...) forces an array even when there's exactly one distinct
+        # person — same reasoning as the $lines assignment above, otherwise
+        # ConvertTo-Json below would serialize a lone name as a bare string
+        # instead of a one-element JSON array.
+        $distinctPersonNames = @($records | Select-Object -ExpandProperty person_id -Unique)
+        $distinctPersonCount = $distinctPersonNames.Count
         $weightPerType = @{ face_to_face = 3; call = 2; text = 1 }
         $weightedInteractionPoints = ($records | ForEach-Object {
             if ($weightPerType.ContainsKey($_.type)) { $weightPerType[$_.type] } else { 0 }
@@ -419,6 +425,7 @@ try {
     $socialBody = @{
         observedDayCount = $observedDayCount
         distinctPersonCount = $distinctPersonCount
+        personNames = $distinctPersonNames
         weightedInteractionPoints = $weightedInteractionPoints
         daysWithInteraction = $daysWithInteraction
     } | ConvertTo-Json

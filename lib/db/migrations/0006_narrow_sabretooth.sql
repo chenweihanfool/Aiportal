@@ -1,0 +1,1 @@
+ALTER TABLE "social_index_history" ADD COLUMN "person_names" text[];

@@ -32,6 +32,13 @@ router.post("/admin/social-index", async (req: Request, res: Response) => {
   const distinctPersonCount = num("distinctPersonCount") ?? 0;
   const weightedInteractionPoints = num("weightedInteractionPoints") ?? 0;
   const daysWithInteraction = num("daysWithInteraction") ?? 0;
+  // collect.ps1 送的是已經正規化過的 person_id 字串陣列（跟 distinctPersonCount
+  // 同一批資料，只是把「人數」換成「是誰」）——不是必填欄位，舊版 collect.ps1
+  // 沒送這個欄位時要能照舊運作，不因此整個請求 400。
+  const rawPersonNames = body["personNames"];
+  const personNames = Array.isArray(rawPersonNames)
+    ? rawPersonNames.filter((v): v is string => typeof v === "string")
+    : null;
 
   const derived = computeSocialIndex({
     observedDayCount,
@@ -48,6 +55,7 @@ router.post("/admin/social-index", async (req: Request, res: Response) => {
     // computeSocialIndex 回傳的三個子分數/socialScore 皆為 null 一致），不是
     // 存假的 0——見 socialIndexHistory.ts schema 註解。
     distinctPersonCount: observedDayCount > 0 ? distinctPersonCount : null,
+    personNames: observedDayCount > 0 ? personNames : null,
     weightedInteractionPoints: observedDayCount > 0 ? weightedInteractionPoints : null,
     daysWithInteraction: observedDayCount > 0 ? daysWithInteraction : null,
     ...derived,

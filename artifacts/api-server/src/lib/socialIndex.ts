@@ -65,6 +65,7 @@ const STALE_THRESHOLD_MS = 36 * 60 * 60 * 1000; // 跟心智指標同樣的門�
 export interface SocialIndexData {
   observedDayCount: number | null;
   distinctPersonCount: number | null;
+  personNames: string[] | null;
   weightedInteractionPoints: number | null;
   daysWithInteraction: number | null;
   breadthScore: number | null;
@@ -93,6 +94,7 @@ export async function fetchSocialIndex(): Promise<SocialIndexData> {
   return {
     observedDayCount: row.observedDayCount,
     distinctPersonCount: row.distinctPersonCount,
+    personNames: row.personNames,
     weightedInteractionPoints: row.weightedInteractionPoints,
     daysWithInteraction: row.daysWithInteraction,
     breadthScore: row.breadthScore,

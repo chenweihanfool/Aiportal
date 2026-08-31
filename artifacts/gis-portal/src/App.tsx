@@ -26,6 +26,15 @@ const PUBLIC_POSITION_POOL: [number, number][] = [
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '1.35.0',
+    date: '2026-08-31',
+    summary: '社交指標新增計分對象名單；修正版本徽章手機排版',
+    changes: [
+      '社交指標卡片新增「計分對象（近 7 天）」——原本 collect.ps1 只把不重複人數（distinctPersonCount）送上伺服器，完整的 person_id 名單從來沒離開過 HERMES 主機；現在 collect.ps1／api-server／social_index_history 表／前端四邊都改成一起傳遞正規化過的 person_id 陣列，卡片上直接列出這幾天被算進分數的對象',
+      '版本徽章收合狀態不再把整行版本說明塞進按鈕——手機窄螢幕上原本會蓋住畫面中間的 3D MODE 按鈕、右邊的 ⚙ 齒輪，甚至超出螢幕邊緣。改成收合時只顯示版本號，完整說明搬進展開面板',
+    ],
+  },
+  {
     version: '1.34.0',
     date: '2026-08-31',
     summary: '首頁改版：知識庫健康度併入 HERMES 戰情室、其餘區塊改可折疊、工具連結加搜尋',
@@ -2358,6 +2367,8 @@ function SocialIndexCard({
   const intensityScore = typeof data?.['intensityScore'] === 'number' ? data['intensityScore'] as number : null
   const connectionRateScore = typeof data?.['connectionRateScore'] === 'number' ? data['connectionRateScore'] as number : null
   const socialScore = typeof data?.['socialScore'] === 'number' ? data['socialScore'] as number : null
+  const personNamesRaw = data?.['personNames']
+  const personNames = Array.isArray(personNamesRaw) ? personNamesRaw.filter((v): v is string => typeof v === 'string') : null
   const stale = data?.['stale'] === true
 
   const cardStyle: React.CSSProperties = {
@@ -2439,6 +2450,20 @@ function SocialIndexCard({
             )}
           </div>
           <SupportStats items={socialItems} />
+          {/* 計分對象名單——distinctPersonCount 只給人數，這裡列出近 7 天窗口
+              內實際被算進去的 person_id（HERMES 正規化過的 alias，不是原始
+              暱稱）。舊版 collect.ps1 還沒送這個欄位時 personNames 會是
+              null，不顯示這一段，不影響其餘分數。 */}
+          {personNames && personNames.length > 0 && (
+            <div style={{ marginTop: '0.9rem' }}>
+              <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: '6px' }}>計分對象（近 7 天）</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {personNames.map(name => (
+                  <span key={name} style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.75)', background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.3)', borderRadius: '999px', padding: '3px 10px' }}>{name}</span>
+                ))}
+              </div>
+            </div>
+          )}
           <FormulaPanel rows={[
             { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)——全被動日記萃取，沒有問卷；跟心智指標一樣源自日記，寫作頻率會造成部分共線' },
             ...socialItems,
