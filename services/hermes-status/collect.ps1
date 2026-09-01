@@ -114,6 +114,23 @@ if (-not $AdminPassword -or -not $ApiBaseUrl) {
     exit 1
 }
 $ApiBaseUrl = $ApiBaseUrl.TrimEnd("/")
+# Body 送出前先把所有非 ASCII 字元跳脫成 \uXXXX 純文字再送，兩層地雷一次繞過：
+# (1) PowerShell 5.1 的 Invoke-RestMethod 對 string Body 預設用 Latin-1 編碼，
+#     中文字（people.yaml 的顯示名稱等）會被逐字替換成 '?'（0x3F）落地到
+#     DB；純 ASCII 字串的 Latin-1 與 UTF-8 逐 byte 相同，編碼差異直接消失。
+# (2) 直接改送 UTF-8 byte[] 也行不通——PS 5.1 管線會把 byte[] 逐 byte 展開
+#     成 Object[]，IRM 拿到的不是完整 body 而是一串單一 byte 物件，三個
+#     POST 全部 400 Bad Request（2026-08-31 22:36 起 error log 連續 Bad
+#     Request 的根因，2026-09-01 實測重現）。\uXXXX 是標準 JSON escape，
+#     Node 的 JSON.parse 會還原回原字元（emoji 走 surrogate pair，同一
+#     機制相容）。
+function ConvertTo-AsciiJson {
+    param([Parameter(ValueFromPipeline)][string]$Text)
+    process {
+        [regex]::Replace($Text, '[^\x00-\x7F]', { param($m) ('\u{0:x4}' -f [int][char]$m.Value) })
+    }
+}
+
 $Headers = @{ "x-admin-password" = $AdminPassword; "Content-Type" = "application/json" }
 
 try {
@@ -215,7 +232,7 @@ try {
         containers     = $containers
         scheduledTasks = $scheduledTasks
     }
-    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-status" -Method Post -Headers $Headers -Body ($snapshot | ConvertTo-Json -Depth 6) | Out-Null
+    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-status" -Method Post -Headers $Headers -Body (($snapshot | ConvertTo-Json -Depth 6) | ConvertTo-AsciiJson) | Out-Null
 }
 catch {
     Write-ErrorLog "Status snapshot collection/POST failed: $_"
@@ -274,7 +291,7 @@ foreach ($source in $UpdateLogPaths.Keys) {
             $message = if ($durationText) { "deploy finished in ${durationText}s" } else { "deploy finished ($line)" }
             $body = @{ source = $source; message = $message; occurredAt = $occurredAt } | ConvertTo-Json
             try {
-                Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-activity" -Method Post -Headers $Headers -Body $body | Out-Null
+                Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-activity" -Method Post -Headers $Headers -Body ($body | ConvertTo-AsciiJson) | Out-Null
             } catch {
                 Write-ErrorLog "Activity POST failed for $source : $_"
                 $ScriptHadError = $true
@@ -379,7 +396,7 @@ try {
         diaryEntryCount = $todayDiaryEntryCount   # 不變：只算今天，給卡片顯示統計用
         diaryEntryCount3Day = $n3                  # 新增：分數實際依據的滾動總和
     } | ConvertTo-Json
-    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/mind-index" -Method Post -Headers $Headers -Body $mindBody | Out-Null
+    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/mind-index" -Method Post -Headers $Headers -Body ($mindBody | ConvertTo-AsciiJson) | Out-Null
 } catch {
     Write-ErrorLog "Diary engagement score (rolling window) collection/POST failed: $_"
     $ScriptHadError = $true
@@ -464,7 +481,7 @@ try {
         weightedInteractionPoints = $weightedInteractionPoints
         daysWithInteraction = $daysWithInteraction
     } | ConvertTo-Json
-    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/social-index" -Method Post -Headers $Headers -Body $socialBody | Out-Null
+    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/social-index" -Method Post -Headers $Headers -Body ($socialBody | ConvertTo-AsciiJson) | Out-Null
 } catch {
     Write-ErrorLog "Social index collection/POST failed: $_"
     $ScriptHadError = $true
