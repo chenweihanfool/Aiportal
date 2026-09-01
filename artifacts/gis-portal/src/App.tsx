@@ -12,6 +12,15 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.0.2',
+    date: '2026-08-31',
+    summary: '六維度指針錶卡片補回點擊連到對應系統，並在卡片上明確標示',
+    changes: [
+      '人生進度管理系統／健身追蹤／任務追蹤系統／旅遊生活這四張指針錶卡片，v2.0.0 改版時只留了卡片名稱那一行文字可以點擊，點擊區域比舊版整張卡片小很多、也沒有任何視覺提示看得出來可以點——這次改成整張卡片都能點擊，並在卡片下方新增「前往系統 ↗」標示，跟舊版一樣一眼就能看出這是可以連過去的系統',
+      '卡片內「詳細數據」展開/收起的點擊區域補上事件阻止冒泡，避免點開詳細數據時被外層卡片的點擊一起觸發、意外跳轉到外部系統',
+    ],
+  },
+  {
     version: '2.0.1',
     date: '2026-08-31',
     summary: '幸福指數卡片改回雷達圖；修正手機上六維度數字被裁掉的排版問題',
@@ -880,28 +889,27 @@ function DimensionGauge({
   }
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
-      padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
-    }}>
+    <div
+      onClick={() => onSelect(site)}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', cursor: 'pointer',
+        padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
+      }}
+    >
       <Gauge value={heroScore} color={tone.color} />
-      <div
-        onClick={() => onSelect(site)}
-        style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink, cursor: 'pointer', textAlign: 'center' }}
-      >
-        {site.name}
-      </div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink, textAlign: 'center' }}>{site.name}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, letterSpacing: '0.04em' }}>
         {heroScore !== null ? tone.label : (summary.status === 'pending' ? '資料準備中' : '暫時無法取得資料')}
       </div>
       {Body && data && (
-        <div style={{ width: '100%', marginTop: '0.3rem' }}>
+        <div style={{ width: '100%', marginTop: '0.3rem' }} onClick={e => e.stopPropagation()}>
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
           {expanded && <div style={{ marginTop: '0.5rem' }}><Body data={data} /></div>}
         </div>
       )}
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.2rem' }}>
-        {formatMinutesAgo(summary.fetchedAt)}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingTop: '0.5rem', marginTop: '0.2rem', borderTop: `1px solid ${COLOR.line}`, fontFamily: FONT.mono, fontSize: '0.6rem' }}>
+        <span style={{ color: COLOR.steelDim }}>{formatMinutesAgo(summary.fetchedAt)}</span>
+        <span style={{ color: COLOR.amberDim, letterSpacing: '0.03em' }}>前往系統 ↗</span>
       </div>
     </div>
   )
