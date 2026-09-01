@@ -12,6 +12,15 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.0.1',
+    date: '2026-08-31',
+    summary: '幸福指數卡片改回雷達圖；修正手機上六維度數字被裁掉的排版問題',
+    changes: [
+      '幸福指數的六維度改回顯示雷達圖（保留下方的權重佔比說明），不是只有 v2.0.0 的每維度分數文字條——原本用來取代雷達圖的做法被使用者否決，雷達圖跟這幾個分數本來就有其存在理由',
+      '修正手機窄螢幕上「指針錶＋六維度數字」左右並排的版面沒有響應式收合規則，導致固定寬度的指針錶＋雷達圖擠在同一列，右側內容被推出可視範圍外、完全看不到——原本在設計預覽裡就有這條 CSS 規則，正式重寫成 React 版時漏掉了，補上手機斷點改成上下堆疊',
+    ],
+  },
+  {
     version: '2.0.0',
     date: '2026-08-31',
     summary: '首頁全面改版：玻璃卡片換成儀表板面板——指針錶、蝕刻刻度、電文式狀態板',
@@ -1041,40 +1050,6 @@ function SocialIndexCard({
 }
 
 // ─────────────────────────────────────────────
-// Weight distribution bars — replaces the old 6-axis radar next to the HHI
-// number, which duplicated what the six gauges below already show
-// individually (and more legibly than a radar polygon).
-// ─────────────────────────────────────────────
-function WeightBars({ contributions }: { contributions: Array<{ label: string; value: number | null; weightPct: number }> }) {
-  const [filled, setFilled] = useState(REDUCE_MOTION)
-  useEffect(() => {
-    if (REDUCE_MOTION) return
-    const t = setTimeout(() => setFilled(true), 150)
-    return () => clearTimeout(t)
-  }, [])
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', width: '100%' }}>
-      {contributions.map(c => (
-        <div key={c.label} style={{ display: 'grid', gridTemplateColumns: '4.6rem 1fr 2.6rem', alignItems: 'center', gap: '0.7rem' }}>
-          <span style={{ fontSize: '0.76rem', color: COLOR.ink, fontWeight: 500 }}>{c.label}</span>
-          <span style={{ height: '6px', background: COLOR.panelDeep, borderRadius: '3px', overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)', display: 'block' }}>
-            <span style={{
-              display: 'block', height: '100%', borderRadius: '3px',
-              background: `linear-gradient(90deg, ${COLOR.amberDim}, ${COLOR.amber})`,
-              width: filled ? `${c.weightPct}%` : '0%',
-              transition: 'width 1.1s cubic-bezier(.2,.8,.2,1)',
-            }} />
-          </span>
-          <span style={{ fontFamily: FONT.mono, fontSize: '0.7rem', color: COLOR.steel, textAlign: 'right' }}>
-            {c.value !== null ? Math.round(c.value) : '—'} · {c.weightPct}%
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────
 // 翰翰仔幸福指數 (Hanhan Happiness Index) — the primary instrument.
 // ─────────────────────────────────────────────
 function HappinessHeroCard({
@@ -1140,6 +1115,7 @@ function HappinessHeroCard({
     { label: '社交指標', value: socialScore, weightPct: Math.round((weights?.socialWeight ?? 0.13) * 100) },
     { label: '旅遊生活', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.12) * 100) },
   ]
+  const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
 
   return (
     <div>
@@ -1151,7 +1127,15 @@ function HappinessHeroCard({
             <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: '999px', padding: '1px 8px' }}>今日暫定</span>
           )}
         </div>
-        <WeightBars contributions={contributions} />
+        <LabeledRadarChart axes={radarAxes} maxValue={100} size={230} color={tone.color} />
+      </div>
+
+      {/* 權重佔比——雷達圖只畫得出分數，這行補上每個維度實際佔幸福指數的
+          百分比，雷達圖看不出來的資訊。 */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem 1.2rem', justifyContent: 'center', marginTop: '1rem', fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim }}>
+        {contributions.map(c => (
+          <span key={c.label}>{c.label} <span style={{ color: COLOR.steel }}>{c.weightPct}%</span></span>
+        ))}
       </div>
 
       {weakestComponent && (

@@ -71,6 +71,16 @@ body,
   .ip-board-cols {
     grid-template-columns: 1fr !important;
   }
+
+  /* Primary HHI gauge + radar row — auto/1fr side-by-side has no room to
+     shrink into on a phone (fixed 200px gauge + fixed-size radar SVG both
+     need real width), so the radar/support content overflowed the visible
+     viewport with nothing visibly wrapping. Stack instead. */
+  .ip-primary-grid {
+    grid-template-columns: 1fr !important;
+    justify-items: center;
+    text-align: center;
+  }
 }
 
 @media (max-width: 480px) {
