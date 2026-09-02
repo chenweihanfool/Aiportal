@@ -69,12 +69,12 @@ $UpdateLogPaths = @{
 
 # 心智指標的日記篇數——一天只有一個 YYYY-MM-DD.md 檔，篇數是看檔案「內容」
 # 裡有幾個時間點記錄，不是檔案數量（處理邏輯見下面 dailyEngagementScore 那段）。
-$DiaryFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\日記"
+$DiaryFolderPath = "F:\SynologyDrive\日記"
 
 # 社交指標（HHI v2）的原始資料——HERMES 自己的 L1/L2 日記處理流程額外寫出
 # 的 append-only JSONL，這支腳本只讀不寫，alias 正規化成 person_id 是
 # HERMES 自己的責任（見 social_interactions.jsonl 交接文件）。
-$SocialFolderPath = "\\NASD723\home\SynologyDrive\obsidian\Vault\社交"
+$SocialFolderPath = "F:\SynologyDrive\社交"
 $SocialInteractionsPath = Join-Path $SocialFolderPath "social_interactions.jsonl"
 # person_id -> 中文顯示名稱同樣讀自 HERMES 這邊，不是另外在 Aiportal 前端
 # 維護一份會失聯的複本——2026-08-31 起卡片上「計分對象」要顯示中文，資料
