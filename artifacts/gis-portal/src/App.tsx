@@ -1946,35 +1946,49 @@ function AdminAuthModal({ onSuccess, onCancel }: { onSuccess: (pw: string) => vo
   )
 }
 
+// Trigger lives in the header's right-hand block (see InstrumentPanelView) —
+// the header had empty room and this used to be a cramped bottom-left
+// popover (300px wide, 60vh scroll, small type) that was awkward to read.
+// The panel itself is now a proper centered modal, sized for actually
+// reading changelogs rather than squinting at a corner popover.
 function VersionHistory() {
   const [expanded, setExpanded] = useState(false)
   const latest = VERSION_HISTORY[0]!
   return (
-    <div style={{ position: 'absolute', bottom: '1.5rem', left: '1.5rem', zIndex: 100, fontFamily: FONT.body, maxWidth: 'calc(50vw - 2rem)' }}>
-      <button onClick={() => setExpanded(x => !x)} style={{
-        display: 'flex', alignItems: 'center', gap: '6px', background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
-        padding: '0.5rem 0.8rem', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.68rem', color: COLOR.steel, whiteSpace: 'nowrap',
+    <>
+      <button onClick={() => setExpanded(true)} style={{
+        display: 'inline-flex', alignItems: 'center', gap: '6px', background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
+        padding: '0.35rem 0.7rem', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steel, whiteSpace: 'nowrap', marginTop: '0.5rem',
       }}>
         <span style={{ color: COLOR.amber, fontWeight: 600 }}>v{latest.version}</span>
-        <span style={{ color: COLOR.steelDim, fontSize: '0.6rem' }}>{expanded ? '▲' : '▼'}</span>
+        <span style={{ color: COLOR.steelDim }}>版本歷程 ▸</span>
       </button>
       {expanded && (
-        <div style={{ marginTop: '8px', background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '6px', padding: '1.1rem 1.2rem', width: 'min(300px, calc(100vw - 3rem))', maxHeight: '60vh', overflowY: 'auto' }}>
-          {VERSION_HISTORY.map((v, vi) => (
-            <div key={v.version} style={{ marginBottom: vi < VERSION_HISTORY.length - 1 ? '18px' : 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: FONT.mono, fontSize: '0.72rem', fontWeight: 600, color: COLOR.amber }}>v{v.version}</span>
-                <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim }}>{v.date}</span>
-              </div>
-              <div style={{ fontSize: '0.7rem', color: COLOR.steel, lineHeight: 1.6, marginBottom: '7px' }}>{v.summary}</div>
-              <ul style={{ margin: 0, padding: '0 0 0 14px' }}>
-                {v.changes.map((c, ci) => <li key={ci} style={{ fontSize: '0.68rem', color: COLOR.steelDim, lineHeight: 1.7 }}>{c}</li>)}
-              </ul>
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,11,14,0.82)' }}
+          onClick={e => { if (e.target === e.currentTarget) setExpanded(false) }}
+        >
+          <div style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '8px', padding: '1.8rem 2.2rem', width: 'min(760px, calc(100vw - 3rem))', maxHeight: '82vh', overflowY: 'auto', fontFamily: FONT.body }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.3rem', position: 'sticky', top: 0, background: COLOR.panel, paddingBottom: '0.8rem', borderBottom: `1px solid ${COLOR.line}` }}>
+              <span style={{ fontFamily: FONT.mono, fontSize: '0.74rem', color: COLOR.amberDim, letterSpacing: '0.2em', textTransform: 'uppercase' }}>版本歷程 · Version History</span>
+              <button onClick={() => setExpanded(false)} style={{ background: 'transparent', border: 'none', color: COLOR.steelDim, fontSize: '1.4rem', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>✕</button>
             </div>
-          ))}
+            {VERSION_HISTORY.map((v, vi) => (
+              <div key={v.version} style={{ marginBottom: vi < VERSION_HISTORY.length - 1 ? '26px' : 0, paddingBottom: vi < VERSION_HISTORY.length - 1 ? '22px' : 0, borderBottom: vi < VERSION_HISTORY.length - 1 ? `1px dashed ${COLOR.line}` : undefined }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: FONT.mono, fontSize: '1rem', fontWeight: 600, color: COLOR.amber }}>v{v.version}</span>
+                  <span style={{ fontFamily: FONT.mono, fontSize: '0.72rem', color: COLOR.steelDim }}>{v.date}</span>
+                </div>
+                <div style={{ fontSize: '0.88rem', color: COLOR.ink, lineHeight: 1.7, marginBottom: '10px', fontWeight: 500 }}>{v.summary}</div>
+                <ul style={{ margin: 0, padding: '0 0 0 18px' }}>
+                  {v.changes.map((c, ci) => <li key={ci} style={{ fontSize: '0.8rem', color: COLOR.steel, lineHeight: 1.85, marginBottom: '5px' }}>{c}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -2026,8 +2040,11 @@ function InstrumentPanelView({
             Life Instrumentation · 即時遙測面板
           </span>
         </div>
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, textAlign: 'right', lineHeight: 1.6 }}>
-          {sites.length > 0 ? `${sites.length} PORTALS AVAILABLE` : 'CONNECTING...'}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, textAlign: 'right', lineHeight: 1.6 }}>
+            {sites.length > 0 ? `${sites.length} PORTALS AVAILABLE` : 'CONNECTING...'}
+          </div>
+          <VersionHistory />
         </div>
       </div>
 
@@ -2189,8 +2206,6 @@ export default function App() {
         onSiteSelect={handleSiteClick}
         onRequestUnlock={handleRequestUnlock}
       />
-
-      <VersionHistory />
 
       <button
         onClick={() => setAdminAuth(true)}
