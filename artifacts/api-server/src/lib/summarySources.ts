@@ -2,9 +2,13 @@ import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@work
 import { desc, eq, lt } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,
+  PERCENTILE_WINDOW_DAYS,
+  clamp,
   computeDisplayedScore,
   computeHappinessComponents,
   getHappinessConfigVersion,
+  percentileRank,
+  type HappinessInputs,
   type HappinessResult,
 } from "./happinessIndex";
 import { fetchMindIndex } from "./mindIndex";
@@ -172,7 +176,9 @@ async function fetchRawSummaryResults(): Promise<Map<string, DashboardSummary>> 
 export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummary>> {
   const results = await fetchRawSummaryResults();
 
-  const { result, busynessScore, usingStaleData } = extractHappinessResult(results);
+  const today = taipeiDateString(new Date());
+  const history = await fetchDimensionHistory(today);
+  const { result, busynessScore, usingStaleData } = await extractHappinessResult(results, history);
   const hhiData = await buildHappinessDisplayData(result, busynessScore, usingStaleData);
   const hhiEntry: DashboardSummary = {
     subsystemId: "hhi",
@@ -188,13 +194,76 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   return results;
 }
 
-/** Pure extraction step shared by the display path (fetchFreshSummaries,
+export interface DimensionHistory {
+  lifeFreedom: number[];
+  fitness: number[];
+  calm: number[];
+  mind: number[];
+  travel: number[];
+  social: number[];
+}
+
+const EMPTY_HISTORY: DimensionHistory = {
+  lifeFreedom: [],
+  fitness: [],
+  calm: [],
+  mind: [],
+  travel: [],
+  social: [],
+};
+
+/** Reads each dimension's *raw* (pre-normalization) scores from the trailing
+ *  PERCENTILE_WINDOW_DAYS days strictly before `beforeDate`, for
+ *  percentileRank() to rank today's raw score against. Only the 23:55
+ *  snapshot job ever writes these columns, so a dimension with no history
+ *  yet (or one that was null on a given day) simply contributes fewer
+ *  entries — percentileRank() itself falls back to the raw score unchanged
+ *  below MIN_HISTORY_DAYS_FOR_PERCENTILE. */
+async function fetchDimensionHistory(beforeDate: string): Promise<DimensionHistory> {
+  const rows = await db
+    .select({
+      lifeFreedomRaw: happinessIndexHistoryTable.lifeFreedomRaw,
+      fitnessHabitRaw: happinessIndexHistoryTable.fitnessHabitRaw,
+      calmRaw: happinessIndexHistoryTable.calmRaw,
+      mindRaw: happinessIndexHistoryTable.mindRaw,
+      travelRaw: happinessIndexHistoryTable.travelRaw,
+      socialRaw: happinessIndexHistoryTable.socialRaw,
+    })
+    .from(happinessIndexHistoryTable)
+    .where(lt(happinessIndexHistoryTable.date, beforeDate))
+    .orderBy(desc(happinessIndexHistoryTable.date))
+    .limit(PERCENTILE_WINDOW_DAYS);
+
+  const pick = (key: keyof (typeof rows)[number]): number[] =>
+    rows.map((r) => r[key]).filter((v): v is number => v !== null);
+
+  return {
+    lifeFreedom: pick("lifeFreedomRaw"),
+    fitness: pick("fitnessHabitRaw"),
+    calm: pick("calmRaw"),
+    mind: pick("mindRaw"),
+    travel: pick("travelRaw"),
+    social: pick("socialRaw"),
+  };
+}
+
+/** Pure(ish) extraction step shared by the display path (fetchFreshSummaries,
  *  above) and the 23:55 daily-persist path (computeAndPersistDailySnapshot,
- *  below) — pulls each dimension's score out of the already-fetched raw
- *  results and runs computeHappinessComponents. No DB write happens here. */
-function extractHappinessResult(
-  results: Map<string, DashboardSummary>
-): { result: HappinessResult; busynessScore: number | null; usingStaleData: boolean } {
+ *  below) — pulls each dimension's *raw* score out of the already-fetched
+ *  raw results, percentile-ranks it against `history` (HHI v3, see
+ *  percentileRank() in happinessIndex.ts), then runs
+ *  computeHappinessComponents on the normalized values. No DB write happens
+ *  here — `history` itself is a DB read, done by the caller via
+ *  fetchDimensionHistory so both callers share one query shape. */
+async function extractHappinessResult(
+  results: Map<string, DashboardSummary>,
+  history: DimensionHistory = EMPTY_HISTORY
+): Promise<{
+  result: HappinessResult;
+  rawComponents: HappinessInputs;
+  busynessScore: number | null;
+  usingStaleData: boolean;
+}> {
   const pf = results.get("pf-cwh");
   const ff = results.get("fitnessforge");
   const vk = results.get("vikunja");
@@ -202,16 +271,16 @@ function extractHappinessResult(
   const tv = results.get("travel");
   const si = results.get("social-index");
 
-  const lifeFreedomScore = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
-  const fitnessHabitScore = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
+  const lifeFreedomRaw = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
+  const fitnessHabitRaw = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
   const busynessScore = vk?.status === "ok" ? (vk.data)?.busyIndex as number | null : null;
   // 2026-08-20 起改讀 dailyEngagementScore（2026-08-21 起是近 3 天滾動窗口日
   // 記篇數，見 HHI v2），不再讀知識庫健康分數 score——那組分數還留著給
   // MindIndexCard 顯示，只是不計入 HHI 了。daily-life-score.py 補這個欄位之
   // 前，這裡會是 null，跟其他缺資料的維度一樣走重新正規化，不會顯示假分數。
-  const mindScore = mi?.status === "ok" ? (mi.data)?.dailyEngagementScore as number | null : null;
-  const travelScore = tv?.status === "ok" ? (tv.data)?.travelScore as number | null : null;
-  const socialScore = si?.status === "ok" ? (si.data)?.socialScore as number | null : null;
+  const mindRaw = mi?.status === "ok" ? (mi.data)?.dailyEngagementScore as number | null : null;
+  const travelRaw = tv?.status === "ok" ? (tv.data)?.travelScore as number | null : null;
+  const socialRaw = si?.status === "ok" ? (si.data)?.socialScore as number | null : null;
 
   // 心智指標／社交指標都是同一種「檔案讀取成功，但值本身可能是舊的」情境
   // （collect.ps1 停止推送一段時間），跟其他來源的 fetch 失敗（status ===
@@ -221,16 +290,45 @@ function extractHappinessResult(
   const socialStale = si?.status === "ok" ? (si.data)?.stale === true : false;
   const usingStaleData = mindStale || socialStale;
 
+  // calmRaw is busyness inverted to "higher is better" BEFORE percentile
+  // ranking (percentileRank always ranks "higher is better" raw values —
+  // see its doc comment in happinessIndex.ts).
+  const calmRaw = busynessScore === null ? null : clamp(100 - busynessScore, 0, 100);
+
+  const lifeFreedomScore = lifeFreedomRaw === null ? null : percentileRank(lifeFreedomRaw, history.lifeFreedom);
+  const fitnessHabitScore = fitnessHabitRaw === null ? null : percentileRank(fitnessHabitRaw, history.fitness);
+  const calmScore = calmRaw === null ? null : percentileRank(calmRaw, history.calm);
+  const mindScore = mindRaw === null ? null : percentileRank(mindRaw, history.mind);
+  const travelScore = travelRaw === null ? null : percentileRank(travelRaw, history.travel);
+  const socialScore = socialRaw === null ? null : percentileRank(socialRaw, history.social);
+
+  // computeHappinessComponents inverts busynessScore internally
+  // (calmScore = 100 - busynessScore) — it was kept unchanged (and its
+  // existing tests with it) rather than reworked to take calmScore
+  // directly, so we invert calmScore back here to cancel that internal
+  // inversion out and land on exactly the percentile-normalized calmScore
+  // computed above.
+  const normalizedBusynessInput = calmScore === null ? null : 100 - calmScore;
+
   const result = computeHappinessComponents({
     lifeFreedomScore,
     fitnessHabitScore,
-    busynessScore,
+    busynessScore: normalizedBusynessInput,
     mindScore,
     travelScore,
     socialScore,
   });
 
-  return { result, busynessScore, usingStaleData };
+  const rawComponents: HappinessInputs = {
+    lifeFreedomScore: lifeFreedomRaw,
+    fitnessHabitScore: fitnessHabitRaw,
+    busynessScore,
+    mindScore: mindRaw,
+    travelScore: travelRaw,
+    socialScore: socialRaw,
+  };
+
+  return { result, rawComponents, busynessScore, usingStaleData };
 }
 
 const HAPPINESS_WEIGHTS = {
@@ -366,11 +464,12 @@ async function buildHappinessDisplayData(
  *  失敗時更正確。 */
 export async function computeAndPersistDailySnapshot(): Promise<void> {
   const results = await fetchRawSummaryResults();
-  const { result } = extractHappinessResult(results);
+  const today = taipeiDateString(new Date());
+  const history = await fetchDimensionHistory(today);
+  const { result, rawComponents } = await extractHappinessResult(results, history);
 
   if (result.finalScore === null) return; // 沒東西可存，維持「資料準備中」
 
-  const today = taipeiDateString(new Date());
   const [priorRow] = await db
     .select({ displayedScore: happinessIndexHistoryTable.displayedScore })
     .from(happinessIndexHistoryTable)
@@ -378,6 +477,12 @@ export async function computeAndPersistDailySnapshot(): Promise<void> {
     .orderBy(desc(happinessIndexHistoryTable.date))
     .limit(1);
   const displayedScore = computeDisplayedScore(result.finalScore, priorRow?.displayedScore ?? null);
+
+  // calmRaw stored here mirrors extractHappinessResult's own calmRaw
+  // (100-busyness, clamped) — recomputed rather than threaded through
+  // rawComponents since rawComponents.busynessScore intentionally still
+  // holds the raw (uninverted) busyness score for display purposes.
+  const calmRaw = rawComponents.busynessScore === null ? null : clamp(100 - rawComponents.busynessScore, 0, 100);
 
   const historyRow = {
     date: today,
@@ -388,6 +493,12 @@ export async function computeAndPersistDailySnapshot(): Promise<void> {
     weakestComponent: result.weakestComponent!,
     availableComponents: result.components.availableComponents,
     configVersion: getHappinessConfigVersion(),
+    lifeFreedomRaw: rawComponents.lifeFreedomScore,
+    fitnessHabitRaw: rawComponents.fitnessHabitScore,
+    calmRaw,
+    mindRaw: rawComponents.mindScore,
+    travelRaw: rawComponents.travelScore,
+    socialRaw: rawComponents.socialScore,
   };
 
   await db

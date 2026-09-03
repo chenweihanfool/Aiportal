@@ -50,6 +50,13 @@
       "when": 1788184146158,
       "tag": "0006_narrow_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788406423077,
+      "tag": "0007_common_killer_shrike",
+      "breakpoints": true
     }
   ]
 }

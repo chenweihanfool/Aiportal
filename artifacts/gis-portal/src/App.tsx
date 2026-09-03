@@ -12,6 +12,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.1.0',
+    date: '2026-09-03',
+    summary: '六維度改用百分位正規化分數：每個維度的「80 分」現在都代表同一件事',
+    changes: [
+      '六個維度來自四套完全獨立設計的公式，尺度差很大——有些正常使用下很難超過 60-70（例如運動、心智），有些輕鬆就上 90，直接把原始分數加權平均，「80 分」在每個維度代表完全不同的意義，強行加權平均得出的幸福指數其實很難解讀',
+      '改成每個維度都拿「今天的原始分數」對照自己過去 90 天同一維度的分數排百分位（少於 10 天歷史時先用原始分數頂著，避免用太少樣本硬算出誤導性的 0 或 100）——現在六個維度的「80 分」統一代表「這是你自己在這個面向相對表現不錯的一天」，不再糾結某個維度的公式本身好不好拉高',
+      '六維度指針錶、幸福指數卡片的雷達圖跟權重佔比，全部改讀正規化後的分數；每張卡片的「詳細數據」裡新增一行「原始分數（未正規化）→ 對照近 90 天百分位」，原始的公式輸出還是看得到，只是不再直接進幸福指數的計算',
+      '沒有動任何一個子系統自己的公式（運動、社交 5 人封頂等既有公式都維持原樣）——正規化在 Aiportal 這邊統一做，不用動四套分別維護的計分邏輯',
+    ],
+  },
+  {
     version: '2.0.2',
     date: '2026-08-31',
     summary: '六維度指針錶卡片補回點擊連到對應系統，並在卡片上明確標示',
@@ -848,7 +859,21 @@ const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) 
 const DIMENSION_HERO_FIELD: Record<string, string> = {
   'pf-cwh': 'lifeFreedomIndex',
   'fitnessforge': 'habitIndex',
-  'vikunja': 'busyIndex', // inverted below — displayed as calm index
+  'vikunja': 'busyIndex', // raw, uninverted — shown as "原始分數" detail only
+  'travel': 'travelScore',
+}
+
+// HHI v3 (2026-09-01) — the six dimensions come from four independently
+// designed formulas with wildly different shapes (see happinessIndex.ts's
+// percentile normalization comment), so "80" meant something different in
+// every dial. The gauges now show each dimension's percentile rank against
+// its own trailing 90-day history (from the "hhi" summary, already
+// normalized server-side), not the raw formula output — the raw number
+// moves to the "詳細數據" panel below instead.
+const DIMENSION_NORMALIZED_FIELD: Record<string, string> = {
+  'pf-cwh': 'lifeFreedomScore',
+  'fitnessforge': 'fitnessHabitScore',
+  'vikunja': 'calmScore', // already inverted+normalized — higher = calmer
   'travel': 'travelScore',
 }
 
@@ -866,11 +891,13 @@ const DIMENSION_SUB: Record<string, string> = {
 function DimensionGauge({
   site,
   summary,
+  hhiSummary,
   unlocked,
   onSelect,
 }: {
   site: SiteData
   summary: DashboardSummary
+  hhiSummary: DashboardSummary | undefined
   unlocked: boolean
   onSelect: (site: SiteData) => void
 }) {
@@ -881,8 +908,11 @@ function DimensionGauge({
   const rawHero = data && typeof data[DIMENSION_HERO_FIELD[summary.subsystemId] ?? ''] === 'number'
     ? data[DIMENSION_HERO_FIELD[summary.subsystemId]!] as number
     : null
-  const heroScore = summary.subsystemId === 'vikunja' && rawHero !== null ? Math.max(0, Math.min(100, 100 - rawHero)) : rawHero
-  const tone = heroScore !== null ? heroTone(heroScore, false) : { color: COLOR.steelDim, label: '資料不足' }
+  const hhiData = hhiSummary?.data
+  const normalizedScore = hhiData && typeof hhiData[DIMENSION_NORMALIZED_FIELD[summary.subsystemId] ?? ''] === 'number'
+    ? hhiData[DIMENSION_NORMALIZED_FIELD[summary.subsystemId]!] as number
+    : null
+  const tone = normalizedScore !== null ? heroTone(normalizedScore, false) : { color: COLOR.steelDim, label: '資料不足' }
 
   if (isLocked) {
     return <LockedGaugeCard label={site.name} sub={site.subtitle || DIMENSION_SUB[summary.subsystemId] || ''} onRequestUnlock={() => onSelect(site)} />
@@ -896,15 +926,22 @@ function DimensionGauge({
         padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
       }}
     >
-      <Gauge value={heroScore} color={tone.color} />
+      <Gauge value={normalizedScore} color={tone.color} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink, textAlign: 'center' }}>{site.name}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, letterSpacing: '0.04em' }}>
-        {heroScore !== null ? tone.label : (summary.status === 'pending' ? '資料準備中' : '暫時無法取得資料')}
+        {normalizedScore !== null ? tone.label : (summary.status === 'pending' ? '資料準備中' : '暫時無法取得資料')}
       </div>
       {Body && data && (
         <div style={{ width: '100%', marginTop: '0.3rem' }} onClick={e => e.stopPropagation()}>
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
-          {expanded && <div style={{ marginTop: '0.5rem' }}><Body data={data} /></div>}
+          {expanded && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+                原始分數（未正規化）：{rawHero !== null ? rawHero : '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+              </div>
+              <Body data={data} />
+            </div>
+          )}
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingTop: '0.5rem', marginTop: '0.2rem', borderTop: `1px solid ${COLOR.line}`, fontFamily: FONT.mono, fontSize: '0.6rem' }}>
@@ -922,10 +959,12 @@ function DimensionGauge({
 // ─────────────────────────────────────────────
 function MindIndexCard({
   summary,
+  hhiSummary,
   unlocked,
   onSelect,
 }: {
   summary: DashboardSummary | undefined
+  hhiSummary: DashboardSummary | undefined
   unlocked: boolean
   onSelect: () => void
 }) {
@@ -935,7 +974,8 @@ function MindIndexCard({
   const diaryEntryCount = typeof data?.['diaryEntryCount'] === 'number' ? data['diaryEntryCount'] as number : null
   const stale = data?.['stale'] === true
   const [expanded, setExpanded] = useState(false)
-  const tone = bandTone(dailyEngagementScore, MIND_SCORE_BANDS)
+  const normalizedScore = typeof hhiSummary?.data?.['mindScore'] === 'number' ? hhiSummary.data['mindScore'] as number : null
+  const tone = bandTone(normalizedScore, MIND_SCORE_BANDS)
 
   if (isLocked) {
     return <LockedGaugeCard label="心智指標" sub="日記書寫" onRequestUnlock={onSelect} />
@@ -950,16 +990,19 @@ function MindIndexCard({
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
-      <Gauge value={dailyEngagementScore} color={tone.color} />
+      <Gauge value={normalizedScore} color={tone.color} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>心智指標</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
-        {dailyEngagementScore !== null ? tone.label : (summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
+        {normalizedScore !== null ? tone.label : (summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
       </div>
       {stale && <div style={{ fontSize: '0.62rem', color: COLOR.warn }}>資料已超過 36 小時未更新</div>}
       <div style={{ width: '100%', marginTop: '0.3rem' }}>
         <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
         {expanded && (
           <div style={{ marginTop: '0.5rem' }}>
+            <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+              原始分數（未正規化）：{dailyEngagementScore ?? '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+            </div>
             <SupportStats items={engagementItems} />
             <FormulaPanel rows={[
               { label: '心智指標（計入幸福指數，HHI v2 滾動 3 天窗口）', formula: 'dailyEngagementScore = round(100 × 近 3 天篇數總和 ÷ (近 3 天篇數總和 + 10))' },
@@ -980,10 +1023,12 @@ function MindIndexCard({
 // ─────────────────────────────────────────────
 function SocialIndexCard({
   summary,
+  hhiSummary,
   unlocked,
   onSelect,
 }: {
   summary: DashboardSummary | undefined
+  hhiSummary: DashboardSummary | undefined
   unlocked: boolean
   onSelect: () => void
 }) {
@@ -1000,7 +1045,8 @@ function SocialIndexCard({
   const personNames = Array.isArray(personNamesRaw) ? personNamesRaw.filter((v): v is string => typeof v === 'string') : null
   const stale = data?.['stale'] === true
   const [expanded, setExpanded] = useState(false)
-  const tone = bandTone(socialScore, SOCIAL_SCORE_BANDS)
+  const normalizedScore = typeof hhiSummary?.data?.['socialScore'] === 'number' ? hhiSummary.data['socialScore'] as number : null
+  const tone = bandTone(normalizedScore, SOCIAL_SCORE_BANDS)
 
   if (isLocked) {
     return <LockedGaugeCard label="社交指標" sub="近 7 天社交活動" onRequestUnlock={onSelect} />
@@ -1020,7 +1066,7 @@ function SocialIndexCard({
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
-      <Gauge value={socialScore} color={tone.color} />
+      <Gauge value={normalizedScore} color={tone.color} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>社交指標</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
         {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 7 天沒有日記可供觀測') : tone.label}
@@ -1041,6 +1087,9 @@ function SocialIndexCard({
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
           {expanded && (
             <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+                原始分數（未正規化）：{socialScore ?? '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+              </div>
               <SupportStats items={socialItems} />
               <FormulaPanel rows={[
                 { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)' },
@@ -1959,6 +2008,7 @@ function InstrumentPanelView({
   })
   const HHI_SITE_PRIORITY: Record<string, number> = { 'pf-cwh': 0, fitnessforge: 1, vikunja: 2, travel: 3 }
   richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
+  const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
 
   const [hermesOpen, setHermesOpen] = useState(false)
 
@@ -1984,7 +2034,7 @@ function InstrumentPanelView({
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
         <Unit code="01" title="翰翰仔幸福指數 · Hanhan Happiness Index">
           <HappinessHeroCard
-            summary={dashboard.find(d => d.subsystemId === 'hhi')}
+            summary={hhiSummary}
             unlocked={unlocked}
             unlockedPassword={unlockedPassword}
             onRequestUnlock={onRequestUnlock}
@@ -1995,15 +2045,17 @@ function InstrumentPanelView({
           <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
             {richSites.map(s => {
               const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
-              return <DimensionGauge key={s.id} site={s} summary={summary} unlocked={unlocked} onSelect={onSiteSelect} />
+              return <DimensionGauge key={s.id} site={s} summary={summary} hhiSummary={hhiSummary} unlocked={unlocked} onSelect={onSiteSelect} />
             })}
             <MindIndexCard
               summary={dashboard.find(d => d.subsystemId === 'mind-index')}
+              hhiSummary={hhiSummary}
               unlocked={unlocked}
               onSelect={onRequestUnlock}
             />
             <SocialIndexCard
               summary={dashboard.find(d => d.subsystemId === 'social-index')}
+              hhiSummary={hhiSummary}
               unlocked={unlocked}
               onSelect={onRequestUnlock}
             />

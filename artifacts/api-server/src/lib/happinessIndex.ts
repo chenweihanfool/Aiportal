@@ -23,6 +23,14 @@ export interface HappinessConfig {
   weakestLinkWeight: number;
   smoothingTodayWeight: number;
   smoothingYesterdayWeight: number;
+  // HHI v3 (2026-09-01) — bumping this alone (with no weight numbers
+  // changing) still needs to change getHappinessConfigVersion()'s hash: the
+  // switch from raw sub-scores to percentile-normalized ones (see
+  // percentileRank() below) changes what every number in this composite
+  // MEANS even though none of the weights moved, and configVersion exists
+  // specifically so old happiness_index_history rows aren't misread as
+  // comparable to rows produced under a different scoring meaning.
+  scoringMode: string;
 }
 
 // 2026-08-09: added mindWeight (心智指標). Existing three weights scaled down
@@ -46,6 +54,15 @@ export interface HappinessConfig {
 // mind_index_history's diaryEntryCount3Day) — a daily reset-to-zero was
 // letting the weakest-link correction's effective weight balloon toward
 // ~30% on any low-writing day, over-dominating the composite.
+// 2026-09-01 (HHI v3): switched every dimension's input from its raw 0-100
+// formula output to a percentile rank against that same dimension's own
+// trailing 90-day history (see percentileRank() below, wired in by
+// summarySources.ts's extractHappinessResult) — the six formulas have wildly
+// different shapes (some rarely exceed 60-70 under completely normal real-
+// world use, some saturate to 90+ easily), so directly weight-averaging
+// their raw outputs meant "80" carried a different meaning in every
+// dimension. Weights themselves are unchanged; scoringMode exists purely to
+// force configVersion to change anyway, since none of the numbers below did.
 export const HAPPINESS_CONFIG: HappinessConfig = {
   lifeFreedomWeight: 0.27,
   fitnessWeight: 0.18,
@@ -56,6 +73,7 @@ export const HAPPINESS_CONFIG: HappinessConfig = {
   weakestLinkWeight: 0.15,
   smoothingTodayWeight: 0.70,
   smoothingYesterdayWeight: 0.30,
+  scoringMode: "percentile-90d-v1",
 };
 
 if (
@@ -213,4 +231,42 @@ export function computeDisplayedScore(
   return roundHalfUp(
     config.smoothingTodayWeight * finalScore + config.smoothingYesterdayWeight * yesterdayDisplayedScore
   );
+}
+
+// ── Per-dimension percentile normalization (HHI v3, 2026-09-01) ──────────
+//
+// The six dimensions come from four independent formulas (this repo's own
+// mind/social/travel math, a separate Python busyness service, and two
+// external systems' own composite indices) with wildly different shapes —
+// some rarely exceed 60-70 under completely normal real-world behavior,
+// some saturate to 90+ easily. Weight-averaging their raw 0-100 outputs
+// directly meant "80" carried a different meaning in every dimension:
+// recalibrating four separately-owned formulas (two of them in other
+// repos) to all agree on an absolute scale isn't practical, and even after
+// doing so there's no guarantee they'd actually end up comparable without
+// looking at real usage data anyway — which is exactly what this does
+// instead, automatically, per person.
+//
+// percentileRank ranks today's raw score against that SAME dimension's own
+// trailing window of raw scores, so "80" always means "a relatively good
+// day for you, in that dimension" regardless of what the underlying
+// formula's own scale looks like — self-calibrating per person per
+// dimension by construction, with no formula surgery required.
+export const PERCENTILE_WINDOW_DAYS = 90;
+
+// Below this many historical days, a percentile is closer to noise than
+// signal (with 2 data points, today is trivially either the best or worst
+// day ever) — fall back to the raw score unchanged until enough history has
+// accumulated, rather than showing a misleadingly precise-looking 0 or 100.
+export const MIN_HISTORY_DAYS_FOR_PERCENTILE = 10;
+
+/** `value`'s percentile rank (0-100) within `history`: what fraction of
+ * historical days scored at or below today. Always "higher is better"
+ * regardless of the raw formula's own direction/scale — callers invert
+ * "lower is better" raw scores (e.g. busyness) to their "higher is better"
+ * form (e.g. calm = 100-busyness) before calling this, not after. */
+export function percentileRank(value: number, history: number[]): number {
+  if (history.length < MIN_HISTORY_DAYS_FOR_PERCENTILE) return roundHalfUp(clamp(value, 0, 100));
+  const countAtOrBelow = history.filter((h) => h <= value).length;
+  return roundHalfUp((countAtOrBelow / history.length) * 100);
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   HAPPINESS_CONFIG,
+  MIN_HISTORY_DAYS_FOR_PERCENTILE,
   computeDisplayedScore,
   computeHappinessComponents,
   getHappinessConfigVersion,
+  percentileRank,
   roundHalfUp,
   type HappinessConfig,
 } from "./happinessIndex";
@@ -267,5 +269,44 @@ describe("getHappinessConfigVersion", () => {
       smoothingYesterdayWeight: 0.3,
     } as unknown as HappinessConfig;
     expect(getHappinessConfigVersion(preV2Config)).not.toBe(getHappinessConfigVersion());
+  });
+});
+
+describe("percentileRank", () => {
+  it("falls back to the raw value (clamped, rounded) when history is thinner than the minimum", () => {
+    const history = Array.from({ length: MIN_HISTORY_DAYS_FOR_PERCENTILE - 1 }, (_, i) => i);
+    expect(percentileRank(57, history)).toBe(57);
+    expect(percentileRank(0, [])).toBe(0);
+  });
+
+  it("clamps the fallback to 0-100 even if a raw formula somehow overshoots", () => {
+    expect(percentileRank(150, [])).toBe(100);
+    expect(percentileRank(-5, [])).toBe(0);
+  });
+
+  it("ranks today at the top when it beats all of a full history window", () => {
+    const history = Array.from({ length: 30 }, () => 40);
+    expect(percentileRank(90, history)).toBe(100);
+  });
+
+  it("ranks today at the bottom when it's below all of a full history window", () => {
+    const history = Array.from({ length: 30 }, () => 90);
+    expect(percentileRank(10, history)).toBe(0);
+  });
+
+  it("matches a worked example: 6 of 10 historical days at or below today -> 60th percentile", () => {
+    const history = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+    // days <= 55: 10,20,30,40,50 -> 5 of 10 -> 50th percentile
+    expect(percentileRank(55, history)).toBe(50);
+    // days <= 65: 10,20,30,40,50,60 -> 6 of 10 -> 60th percentile
+    expect(percentileRank(65, history)).toBe(60);
+  });
+
+  it("this is exactly why a low-ceiling formula stops mattering: a personal-best day always ranks near 100 regardless of the raw formula's own scale", () => {
+    // A formula that realistically never exceeds ~65 under normal use — the
+    // exact "運動分屬始終不高" complaint this feature exists to fix.
+    const lowCeilingHistory = [40, 45, 48, 50, 52, 55, 58, 60, 62, 63, 64, 65];
+    expect(percentileRank(65, lowCeilingHistory)).toBe(100); // today's raw formula max -> a top day, correctly
+    expect(percentileRank(52, lowCeilingHistory)).toBe(42); // a middling raw day among these 12 -> a middling percentile
   });
 });
