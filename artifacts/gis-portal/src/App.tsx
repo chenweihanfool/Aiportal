@@ -13,6 +13,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.3.1',
+    date: '2026-09-06',
+    summary: '人物節點也能點——列出該人物的所有關聯事件',
+    changes: [
+      '上一版只有事件節點能點開詳情，人物節點點了沒反應——現在點人物節點會在圖下方列出該人物參與的所有事件（日期＋標題，依日期新到舊排序），跟點事件節點的詳情卡二選一顯示',
+      '人物詳情卡裡的每個事件都可以再點一次，直接切換成該事件的詳情卡（標題／日期／狀態／標籤）',
+      '被選取的人物節點加一圈外框標示，跟事件節點被選取時變色的視覺邏輯一致',
+    ],
+  },
+  {
     version: '2.3.0',
     date: '2026-09-06',
     summary: 'HERMES 人-事網路圖改成可拖拉的即時力導向動態圖',
@@ -1393,6 +1403,7 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
   const [, setTick] = useState(0)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<HermesGraphEventNode | null>(null)
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null)
 
   useEffect(() => {
     if (people.length === 0 && events.length === 0) {
@@ -1500,6 +1511,12 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hoveredId])
 
+  const selectedPersonEvents = useMemo(() => {
+    if (!selectedPerson) return []
+    const eventIds = new Set(edges.filter(e => e.person === selectedPerson).map(e => e.eventId))
+    return events.filter(e => eventIds.has(e.id)).sort((a, b) => b.date.localeCompare(a.date))
+  }, [selectedPerson, edges, events])
+
   const nodes = nodesRef.current
   const links = linksRef.current
 
@@ -1539,7 +1556,7 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
               onPointerDown={e => handlePointerDown(e, n)}
               onMouseEnter={() => setHoveredId(n.id)}
               onMouseLeave={() => setHoveredId(null)}
-              onClick={() => setSelectedEvent(events.find(e => e.id === n.eventId) ?? null)}
+              onClick={() => { setSelectedEvent(events.find(e => e.id === n.eventId) ?? null); setSelectedPerson(null) }}
             >
               <title>{`${n.label}`}</title>
             </circle>
@@ -1547,14 +1564,17 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
         })}
         {nodes.filter(n => n.kind === 'person').map(n => {
           const dimmed = neighborIds ? !neighborIds.has(n.id) : false
+          const isSelected = selectedPerson === n.label
           return (
             <g key={n.id} opacity={dimmed ? 0.2 : 1}>
               <circle
                 cx={n.x} cy={n.y} r={n.radius} fill={COLOR.amber} fillOpacity={0.88}
-                style={{ cursor: 'grab' }}
+                stroke={isSelected ? COLOR.ink : 'none'} strokeWidth={isSelected ? 2 : 0}
+                style={{ cursor: 'pointer' }}
                 onPointerDown={e => handlePointerDown(e, n)}
                 onMouseEnter={() => setHoveredId(n.id)}
                 onMouseLeave={() => setHoveredId(null)}
+                onClick={() => { setSelectedPerson(n.label); setSelectedEvent(null) }}
               >
                 <title>{`${n.label} · ${n.eventCount ?? 0} 個事件`}</title>
               </circle>
@@ -1579,6 +1599,26 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
               ))}
             </div>
           )}
+        </div>
+      )}
+      {selectedPerson && (
+        <div style={{ marginTop: '0.6rem', padding: '0.7rem 0.9rem', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '5px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+            <div style={{ fontSize: '0.78rem', color: COLOR.ink, fontWeight: 600 }}>{selectedPerson} · {selectedPersonEvents.length} 個關聯事件</div>
+            <span onClick={() => setSelectedPerson(null)} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.8rem', flexShrink: 0 }}>✕</span>
+          </div>
+          <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '9rem', overflowY: 'auto' }}>
+            {selectedPersonEvents.map(ev => (
+              <div
+                key={ev.id}
+                onClick={() => { setSelectedEvent(ev); setSelectedPerson(null) }}
+                style={{ display: 'flex', gap: '8px', alignItems: 'baseline', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.68rem' }}
+              >
+                <span style={{ color: COLOR.steelDim, flexShrink: 0 }}>{ev.date}</span>
+                <span style={{ color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
