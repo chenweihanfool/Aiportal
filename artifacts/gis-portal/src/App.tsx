@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
 import { COLOR, FONT } from './theme'
 import './portal.css'
 
@@ -11,6 +12,18 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.2.0',
+    date: '2026-09-06',
+    summary: 'HERMES 戰情室改成人-事關係網路圖，搬到幸福指數上方、預設展開',
+    changes: [
+      '知識庫健康度原本的 4 項分數（轉化率／連結健康度／活化度／本週節奏）量測的是 AI/知識/ 舊管線，9/1 HERMES 事人雙實體改版（Events/People）後新架構完全不在計算範圍內，數字早就脫鉤——與其修那 4 個公式，改成直接把 Events/*.md frontmatter 的 participants 關聯畫成類似 Obsidian Graph View 的人-事網路圖，管線一旦停止寫入，圖立刻是空的或不再長大，不會再有「看不出脫鉤」的問題',
+      '新增人物數量／事件數量／平均關聯人數／孤兒事件率／本週新增事件／本週新增人物／最活躍人物幾項指標，全部從 Events 原始資料即時反推，不是另外預先算好存死的數字',
+      'collect.ps1 新增 Get-HermesEvents：唯讀掃描 Events/*.md 的 frontmatter（跟既有 people.yaml 解析同一套「正則夠用就好」原則），整批 POST 給新的 /api/admin/hermes-graph；後端存最新一份快照，GET 時才計算節點/邊與所有衍生指標',
+      '網路圖用 d3-force 算力導向佈局後畫成固定 SVG（不是可拖拉的即時模擬），人物節點大小依關聯事件數決定；HERMES 戰情室整節搬到幸福指數卡片上方、預設展開，圖盡量放大顯示',
+      '順手修正 apiFetchHermesStatus／apiFetchHermesActivity 呼叫路徑打錯字的舊 bug（一直打成 /api/admin/hermes-status，實際後端路徑是 /api/hermes-status，兩支 GET 一直是 404，CPU/RAM/磁碟/容器狀態面板其實從沒真的讀到過資料）',
+    ],
+  },
   {
     version: '2.1.0',
     date: '2026-09-03',
@@ -157,20 +170,6 @@ async function apiFetchHappinessHistory(adminPassword: string, days = 30): Promi
   return data.history
 }
 
-interface MindIndexHistoryPoint {
-  date: string
-  score: number
-}
-
-async function apiFetchMindIndexHistory(adminPassword: string, days = 30): Promise<MindIndexHistoryPoint[]> {
-  const r = await fetch(`${API_BASE}api/mind-index/history?days=${days}`, {
-    headers: { 'x-admin-password': adminPassword },
-  })
-  if (!r.ok) throw new Error('Failed to fetch mind-index history')
-  const data = await r.json() as { history: MindIndexHistoryPoint[] }
-  return data.history
-}
-
 interface SocialIndexHistoryPoint {
   date: string
   socialScore: number
@@ -201,7 +200,12 @@ interface HermesStatusData {
 }
 
 async function apiFetchHermesStatus(adminPassword: string): Promise<HermesStatusData> {
-  const r = await fetch(`${API_BASE}api/admin/hermes-status`, {
+  // 這兩支 GET 掛在後端的 /api/hermes-status（沒有 /admin 前綴——只有寫入用
+  // 的 POST 才在 /admin/ 底下，見 routes/hermesStatus.ts），這裡先前一直錯打
+  // 成 /api/admin/hermes-status，兩支 fetch 從沒真的成功過（一律 404 →
+  // catch 到 statusError，面板一直顯示「暫時無法取得資料」）。2026-09-06
+  // 趁重寫 HERMES 戰情室順手修正。
+  const r = await fetch(`${API_BASE}api/hermes-status`, {
     headers: { 'x-admin-password': adminPassword },
   })
   if (!r.ok) throw new Error('Failed to fetch hermes status')
@@ -211,12 +215,41 @@ async function apiFetchHermesStatus(adminPassword: string): Promise<HermesStatus
 interface HermesActivityEntry { id: number; occurredAt: string; source: string; message: string }
 
 async function apiFetchHermesActivity(adminPassword: string, limit = 20): Promise<HermesActivityEntry[]> {
-  const r = await fetch(`${API_BASE}api/admin/hermes-activity?limit=${limit}`, {
+  const r = await fetch(`${API_BASE}api/hermes-activity?limit=${limit}`, {
     headers: { 'x-admin-password': adminPassword },
   })
   if (!r.ok) throw new Error('Failed to fetch hermes activity')
   const data = await r.json() as { activity: HermesActivityEntry[] }
   return data.activity
+}
+
+interface HermesGraphPersonNode { name: string; eventCount: number }
+interface HermesGraphEventNode { id: string; date: string; title: string; status: string | null; tags: string[] }
+interface HermesGraphEdge { person: string; eventId: string; role: string }
+
+interface HermesGraphMetrics {
+  peopleCount: number
+  eventsCount: number
+  avgParticipantsPerEvent: number
+  orphanEventRatioPct: number
+  newEventsThisWeek: number
+  newPeopleThisWeek: number
+  mostActivePerson: { name: string; eventCount: number } | null
+}
+
+interface HermesGraphData {
+  available: boolean
+  computedAt: string | null
+  metrics?: HermesGraphMetrics
+  graph?: { people: HermesGraphPersonNode[]; events: HermesGraphEventNode[]; edges: HermesGraphEdge[] }
+}
+
+async function apiFetchHermesGraph(adminPassword: string): Promise<HermesGraphData> {
+  const r = await fetch(`${API_BASE}api/hermes-graph`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch hermes graph')
+  return r.json() as Promise<HermesGraphData>
 }
 
 async function apiVerifyPassword(password: string): Promise<boolean> {
@@ -317,10 +350,6 @@ function pctTone(pct: number | null): string {
 }
 
 const MIND_SCORE_BANDS: Band[] = [[80, COLOR.ok, '優良'], [60, COLOR.warn, '普通'], [40, COLOR.concern, '偏弱'], [0, COLOR.crit, '停滯']]
-const CONVERSION_BANDS: Band[] = [[90, COLOR.ok, '順暢'], [70, COLOR.warn, '普通'], [0, COLOR.crit, '淤積']]
-const LINK_HEALTH_BANDS: Band[] = [[90, COLOR.ok, '緊密'], [75, COLOR.warn, '普通'], [0, COLOR.crit, '孤立']]
-const VITALITY_BANDS: Band[] = [[80, COLOR.ok, '活躍'], [40, COLOR.warn, '普通'], [0, COLOR.crit, '停滯']]
-const RHYTHM_BANDS: Band[] = [[80, COLOR.ok, '穩定'], [40, COLOR.warn, '普通'], [0, COLOR.crit, '低迷']]
 const SOCIAL_SCORE_BANDS: Band[] = [[80, COLOR.ok, '熱絡'], [60, COLOR.warn, '普通'], [40, COLOR.concern, '偏冷'], [0, COLOR.crit, '疏離']]
 
 // ─────────────────────────────────────────────
@@ -1301,76 +1330,149 @@ function SubPanel({ title, sub, children }: { title: string; sub: string; childr
   )
 }
 
-function HermesKnowledgeHealthPanel({
-  summary,
-  unlockedPassword,
-}: {
-  summary: DashboardSummary | undefined
-  unlockedPassword: string | null
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const [history, setHistory] = useState<MindIndexHistoryPoint[] | null>(null)
-  const [historyError, setHistoryError] = useState(false)
+// ─────────────────────────────────────────────
+// 人-事關係網路圖（2026-09-06 起，取代舊的知識庫健康度 4 項分數：轉化率／
+// 連結健康度／活化度／本週節奏量測的是 AI/知識/ 舊管線，9/1 事人雙實體改版
+// 後 Events/People 新架構完全不在計算範圍內，分數早就脫鉤——與其修那 4 個
+// 公式，改成直接把新架構的原始資料（Events/*.md frontmatter 的
+// participants 陣列）畫成類似 Obsidian Graph View 的網路圖，管線一旦停止
+// 寫入，圖立刻是空的或不再長大，不會再有「看不出脫鉤」的問題。
+// ─────────────────────────────────────────────
+interface GraphNode extends SimulationNodeDatum {
+  id: string
+  kind: 'person' | 'event'
+  label: string
+  radius: number
+  eventCount?: number
+  eventDate?: string
+}
 
-  useEffect(() => {
-    if (!expanded || !unlockedPassword || history !== null) return
-    let cancelled = false
-    apiFetchMindIndexHistory(unlockedPassword)
-      .then(rows => { if (!cancelled) setHistory(rows) })
-      .catch(() => { if (!cancelled) setHistoryError(true) })
-    return () => { cancelled = true }
-  }, [expanded, unlockedPassword, history])
+const GRAPH_WIDTH = 760
+const GRAPH_HEIGHT = 460
 
-  const data = summary?.data
-  const score = typeof data?.['score'] === 'number' ? data['score'] as number : null
-  const conversion = typeof data?.['conversion'] === 'number' ? data['conversion'] as number : null
-  const linkHealth = typeof data?.['linkHealth'] === 'number' ? data['linkHealth'] as number : null
-  const vitality = typeof data?.['vitality'] === 'number' ? data['vitality'] as number : null
-  const rhythm = typeof data?.['rhythm'] === 'number' ? data['rhythm'] as number : null
-  const partial = data?.['partial'] === true
+function useHermesGraphLayout(
+  people: HermesGraphPersonNode[],
+  events: HermesGraphEventNode[],
+  edges: HermesGraphEdge[],
+) {
+  return useMemo(() => {
+    if (people.length === 0 && events.length === 0) return { nodes: [] as GraphNode[], links: [] as Array<SimulationLinkDatum<GraphNode> & { key: string }> }
 
-  const oldTone = bandTone(score, MIND_SCORE_BANDS)
-  const conversionTone = bandTone(conversion, CONVERSION_BANDS)
-  const linkHealthTone = bandTone(linkHealth, LINK_HEALTH_BANDS)
-  const vitalityTone = bandTone(vitality, VITALITY_BANDS)
-  const rhythmTone = bandTone(rhythm, RHYTHM_BANDS)
-  const knowledgeItems = [
-    { label: '轉化率', value: conversion !== null ? String(conversion) : '—', color: conversionTone.color, tier: conversion !== null ? conversionTone.label : undefined, formula: 'CREATE 層：100 × 近30天編譯進 wiki 的條目數 ÷ (近30天編譯數 + inbox 超過7天未編譯的積壓數)' },
-    { label: '連結健康度', value: linkHealth !== null ? String(linkHealth) : '—', color: linkHealthTone.color, tier: linkHealth !== null ? linkHealthTone.label : undefined, formula: 'ENRICH 層：100 × (1 − 孤兒條目數 ÷ 總條目數)' },
-    { label: '活化度', value: vitality !== null ? String(vitality) : '—', color: vitalityTone.color, tier: vitality !== null ? vitalityTone.label : undefined, formula: 'SYNTHESIZE 層：min(100, 近30天被修改條目比例 × 400)' },
-    { label: '本週節奏', value: rhythm !== null ? String(rhythm) : '—', color: rhythmTone.color, tier: rhythm !== null ? rhythmTone.label : undefined, formula: '近7天加權積分 ÷ 30 × 100' },
-  ]
+    const nodes: GraphNode[] = [
+      ...people.map((p): GraphNode => ({
+        id: `p:${p.name}`, kind: 'person', label: p.name,
+        radius: Math.min(24, 7 + Math.sqrt(p.eventCount) * 4.2), eventCount: p.eventCount,
+      })),
+      ...events.map((e): GraphNode => ({ id: `e:${e.id}`, kind: 'event', label: e.title, radius: 4, eventDate: e.date })),
+    ]
+    const links = edges.map((edge, i) => ({ key: `${edge.person}|${edge.eventId}|${i}`, source: `p:${edge.person}`, target: `e:${edge.eventId}` }))
+
+    // 靜態排版：手動 tick 到收斂就停，不用 requestAnimationFrame 持續模擬
+    // ——這是一張唯讀的儀表板圖，不是可拖拉的互動圖，穩定佈局後直接畫成固
+    // 定 SVG 就夠了。多數事件彼此不相干（沒有共同的人物），圖裡其實是很多
+    // 互不相連的小群組——只有 charge + center 兩個力，各群組會被斥力越推
+    // 越遠，飄到 viewBox 外面看不到；加兩個很弱的 x/y 定位力把每個節點都
+    // 溫和地拉回中心附近，group 之間才不會散得無邊無際。
+    const sim = forceSimulation<GraphNode>(nodes)
+      .force('link', forceLink<GraphNode, (typeof links)[number]>(links).id(d => d.id).distance(34).strength(0.55))
+      .force('charge', forceManyBody().strength(-85))
+      .force('center', forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
+      .force('collide', forceCollide<GraphNode>().radius(d => d.radius + 3))
+      .force('x', forceX(GRAPH_WIDTH / 2).strength(0.025))
+      .force('y', forceY(GRAPH_HEIGHT / 2).strength(0.025))
+      .stop()
+    for (let i = 0; i < 300; i++) sim.tick()
+
+    // 保險絲：不管力學怎麼收斂，最後都夾回 viewBox 範圍內（含節點半徑跟人
+    // 物標籤要用的下緣空間），確保沒有節點或標籤被裁到看不見。
+    const LABEL_MARGIN = 16
+    for (const n of nodes) {
+      const bottomMargin = n.kind === 'person' ? n.radius + LABEL_MARGIN : n.radius
+      n.x = Math.max(n.radius, Math.min(GRAPH_WIDTH - n.radius, n.x ?? GRAPH_WIDTH / 2))
+      n.y = Math.max(n.radius, Math.min(GRAPH_HEIGHT - bottomMargin, n.y ?? GRAPH_HEIGHT / 2))
+    }
+
+    return { nodes, links }
+  }, [people, events, edges])
+}
+
+function HermesEventGraph({ people, events, edges }: { people: HermesGraphPersonNode[]; events: HermesGraphEventNode[]; edges: HermesGraphEdge[] }) {
+  const { nodes, links } = useHermesGraphLayout(people, events, edges)
+
+  if (nodes.length === 0) {
+    return (
+      <div style={{ fontSize: '0.75rem', color: COLOR.steelDim, padding: '2.5rem 0', textAlign: 'center' }}>
+        還沒有任何事件／人物資料——collect.ps1 還沒掃到 Events/，或 vault 裡還沒有任何事件
+      </div>
+    )
+  }
 
   return (
-    <SubPanel title="知識庫健康度" sub="HERMES Knowledge Base · 不計入幸福指數">
-      {score === null ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>
-          {summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中…'}
-        </div>
+    <svg width="100%" height={GRAPH_HEIGHT} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} style={{ display: 'block' }}>
+      {links.map(link => {
+        const s = link.source as GraphNode
+        const t = link.target as GraphNode
+        if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return null
+        return <line key={link.key} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke={COLOR.line} strokeWidth={1} />
+      })}
+      {nodes.filter(n => n.kind === 'event').map(n => (
+        <circle key={n.id} cx={n.x} cy={n.y} r={n.radius} fill={COLOR.steelDim} fillOpacity={0.75}>
+          <title>{`${n.eventDate ?? ''} · ${n.label}`}</title>
+        </circle>
+      ))}
+      {nodes.filter(n => n.kind === 'person').map(n => (
+        <g key={n.id}>
+          <circle cx={n.x} cy={n.y} r={n.radius} fill={COLOR.amber} fillOpacity={0.88}>
+            <title>{`${n.label} · ${n.eventCount ?? 0} 個事件`}</title>
+          </circle>
+          <text x={n.x} y={(n.y ?? 0) + n.radius + 12} textAnchor="middle" fontSize={10.5} fontFamily={FONT.mono} fill={COLOR.ink}>{n.label}</text>
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string | null }) {
+  const [data, setData] = useState<HermesGraphData | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (!unlockedPassword) return
+    let cancelled = false
+    apiFetchHermesGraph(unlockedPassword)
+      .then(d => { if (!cancelled) setData(d) })
+      .catch(() => { if (!cancelled) setError(true) })
+    return () => { cancelled = true }
+  }, [unlockedPassword])
+
+  return (
+    <SubPanel title="人-事關係網路圖" sub="HERMES 事人雙實體架構（Events/People）· 不計入幸福指數">
+      {error ? (
+        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
+      ) : data === null ? (
+        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+      ) : !data.available || !data.graph || !data.metrics ? (
+        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>資料準備中，collect.ps1 還沒掃過 Events/</div>
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '0.9rem' }}>
-            <div style={{ fontFamily: FONT.mono, fontSize: '1.7rem', fontWeight: 700, lineHeight: 1, color: oldTone.color }}>{score}</div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: oldTone.color }}>{oldTone.label}</div>
-            {partial && <span style={{ fontSize: '0.66rem', color: COLOR.warn }}>部分子分數缺項</span>}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
+            <StatCell label="人物數量" value={String(data.metrics.peopleCount)} />
+            <StatCell label="事件數量" value={String(data.metrics.eventsCount)} />
+            <StatCell label="平均關聯人數" value={data.metrics.avgParticipantsPerEvent.toFixed(1)} sub="每事件" />
+            <StatCell label="孤兒事件率" value={`${data.metrics.orphanEventRatioPct}%`} valueColor={data.metrics.orphanEventRatioPct >= 50 ? COLOR.warn : undefined} sub="無關聯人物" />
+            <StatCell label="本週新增事件" value={String(data.metrics.newEventsThisWeek)} />
+            <StatCell label="本週新增人物" value={String(data.metrics.newPeopleThisWeek)} />
           </div>
-          <SupportStats items={knowledgeItems} />
-          <FormulaPanel rows={[
-            { label: '知識庫健康度', formula: 'score = round((轉化率 × 連結健康度 × 活化度 × 本週節奏) ^ 0.25)，幾何平均' },
-            ...knowledgeItems,
-          ]} />
-          <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="歷史趨勢 ▼" labelExpanded="收起歷史趨勢 ▲" />
-          {expanded && (
-            <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: `1px dashed ${COLOR.line}` }}>
-              {historyError ? (
-                <div style={{ fontSize: '0.72rem', color: COLOR.steelDim }}>趨勢資料讀取失敗</div>
-              ) : history === null ? (
-                <div style={{ fontSize: '0.72rem', color: COLOR.steelDim }}>載入中…</div>
-              ) : (
-                <TrendLineChart points={history.map(h => ({ date: h.date, value: h.score }))} color={oldTone.color} height={70} />
-              )}
+          {data.metrics.mostActivePerson && (
+            <div style={{ fontSize: '0.76rem', color: COLOR.steel, marginBottom: '0.7rem' }}>
+              這陣子最活躍：<span style={{ color: COLOR.amber, fontWeight: 600 }}>{data.metrics.mostActivePerson.name}</span>
+              <span style={{ color: COLOR.steelDim }}>（{data.metrics.mostActivePerson.eventCount} 個事件）</span>
             </div>
           )}
+          <HermesEventGraph people={data.graph.people} events={data.graph.events} edges={data.graph.edges} />
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>
+            {data.computedAt ? formatMinutesAgo(data.computedAt) : ''}
+          </div>
         </>
       )}
     </SubPanel>
@@ -1425,12 +1527,10 @@ function HermesWarRoomSection({
   unlocked,
   unlockedPassword,
   onRequestUnlock,
-  mindSummary,
 }: {
   unlocked: boolean
   unlockedPassword: string | null
   onRequestUnlock: () => void
-  mindSummary: DashboardSummary | undefined
 }) {
   const [status, setStatus] = useState<HermesStatusData | null>(null)
   const [statusError, setStatusError] = useState(false)
@@ -1461,6 +1561,9 @@ function HermesWarRoomSection({
 
   return (
     <div>
+      <HermesEventGraphPanel unlockedPassword={unlockedPassword} />
+
+      <div style={{ marginTop: '0.9rem' }}>
       {availableStatus === null ? (
         <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '1rem 0.2rem' }}>
           {statusError ? 'HERMES 戰情室：暫時無法取得資料' : 'HERMES 戰情室：尚無資料，collect.ps1 還沒在主機上跑過'}
@@ -1523,9 +1626,6 @@ function HermesWarRoomSection({
           </div>
         </div>
       )}
-
-      <div style={{ marginTop: '0.9rem' }}>
-        <HermesKnowledgeHealthPanel summary={mindSummary} unlockedPassword={unlockedPassword} />
       </div>
     </div>
   )
@@ -2024,7 +2124,9 @@ function InstrumentPanelView({
   richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
   const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
 
-  const [hermesOpen, setHermesOpen] = useState(false)
+  // 預設展開（原本預設收合）——人-事網路圖是這裡現在的主要內容，不是輔助
+  // 的維運監控資訊了，藏起來反而失去意義；見 2026-09-06 改版說明。
+  const [hermesOpen, setHermesOpen] = useState(true)
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
@@ -2049,7 +2151,33 @@ function InstrumentPanelView({
       </div>
 
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
-        <Unit code="01" title="翰翰仔幸福指數 · Hanhan Happiness Index">
+        {/* HERMES 戰情室搬到幸福指數上方、預設展開——人-事網路圖現在是這裡
+            的主要內容，不再是可有可無的維運監控附加區塊，見 2026-09-06 改版
+            說明。折疊開關還留著，方便手機上想先跳過看下面內容的人收起來。 */}
+        <div
+          onClick={() => setHermesOpen(o => !o)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: hermesOpen ? '0' : '1.1rem' }}
+        >
+          <span style={{ fontFamily: FONT.mono, fontSize: '0.66rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: COLOR.steelDim, display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
+            <span style={{ color: COLOR.amberDim }}>01</span>
+            <span style={{ fontFamily: FONT.body, fontSize: '0.72rem', letterSpacing: '0.08em', color: COLOR.steel, textTransform: 'none' }}>
+              HERMES 戰情室 · 人-事網路圖{!unlocked ? '（🔒）' : ''}
+            </span>
+            <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: hermesOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+            <span style={{ flex: 1, height: '1px', background: COLOR.line }} />
+          </span>
+        </div>
+        {hermesOpen && (
+          <Unit code="01" title="HERMES 戰情室 · 人-事網路圖">
+            <HermesWarRoomSection
+              unlocked={unlocked}
+              unlockedPassword={unlockedPassword}
+              onRequestUnlock={onRequestUnlock}
+            />
+          </Unit>
+        )}
+
+        <Unit code="02" title="翰翰仔幸福指數 · Hanhan Happiness Index">
           <HappinessHeroCard
             summary={hhiSummary}
             unlocked={unlocked}
@@ -2058,7 +2186,7 @@ function InstrumentPanelView({
           />
         </Unit>
 
-        <Unit code="02" title="六維度子系統 · Subsystem Readouts">
+        <Unit code="03" title="六維度子系統 · Subsystem Readouts">
           <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
             {richSites.map(s => {
               const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
@@ -2078,30 +2206,6 @@ function InstrumentPanelView({
             />
           </div>
         </Unit>
-
-        <div
-          onClick={() => setHermesOpen(o => !o)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: hermesOpen ? '0' : '1.1rem' }}
-        >
-          <span style={{ fontFamily: FONT.mono, fontSize: '0.66rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: COLOR.steelDim, display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
-            <span style={{ color: COLOR.amberDim }}>03</span>
-            <span style={{ fontFamily: FONT.body, fontSize: '0.72rem', letterSpacing: '0.08em', color: COLOR.steel, textTransform: 'none' }}>
-              HERMES 戰情室 · Ops Telemetry{!unlocked ? '（🔒）' : ''}
-            </span>
-            <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: hermesOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-            <span style={{ flex: 1, height: '1px', background: COLOR.line }} />
-          </span>
-        </div>
-        {hermesOpen && (
-          <Unit code="03" title="HERMES 戰情室 · Ops Telemetry">
-            <HermesWarRoomSection
-              unlocked={unlocked}
-              unlockedPassword={unlockedPassword}
-              onRequestUnlock={onRequestUnlock}
-              mindSummary={dashboard.find(d => d.subsystemId === 'mind-index')}
-            />
-          </Unit>
-        )}
 
         <ToolLinksZone privateSites={plainSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
 

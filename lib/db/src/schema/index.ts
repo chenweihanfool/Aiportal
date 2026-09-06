@@ -6,3 +6,4 @@ export * from "./mindIndexHistory";
 export * from "./socialIndexHistory";
 export * from "./hermesStatusSnapshot";
 export * from "./hermesActivityLog";
+export * from "./hermesGraphSnapshot";
