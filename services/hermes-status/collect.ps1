@@ -84,6 +84,14 @@ $SocialInteractionsPath = Join-Path $SocialFolderPath "social_interactions.jsonl
 # 的 NAS 檔案。
 $PeopleYamlPath = Join-Path $SocialFolderPath "people.yaml"
 
+# HERMES 戰情室的人-事關係網路圖（2026-09-06 起，取代舊的知識庫健康度 4
+# 項分數——那 4 項分數量測的是 AI/知識/ 舊管線，9/1 改版後的「事人雙實體」
+# 新架構（Events/People）完全不在計算範圍內，數字早就脫鉤了。Events/*.md
+# 的 frontmatter 是唯一的真相來源；People/*.md 只是 HERMES 自己維護的反查
+# 快取，這支腳本不讀它，一切（人物節點、degree、孤兒事件率...）都在
+# api-server 那邊從 events 陣列反推，見 routes/hermesStatus.ts。
+$EventsFolderPath = "F:\SynologyDrive\Events"
+
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
 $LogDir = Join-Path $ScriptDir "logs"
 $ErrorLogPath = Join-Path $LogDir "hermes_status_error.log"
@@ -426,6 +434,82 @@ function Get-PersonDisplayNames {
     return $map
 }
 
+# Events/*.md 的 frontmatter 逐行掃描——跟上面 Get-PersonDisplayNames 同一套
+# 「不是完整 YAML parser，正則夠用就好」原則。participants 是唯一的巢狀清
+# 單（person + role 兩行一組，見 Events/README.md 的 schema 說明），其餘欄
+# 位都是單行 key: value 或 key: [a, b] 這種簡單格式。單一檔案格式異常（缺
+# id/date、frontmatter 沒有正常收尾）直接跳過該檔，不讓整支腳本失敗——這正
+# 是舊管線那次「路徑多一個反斜線就整支腳本 exit 1」教訓要避免重蹈的模式。
+function Get-HermesEvents {
+    param([string]$FolderPath)
+    $events = @()
+    if (-not (Test-Path $FolderPath)) { return $events }
+
+    $files = Get-ChildItem -Path $FolderPath -Filter "*.md" | Where-Object { $_.Name -ne "README.md" }
+    foreach ($file in $files) {
+        try {
+            $lines = Get-Content -Path $file.FullName -Encoding UTF8
+            if ($lines.Count -eq 0 -or $lines[0] -ne "---") { continue }
+
+            $endIdx = -1
+            for ($i = 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -eq "---") { $endIdx = $i; break }
+            }
+            if ($endIdx -lt 0) { continue }
+
+            $id = $null; $date = $null; $caseNo = $null; $location = $null; $status = $null
+            $tags = @()
+            $participants = @()
+            $pendingPerson = $null
+
+            for ($i = 1; $i -lt $endIdx; $i++) {
+                $line = $lines[$i]
+                if ($line -match '^id:\s*(.+)$') { $id = $Matches[1].Trim() }
+                elseif ($line -match '^date:\s*(.+)$') { $date = $Matches[1].Trim() }
+                elseif ($line -match '^case_no:\s*(.+)$') { $v = $Matches[1].Trim(); if ($v -ne 'null') { $caseNo = $v.Trim('"') } }
+                elseif ($line -match '^location:\s*(.+)$') { $v = $Matches[1].Trim(); if ($v -ne 'null') { $location = $v.Trim('"') } }
+                elseif ($line -match '^status:\s*(.+)$') { $status = $Matches[1].Trim() }
+                elseif ($line -match '^tags:\s*\[(.*)\]\s*$') {
+                    $tags = @($Matches[1] -split ',' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { $_ })
+                }
+                elseif ($line -match '^\s*-\s*person:\s*"?\[\[([^\]]+)\]\]"?\s*$') {
+                    $pendingPerson = $Matches[1]
+                }
+                elseif ($pendingPerson -and $line -match '^\s*role:\s*(.+)$') {
+                    $participants += @{ person = $pendingPerson; role = $Matches[1].Trim() }
+                    $pendingPerson = $null
+                }
+            }
+
+            if (-not $id -or -not $date) { continue }  # 缺關鍵欄位的檔案跳過，不硬湊資料
+
+            # 標題：frontmatter 結束後第一個「# 」開頭的行；抓不到就退回檔名
+            # （去掉日期前綴跟副檔名）當標題。
+            $title = $null
+            for ($i = $endIdx + 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match '^#\s+(.+)$') { $title = $Matches[1].Trim(); break }
+            }
+            if (-not $title) {
+                $title = $file.BaseName -replace '^\d{4}-\d{2}-\d{2}_', ''
+            }
+
+            $events += @{
+                id = $id
+                date = $date
+                title = $title
+                caseNo = $caseNo
+                location = $location
+                status = $status
+                tags = @($tags)
+                participants = @($participants)
+            }
+        } catch {
+            Write-ErrorLog "Hermes graph: 解析 $($file.Name) 失敗: $_"
+        }
+    }
+    return $events
+}
+
 # ── 社交指標：近 7 天觀測日/互動統計 → socialScore（HHI v2，新增） ────────
 # 資料來源是 HERMES 自己 L1/L2 日記處理流程額外寫出的 social_interactions.jsonl
 # （見檔頭 $SocialInteractionsPath）——這支腳本只做檔案解析、產出聚合計數，
@@ -484,6 +568,23 @@ try {
     Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/social-index" -Method Post -Headers $Headers -Body ($socialBody | ConvertTo-AsciiJson) | Out-Null
 } catch {
     Write-ErrorLog "Social index collection/POST failed: $_"
+    $ScriptHadError = $true
+}
+
+# ── HERMES 戰情室：人-事關係網路圖（取代舊的知識庫健康度 4 項分數）─────
+# 每次整包重新掃描 Events/*.md 並整批覆蓋，不是差異更新——跟 hermes-status
+# 那個 snapshot 一樣的「latest row 整包覆蓋」模式，人物節點/degree/孤兒事件
+# 率等衍生指標全部在 api-server 那邊從 events 反推，這裡只負責把 vault 裡
+# 的原始 frontmatter 掃出來。
+try {
+    $hermesEvents = Get-HermesEvents -FolderPath $EventsFolderPath
+    # @(...) 強制陣列，理由同上面 social 區塊——事件數是 0 或 1 筆時，
+    # ConvertTo-Json 沒有這層保護會把陣列序列化成裸物件，api-server 那邊
+    # Array.isArray() 檢查就會直接判定成空陣列，整包資料等於沒送到。
+    $graphBody = @{ events = @($hermesEvents) } | ConvertTo-Json -Depth 6
+    Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-graph" -Method Post -Headers $Headers -Body ($graphBody | ConvertTo-AsciiJson) | Out-Null
+} catch {
+    Write-ErrorLog "Hermes graph collection/POST failed: $_"
     $ScriptHadError = $true
 }
 

@@ -57,6 +57,13 @@
       "when": 1788406423077,
       "tag": "0007_common_killer_shrike",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788676534243,
+      "tag": "0008_fair_toad",
+      "breakpoints": true
     }
   ]
 }

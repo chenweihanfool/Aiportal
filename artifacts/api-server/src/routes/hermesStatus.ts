@@ -1,5 +1,12 @@
 import { Router, type Request, type Response } from "express";
-import { db, hermesStatusSnapshotTable, hermesActivityLogTable, type HermesStatusSnapshotRow } from "@workspace/db";
+import {
+  db,
+  hermesStatusSnapshotTable,
+  hermesActivityLogTable,
+  hermesGraphSnapshotTable,
+  type HermesStatusSnapshotRow,
+  type HermesGraphEvent,
+} from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 
 const router = Router();
@@ -98,6 +105,109 @@ router.get("/hermes-status", async (req: Request, res: Response) => {
     scheduledTasks: row.scheduledTasks ?? [],
     computedAt: row.computedAt.toISOString(),
     stale,
+  });
+});
+
+// HERMES's "事人雙實體" (event-person dual-entity) knowledge structure —
+// collect.ps1 re-scans every Events/*.md file's frontmatter each run and
+// POSTs the full current set (not a diff, same "whole payload overwrite"
+// shape as hermes-status above). People/*.md is a script-maintained
+// backlink cache on HERMES's own side, not a separate source of truth, so
+// only `events` is ever posted or stored — every person node, edge, and
+// derived metric below is computed from `events` at read time.
+router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
+  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  if (!authorized) {
+    return res.status(403).json({ message: "需要管理員權限" });
+  }
+
+  const body = req.body as Record<string, unknown>;
+  const events = Array.isArray(body["events"]) ? (body["events"] as HermesGraphEvent[]) : [];
+
+  await db
+    .insert(hermesGraphSnapshotTable)
+    .values({ id: "latest", events })
+    .onConflictDoUpdate({
+      target: hermesGraphSnapshotTable.id,
+      set: { events, computedAt: new Date() },
+    });
+
+  return res.json({ success: true });
+});
+
+router.get("/hermes-graph", async (req: Request, res: Response) => {
+  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  if (!unlocked) {
+    return res.status(403).json({ message: "需要解鎖私領域才能查看" });
+  }
+
+  const [row] = await db
+    .select()
+    .from(hermesGraphSnapshotTable)
+    .where(eq(hermesGraphSnapshotTable.id, "latest"))
+    .limit(1);
+
+  if (!row || !row.events) {
+    return res.json({ available: false });
+  }
+
+  const events = row.events;
+
+  // 人物節點 + degree（連結數）從 events.participants 反推——People/*.md
+  // 只是 HERMES 自己維護的反查快取，不是另一份要另外信任的來源。同一個
+  // person 名稱視為同一個節點（沒有跨事件的 id，用顯示名稱本身當 key，跟
+  // frontmatter 的 `[[人名]]` wikilink 語意一致）。
+  const peopleByName = new Map<string, { name: string; eventCount: number; firstDate: string }>();
+  const edges: Array<{ person: string; eventId: string; role: string }> = [];
+  let totalParticipantLinks = 0;
+  let orphanEventCount = 0;
+
+  for (const ev of events) {
+    const participants = ev.participants ?? [];
+    if (participants.length === 0) orphanEventCount++;
+    totalParticipantLinks += participants.length;
+    for (const p of participants) {
+      edges.push({ person: p.person, eventId: ev.id, role: p.role });
+      const existing = peopleByName.get(p.person);
+      if (existing) {
+        existing.eventCount++;
+        if (ev.date < existing.firstDate) existing.firstDate = ev.date;
+      } else {
+        peopleByName.set(p.person, { name: p.person, eventCount: 1, firstDate: ev.date });
+      }
+    }
+  }
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const newEventsThisWeek = events.filter((ev) => ev.date >= weekAgo).length;
+  const newPeopleThisWeek = Array.from(peopleByName.values()).filter((p) => p.firstDate >= weekAgo).length;
+
+  const people = Array.from(peopleByName.values()).sort((a, b) => b.eventCount - a.eventCount);
+  const mostActivePerson = people.length > 0 ? { name: people[0].name, eventCount: people[0].eventCount } : null;
+
+  return res.json({
+    available: true,
+    computedAt: row.computedAt.toISOString(),
+    metrics: {
+      peopleCount: people.length,
+      eventsCount: events.length,
+      avgParticipantsPerEvent: events.length > 0 ? Math.round((totalParticipantLinks / events.length) * 10) / 10 : 0,
+      orphanEventRatioPct: events.length > 0 ? Math.round((orphanEventCount / events.length) * 100) : 0,
+      newEventsThisWeek,
+      newPeopleThisWeek,
+      mostActivePerson,
+    },
+    graph: {
+      people: people.map((p) => ({ name: p.name, eventCount: p.eventCount })),
+      events: events.map((ev) => ({
+        id: ev.id,
+        date: ev.date,
+        title: ev.title,
+        status: ev.status,
+        tags: ev.tags ?? [],
+      })),
+      edges,
+    },
   });
 });
 
