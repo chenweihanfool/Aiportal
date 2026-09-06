@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
 import { COLOR, FONT } from './theme'
 import './portal.css'
@@ -12,6 +12,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.3.0',
+    date: '2026-09-06',
+    summary: 'HERMES 人-事網路圖改成可拖拉的即時力導向動態圖',
+    changes: [
+      '節點改成可拖拉：按住拖動時暫時釘住該節點（fx/fy），力導向模擬即時重新計算其他節點位置，放開後立刻回到正常物理模擬，跟真正的 Obsidian Graph View 手感一致',
+      '圖一載入就用即時模擬跑（d3-force 的 tick 事件直接驅動畫面重繪），不是預先算好定格再畫成靜態 SVG，會看到節點從隨機起始位置逐漸展開、收斂穩定的動畫過程',
+      '滑鼠移到節點上會高亮相關聯的節點與連線，其餘淡化——人-事二分圖只有人物↔事件邊，單純抓一層鄰居只會亮到自己參加的事件，抓不到同場的其他人，所以額外多一層：把直接相連事件的「其他參與者」也一併納入高亮範圍',
+      '點擊事件節點會在圖下方彈出詳細卡片（標題／日期／狀態／標籤），再點一次或按 ✕ 收合',
+    ],
+  },
   {
     version: '2.2.0',
     date: '2026-09-06',
@@ -1344,60 +1355,153 @@ interface GraphNode extends SimulationNodeDatum {
   label: string
   radius: number
   eventCount?: number
-  eventDate?: string
+  eventId?: string // only set on event nodes — key back into the `events` prop for the click-to-detail card
 }
+
+type GraphLink = SimulationLinkDatum<GraphNode> & { key: string }
 
 const GRAPH_WIDTH = 760
 const GRAPH_HEIGHT = 460
+const LABEL_MARGIN = 16
 
-function useHermesGraphLayout(
-  people: HermesGraphPersonNode[],
-  events: HermesGraphEventNode[],
-  edges: HermesGraphEdge[],
-) {
-  return useMemo(() => {
-    if (people.length === 0 && events.length === 0) return { nodes: [] as GraphNode[], links: [] as Array<SimulationLinkDatum<GraphNode> & { key: string }> }
+function clampNodesToCanvas(nodes: GraphNode[]) {
+  // 保險絲：不管力學怎麼跑，每個 tick 後都夾回 viewBox 範圍內（含節點半徑
+  // 跟人物標籤要用的下緣空間）——拖拉時很容易把節點拖到邊界外，沒有這層
+  // 節點/標籤會直接被 SVG 裁掉看不見。
+  for (const n of nodes) {
+    const bottomMargin = n.kind === 'person' ? n.radius + LABEL_MARGIN : n.radius
+    n.x = Math.max(n.radius, Math.min(GRAPH_WIDTH - n.radius, n.x ?? GRAPH_WIDTH / 2))
+    n.y = Math.max(n.radius, Math.min(GRAPH_HEIGHT - bottomMargin, n.y ?? GRAPH_HEIGHT / 2))
+  }
+}
+
+function linkEndpointId(end: string | number | GraphNode): string {
+  return typeof end === 'object' ? end.id : String(end)
+}
+
+// 即時力導向模擬（不是算一次就畫死的靜態圖）：節點可以拖拉、滑鼠移過去會
+// 高亮關聯的節點跟連線、點事件節點會顯示詳細內容。用 useRef 存節點/連線陣
+// 列本身（d3 內部會直接 mutate 這些物件的 x/y/fx/fy），每個 tick 用一個遞
+// 增計數器觸發 React 重新渲染讀取最新座標，不是每個 tick 都整包 setState
+// 新陣列——避免高頻率模擬時不必要的陣列重建。
+function HermesEventGraph({ people, events, edges }: { people: HermesGraphPersonNode[]; events: HermesGraphEventNode[]; edges: HermesGraphEdge[] }) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const simRef = useRef<ReturnType<typeof forceSimulation<GraphNode>> | null>(null)
+  const nodesRef = useRef<GraphNode[]>([])
+  const linksRef = useRef<GraphLink[]>([])
+  const draggingIdRef = useRef<string | null>(null)
+  const [, setTick] = useState(0)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<HermesGraphEventNode | null>(null)
+
+  useEffect(() => {
+    if (people.length === 0 && events.length === 0) {
+      nodesRef.current = []
+      linksRef.current = []
+      setTick(t => t + 1)
+      return
+    }
 
     const nodes: GraphNode[] = [
       ...people.map((p): GraphNode => ({
         id: `p:${p.name}`, kind: 'person', label: p.name,
         radius: Math.min(24, 7 + Math.sqrt(p.eventCount) * 4.2), eventCount: p.eventCount,
       })),
-      ...events.map((e): GraphNode => ({ id: `e:${e.id}`, kind: 'event', label: e.title, radius: 4, eventDate: e.date })),
+      ...events.map((e): GraphNode => ({ id: `e:${e.id}`, kind: 'event', label: e.title, radius: 4, eventId: e.id })),
     ]
-    const links = edges.map((edge, i) => ({ key: `${edge.person}|${edge.eventId}|${i}`, source: `p:${edge.person}`, target: `e:${edge.eventId}` }))
+    const links: GraphLink[] = edges.map((edge, i) => ({ key: `${edge.person}|${edge.eventId}|${i}`, source: `p:${edge.person}`, target: `e:${edge.eventId}` }))
+    nodesRef.current = nodes
+    linksRef.current = links
 
-    // 靜態排版：手動 tick 到收斂就停，不用 requestAnimationFrame 持續模擬
-    // ——這是一張唯讀的儀表板圖，不是可拖拉的互動圖，穩定佈局後直接畫成固
-    // 定 SVG 就夠了。多數事件彼此不相干（沒有共同的人物），圖裡其實是很多
-    // 互不相連的小群組——只有 charge + center 兩個力，各群組會被斥力越推
-    // 越遠，飄到 viewBox 外面看不到；加兩個很弱的 x/y 定位力把每個節點都
-    // 溫和地拉回中心附近，group 之間才不會散得無邊無際。
+    // 多數事件彼此不相干（沒有共同的人物），圖裡其實是很多互不相連的小群
+    // 組——只有 charge + center 兩個力，各群組會被斥力越推越遠，飄到
+    // viewBox 外面看不到；加兩個很弱的 x/y 定位力把每個節點都溫和地拉回中
+    // 心附近，group 之間才不會散得無邊無際。
     const sim = forceSimulation<GraphNode>(nodes)
-      .force('link', forceLink<GraphNode, (typeof links)[number]>(links).id(d => d.id).distance(34).strength(0.55))
+      .force('link', forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(34).strength(0.55))
       .force('charge', forceManyBody().strength(-85))
       .force('center', forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
       .force('collide', forceCollide<GraphNode>().radius(d => d.radius + 3))
       .force('x', forceX(GRAPH_WIDTH / 2).strength(0.025))
       .force('y', forceY(GRAPH_HEIGHT / 2).strength(0.025))
-      .stop()
-    for (let i = 0; i < 300; i++) sim.tick()
+      .on('tick', () => {
+        clampNodesToCanvas(nodes)
+        setTick(t => t + 1)
+      })
+    simRef.current = sim
 
-    // 保險絲：不管力學怎麼收斂，最後都夾回 viewBox 範圍內（含節點半徑跟人
-    // 物標籤要用的下緣空間），確保沒有節點或標籤被裁到看不見。
-    const LABEL_MARGIN = 16
-    for (const n of nodes) {
-      const bottomMargin = n.kind === 'person' ? n.radius + LABEL_MARGIN : n.radius
-      n.x = Math.max(n.radius, Math.min(GRAPH_WIDTH - n.radius, n.x ?? GRAPH_WIDTH / 2))
-      n.y = Math.max(n.radius, Math.min(GRAPH_HEIGHT - bottomMargin, n.y ?? GRAPH_HEIGHT / 2))
-    }
+    // 不預先手動 tick 到收斂再畫出來——讓模擬從初始亂數位置開始跑、畫面上
+    // 真的看得到節點飛進來收斂就定位的過程（跟 Obsidian Graph View 開圖時
+    // 的感覺一樣），alphaDecay 用預設值，跑到 alphaMin 以下會自己停止，不
+    // 會無限耗 CPU；拖拉節點時會重新加溫（見 handlePointerDown）。
 
-    return { nodes, links }
+    return () => { sim.stop() }
   }, [people, events, edges])
-}
 
-function HermesEventGraph({ people, events, edges }: { people: HermesGraphPersonNode[]; events: HermesGraphEventNode[]; edges: HermesGraphEdge[] }) {
-  const { nodes, links } = useHermesGraphLayout(people, events, edges)
+  function toSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null {
+    const svg = svgRef.current
+    const ctm = svg?.getScreenCTM()
+    if (!svg || !ctm) return null
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    const p = pt.matrixTransform(ctm.inverse())
+    return { x: p.x, y: p.y }
+  }
+
+  function handlePointerDown(e: React.PointerEvent<SVGCircleElement>, node: GraphNode) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    draggingIdRef.current = node.id
+    node.fx = node.x
+    node.fy = node.y
+    simRef.current?.alphaTarget(0.3).restart()
+  }
+
+  function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    const draggingId = draggingIdRef.current
+    if (!draggingId) return
+    const p = toSvgPoint(e.clientX, e.clientY)
+    const node = nodesRef.current.find(n => n.id === draggingId)
+    if (p && node) { node.fx = p.x; node.fy = p.y }
+  }
+
+  function handlePointerUp() {
+    if (!draggingIdRef.current) return
+    const node = nodesRef.current.find(n => n.id === draggingIdRef.current)
+    if (node) { node.fx = null; node.fy = null }
+    draggingIdRef.current = null
+    simRef.current?.alphaTarget(0)
+  }
+
+  const neighborIds = useMemo(() => {
+    if (!hoveredId) return null
+    // 圖是二分圖（人只連事件、事件只連人，沒有人-人直接的邊），只算一跳鄰
+    // 居的話，滑鼠移到「使用者」上只會亮他自己參加的事件，不會亮同一場事
+    // 件裡的其他人——那些人明明也「相關聯」，卻因為隔了一個事件節點被當
+    // 成無關。這裡多走一跳：先找出直接相連的事件，再把那些事件的其他參
+    // 與者也一併收進來，「這個人／事件牽連到的一切」才會真的一起亮起來。
+    const set = new Set<string>([hoveredId])
+    const directEventIds = new Set<string>()
+    for (const l of linksRef.current) {
+      const s = linkEndpointId(l.source)
+      const t = linkEndpointId(l.target)
+      if (s === hoveredId) { set.add(t); if (t.startsWith('e:')) directEventIds.add(t) }
+      if (t === hoveredId) { set.add(s); if (s.startsWith('e:')) directEventIds.add(s) }
+    }
+    for (const l of linksRef.current) {
+      const s = linkEndpointId(l.source)
+      const t = linkEndpointId(l.target)
+      if (directEventIds.has(s)) set.add(t)
+      if (directEventIds.has(t)) set.add(s)
+    }
+    return set
+    // linksRef.current 只在資料變動（連帶 hoveredId 重置）時才會換掉，這裡
+    // 只依賴 hoveredId 就夠了，不用把 ref 本身放進依賴陣列。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredId])
+
+  const nodes = nodesRef.current
+  const links = linksRef.current
 
   if (nodes.length === 0) {
     return (
@@ -1408,27 +1512,76 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
   }
 
   return (
-    <svg width="100%" height={GRAPH_HEIGHT} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} style={{ display: 'block' }}>
-      {links.map(link => {
-        const s = link.source as GraphNode
-        const t = link.target as GraphNode
-        if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return null
-        return <line key={link.key} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke={COLOR.line} strokeWidth={1} />
-      })}
-      {nodes.filter(n => n.kind === 'event').map(n => (
-        <circle key={n.id} cx={n.x} cy={n.y} r={n.radius} fill={COLOR.steelDim} fillOpacity={0.75}>
-          <title>{`${n.eventDate ?? ''} · ${n.label}`}</title>
-        </circle>
-      ))}
-      {nodes.filter(n => n.kind === 'person').map(n => (
-        <g key={n.id}>
-          <circle cx={n.x} cy={n.y} r={n.radius} fill={COLOR.amber} fillOpacity={0.88}>
-            <title>{`${n.label} · ${n.eventCount ?? 0} 個事件`}</title>
-          </circle>
-          <text x={n.x} y={(n.y ?? 0) + n.radius + 12} textAnchor="middle" fontSize={10.5} fontFamily={FONT.mono} fill={COLOR.ink}>{n.label}</text>
-        </g>
-      ))}
-    </svg>
+    <div>
+      <svg
+        ref={svgRef}
+        width="100%" height={GRAPH_HEIGHT} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+        style={{ display: 'block', touchAction: 'none' }}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      >
+        {links.map(link => {
+          const s = link.source as GraphNode
+          const t = link.target as GraphNode
+          if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return null
+          const dimmed = neighborIds ? !(neighborIds.has(s.id) && neighborIds.has(t.id)) : false
+          return <line key={link.key} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke={COLOR.line} strokeWidth={1} opacity={dimmed ? 0.1 : 1} />
+        })}
+        {nodes.filter(n => n.kind === 'event').map(n => {
+          const dimmed = neighborIds ? !neighborIds.has(n.id) : false
+          return (
+            <circle
+              key={n.id} cx={n.x} cy={n.y} r={n.radius}
+              fill={selectedEvent && n.eventId === selectedEvent.id ? COLOR.amber : COLOR.steelDim}
+              fillOpacity={dimmed ? 0.15 : 0.8}
+              style={{ cursor: 'pointer' }}
+              onPointerDown={e => handlePointerDown(e, n)}
+              onMouseEnter={() => setHoveredId(n.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              onClick={() => setSelectedEvent(events.find(e => e.id === n.eventId) ?? null)}
+            >
+              <title>{`${n.label}`}</title>
+            </circle>
+          )
+        })}
+        {nodes.filter(n => n.kind === 'person').map(n => {
+          const dimmed = neighborIds ? !neighborIds.has(n.id) : false
+          return (
+            <g key={n.id} opacity={dimmed ? 0.2 : 1}>
+              <circle
+                cx={n.x} cy={n.y} r={n.radius} fill={COLOR.amber} fillOpacity={0.88}
+                style={{ cursor: 'grab' }}
+                onPointerDown={e => handlePointerDown(e, n)}
+                onMouseEnter={() => setHoveredId(n.id)}
+                onMouseLeave={() => setHoveredId(null)}
+              >
+                <title>{`${n.label} · ${n.eventCount ?? 0} 個事件`}</title>
+              </circle>
+              <text x={n.x} y={(n.y ?? 0) + n.radius + 12} textAnchor="middle" fontSize={10.5} fontFamily={FONT.mono} fill={COLOR.ink} style={{ pointerEvents: 'none' }}>{n.label}</text>
+            </g>
+          )
+        })}
+      </svg>
+      {selectedEvent && (
+        <div style={{ marginTop: '0.6rem', padding: '0.7rem 0.9rem', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '5px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+            <div style={{ fontSize: '0.78rem', color: COLOR.ink, fontWeight: 600 }}>{selectedEvent.title}</div>
+            <span onClick={() => setSelectedEvent(null)} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.8rem', flexShrink: 0 }}>✕</span>
+          </div>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginTop: '4px' }}>
+            {selectedEvent.date}{selectedEvent.status ? ` · ${selectedEvent.status}` : ''}
+          </div>
+          {selectedEvent.tags.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+              {selectedEvent.tags.map(tag => (
+                <span key={tag} style={{ fontSize: '0.62rem', color: COLOR.steel, background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 8px' }}>{tag}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
