@@ -4,16 +4,19 @@
 .DESCRIPTION
     Steps:
       1. git pull (from chenweihanfool/Aiportal on GitHub)
-      2. docker compose build --no-cache + rm -sf + up -d (two-step forced
-         recreate, avoids the stale-image trap #12a where --force-recreate
-         alone doesn't guarantee the container picks up the freshly-built
-         image on this Windows Docker Desktop host)
-      3. docker compose --profile migrate run --build --rm db-migrate (applies
+      2. docker compose --profile migrate run --build --rm db-migrate (applies
          lib/db/migrations/*.sql via a one-off container built from the
          Dockerfile's `build` stage, which has the full pnpm workspace incl.
          drizzle-kit -- the api-server *runtime* image does not, it's just
          the esbuild-bundled dist/index.mjs, so exec'ing into it can't run
-         drizzle-kit at all)
+         drizzle-kit at all). Runs BEFORE the redeploy below (2026-09-03) so
+         schema changes land before api-server/gis-portal start against them --
+         avoids a crash-loop window where new code queries columns that don't
+         exist yet.
+      3. docker compose build --no-cache + rm -sf + up -d (two-step forced
+         recreate, avoids the stale-image trap #12a where --force-recreate
+         alone doesn't guarantee the container picks up the freshly-built
+         image on this Windows Docker Desktop host)
       4. health check (verify /api/healthz responds)
 
     Same pattern as pf-cwh/FitnessForge on this host. Postgres itself is NOT
@@ -88,9 +91,56 @@ catch {
 }
 
 # ==============================================
-# Step 2: docker compose build + rm + up (two-step forced recreate)
+# Step 2: schema sync (db-migrate service, applies lib/db/migrations/*.sql)
 # ==============================================
-Write-Host "[2/4] Building + starting containers..." -ForegroundColor Yellow
+# 2026-08-21: reverted from "docker compose exec api-server npx drizzle-kit
+# push" back to the db-migrate service. That exec approach could never have
+# actually worked -- artifacts/api-server/Dockerfile's runtime stage (the
+# one api-server actually runs) only COPYs the esbuild-bundled dist/index.mjs;
+# there's no node_modules, no drizzle-kit, no drizzle.config.ts anywhere in
+# that image, so `npx drizzle-kit push --config ./drizzle.config.ts` had
+# nothing to find or run regardless of what path was passed. Confirmed hit
+# on 2026-08-21's deploy, worked around manually that time.
+#
+# db-migrate targets the Dockerfile's `build` stage instead (full pnpm
+# workspace, has drizzle-kit + lib/db/drizzle.config.ts + lib/db/migrations/),
+# which is why it's the one that can actually run this. It was swapped away
+# from earlier over an ENOTFOUND "base" DNS error -- if that recurs, it needs
+# debugging on the real host (not reproducible from a dev checkout), but the
+# exec-based replacement was never a working alternative, so reverting is a
+# strict improvement either way.
+#
+# 2026-09-03: moved ahead of the api-server/gis-portal redeploy (was Step 3)
+# so schema changes are applied before the new code that expects them starts
+# up -- avoids a window where the freshly-deployed api-server crash-loops
+# against a not-yet-migrated schema.
+Write-Host "[2/4] Syncing database schema..." -ForegroundColor Yellow
+try {
+    Push-Location $RepoDir
+    # --build is not optional: `docker compose run` (unlike `up`) does not
+    # rebuild a service whose image already exists, even if lib/db/migrations/
+    # has moved on since that image was built -- see the db-migrate comment
+    # in docker-compose.yml for the exact incident this bit before.
+    $migrateResult = cmd /c "docker compose --profile migrate run --build --rm db-migrate 2>&1"
+    Write-Host $migrateResult
+    if ($LASTEXITCODE -ne 0) {
+        throw "db-migrate failed (exit code: $LASTEXITCODE)"
+    }
+    Write-Host "  >> Schema synced" -ForegroundColor Green
+    Pop-Location
+}
+catch {
+    Write-Host "ERROR schema sync: $_" -ForegroundColor Red
+    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose --profile migrate run --build --rm db-migrate" -ForegroundColor Yellow
+    Pop-Location
+    Write-Host "  Schema sync failure is treated as fatal -- a missing table will crash-loop api-server." -ForegroundColor Red
+    exit 1
+}
+
+# ==============================================
+# Step 3: docker compose build + rm + up (two-step forced recreate)
+# ==============================================
+Write-Host "[3/4] Building + starting containers..." -ForegroundColor Yellow
 try {
     Push-Location $RepoDir
     $buildResult = cmd /c "docker compose build --no-cache 2>&1"
@@ -115,48 +165,6 @@ catch {
     Write-Host "ERROR docker up --build: $_" -ForegroundColor Red
     Write-Host "Make sure Docker Desktop is running and .env exists (copy from .env.example)" -ForegroundColor Yellow
     Pop-Location
-    exit 1
-}
-
-# ==============================================
-# Step 3: schema sync (db-migrate service, applies lib/db/migrations/*.sql)
-# ==============================================
-# 2026-08-21: reverted from "docker compose exec api-server npx drizzle-kit
-# push" back to the db-migrate service. That exec approach could never have
-# actually worked -- artifacts/api-server/Dockerfile's runtime stage (the
-# one api-server actually runs) only COPYs the esbuild-bundled dist/index.mjs;
-# there's no node_modules, no drizzle-kit, no drizzle.config.ts anywhere in
-# that image, so `npx drizzle-kit push --config ./drizzle.config.ts` had
-# nothing to find or run regardless of what path was passed. Confirmed hit
-# on 2026-08-21's deploy, worked around manually that time.
-#
-# db-migrate targets the Dockerfile's `build` stage instead (full pnpm
-# workspace, has drizzle-kit + lib/db/drizzle.config.ts + lib/db/migrations/),
-# which is why it's the one that can actually run this. It was swapped away
-# from earlier over an ENOTFOUND "base" DNS error -- if that recurs, it needs
-# debugging on the real host (not reproducible from a dev checkout), but the
-# exec-based replacement was never a working alternative, so reverting is a
-# strict improvement either way.
-Write-Host "[3/4] Syncing database schema..." -ForegroundColor Yellow
-try {
-    Push-Location $RepoDir
-    # --build is not optional: `docker compose run` (unlike `up`) does not
-    # rebuild a service whose image already exists, even if lib/db/migrations/
-    # has moved on since that image was built -- see the db-migrate comment
-    # in docker-compose.yml for the exact incident this bit before.
-    $migrateResult = cmd /c "docker compose --profile migrate run --build --rm db-migrate 2>&1"
-    Write-Host $migrateResult
-    if ($LASTEXITCODE -ne 0) {
-        throw "db-migrate failed (exit code: $LASTEXITCODE)"
-    }
-    Write-Host "  >> Schema synced" -ForegroundColor Green
-    Pop-Location
-}
-catch {
-    Write-Host "ERROR schema sync: $_" -ForegroundColor Red
-    Write-Host "  If this failed, run manually: cd $RepoDir && docker compose --profile migrate run --build --rm db-migrate" -ForegroundColor Yellow
-    Pop-Location
-    Write-Host "  Schema sync failure is treated as fatal -- a missing table will crash-loop api-server." -ForegroundColor Red
     exit 1
 }
 
