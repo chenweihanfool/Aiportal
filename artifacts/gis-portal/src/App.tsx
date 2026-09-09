@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, forceRadial, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
 import { COLOR, FONT } from './theme'
 import './portal.css'
 
@@ -12,6 +12,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.3.2',
+    date: '2026-09-09',
+    summary: '孤立節點改成 Obsidian 式圓形散佈，並加上顯示開關',
+    changes: [
+      '孤兒事件（沒有任何 participants 的事件）以前跟其他節點共用同一組 charge／center 力，沒有連線拉著，會被斥力一路推到 viewBox 邊界被夾住，一整排疊在四個邊上變成一個很明顯的方框，跟 Obsidian 完全不像',
+      '改用 forceRadial 把孤兒節點統一拉到「以圖中心為圓心的固定半徑」圓周上，配合節點間的斥力自然沿圓周散開，變成 Obsidian 那種孤立節點圍成一圈的觀感，不再貼著方形邊界',
+      '新增「孤立節點」顯示開關（預設關閉，跟 Obsidian Graph View 預設一致），開關上會顯示目前孤立節點的數量；全部資料都被篩掉時開關仍會留著，方便隨時打開找回來',
+    ],
+  },
   {
     version: '2.3.1',
     date: '2026-09-06',
@@ -1366,6 +1376,7 @@ interface GraphNode extends SimulationNodeDatum {
   radius: number
   eventCount?: number
   eventId?: string // only set on event nodes — key back into the `events` prop for the click-to-detail card
+  isOrphan?: boolean // event node with zero participants — no link ever touches it
 }
 
 type GraphLink = SimulationLinkDatum<GraphNode> & { key: string }
@@ -1373,6 +1384,12 @@ type GraphLink = SimulationLinkDatum<GraphNode> & { key: string }
 const GRAPH_WIDTH = 760
 const GRAPH_HEIGHT = 460
 const LABEL_MARGIN = 16
+// 孤立節點顯示開關打開時，孤兒事件不再被 charge 力推到隨便一個角落夾在
+// viewBox 邊上（一長方框感很重，跟 Obsidian 完全不同）——改用 forceRadial
+// 把它們拉到一個以圖中心為圓心的固定半徑上，配合彼此之間的斥力自然沿著
+// 圓周散開，才是 Obsidian 那種「孤立節點圍成一圈」的觀感。半徑抓得比
+// canvas 短邊的一半小一截，確保整圈都在 viewBox 內、不會被裁到。
+const ORPHAN_RING_RADIUS = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) / 2 - 26
 
 function clampNodesToCanvas(nodes: GraphNode[]) {
   // 保險絲：不管力學怎麼跑，每個 tick 後都夾回 viewBox 範圍內（含節點半徑
@@ -1404,9 +1421,16 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<HermesGraphEventNode | null>(null)
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null)
+  // 預設跟 Obsidian Graph View 一樣關閉——孤兒事件（沒有任何 participants
+  // 的事件）預設不畫，圖只顯示真正有關聯的人-事網路，畫面比較乾淨。
+  const [showOrphans, setShowOrphans] = useState(false)
+
+  const linkedEventIds = useMemo(() => new Set(edges.map(e => e.eventId)), [edges])
+  const orphanCount = useMemo(() => events.filter(e => !linkedEventIds.has(e.id)).length, [events, linkedEventIds])
 
   useEffect(() => {
-    if (people.length === 0 && events.length === 0) {
+    const visibleEvents = showOrphans ? events : events.filter(e => linkedEventIds.has(e.id))
+    if (people.length === 0 && visibleEvents.length === 0) {
       nodesRef.current = []
       linksRef.current = []
       setTick(t => t + 1)
@@ -1418,7 +1442,10 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
         id: `p:${p.name}`, kind: 'person', label: p.name,
         radius: Math.min(24, 7 + Math.sqrt(p.eventCount) * 4.2), eventCount: p.eventCount,
       })),
-      ...events.map((e): GraphNode => ({ id: `e:${e.id}`, kind: 'event', label: e.title, radius: 4, eventId: e.id })),
+      ...visibleEvents.map((e): GraphNode => ({
+        id: `e:${e.id}`, kind: 'event', label: e.title, radius: 4, eventId: e.id,
+        isOrphan: !linkedEventIds.has(e.id),
+      })),
     ]
     const links: GraphLink[] = edges.map((edge, i) => ({ key: `${edge.person}|${edge.eventId}|${i}`, source: `p:${edge.person}`, target: `e:${edge.eventId}` }))
     nodesRef.current = nodes
@@ -1427,14 +1454,22 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
     // 多數事件彼此不相干（沒有共同的人物），圖裡其實是很多互不相連的小群
     // 組——只有 charge + center 兩個力，各群組會被斥力越推越遠，飄到
     // viewBox 外面看不到；加兩個很弱的 x/y 定位力把每個節點都溫和地拉回中
-    // 心附近，group 之間才不會散得無邊無際。
+    // 心附近，group 之間才不會散得無邊無際。孤兒節點不吃這兩個力（見下面
+    // forceRadial 的說明），不然兩股力互相打架，圓圈會被拉扁。
     const sim = forceSimulation<GraphNode>(nodes)
       .force('link', forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(34).strength(0.55))
       .force('charge', forceManyBody().strength(-85))
       .force('center', forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
       .force('collide', forceCollide<GraphNode>().radius(d => d.radius + 3))
-      .force('x', forceX(GRAPH_WIDTH / 2).strength(0.025))
-      .force('y', forceY(GRAPH_HEIGHT / 2).strength(0.025))
+      .force('x', forceX<GraphNode>(GRAPH_WIDTH / 2).strength(d => d.isOrphan ? 0 : 0.025))
+      .force('y', forceY<GraphNode>(GRAPH_HEIGHT / 2).strength(d => d.isOrphan ? 0 : 0.025))
+      // 孤兒節點（沒有任何連線）不受 link 力約束，單靠 charge 斥力會被越推
+      // 越遠，撞上 clampNodesToCanvas 的邊界夾死，一整排疊在 viewBox 四邊，
+      // 看起來像個方框——跟真正的 Obsidian 完全不像。這裡改用 forceRadial
+      // 把孤兒節點統一拉往「以圖中心為圓心、固定半徑」的圓周上，配合彼此
+      // 間的斥力自然沿圓周散開，才有 Obsidian 那種孤立節點圍成一圈的感覺；
+      // 非孤兒節點的 strength 是 0，不受這個力影響。
+      .force('radial', forceRadial<GraphNode>(ORPHAN_RING_RADIUS, GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2).strength(d => d.isOrphan ? 0.9 : 0))
       .on('tick', () => {
         clampNodesToCanvas(nodes)
         setTick(t => t + 1)
@@ -1447,7 +1482,7 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
     // 會無限耗 CPU；拖拉節點時會重新加溫（見 handlePointerDown）。
 
     return () => { sim.stop() }
-  }, [people, events, edges])
+  }, [people, events, edges, showOrphans, linkedEventIds])
 
   function toSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null {
     const svg = svgRef.current
@@ -1520,7 +1555,7 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
   const nodes = nodesRef.current
   const links = linksRef.current
 
-  if (nodes.length === 0) {
+  if (people.length === 0 && events.length === 0) {
     return (
       <div style={{ fontSize: '0.75rem', color: COLOR.steelDim, padding: '2.5rem 0', textAlign: 'center' }}>
         還沒有任何事件／人物資料——collect.ps1 還沒掃到 Events/，或 vault 裡還沒有任何事件
@@ -1528,8 +1563,44 @@ function HermesEventGraph({ people, events, edges }: { people: HermesGraphPerson
     )
   }
 
+  const orphanToggle = (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
+      <button
+        type="button"
+        onClick={() => setShowOrphans(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+          padding: '0.3rem 0.6rem', borderRadius: '999px', fontFamily: FONT.mono, fontSize: '0.62rem', letterSpacing: '0.04em',
+          background: showOrphans ? 'rgba(245,166,35,0.12)' : 'transparent',
+          border: `1px solid ${showOrphans ? COLOR.amberDim : COLOR.line}`,
+          color: showOrphans ? COLOR.amber : COLOR.steelDim,
+        }}
+      >
+        <span style={{
+          width: '8px', height: '8px', borderRadius: '50%',
+          background: showOrphans ? COLOR.amber : 'transparent', border: `1px solid ${showOrphans ? COLOR.amber : COLOR.steelDim}`,
+        }} />
+        孤立節點（無關聯事件）{orphanCount > 0 ? `· ${orphanCount}` : ''}
+      </button>
+    </div>
+  )
+
+  if (nodes.length === 0) {
+    // 有資料，但目前都被開關篩掉了（例如全部都是孤兒事件、開關又是關的）——
+    // 開關本身還是要留著，不然使用者沒辦法打開它把資料叫回來。
+    return (
+      <div>
+        {orphanToggle}
+        <div style={{ fontSize: '0.75rem', color: COLOR.steelDim, padding: '2.5rem 0', textAlign: 'center' }}>
+          目前沒有已連結的人-事關聯——{orphanCount > 0 ? '有孤立節點，打開上面的開關看看' : '資料還在累積中'}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
+      {orphanToggle}
       <svg
         ref={svgRef}
         width="100%" height={GRAPH_HEIGHT} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
