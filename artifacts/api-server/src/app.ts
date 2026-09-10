@@ -26,8 +26,11 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 2026-09-11: default 100kb body limit started rejecting collect.ps1's
+// full-payload /admin/hermes-graph POST once Events/ passed ~100 files
+// (413 Payload Too Large, graph frozen at 105 events). 2mb headroom.
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 // Every /api response here is computed live on every request (or explicitly
 // rejects with 403/400) — none of it should ever be cached by a browser or
