@@ -472,12 +472,22 @@ function Get-HermesEvents {
                 elseif ($line -match '^tags:\s*\[(.*)\]\s*$') {
                     $tags = @($Matches[1] -split ',' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { $_ })
                 }
-                elseif ($line -match '^\s*-\s*person:\s*"?\[\[([^\]]+)\]\]"?\s*$') {
+                elseif ($line -match '^\s*-\s*name_raw:\s*(.+)$') {
+                    # 新格式（L3 消化舊知識條目時寫入）：name_raw 首行 + person/role/org 後續行
+                    $pendingPerson = $Matches[1].Trim()   # 先記 name_raw，若後續 person 行成功則覆蓋
+                    $pendingIsNewFormat = $true
+                }
+                elseif ($line -match '^\s*-?\s*person:\s*"?\[\[([^\]]+)\]\]"?\s*$') {
+                    # 兩種格式都接受：
+                    #   舊格式：- person: "[[名字]]"（單行，破折號前綴）
+                    #   新格式：name_raw 首行後的續行 person: "[[名字]]"（無破折號）
+                    # wikilink 內名字為準（新格式時覆蓋先前的 name_raw 值）
                     $pendingPerson = $Matches[1]
                 }
                 elseif ($pendingPerson -and $line -match '^\s*role:\s*(.+)$') {
                     $participants += @{ person = $pendingPerson; role = $Matches[1].Trim() }
                     $pendingPerson = $null
+                    $pendingIsNewFormat = $false
                 }
             }
 
