@@ -161,10 +161,14 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
   const edges: Array<{ person: string; eventId: string; role: string }> = [];
   let totalParticipantLinks = 0;
   let orphanEventCount = 0;
+  let trueOrphanEventCount = 0;
 
   for (const ev of events) {
     const participants = ev.participants ?? [];
     if (participants.length === 0) orphanEventCount++;
+    // 「真孤兒」＝沒有任何關聯（無 participants 也無案件）——案件鏈（C4 補鏈）
+    // 讓事件有歸屬但不算人物關聯，只看 participants 會把已歸檔的事件也算成孤兒
+    if (participants.length === 0 && !(typeof ev.case === "string" && ev.case.length > 0)) trueOrphanEventCount++;
     totalParticipantLinks += participants.length;
     for (const p of participants) {
       edges.push({ person: p.person, eventId: ev.id, role: p.role });
@@ -193,6 +197,7 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
       eventsCount: events.length,
       avgParticipantsPerEvent: events.length > 0 ? Math.round((totalParticipantLinks / events.length) * 10) / 10 : 0,
       orphanEventRatioPct: events.length > 0 ? Math.round((orphanEventCount / events.length) * 100) : 0,
+      trueOrphanEventRatioPct: events.length > 0 ? Math.round((trueOrphanEventCount / events.length) * 100) : 0,
       newEventsThisWeek,
       newPeopleThisWeek,
       mostActivePerson,

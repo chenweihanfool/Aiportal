@@ -20,6 +20,7 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
       date: string; // YYYY-MM-DD
       title: string;
       caseNo: string | null;
+      case: string | null; // 案件 wikilink 名（`case: "[[案件名]]"` 內的名字），判斷「真孤兒」用
       location: string | null;
       status: string | null;
       tags: string[];

@@ -457,7 +457,7 @@ function Get-HermesEvents {
             }
             if ($endIdx -lt 0) { continue }
 
-            $id = $null; $date = $null; $caseNo = $null; $location = $null; $status = $null
+            $id = $null; $date = $null; $caseNo = $null; $case = $null; $location = $null; $status = $null
             $tags = @()
             $participants = @()
             $pendingPerson = $null
@@ -467,6 +467,7 @@ function Get-HermesEvents {
                 if ($line -match '^id:\s*(.+)$') { $id = $Matches[1].Trim() }
                 elseif ($line -match '^date:\s*(.+)$') { $date = $Matches[1].Trim() }
                 elseif ($line -match '^case_no:\s*(.+)$') { $v = $Matches[1].Trim(); if ($v -ne 'null') { $caseNo = $v.Trim('"') } }
+                elseif ($line -match '^case:\s*"?\[\[([^\]]+)\]\]"?\s*$') { $case = $Matches[1] }
                 elseif ($line -match '^location:\s*(.+)$') { $v = $Matches[1].Trim(); if ($v -ne 'null') { $location = $v.Trim('"') } }
                 elseif ($line -match '^status:\s*(.+)$') { $status = $Matches[1].Trim() }
                 elseif ($line -match '^tags:\s*\[(.*)\]\s*$') {
@@ -508,6 +509,7 @@ function Get-HermesEvents {
                 date = $date
                 title = $title
                 caseNo = $caseNo
+                case = $case
                 location = $location
                 status = $status
                 tags = @($tags)

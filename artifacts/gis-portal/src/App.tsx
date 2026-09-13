@@ -13,6 +13,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.3.3',
+    date: '2026-09-14',
+    summary: '孤兒事件率改成「真孤兒」口徑：已掛案件鏈的事件不再被算成孤兒',
+    changes: [
+      '原本「孤兒事件率」只看 participants（人物關聯），但 C4 孤兒補鏈每天補的主要是案件（case）連結——補了案件也不會讓指標下降，73% 裡有 31 筆其實已掛案件鏈，指標永遠卡在結構性下限',
+      '改算「真孤兒」＝無人物關聯且無案件歸屬（目前 108/191 ≈ 57%），C4 每輪補案件鏈會真實反映在數字下降上；原孤兒率（無人物）移到指標下方小字繼續可見',
+      'collect.ps1 的 Get-HermesEvents 新增解析 frontmatter 的 case: "[[案件名]]" wikilink 欄位，隨事件整批上傳；API 層以「participants 為空且 case 為空」判定真孤兒',
+    ],
+  },
+  {
     version: '2.3.2',
     date: '2026-09-09',
     summary: '孤立節點改成 Obsidian 式圓形散佈，並加上顯示開關',
@@ -263,6 +273,7 @@ interface HermesGraphMetrics {
   eventsCount: number
   avgParticipantsPerEvent: number
   orphanEventRatioPct: number
+  trueOrphanEventRatioPct: number
   newEventsThisWeek: number
   newPeopleThisWeek: number
   mostActivePerson: { name: string; eventCount: number } | null
@@ -1723,7 +1734,7 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
             <StatCell label="人物數量" value={String(data.metrics.peopleCount)} />
             <StatCell label="事件數量" value={String(data.metrics.eventsCount)} />
             <StatCell label="平均關聯人數" value={data.metrics.avgParticipantsPerEvent.toFixed(1)} sub="每事件" />
-            <StatCell label="孤兒事件率" value={`${data.metrics.orphanEventRatioPct}%`} valueColor={data.metrics.orphanEventRatioPct >= 50 ? COLOR.warn : undefined} sub="無關聯人物" />
+            <StatCell label="真孤兒事件率" value={`${data.metrics.trueOrphanEventRatioPct}%`} valueColor={data.metrics.trueOrphanEventRatioPct >= 50 ? COLOR.warn : undefined} sub={`無人物且無案件（孤兒 ${data.metrics.orphanEventRatioPct}%）`} />
             <StatCell label="本週新增事件" value={String(data.metrics.newEventsThisWeek)} />
             <StatCell label="本週新增人物" value={String(data.metrics.newPeopleThisWeek)} />
           </div>
