@@ -21,11 +21,9 @@
 // ─────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { COLOR, FONT } from './theme'
-import {
-  apiFetchHermesGraph,
-  type HermesGraphData,
-  type HermesGraphEventNode,
-} from './hermesGraphApi'
+import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
+import { buildIndex, searchNodes, shortestPath, splitId } from './graphInsights'
+import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPanel'
 
 type NodeKind = 'person' | 'event' | 'case' | 'object'
 // 四種實體都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
@@ -49,16 +47,18 @@ interface UNode {
 interface ULink { key: string; aId: string; bId: string }
 
 const FOCAL_LENGTH = 620
-const DEFAULT_CAMERA_DISTANCE = 900
-const MIN_CAMERA_DISTANCE = 480
-const MAX_CAMERA_DISTANCE = 2400
+// 縮放範圍不寫死絕對值，改成相對於當前宇宙半徑（見 worldRadiusRef）——宇宙
+// 會隨節點數長大，寫死的上下限在資料量變大後就會變成「拉不遠／推不近」。
+const ZOOM_MIN_FACTOR = 0.25
+const ZOOM_MAX_FACTOR = 8
 const IDLE_ROTATE_SPEED = 0.0007
 const POSITION_EASE = 0.09
 const PIVOT_EASE = 0.12
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
-// 衛星散開的球冠半角：太小會疊在一起，太大就看不出「這群是掛在那個核心
-// 節點上」的分群感。
-const SATELLITE_CAP = 0.6
+// 衛星散開的球冠半角。不能是固定值：一個核心節點可能掛 2 個衛星，也可能
+// 掛 100 個，固定角度在後者會擠成一坨。球冠面積大致 ∝ θ²，所以 θ ∝ √m，
+// 再夾在一個看得出分群、又不會糊掉的範圍內。
+const satelliteCapFor = (m: number) => Math.max(0.3, Math.min(1.05, 0.16 * Math.sqrt(m)))
 // 最遠端節點的不透明度下限。第一版是 0.05（幾乎透明），整張圖因此灰濛濛；
 // 0.32 仍然看得出前後深度，但不會讓任何節點糊掉。
 const DEPTH_MIN_OPACITY = 0.32
@@ -122,11 +122,14 @@ function hash01(s: string): number {
 function computeLayout(nodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): number {
   const coreNodes = nodes.filter(n => n.kind === coreKind)
   const coreIds = new Set(coreNodes.map(n => n.id))
-  // 核心節點數量差很多（案件 12 個 vs 事件 364 個），半徑跟著節點數長，
-  // 不然 364 個核心節點擠在同一個小球面上一樣會糊。
-  const coreR = Math.max(115, Math.min(265, 70 + Math.sqrt(coreNodes.length) * 14))
-  const shellR = coreR + 180
-  const outerR = shellR + 130
+  // 半徑全部隨節點數成長，而且刻意不封頂：球面能容納的節點數 ∝ R²，所以
+  // R ∝ √n 才會讓節點密度維持恆定。之前 coreR 封頂在 265、外兩層又是固定
+  // 偏移（+180/+130），核心節點超過約 194 個之後就只會越擠越密——上千個
+  // 節點時整張圖必然糊掉。外兩層改成比例而非固定值，宇宙才會整體等比放
+  // 大；鏡頭會在重算佈局後自動拉到剛好框住（見 fitCameraTo）。
+  const coreR = Math.max(115, 70 + Math.sqrt(coreNodes.length) * 14)
+  const shellR = coreR * 1.9 + 60
+  const outerR = shellR * 1.35
 
   const dirOf = new Map<string, [number, number, number]>()
   coreNodes.forEach((n, i) => {
@@ -161,9 +164,10 @@ function computeLayout(nodes: UNode[], neighbors: Map<string, Set<string>>, core
     const [ax, ay, az, bx, by, bz] = orthoBasis(u[0], u[1], u[2])
     sats.sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0))
     const m = sats.length
+    const cap = satelliteCapFor(m)
     sats.forEach((s, k) => {
       // sqrt 讓衛星在球冠裡是等面積分佈（均勻鋪滿），不是全擠在中心軸旁
-      const spread = SATELLITE_CAP * Math.sqrt((k + 0.5) / m)
+      const spread = cap * Math.sqrt((k + 0.5) / m)
       const theta = k * GOLDEN_ANGLE
       const cs = Math.cos(spread), sn = Math.sin(spread)
       const ct = Math.cos(theta), st = Math.sin(theta)
@@ -191,7 +195,11 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const [coreKind, setCoreKind] = useState<CoreKind>('person')
   const [showIsolatedEvents, setShowIsolatedEvents] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const [selection, setSelection] = useState<{ kind: NodeKind; id: string } | null>(null)
+  const [selection, setSelection] = useState<Selection | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  // 走過的節點鏈：讓「一直串聯下去」可以回頭，不會走幾步就迷路
+  const [trail, setTrail] = useState<Selection[]>([])
+  const [pathAnchor, setPathAnchor] = useState<string | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -206,13 +214,32 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const pivotRef = useRef({ x: 0, y: 0, z: 0 })
   const coreKindRef = useRef<CoreKind>('person')
   const hoveredIdRef = useRef<string | null>(null)
-  const selectionRef = useRef<{ kind: NodeKind; id: string } | null>(null)
+  const selectionRef = useRef<Selection | null>(null)
+  // 路徑上的節點集合，給 draw() 每幀讀（畫布迴圈只掛一次，一律走 ref）
+  const pathSetRef = useRef<Set<string> | null>(null)
   const yawRef = useRef(0.6)
   const pitchRef = useRef(-0.22)
-  const cameraDistRef = useRef(DEFAULT_CAMERA_DISTANCE)
+  const cameraDistRef = useRef(900)
   const draggingRef = useRef(false)
   const pointerDownRef = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const sizeRef = useRef({ width: 800, height: 600 })
+
+  // 重算佈局後把鏡頭拉到剛好框住整個宇宙。宇宙半徑會隨節點數成長（幾千
+  // 個節點時 outerR 會是現在的好幾倍），固定的預設鏡頭距離遲早會框不住，
+  // 所以框距是從半徑反推出來的，不是常數。
+  const fitCameraTo = useCallback((worldR: number) => {
+    const { width, height } = sizeRef.current
+    const minDim = Math.max(240, Math.min(width, height))
+    cameraDistRef.current = (worldR * FOCAL_LENGTH) / (0.42 * minDim)
+  }, [])
+
+  // 統一的選取入口：所有選取（點畫布、點詳情卡的 chip、點搜尋結果）都走
+  // 這裡，順便把節點推進 trail，回頭時才有得跳。
+  const selectNode = useCallback((sel: Selection | null) => {
+    setSelection(sel)
+    if (!sel) return
+    setTrail(prev => (prev[prev.length - 1]?.id === sel.id ? prev : [...prev, sel].slice(-24)))
+  }, [])
 
   useEffect(() => { coreKindRef.current = coreKind }, [coreKind])
   useEffect(() => { hoveredIdRef.current = hoveredId }, [hoveredId])
@@ -281,17 +308,19 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     neighborsRef.current = neighbors
 
     worldRadiusRef.current = computeLayout(nodes, neighbors, coreKindRef.current)
+    fitCameraTo(worldRadiusRef.current)
     // 初次出現時從中心往外展開，是開場動畫也順便避免所有節點同一幀瞬間
     // 出現在最終位置那種生硬感。
     for (const n of nodes) { n.x = n.tx * 0.25; n.y = n.ty * 0.25; n.z = n.tz * 0.25 }
     setSelection(null)
-  }, [data, showIsolatedEvents, eventTouchedIds])
+  }, [data, showIsolatedEvents, eventTouchedIds, fitCameraTo])
 
   // 切換核心類型：只重算目標座標，節點自己補間過去。
   useEffect(() => {
     if (nodesRef.current.length === 0) return
     worldRadiusRef.current = computeLayout(nodesRef.current, neighborsRef.current, coreKind)
-  }, [coreKind])
+    fitCameraTo(worldRadiusRef.current)
+  }, [coreKind, fitCameraTo])
 
   // ── 每幀：補間位置 → 投影 → 畫。沒有任何力學迭代，成本只跟節點數成正
   // 比，幾百個節點也穩定。整個迴圈只掛一次（依賴陣列是空的），所有會變動
@@ -369,20 +398,30 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const selectedId = selectionRef.current?.id ?? null
       const focusSet = focusId ? (neighborsRef.current.get(focusId) ?? new Set<string>()) : null
 
-      const isLit = (id: string) => !focusSet || id === focusId || focusSet.has(id)
+      const pathSet = pathSetRef.current
+      const isLit = (id: string) => (pathSet ? pathSet.has(id) : !focusSet || id === focusId || focusSet.has(id))
 
-      ctx.lineWidth = 1
       for (const link of linksRef.current) {
         const a = byId.get(link.aId), b = byId.get(link.bId)
         if (!a || !b) continue
+        // 路徑模式：只有「路徑上相鄰的兩點之間」那幾條邊被打亮成琥珀色，
+        // 其餘全部壓到幾乎看不見——這樣「這兩個東西怎麼扯上關係」是直接
+        // 在圖上看出來的，不是只有文字列出來而已。
+        const onPath = !!pathSet && pathSet.has(a.id) && pathSet.has(b.id)
         const lit = isLit(a.id) && isLit(b.id)
-        const op = Math.min(a.opacity, b.opacity) * (lit ? 0.3 : 0.04)
-        ctx.strokeStyle = `rgba(150,161,180,${op.toFixed(3)})`
+        ctx.lineWidth = onPath ? 2 : 1
+        if (onPath) {
+          ctx.strokeStyle = `rgba(245,166,35,${(Math.min(a.opacity, b.opacity) * 0.95).toFixed(3)})`
+        } else {
+          const op = Math.min(a.opacity, b.opacity) * (lit ? 0.3 : 0.04)
+          ctx.strokeStyle = `rgba(150,161,180,${op.toFixed(3)})`
+        }
         ctx.beginPath()
         ctx.moveTo(a.sx, a.sy)
         ctx.lineTo(b.sx, b.sy)
         ctx.stroke()
       }
+      ctx.lineWidth = 1
 
       // 由遠到近畫，近端節點蓋住遠端節點，這是立體感的關鍵
       const sorted = [...nodes].sort((p, q) => q.depth - p.depth)
@@ -536,8 +575,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     // 只有「幾乎沒有位移」才算點擊，不然轉視角時鬆手常常誤觸選取
     if (!down || down.moved) return
     const hit = hitTest(e.clientX, e.clientY)
-    setSelection(hit ? { kind: hit.kind, id: hit.id } : null)
-  }, [hitTest])
+    selectNode(hit ? { kind: hit.kind, id: hit.id } : null)
+  }, [hitTest, selectNode])
 
   const handlePointerLeave = useCallback(() => {
     pointerDownRef.current = null
@@ -547,42 +586,29 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault()
-    cameraDistRef.current = Math.max(MIN_CAMERA_DISTANCE, Math.min(MAX_CAMERA_DISTANCE, cameraDistRef.current + e.deltaY * 0.7))
+    // 乘法縮放而不是加減固定量：加法在拉遠之後每一格滾輪的視覺變化會越來
+    // 越小（因為投影是 1/距離），乘法則不管在哪個尺度上每一格的感覺都一
+    // 樣。上下限也綁在宇宙半徑上，宇宙長大時跟著放寬。
+    const worldR = worldRadiusRef.current
+    const next = cameraDistRef.current * Math.exp(e.deltaY * 0.0014)
+    cameraDistRef.current = Math.max(worldR * ZOOM_MIN_FACTOR, Math.min(worldR * ZOOM_MAX_FACTOR, next))
   }, [])
 
   const g = data?.graph
-  const detail = useMemo(() => {
-    if (!selection || !g) return null
-    const name = selection.id.slice(2)
-    const byDateDesc = (a: HermesGraphEventNode, b: HermesGraphEventNode) => b.date.localeCompare(a.date)
-    const lookup = (ids: string[]) => ids
-      .map(id => g.events.find(ev => ev.id === id))
-      .filter((e): e is HermesGraphEventNode => !!e)
-      .sort(byDateDesc)
 
-    if (selection.kind === 'person') {
-      const events = lookup(g.edges.filter(e => e.person === name).map(e => e.eventId))
-      const related = g.personRelations.filter(r => r.from === name || r.to === name)
-      return { title: name, subtitle: `人物 · ${events.length} 個關聯事件${related.length ? ` · ${related.length} 位關係人物` : ''}`, events }
-    }
-    if (selection.kind === 'case') {
-      const events = lookup(g.caseEdges.filter(e => e.case === name).map(e => e.eventId))
-      const status = g.cases.find(c => c.name === name)?.status
-      return { title: name, subtitle: `案件${status ? ` · ${status}` : ''} · ${events.length} 個關聯事件`, events }
-    }
-    if (selection.kind === 'object') {
-      const events = lookup(g.objectEdges.filter(e => e.object === name).map(e => e.eventId))
-      const objectType = g.objects.find(o => o.name === name)?.objectType
-      return { title: name, subtitle: `物件${objectType ? ` · ${objectType}` : ''} · ${events.length} 個關聯事件`, events }
-    }
-    const ev = g.events.find(e => e.id === name)
-    if (!ev) return null
-    return {
-      title: ev.title,
-      subtitle: `事件 · ${ev.date}${ev.status ? ` · ${ev.status}` : ''}${ev.case ? ` · 案件：${ev.case}` : ''}`,
-      events: [] as HermesGraphEventNode[],
-    }
-  }, [selection, g])
+  // 搜尋：364 個事件用眼睛在球面上找不到，這是能不能實際用起來的關鍵。
+  const searchHits = useMemo(
+    () => (g && searchQuery.trim() ? searchNodes(g, searchQuery, coreKind, 24) : []),
+    [g, searchQuery, coreKind],
+  )
+
+  // 兩點之間的最短路徑：回答「這兩個東西到底怎麼扯上關係的」。BFS 走的是
+  // 真實的邊，不是猜的，所以路徑本身就是證據。
+  const pathIds = useMemo(() => {
+    if (!g || !pathAnchor || !selection || pathAnchor === selection.id) return null
+    return shortestPath(buildIndex(g), pathAnchor, selection.id)
+  }, [g, pathAnchor, selection])
+  useEffect(() => { pathSetRef.current = pathIds ? new Set(pathIds) : null }, [pathIds])
 
   const ready = !!(unlockedPassword && !error && data && data.available !== false && data.graph)
   const statusMessage = !unlockedPassword
@@ -610,6 +636,38 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
             }}>{coreLabel[k]}為核心</button>
           ))}
         </div>
+        {ready && (
+          <div style={{ position: 'relative', minWidth: '210px' }}>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="搜尋人／事／案件／物件…"
+              style={{
+                width: '100%', padding: '0.4rem 0.7rem', borderRadius: '999px',
+                background: COLOR.panel, border: `1px solid ${searchQuery ? COLOR.amberDim : COLOR.line}`,
+                color: COLOR.ink, fontFamily: FONT.body, fontSize: '0.7rem', outline: 'none',
+              }}
+            />
+            {searchHits.length > 0 && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 5px)', left: 0, right: 0, zIndex: 10,
+                maxHeight: '19rem', overflowY: 'auto',
+                background: 'rgba(18,19,25,0.98)', border: `1px solid ${COLOR.line}`, borderRadius: '6px',
+              }}>
+                {searchHits.map(hit => (
+                  <div
+                    key={hit.id}
+                    onClick={() => { selectNode({ kind: hit.kind, id: hit.id }); setSearchQuery('') }}
+                    style={{ padding: '0.4rem 0.7rem', cursor: 'pointer', borderBottom: `1px solid ${COLOR.line}` }}
+                  >
+                    <div style={{ fontSize: '0.7rem', color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hit.label}</div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: '0.58rem', color: COLOR.steelDim }}>{hit.sub}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ flex: 1 }} />
         {ready && m && (
           <>
@@ -645,27 +703,49 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           </div>
         )}
 
-        {ready && detail && (
+        {ready && g && selection && (
+          <RelationshipDetailPanel
+            graph={g}
+            selection={selection}
+            onSelect={selectNode}
+            onClose={() => { setSelection(null); setPathAnchor(null) }}
+            onSetPathAnchor={setPathAnchor}
+            pathAnchor={pathAnchor}
+            trail={trail}
+            onTrailJump={(i) => { const t = trail[i]; if (t) { setSelection(t); setTrail(prev => prev.slice(0, i + 1)) } }}
+          />
+        )}
+
+        {ready && pathIds && pathIds.length > 1 && g && (
           <div style={{
-            position: 'absolute', left: '1.2rem', bottom: '1.2rem', width: 'min(380px, calc(100% - 2.4rem))',
-            padding: '0.8rem 1rem', background: 'rgba(18,19,25,0.94)', border: `1px solid ${COLOR.line}`, borderRadius: '6px',
+            position: 'absolute', left: '1.2rem', top: '1rem', width: 'min(520px, calc(100% - 2.4rem))',
+            padding: '0.6rem 0.85rem', background: 'rgba(18,19,25,0.96)', border: `1px solid ${COLOR.amberDim}`, borderRadius: '6px',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-              <div style={{ fontSize: '0.82rem', color: COLOR.ink, fontWeight: 600 }}>{detail.title}</div>
-              <span onClick={() => setSelection(null)} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.85rem', flexShrink: 0 }}>✕</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.amber, letterSpacing: '0.06em' }}>
+                關聯路徑 · {pathIds.length - 1} 步
+              </span>
+              <span onClick={() => setPathAnchor(null)} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.75rem' }}>✕</span>
             </div>
-            <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginTop: '4px' }}>{detail.subtitle}</div>
-            {detail.events.length > 0 && (
-              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '9rem', overflowY: 'auto' }}>
-                {detail.events.map(ev => (
-                  <div key={ev.id} onClick={() => setSelection({ kind: 'event', id: `e:${ev.id}` })}
-                    style={{ display: 'flex', gap: '8px', alignItems: 'baseline', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.68rem' }}>
-                    <span style={{ color: COLOR.steelDim, flexShrink: 0 }}>{ev.date}</span>
-                    <span style={{ color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginTop: '5px' }}>
+              {pathIds.map((id, i) => {
+                const { kind, name } = splitId(id)
+                const label = kind === 'event'
+                  ? (g.events.find(e => e.id === name)?.title ?? name)
+                  : name
+                const short = label.length > 16 ? `${label.slice(0, 15)}…` : label
+                return (
+                  <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    {i > 0 && <span style={{ color: COLOR.steelDim, fontSize: '0.65rem' }}>→</span>}
+                    <span
+                      onClick={() => selectNode({ kind, id })}
+                      title={label}
+                      style={{ cursor: 'pointer', fontSize: '0.66rem', color: COLOR.ink, borderBottom: `1px dotted ${COLOR.steelDim}` }}
+                    >{short}</span>
+                  </span>
+                )
+              })}
+            </div>
           </div>
         )}
 
