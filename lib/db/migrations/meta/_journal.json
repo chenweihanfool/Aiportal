@@ -64,6 +64,13 @@
       "when": 1788676534243,
       "tag": "0008_fair_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789571905369,
+      "tag": "0009_slimy_colonel_america",
+      "breakpoints": true
     }
   ]
 }
