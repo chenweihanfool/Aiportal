@@ -1,23 +1,23 @@
 // ─────────────────────────────────────────────
-// 事人物三實體關係宇宙 — 獨立全頁 3D 關係圖（2026-09-16）
+// 事人物關係宇宙 — 獨立全頁 3D 關係圖
 //
-// 取代原本 HERMES 戰情室裡那張平面、有邊框、只有人-事兩種節點的小面板
-// （那張圖還留著，縮成摘要卡＋連結進來這裡）。這裡是真正的深入探索頁：
-// 四種節點（人／事／案件／物件）、四種邊（人↔事／事↔案件／事↔物件／
-// 人↔人），可以切換「以哪種類型為核心」重新佈局，畫面是可拖拉旋轉的假 3D
-// 球體——不是重新引入 three.js（這個專案先前特地把 three.js 拔掉去做扁平
-// 儀表板風格），是純 canvas + 手刻的簡化 3D 力學模擬（node 有 x/y/z，
-// charge/link/radial 三種力都是 d3-force 同一套概念的 3D 版本，只是自己重
-// 寫成不靠任何 3D 函式庫的最小實作）加透視投影：
-//   - 節點被 forceRadial 風格的力往「以核心類型為準的目標半徑」拉，核心類
-//     型的目標半徑小（離鏡頭近＝視覺上放大）、其餘類型目標半徑大，配合彼
-//     此的斥力自然散開成一個球殼分佈，形狀跟拿掉方框的孤立節點圓環是同一
-//     招數的立體版。
-//   - 每幀依目前的旋轉角度把 3D 座標投影回 2D 螢幕座標，遠端（transformed
-//     z 大）節點的 scale 變小，opacity 也跟著降到接近透明（自動淡出），
-//     近端節點維持不透明——這就是「超過一定範圍自動淡出」的球體宇宙感。
-//   - 節點一律 fillStyle 畫實心圓，不畫 stroke，無邊框；選取狀態用變色/
-//     放大表示，不是外框。
+// 2026-09-16 第二版。第一版用手刻的 3D 力導向模擬，在正式資料規模（58 人
+// 物／364 事件／12 案件／54 物件）下完全不堪用，三個結構性問題：
+//   1. 斥力是 charge/dist²、最近距離只夾到 1，密集區一重疊就生出巨大推
+//      力把節點甩出去；alpha 要十幾秒才冷卻，期間整張圖都在亂竄，切一次
+//      核心就重新亂竄一次。
+//   2. 深度淡出把整個球體的深度線性映到 0.05~1，結果球心附近的節點只有
+//      三成不透明度——幾百顆半透明圓疊在一起就糊成一片霧。
+//   3. 非核心的人物用 amberDim（偏橘的暗色），切到別的核心時人物看起來
+//      還是「黃的」，等於看不出核心到底換了誰。
+//
+// 這版改成「確定性佈局 + 位置補間」，完全拿掉力學迭代：資料或核心類型變
+// 動時直接算出每個節點的目標座標——核心類型的節點用黃金角（Fibonacci
+// sphere）均分在內層球面上，其餘節點掛到自己主要核心鄰居的方向上、在那
+// 個方向的球冠內散開成花瓣狀衛星群，完全沒有核心鄰居的則落到最外層球
+// 殼。每幀只做「往目標座標補間 → 投影 → 畫」，所以畫面永遠不會抖、不會
+// 亂竄，幾百個節點也穩；切換核心時看到的是一次乾淨的重新排列動畫，而不
+// 是一團持續蠕動的東西。
 // ─────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { COLOR, FONT } from './theme'
@@ -28,9 +28,8 @@ import {
 } from './hermesGraphApi'
 
 type NodeKind = 'person' | 'event' | 'case' | 'object'
-// 四種實體都能當核心——「人/事/物」是使用者最早提的三個，但案件（脈絡層）
-// 同樣是圖上獨立的一種節點，沒有理由排除在切換選項外，所以就是 NodeKind
-// 本身，不是它的子集。
+// 四種實體都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
+// 立的一種節點，沒有理由排除。
 type CoreKind = NodeKind
 
 interface UNode {
@@ -39,42 +38,39 @@ interface UNode {
   label: string
   baseRadius: number
   eventCount: number
-  // 3D 模擬狀態——直接 mutate 這些欄位，不整包 setState（跟既有 2D 圖同一
-  // 套「用 ref 存、tick 計數器觸發重繪」的效能考量）。
+  // 目前座標往目標座標補間；目標座標由 computeLayout 一次算好，不是每幀
+  // 被力學推著跑。
   x: number; y: number; z: number
-  vx: number; vy: number; vz: number
-  // 投影後的螢幕座標／視覺屬性，每幀重算，畫圖跟點擊命中測試都讀這裡。
+  tx: number; ty: number; tz: number
+  // 投影後的螢幕座標／視覺屬性，每幀重算；畫圖跟點擊命中測試都讀這裡。
   sx: number; sy: number; screenRadius: number; opacity: number; depth: number
 }
 
-interface ULink {
-  key: string
-  aId: string
-  bId: string
-}
+interface ULink { key: string; aId: string; bId: string }
 
-const WORLD = { core: 100, outer: 360 }
-const CAMERA_DISTANCE = 900
-const FOCAL_LENGTH = 520
-const CHARGE_STRENGTH = -820
-const LINK_STRENGTH = 0.016
-const LINK_DISTANCE = 60
-const RADIAL_STRENGTH = 0.24
-const VELOCITY_DECAY = 0.62
-const ALPHA_DECAY = 0.992
-const ALPHA_MIN = 0.006
-const IDLE_ROTATE_SPEED = 0.0009
+const FOCAL_LENGTH = 620
+const DEFAULT_CAMERA_DISTANCE = 900
+const MIN_CAMERA_DISTANCE = 480
+const MAX_CAMERA_DISTANCE = 2400
+const IDLE_ROTATE_SPEED = 0.0007
+const POSITION_EASE = 0.09
+const PIVOT_EASE = 0.12
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+// 衛星散開的球冠半角：太小會疊在一起，太大就看不出「這群是掛在那個核心
+// 節點上」的分群感。
+const SATELLITE_CAP = 0.6
+// 最遠端節點的不透明度下限。第一版是 0.05（幾乎透明），整張圖因此灰濛濛；
+// 0.32 仍然看得出前後深度，但不會讓任何節點糊掉。
+const DEPTH_MIN_OPACITY = 0.32
 
-// 之前這裡不管 isCore 是誰、person 一律畫 amber、event 一律 steelDim——等於
-// 「人為核心」永遠長得像核心，切到「事/物/案件為核心」時佈局雖然真的變
-// 了，顏色卻完全沒反應，使用者當然看不出核心換了誰。改成：目前被選為核
-// 心的那個 kind 一律 amber（醒目），其餘三種各自固定一個好分辨的暗色，
-// 四種暗色互不相同，才能在四種都不是核心的畫面上還分得出誰是誰。
+// 核心那一類一律 amber，其餘三類一律中性灰——刻意都不帶橘黃，否則「amber
+// ＝目前的核心」這個唯一的顏色語意就被破壞（第一版非核心人物用 amberDim
+// 就是這個問題）。三個灰階彼此的明度差夠大，四類同時在畫面上也分得出來。
 const NON_CORE_COLOR: Record<NodeKind, string> = {
-  person: COLOR.amberDim,
-  event: COLOR.steelDim,
-  case: COLOR.steel,
-  object: COLOR.inkDim,
+  person: '#aab4c4',
+  event: '#5d6472',
+  case: '#8f8f88',
+  object: '#74839a',
 }
 
 function nodeColor(kind: NodeKind, coreKind: CoreKind): string {
@@ -82,10 +78,111 @@ function nodeColor(kind: NodeKind, coreKind: CoreKind): string {
 }
 
 function baseRadiusFor(kind: NodeKind, eventCount: number): number {
-  if (kind === 'person') return Math.min(22, 6 + Math.sqrt(eventCount) * 3.6)
-  if (kind === 'case') return Math.min(18, 5 + Math.sqrt(eventCount) * 3)
-  if (kind === 'object') return Math.min(14, 4 + Math.sqrt(eventCount) * 2.4)
-  return 3.2 // event
+  if (kind === 'person') return Math.min(20, 5.5 + Math.sqrt(eventCount) * 3)
+  if (kind === 'case') return Math.min(17, 5 + Math.sqrt(eventCount) * 2.6)
+  if (kind === 'object') return Math.min(13, 4 + Math.sqrt(eventCount) * 2.2)
+  return 2.8 // event
+}
+
+/** 黃金角螺旋撒點：n 個方向盡量均勻分佈在單位球面上，沒有極點擠成一團的
+ *  問題，而且完全確定性（同樣的 i/n 永遠得到同一個方向）。 */
+function fibDir(i: number, n: number): [number, number, number] {
+  const y = n <= 1 ? 0 : 1 - (2 * i) / (n - 1)
+  const r = Math.sqrt(Math.max(0, 1 - y * y))
+  const theta = GOLDEN_ANGLE * i
+  return [Math.cos(theta) * r, y, Math.sin(theta) * r]
+}
+
+/** 給定單位向量 u，回傳與它正交的兩個單位向量（u、a、b 構成右手座標
+ *  系），用來在「以 u 為中心的球冠」裡擺衛星節點。 */
+function orthoBasis(ux: number, uy: number, uz: number): [number, number, number, number, number, number] {
+  // 挑一個跟 u 不平行的輔助軸，否則外積會退化成零向量
+  const hx = Math.abs(uy) < 0.9 ? 0 : 1
+  const hy = Math.abs(uy) < 0.9 ? 1 : 0
+  let ax = uy * 0 - uz * hy, ay = uz * hx - ux * 0, az = ux * hy - uy * hx
+  const al = Math.hypot(ax, ay, az) || 1
+  ax /= al; ay /= al; az /= al
+  const bx = uy * az - uz * ay, by = uz * ax - ux * az, bz = ux * ay - uy * ax
+  return [ax, ay, az, bx, by, bz]
+}
+
+/** 由 id 算出的穩定亂數（0~1），給半徑加一點抖動讓球殼不要像機械格點，
+ *  但同一個節點每次重算都拿到同一個值，不會因此閃動。 */
+function hash01(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return ((h >>> 0) % 10000) / 10000
+}
+
+/** 算出每個節點的目標座標。核心類型在內層球面、其衛星在外一層的球冠
+ *  裡、沒有核心鄰居的在最外層球殼。回傳最外層半徑給深度淡出當基準。 */
+function computeLayout(nodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): number {
+  const coreNodes = nodes.filter(n => n.kind === coreKind)
+  const coreIds = new Set(coreNodes.map(n => n.id))
+  // 核心節點數量差很多（案件 12 個 vs 事件 364 個），半徑跟著節點數長，
+  // 不然 364 個核心節點擠在同一個小球面上一樣會糊。
+  const coreR = Math.max(115, Math.min(265, 70 + Math.sqrt(coreNodes.length) * 14))
+  const shellR = coreR + 180
+  const outerR = shellR + 130
+
+  const dirOf = new Map<string, [number, number, number]>()
+  coreNodes.forEach((n, i) => {
+    const u = fibDir(i, coreNodes.length)
+    dirOf.set(n.id, u)
+    n.tx = u[0] * coreR; n.ty = u[1] * coreR; n.tz = u[2] * coreR
+  })
+
+  const satellitesOf = new Map<string, UNode[]>()
+  const orphans: UNode[] = []
+  for (const n of nodes) {
+    if (coreIds.has(n.id)) continue
+    let anchor: string | null = null
+    const nb = neighbors.get(n.id)
+    if (nb) {
+      for (const id of nb) {
+        if (coreIds.has(id)) { anchor = id; break }
+      }
+    }
+    if (anchor) {
+      const arr = satellitesOf.get(anchor)
+      if (arr) arr.push(n)
+      else satellitesOf.set(anchor, [n])
+    } else {
+      orphans.push(n)
+    }
+  }
+
+  for (const [anchorId, sats] of satellitesOf) {
+    const u = dirOf.get(anchorId)
+    if (!u) continue
+    const [ax, ay, az, bx, by, bz] = orthoBasis(u[0], u[1], u[2])
+    sats.sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0))
+    const m = sats.length
+    sats.forEach((s, k) => {
+      // sqrt 讓衛星在球冠裡是等面積分佈（均勻鋪滿），不是全擠在中心軸旁
+      const spread = SATELLITE_CAP * Math.sqrt((k + 0.5) / m)
+      const theta = k * GOLDEN_ANGLE
+      const cs = Math.cos(spread), sn = Math.sin(spread)
+      const ct = Math.cos(theta), st = Math.sin(theta)
+      const dx = u[0] * cs + (ax * ct + bx * st) * sn
+      const dy = u[1] * cs + (ay * ct + by * st) * sn
+      const dz = u[2] * cs + (az * ct + bz * st) * sn
+      const r = shellR * (0.86 + hash01(s.id) * 0.28)
+      s.tx = dx * r; s.ty = dy * r; s.tz = dz * r
+    })
+  }
+
+  orphans.sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0))
+  orphans.forEach((n, i) => {
+    const u = fibDir(i, orphans.length)
+    const r = outerR * (0.94 + hash01(n.id) * 0.12)
+    n.tx = u[0] * r; n.ty = u[1] * r; n.tz = u[2] * r
+  })
+
+  return outerR * 1.1
 }
 
 export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPassword: string | null; onBack: () => void }) {
@@ -95,45 +192,41 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const [showIsolatedEvents, setShowIsolatedEvents] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ kind: NodeKind; id: string } | null>(null)
-  const [, forceRedraw] = useState(0)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const nodesRef = useRef<UNode[]>([])
   const linksRef = useRef<ULink[]>([])
   const nodeByIdRef = useRef<Map<string, UNode>>(new Map())
-  // 點到的節點「慢慢置中不動」：每幀把整個宇宙的旋轉軸心從世界原點換成
-  // pivot，pivot 又每幀往「目前選取節點的即時座標」緩緩逼近（lerp，不是
-  // 瞬移，才有「慢慢」的感覺）。一旦 pivot 追上選取節點的座標，該節點的
-  // 座標減掉 pivot 後恆為 (0,0,0)，投影後精確落在螢幕正中央、不會因為物
-  // 理模擬或鏡頭旋轉而偏移——不需要額外釘住那個節點本身，其他節點跟連線
-  // 則會看起來繞著它公轉，資料量大時想盯著一個節點看細節非常好用。沒有
-  // 選取任何節點時，目標 pivot 就是原點，跟舊行為完全一樣。
+  const neighborsRef = useRef<Map<string, Set<string>>>(new Map())
+  const worldRadiusRef = useRef(500)
+  // 點到的節點「慢慢置中」：每幀把旋轉軸心從世界原點換成 pivot，pivot 又
+  // 緩緩逼近選取節點的座標。pivot 追上之後，該節點座標減掉 pivot 恆為
+  // (0,0,0)，投影必然精確落在畫面正中央。
   const pivotRef = useRef({ x: 0, y: 0, z: 0 })
-  const alphaRef = useRef(1)
   const coreKindRef = useRef<CoreKind>('person')
+  const hoveredIdRef = useRef<string | null>(null)
+  const selectionRef = useRef<{ kind: NodeKind; id: string } | null>(null)
   const yawRef = useRef(0.6)
-  const pitchRef = useRef(-0.25)
-  const cameraDistRef = useRef(CAMERA_DISTANCE)
+  const pitchRef = useRef(-0.22)
+  const cameraDistRef = useRef(DEFAULT_CAMERA_DISTANCE)
   const draggingRef = useRef(false)
-  const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
-  const draggedNodeRef = useRef<UNode | null>(null)
+  const pointerDownRef = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const sizeRef = useRef({ width: 800, height: 600 })
-  const showIsolatedRef = useRef(false)
+
+  useEffect(() => { coreKindRef.current = coreKind }, [coreKind])
+  useEffect(() => { hoveredIdRef.current = hoveredId }, [hoveredId])
+  useEffect(() => { selectionRef.current = selection }, [selection])
 
   useEffect(() => {
     if (!unlockedPassword) return
     apiFetchHermesGraph(unlockedPassword).then(setData).catch(() => setError(true))
   }, [unlockedPassword])
 
-  useEffect(() => { coreKindRef.current = coreKind; alphaRef.current = 1 }, [coreKind])
-  useEffect(() => { showIsolatedRef.current = showIsolatedEvents; alphaRef.current = 1 }, [showIsolatedEvents])
-
   const eventTouchedIds = useMemo(() => {
-    // 「孤立事件」＝完全沒有任何邊碰到的事件（無 participants、無 case、無
-    // objects）——事人二分圖的孤立節點只看 participants 就夠，四實體圖要
-    // 三種邊都算過一遍才是真正孤立，不然一個只掛了案件、沒有人物參與的事
-    // 件會被誤判成孤立。
+    // 「孤立事件」＝完全沒有任何邊碰到（無 participants、無 case、無
+    // objects）。四實體圖要三種邊都算過一遍才是真正孤立，只看 participants
+    // 會把「只掛了案件」的事件誤判成孤立。
     const g = data?.graph
     if (!g) return new Set<string>()
     const s = new Set<string>()
@@ -143,145 +236,105 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     return s
   }, [data])
 
-  // 建立節點/連線列表——只在資料或「孤立事件顯示開關」變動時重建，核心類
-  // 型切換不重建列表，只換目標半徑（見下面 tick 函式），這樣切換時既有節
-  // 點的位置是從目前位置動畫過去，不是整批重新隨機撒點。
+  // 建節點／連線／鄰接表。只在資料或「孤立事件顯示開關」變動時重建；切換
+  // 核心類型不重建，只重算目標座標（見下一個 effect），節點才會從目前位
+  // 置平順地移到新位置，而不是整批重新撒點。
   useEffect(() => {
     const g = data?.graph
-    if (!g) { nodesRef.current = []; linksRef.current = []; nodeByIdRef.current = new Map(); return }
-
-    const visibleEvents = showIsolatedEvents ? g.events : g.events.filter(e => eventTouchedIds.has(e.id))
-
-    const makeNode = (id: string, kind: NodeKind, label: string, eventCount: number): UNode => {
-      const phi = Math.acos(2 * Math.random() - 1)
-      const theta = Math.random() * Math.PI * 2
-      const r = WORLD.outer * 0.6
-      return {
-        id, kind, label, eventCount, baseRadius: baseRadiusFor(kind, eventCount),
-        x: r * Math.sin(phi) * Math.cos(theta), y: r * Math.sin(phi) * Math.sin(theta), z: r * Math.cos(phi),
-        vx: 0, vy: 0, vz: 0, sx: 0, sy: 0, screenRadius: 0, opacity: 1, depth: 0,
-      }
+    if (!g) {
+      nodesRef.current = []; linksRef.current = []
+      nodeByIdRef.current = new Map(); neighborsRef.current = new Map()
+      return
     }
 
+    const visibleEvents = showIsolatedEvents ? g.events : g.events.filter(e => eventTouchedIds.has(e.id))
+    const mk = (id: string, kind: NodeKind, label: string, eventCount: number): UNode => ({
+      id, kind, label, eventCount, baseRadius: baseRadiusFor(kind, eventCount),
+      x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0,
+      sx: 0, sy: 0, screenRadius: 0, opacity: 1, depth: 0,
+    })
+
     const nodes: UNode[] = [
-      ...g.people.map(p => makeNode(`p:${p.name}`, 'person', p.name, p.eventCount)),
-      ...visibleEvents.map(e => makeNode(`e:${e.id}`, 'event', e.title, 1)),
-      ...g.cases.map(c => makeNode(`c:${c.name}`, 'case', c.name, c.eventCount)),
-      ...g.objects.map(o => makeNode(`o:${o.name}`, 'object', o.name, o.eventCount)),
+      ...g.people.map(p => mk(`p:${p.name}`, 'person', p.name, p.eventCount)),
+      ...visibleEvents.map(e => mk(`e:${e.id}`, 'event', e.title, 1)),
+      ...g.cases.map(c => mk(`c:${c.name}`, 'case', c.name, c.eventCount)),
+      ...g.objects.map(o => mk(`o:${o.name}`, 'object', o.name, o.eventCount)),
     ]
     const byId = new Map(nodes.map(n => [n.id, n]))
 
     const links: ULink[] = []
-    for (const e of g.edges) if (byId.has(`e:${e.eventId}`)) links.push({ key: `pe:${e.person}|${e.eventId}`, aId: `p:${e.person}`, bId: `e:${e.eventId}` })
-    for (const e of g.caseEdges) if (byId.has(`e:${e.eventId}`)) links.push({ key: `ec:${e.eventId}|${e.case}`, aId: `e:${e.eventId}`, bId: `c:${e.case}` })
-    for (const e of g.objectEdges) if (byId.has(`e:${e.eventId}`)) links.push({ key: `eo:${e.eventId}|${e.object}`, aId: `e:${e.eventId}`, bId: `o:${e.object}` })
-    for (const r of g.personRelations) if (byId.has(`p:${r.from}`) && byId.has(`p:${r.to}`)) links.push({ key: `pp:${r.from}|${r.to}`, aId: `p:${r.from}`, bId: `p:${r.to}` })
+    const neighbors = new Map<string, Set<string>>()
+    const connect = (aId: string, bId: string, key: string) => {
+      if (!byId.has(aId) || !byId.has(bId)) return
+      links.push({ key, aId, bId })
+      const sa = neighbors.get(aId) ?? new Set<string>(); sa.add(bId); neighbors.set(aId, sa)
+      const sb = neighbors.get(bId) ?? new Set<string>(); sb.add(aId); neighbors.set(bId, sb)
+    }
+    for (const e of g.edges) connect(`p:${e.person}`, `e:${e.eventId}`, `pe:${e.person}|${e.eventId}`)
+    for (const e of g.caseEdges) connect(`e:${e.eventId}`, `c:${e.case}`, `ec:${e.eventId}|${e.case}`)
+    for (const e of g.objectEdges) connect(`e:${e.eventId}`, `o:${e.object}`, `eo:${e.eventId}|${e.object}`)
+    for (const r of g.personRelations) connect(`p:${r.from}`, `p:${r.to}`, `pp:${r.from}|${r.to}`)
 
     nodesRef.current = nodes
     linksRef.current = links
     nodeByIdRef.current = byId
-    alphaRef.current = 1
+    neighborsRef.current = neighbors
+
+    worldRadiusRef.current = computeLayout(nodes, neighbors, coreKindRef.current)
+    // 初次出現時從中心往外展開，是開場動畫也順便避免所有節點同一幀瞬間
+    // 出現在最終位置那種生硬感。
+    for (const n of nodes) { n.x = n.tx * 0.25; n.y = n.ty * 0.25; n.z = n.tz * 0.25 }
+    setSelection(null)
   }, [data, showIsolatedEvents, eventTouchedIds])
 
-  // ── 一顆手刻的極簡 3D 力學模擬（d3-force 同一套概念的 3D 版本）+ 透視投
-  // 影 + 旋轉互動，全部塞在一個 requestAnimationFrame 迴圈裡：alpha 還沒冷
-  // 卻前每幀跑一次物理 tick，冷卻後（或使用者正在拖拉節點/旋轉視角時）物
-  // 理計算自動變成極輕量，畫面仍持續重繪以套用旋轉/縮放。
+  // 切換核心類型：只重算目標座標，節點自己補間過去。
+  useEffect(() => {
+    if (nodesRef.current.length === 0) return
+    worldRadiusRef.current = computeLayout(nodesRef.current, neighborsRef.current, coreKind)
+  }, [coreKind])
+
+  // ── 每幀：補間位置 → 投影 → 畫。沒有任何力學迭代，成本只跟節點數成正
+  // 比，幾百個節點也穩定。整個迴圈只掛一次（依賴陣列是空的），所有會變動
+  // 的狀態一律透過 ref 讀取——第一版把 hoveredId/selection 直接 closure 進
+  // 來，迴圈掛上後就永遠讀到舊值，hover 高亮跟選取變色其實從沒生效過。
   useEffect(() => {
     let raf = 0
     let stopped = false
 
-    function tickPhysics() {
+    function project() {
       const nodes = nodesRef.current
-      const alpha = alphaRef.current
-      if (alpha < ALPHA_MIN) return
-      const n = nodes.length
-      const fx = new Float64Array(n)
-      const fy = new Float64Array(n)
-      const fz = new Float64Array(n)
-
-      // Charge：O(n^2) 兩兩互斥，n 在幾百節點的規模下綽綽有餘（見檔頭說
-      // 明）；超過約一千節點才需要考慮八分樹近似，目前資料量還不到那個
-      // 門檻，先不做，避免過早的複雜度。
-      for (let i = 0; i < n; i++) {
-        const a = nodes[i]
-        for (let j = i + 1; j < n; j++) {
-          const b = nodes[j]
-          let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
-          let distSq = dx * dx + dy * dy + dz * dz
-          if (distSq < 1) distSq = 1
-          const dist = Math.sqrt(distSq)
-          const force = (CHARGE_STRENGTH * alpha) / distSq
-          const fxn = (force * dx) / dist, fyn = (force * dy) / dist, fzn = (force * dz) / dist
-          fx[i] -= fxn; fy[i] -= fyn; fz[i] -= fzn
-          fx[j] += fxn; fy[j] += fyn; fz[j] += fzn
-        }
+      for (const n of nodes) {
+        n.x += (n.tx - n.x) * POSITION_EASE
+        n.y += (n.ty - n.y) * POSITION_EASE
+        n.z += (n.tz - n.z) * POSITION_EASE
       }
 
-      // Link：彈簧力拉向目標距離，用 id 查表找端點的陣列索引。
-      const idxOf = new Map(nodes.map((nd, i) => [nd.id, i]))
-      for (const link of linksRef.current) {
-        const ai = idxOf.get(link.aId), bi = idxOf.get(link.bId)
-        if (ai === undefined || bi === undefined) continue
-        const a = nodes[ai], b = nodes[bi]
-        let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
-        let dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1
-        const force = ((dist - LINK_DISTANCE) / dist) * LINK_STRENGTH * alpha
-        const fxn = force * dx, fyn = force * dy, fzn = force * dz
-        fx[ai] += fxn; fy[ai] += fyn; fz[ai] += fzn
-        fx[bi] -= fxn; fy[bi] -= fyn; fz[bi] -= fzn
-      }
+      const sel = selectionRef.current
+      const focus = sel ? nodeByIdRef.current.get(sel.id) : null
+      const pivot = pivotRef.current
+      const targetX = focus ? focus.x : 0
+      const targetY = focus ? focus.y : 0
+      const targetZ = focus ? focus.z : 0
+      pivot.x += (targetX - pivot.x) * PIVOT_EASE
+      pivot.y += (targetY - pivot.y) * PIVOT_EASE
+      pivot.z += (targetZ - pivot.z) * PIVOT_EASE
 
-      // Radial：拉向「核心類型近、其餘類型遠」的目標球殼半徑——跟 2D 圖裡
-      // 孤立節點用的 forceRadial 是同一招，這裡是每個節點依自己的 kind 決
-      // 定目標半徑，而不是固定同一個半徑。
-      const core = coreKindRef.current
-      for (let i = 0; i < n; i++) {
-        const node = nodes[i]
-        const target = node.kind === core ? WORLD.core : WORLD.outer
-        const dist = Math.sqrt(node.x * node.x + node.y * node.y + node.z * node.z) || 1
-        const diff = ((target - dist) / dist) * RADIAL_STRENGTH * alpha
-        fx[i] += node.x * diff; fy[i] += node.y * diff; fz[i] += node.z * diff
-      }
+      // 選取狀態下停掉自轉：使用者要的是「點到的節點置中不動」，整個場景
+      // 同時凍住，看細節時最清楚；取消選取後才恢復自轉。
+      if (!draggingRef.current && !focus) yawRef.current += IDLE_ROTATE_SPEED
 
-      for (let i = 0; i < n; i++) {
-        const node = nodes[i]
-        if (node === draggedNodeRef.current) continue // 拖拉中的節點位置由指標直接控制，不吃物理力
-        node.vx = (node.vx + fx[i]) * VELOCITY_DECAY
-        node.vy = (node.vy + fy[i]) * VELOCITY_DECAY
-        node.vz = (node.vz + fz[i]) * VELOCITY_DECAY
-        node.x += node.vx; node.y += node.vy; node.z += node.vz
-      }
-
-      alphaRef.current = alpha * ALPHA_DECAY
-    }
-
-    function render() {
-      if (stopped) return
-      tickPhysics()
-
-      if (!draggingRef.current) yawRef.current += IDLE_ROTATE_SPEED
       const yaw = yawRef.current, pitch = pitchRef.current
       const cosY = Math.cos(yaw), sinY = Math.sin(yaw)
       const cosP = Math.cos(pitch), sinP = Math.sin(pitch)
       const cameraDist = cameraDistRef.current
       const { width, height } = sizeRef.current
       const cx = width / 2, cy = height / 2
+      const worldR = worldRadiusRef.current
+      const coreNow = coreKindRef.current
 
-      const focusNode = selectionRef.current ? nodeByIdRef.current.get(selectionRef.current.id) : null
-      const pivot = pivotRef.current
-      const targetX = focusNode ? focusNode.x : 0, targetY = focusNode ? focusNode.y : 0, targetZ = focusNode ? focusNode.z : 0
-      pivot.x += (targetX - pivot.x) * 0.08
-      pivot.y += (targetY - pivot.y) * 0.08
-      pivot.z += (targetZ - pivot.z) * 0.08
-
-      const nodes = nodesRef.current
-      for (const node of nodes) {
-        // yaw（繞 Y 軸）再 pitch（繞 X 軸）——順序固定，避免萬向鎖以外的意
-        // 外滾轉，兩個角度分別由水平/垂直拖拉量獨立控制，符合直覺。先減
-        // 掉 pivot 再旋轉，等於把旋轉軸心從世界原點換成 pivot（見上面
-        // pivotRef 的說明）。
-        const lx = node.x - pivot.x, ly = node.y - pivot.y, lz = node.z - pivot.z
+      for (const n of nodes) {
+        // 先減掉 pivot 再旋轉＝把旋轉軸心換成 pivot（見 pivotRef 說明）
+        const lx = n.x - pivot.x, ly = n.y - pivot.y, lz = n.z - pivot.z
         const rx = lx * cosY - lz * sinY
         const rz1 = lx * sinY + lz * cosY
         const ry = ly * cosP - rz1 * sinP
@@ -289,20 +342,16 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
         const perspectiveZ = rz + cameraDist
         const scale = perspectiveZ > 1 ? FOCAL_LENGTH / perspectiveZ : 0
-        node.sx = cx + rx * scale
-        node.sy = cy + ry * scale
-        node.screenRadius = node.baseRadius * scale * (node.kind === coreKindRef.current ? 1.6 : 1)
-        node.depth = perspectiveZ
-
-        const nearScale = FOCAL_LENGTH / Math.max(1, cameraDist - WORLD.outer)
-        const farScale = FOCAL_LENGTH / (cameraDist + WORLD.outer)
-        const t = (scale - farScale) / (nearScale - farScale || 1)
-        node.opacity = Math.max(0.05, Math.min(1, 0.05 + t * 0.95))
+        n.sx = cx + rx * scale
+        n.sy = cy + ry * scale
+        n.screenRadius = n.baseRadius * scale * (n.kind === coreNow ? 1.55 : 1)
+        n.depth = perspectiveZ
+        // 深度直接換算不透明度：最前面 1、最後面 DEPTH_MIN_OPACITY。用 rz
+        // 而不是 scale，映射是線性且跟鏡頭距離無關，縮放時不會整張圖一起
+        // 變淡。
+        const frontness = Math.max(0, Math.min(1, (worldR - rz) / (2 * worldR)))
+        n.opacity = DEPTH_MIN_OPACITY + (1 - DEPTH_MIN_OPACITY) * frontness
       }
-
-      draw()
-      forceRedraw(v => (v + 1) % 1000000)
-      raf = requestAnimationFrame(render)
     }
 
     function draw() {
@@ -313,87 +362,116 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const { width, height } = sizeRef.current
       ctx.clearRect(0, 0, width, height)
 
-      // 讀 ref 不是讀 state：這個 render() 只在 data 變動時重新掛上 rAF
-      // 迴圈（見這個 effect 的依賴陣列 [data]），hoveredId/selection 之後
-      // 的每一次更新都不會讓這個迴圈重新啟動，draw() 若直接 closure 住
-      // state 變數，讀到的永遠是掛上迴圈那一刻的舊值（多半是 null）——
-      // hover 高亮、選取變色實際上永遠不會生效。改讀 hoveredIdRef/
-      // selectionRef，兩個 ref 在對應的 state 變動時同步更新，這裡才拿
-      // 得到當下最新值。
-      const neighborIds = computeNeighborIds(hoveredIdRef.current ?? selectionRef.current?.id ?? null)
+      const nodes = nodesRef.current
+      const byId = nodeByIdRef.current
+      const coreNow = coreKindRef.current
+      const focusId = hoveredIdRef.current ?? selectionRef.current?.id ?? null
+      const selectedId = selectionRef.current?.id ?? null
+      const focusSet = focusId ? (neighborsRef.current.get(focusId) ?? new Set<string>()) : null
 
-      // Links first, painter's algorithm 不特別排序連線（連線本身很細，疊
-      // 畫順序影響不大），但節點依深度由遠到近排序再畫，確保近端節點蓋在
-      // 遠端節點上面，是立體感的關鍵。
+      const isLit = (id: string) => !focusSet || id === focusId || focusSet.has(id)
+
       ctx.lineWidth = 1
       for (const link of linksRef.current) {
-        const a = nodeByIdRef.current.get(link.aId), b = nodeByIdRef.current.get(link.bId)
+        const a = byId.get(link.aId), b = byId.get(link.bId)
         if (!a || !b) continue
-        const dimmed = neighborIds ? !(neighborIds.has(a.id) && neighborIds.has(b.id)) : false
-        const op = Math.min(a.opacity, b.opacity) * (dimmed ? 0.05 : 0.28)
-        ctx.strokeStyle = `rgba(154,164,182,${op})`
+        const lit = isLit(a.id) && isLit(b.id)
+        const op = Math.min(a.opacity, b.opacity) * (lit ? 0.3 : 0.04)
+        ctx.strokeStyle = `rgba(150,161,180,${op.toFixed(3)})`
         ctx.beginPath()
         ctx.moveTo(a.sx, a.sy)
         ctx.lineTo(b.sx, b.sy)
         ctx.stroke()
       }
 
-      const sorted = [...nodesRef.current].sort((a, b) => b.depth - a.depth)
-      for (const node of sorted) {
-        const dimmed = neighborIds ? !neighborIds.has(node.id) : false
-        const isSelected = selectionRef.current?.id === node.id
-        const color = isSelected ? COLOR.amber : nodeColor(node.kind, coreKindRef.current)
-        const op = node.opacity * (dimmed ? 0.12 : 1)
-        ctx.globalAlpha = Math.max(0.03, op)
-        ctx.fillStyle = color
+      // 由遠到近畫，近端節點蓋住遠端節點，這是立體感的關鍵
+      const sorted = [...nodes].sort((p, q) => q.depth - p.depth)
+      for (const n of sorted) {
+        const lit = isLit(n.id)
+        const selected = n.id === selectedId
+        const r = Math.max(0.8, n.screenRadius)
+
+        if (selected) {
+          // 選取用光暈表示，不畫外框（節點一律無邊框）
+          const glow = ctx.createRadialGradient(n.sx, n.sy, 0, n.sx, n.sy, r * 3.4)
+          glow.addColorStop(0, 'rgba(245,166,35,0.40)')
+          glow.addColorStop(1, 'rgba(245,166,35,0)')
+          ctx.globalAlpha = 1
+          ctx.fillStyle = glow
+          ctx.beginPath()
+          ctx.arc(n.sx, n.sy, r * 3.4, 0, Math.PI * 2)
+          ctx.fill()
+        }
+
+        ctx.globalAlpha = selected ? 1 : n.opacity * (lit ? 1 : 0.16)
+        ctx.fillStyle = selected ? COLOR.amber : nodeColor(n.kind, coreNow)
         ctx.beginPath()
-        ctx.arc(node.sx, node.sy, Math.max(0.6, isSelected ? node.screenRadius * 1.3 : node.screenRadius), 0, Math.PI * 2)
+        ctx.arc(n.sx, n.sy, selected ? r * 1.35 : r, 0, Math.PI * 2)
         ctx.fill()
       }
       ctx.globalAlpha = 1
 
-      // 人物節點的標籤——事件/案件/物件節點太多太密，全部上字會糊成一片，
-      // 只有人物節點少（幾十個）且是主要導覽入口，維持文字標籤；其餘類型
-      // 靠點擊/hover 的詳情卡代替常駐文字。
-      ctx.font = `10px ${FONT.mono}`
+      // 標籤：有選取/hover 時只標那個節點跟它的鄰居（看關係時最需要的資
+      // 訊）；沒有的話標核心類型的節點，但核心數量太多（例如 364 個事件）
+      // 就整個不標，否則字會疊成一片。
+      const labelled: UNode[] = []
+      if (focusId) {
+        const f = byId.get(focusId)
+        if (f) labelled.push(f)
+        if (focusSet) {
+          for (const id of focusSet) {
+            const nb = byId.get(id)
+            if (nb) labelled.push(nb)
+            if (labelled.length > 36) break
+          }
+        }
+      } else {
+        const coreNodes = nodes.filter(n => n.kind === coreNow)
+        if (coreNodes.length <= 90) labelled.push(...coreNodes)
+      }
+
+      ctx.font = `11px ${FONT.mono}`
       ctx.textAlign = 'center'
-      for (const node of sorted) {
-        if (node.kind !== 'person') continue
-        const dimmed = neighborIds ? !neighborIds.has(node.id) : false
-        ctx.globalAlpha = Math.max(0.05, node.opacity * (dimmed ? 0.12 : 1))
-        ctx.fillStyle = COLOR.ink
-        ctx.fillText(node.label, node.sx, node.sy + node.screenRadius + 11)
+      // 標籤做螢幕空間的碰撞排除：核心球面上幾十個節點投影後常常互相重
+      // 疊，全部照畫會糊成一團看不出誰是誰（第一版就是這樣）。依優先序
+      // （選取中 > 半徑大 > 離鏡頭近）逐一嘗試放置，跟已放好的標籤重疊就
+      // 直接不畫——寧可少標幾個，也不要疊成雜訊。
+      const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = []
+      const priority = labelled.slice().sort((p, q) => {
+        if (p.id === selectedId) return -1
+        if (q.id === selectedId) return 1
+        if (q.screenRadius !== p.screenRadius) return q.screenRadius - p.screenRadius
+        return p.depth - q.depth
+      })
+      for (const n of priority) {
+        if (n.opacity < 0.45 && n.id !== selectedId) continue // 太後面的節點不標，減少雜訊
+        const text = n.label.length > 14 ? `${n.label.slice(0, 13)}…` : n.label
+        const w = ctx.measureText(text).width
+        const x = n.sx, y = n.sy + Math.max(4, n.screenRadius) + 12
+        const box = { x0: x - w / 2 - 2, y0: y - 10, x1: x + w / 2 + 2, y1: y + 3 }
+        if (placed.some(b => !(box.x1 < b.x0 || box.x0 > b.x1 || box.y1 < b.y0 || box.y0 > b.y1))) continue
+        placed.push(box)
+        ctx.globalAlpha = Math.max(0.45, n.opacity)
+        ctx.fillStyle = n.id === selectedId ? COLOR.amber : COLOR.ink
+        ctx.fillText(text, x, y)
       }
       ctx.globalAlpha = 1
     }
 
-    function computeNeighborIds(centerId: string | null): Set<string> | null {
-      if (!centerId) return null
-      const set = new Set<string>([centerId])
-      for (const l of linksRef.current) {
-        if (l.aId === centerId) set.add(l.bId)
-        if (l.bId === centerId) set.add(l.aId)
-      }
-      return set
+    function frame() {
+      if (stopped) return
+      project()
+      draw()
+      raf = requestAnimationFrame(frame)
     }
 
-    raf = requestAnimationFrame(render)
+    raf = requestAnimationFrame(frame)
     return () => { stopped = true; cancelAnimationFrame(raf) }
-    // hoveredId/selection 只影響 draw() 內部的高亮判斷，不需要重啟整個
-    // rAF 迴圈——故意不放進依賴陣列，draw() 每幀都會讀到當下最新值（透過
-    // closure 讀外層 state 在 effect 重跑時才會更新，這裡改用 ref 讀取見
-    // 下方 hoveredId/selection 的鏡射 ref）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data])
+  }, [])
 
-  // hoveredId/selection 給 rAF 迴圈內的 draw() 讀最新值用（迴圈本身只在
-  // data 變動時重建，不能靠 effect 的 closure 抓到之後才變動的 state）。
-  const hoveredIdRef = useRef<string | null>(null)
-  const selectionRef = useRef<typeof selection>(null)
-  useEffect(() => { hoveredIdRef.current = hoveredId }, [hoveredId])
-  useEffect(() => { selectionRef.current = selection }, [selection])
-
-  // ── Resize：canvas 內部解析度跟著容器實際像素尺寸走，避免模糊或裁切 ──
+  // canvas 內部解析度跟著容器實際像素尺寸走（含 devicePixelRatio），不然
+  // 畫面會是拉伸過的糊圖。容器/canvas 一律每次都掛載（不用早期 return 跳
+  // 過），這個 effect 才抓得到 ref。
   useEffect(() => {
     const el = containerRef.current
     const canvas = canvasRef.current
@@ -402,11 +480,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const box = entries[0]?.contentRect
       if (!box) return
       const dpr = Math.min(2, window.devicePixelRatio || 1)
-      sizeRef.current = { width: box.width, height: box.height }
-      canvas.width = box.width * dpr
-      canvas.height = box.height * dpr
-      canvas.style.width = `${box.width}px`
-      canvas.style.height = `${box.height}px`
+      const w = Math.max(1, Math.floor(box.width)), h = Math.max(1, Math.floor(box.height))
+      sizeRef.current = { width: w, height: h }
+      canvas.width = Math.floor(w * dpr)
+      canvas.height = Math.floor(h * dpr)
+      canvas.style.width = `${w}px`
+      canvas.style.height = `${h}px`
       const ctx = canvas.getContext('2d')
       if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     })
@@ -414,140 +493,97 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     return () => ro.disconnect()
   }, [])
 
-  function hitTest(clientX: number, clientY: number): UNode | null {
+  const hitTest = useCallback((clientX: number, clientY: number): UNode | null => {
     const canvas = canvasRef.current
     if (!canvas) return null
     const rect = canvas.getBoundingClientRect()
     const x = clientX - rect.left, y = clientY - rect.top
     let best: UNode | null = null
     let bestDepth = Infinity
-    for (const node of nodesRef.current) {
-      const dx = node.sx - x, dy = node.sy - y
-      const r = Math.max(4, node.screenRadius) + 2
-      if (dx * dx + dy * dy <= r * r && node.depth < bestDepth) { best = node; bestDepth = node.depth }
+    for (const n of nodesRef.current) {
+      const dx = n.sx - x, dy = n.sy - y
+      const r = Math.max(5, n.screenRadius) + 3
+      if (dx * dx + dy * dy <= r * r && n.depth < bestDepth) { best = n; bestDepth = n.depth }
     }
     return best
-  }
+  }, [])
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     (e.target as Element).setPointerCapture(e.pointerId)
-    lastPointerRef.current = { x: e.clientX, y: e.clientY }
-    const hit = hitTest(e.clientX, e.clientY)
-    if (hit && hit.kind !== 'event') {
-      // 人物／案件／物件節點：按住可以拖拉調整位置（釋放物理），純滑鼠
-      // 移動（沒按住任何節點）則是旋轉整個宇宙的視角。事件節點數量太多、
-      // 半徑太小，不提供拖拉（誤觸機率高，體驗反而變差），只能點擊看詳情。
-      draggedNodeRef.current = hit
-      alphaRef.current = Math.max(alphaRef.current, 0.3)
-    } else {
-      draggingRef.current = true
-    }
+    pointerDownRef.current = { x: e.clientX, y: e.clientY, moved: false }
+    draggingRef.current = true
   }, [])
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    const last = lastPointerRef.current
-    if (!last) { setHoveredId(hitTest(e.clientX, e.clientY)?.id ?? null); return }
-    const dx = e.clientX - last.x, dy = e.clientY - last.y
-    lastPointerRef.current = { x: e.clientX, y: e.clientY }
-
-    if (draggedNodeRef.current) {
-      // 拖拉節點：直接把節點釘在鏡頭前一個固定深度的平面上跟著指標走，用
-      // 目前的旋轉反矩陣換算回節點自己的世界座標，鬆手後物理模擬會接手。
-      const node = draggedNodeRef.current
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const rect = canvas.getBoundingClientRect()
-      const { width, height } = sizeRef.current
-      const cx = width / 2, cy = height / 2
-      const scale = node.screenRadius > 0 ? FOCAL_LENGTH / (node.depth || CAMERA_DISTANCE) : FOCAL_LENGTH / CAMERA_DISTANCE
-      const targetSx = e.clientX - rect.left, targetSy = e.clientY - rect.top
-      const rx = (targetSx - cx) / scale, ry = (targetSy - cy) / scale
-      const yaw = yawRef.current, pitch = pitchRef.current
-      // 反向套用 pitch 再 yaw（正向轉換順序的逆過程）還原成世界座標，z 分
-      // 量維持節點原本的旋轉後深度換算回去，允許在螢幕平面上自由拖拉。
-      const rz = node.depth - CAMERA_DISTANCE
-      const y0 = ry * Math.cos(pitch) + rz * Math.sin(pitch)
-      const z1 = -ry * Math.sin(pitch) + rz * Math.cos(pitch)
-      const x0 = rx * Math.cos(yaw) + z1 * Math.sin(yaw)
-      const z0 = -rx * Math.sin(yaw) + z1 * Math.cos(yaw)
-      // 正向投影在旋轉前先減掉 pivot（見 pivotRef 說明），這裡是它的逆運
-      // 算，算出來的 x0/y0/z0 是「pivot 為原點」的座標，要加回 pivot 才是
-      // 節點真正的世界座標——沒加的話，只要目前有節點被選取置中，拖拉任
-      // 何節點都會系統性地偏移掉 pivot 那段距離。
-      const pivot = pivotRef.current
-      node.x = x0 + pivot.x; node.y = y0 + pivot.y; node.z = z0 + pivot.z
-      node.vx = 0; node.vy = 0; node.vz = 0
+    const down = pointerDownRef.current
+    if (!down) {
+      setHoveredId(hitTest(e.clientX, e.clientY)?.id ?? null)
       return
     }
-
-    if (draggingRef.current) {
-      yawRef.current += dx * 0.006
-      pitchRef.current = Math.max(-1.4, Math.min(1.4, pitchRef.current + dy * 0.006))
+    const dx = e.clientX - down.x, dy = e.clientY - down.y
+    if (!down.moved && Math.hypot(dx, dy) > 4) down.moved = true
+    if (down.moved) {
+      yawRef.current += (e.clientX - down.x) * 0.006
+      pitchRef.current = Math.max(-1.4, Math.min(1.4, pitchRef.current + (e.clientY - down.y) * 0.006))
+      pointerDownRef.current = { x: e.clientX, y: e.clientY, moved: true }
     }
-  }, [])
+  }, [hitTest])
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    const wasDragMove = draggingRef.current
-    const draggedNode = draggedNodeRef.current
+    const down = pointerDownRef.current
+    pointerDownRef.current = null
     draggingRef.current = false
-    draggedNodeRef.current = null
-    lastPointerRef.current = null
+    // 只有「幾乎沒有位移」才算點擊，不然轉視角時鬆手常常誤觸選取
+    if (!down || down.moved) return
+    const hit = hitTest(e.clientX, e.clientY)
+    setSelection(hit ? { kind: hit.kind, id: hit.id } : null)
+  }, [hitTest])
 
-    // 純點擊（沒有明顯拖拉位移）才觸發選取——用 pointerdown 當下 hitTest
-    // 到的節點，而不是再 hitTest 一次，避免拖拉一小段後鬆手時指標已經不
-    // 在節點正上方而誤判成沒點到。
-    if (!wasDragMove && !draggedNode) {
-      const hit = hitTest(e.clientX, e.clientY)
-      if (hit) setSelection({ kind: hit.kind, id: hit.id })
-    } else if (draggedNode) {
-      // 拖拉節點時仍可能是「幾乎沒移動的一次點擊」，也當作選取。
-      setSelection({ kind: draggedNode.kind, id: draggedNode.id })
-    }
+  const handlePointerLeave = useCallback(() => {
+    pointerDownRef.current = null
+    draggingRef.current = false
+    setHoveredId(null)
   }, [])
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault()
-    cameraDistRef.current = Math.max(420, Math.min(1800, cameraDistRef.current + e.deltaY * 0.6))
+    cameraDistRef.current = Math.max(MIN_CAMERA_DISTANCE, Math.min(MAX_CAMERA_DISTANCE, cameraDistRef.current + e.deltaY * 0.7))
   }, [])
 
   const g = data?.graph
   const detail = useMemo(() => {
     if (!selection || !g) return null
+    const name = selection.id.slice(2)
+    const byDateDesc = (a: HermesGraphEventNode, b: HermesGraphEventNode) => b.date.localeCompare(a.date)
+    const lookup = (ids: string[]) => ids
+      .map(id => g.events.find(ev => ev.id === id))
+      .filter((e): e is HermesGraphEventNode => !!e)
+      .sort(byDateDesc)
+
     if (selection.kind === 'person') {
-      const name = selection.id.slice(2)
-      const events = g.edges.filter(e => e.person === name).map(e => g.events.find(ev => ev.id === e.eventId)).filter((e): e is HermesGraphEventNode => !!e)
-      return { title: name, subtitle: `人物 · ${events.length} 個關聯事件`, events: events.sort((a, b) => b.date.localeCompare(a.date)) }
+      const events = lookup(g.edges.filter(e => e.person === name).map(e => e.eventId))
+      const related = g.personRelations.filter(r => r.from === name || r.to === name)
+      return { title: name, subtitle: `人物 · ${events.length} 個關聯事件${related.length ? ` · ${related.length} 位關係人物` : ''}`, events }
     }
     if (selection.kind === 'case') {
-      const name = selection.id.slice(2)
-      const events = g.caseEdges.filter(e => e.case === name).map(e => g.events.find(ev => ev.id === e.eventId)).filter((e): e is HermesGraphEventNode => !!e)
+      const events = lookup(g.caseEdges.filter(e => e.case === name).map(e => e.eventId))
       const status = g.cases.find(c => c.name === name)?.status
-      return { title: name, subtitle: `案件${status ? ` · ${status}` : ''} · ${events.length} 個關聯事件`, events: events.sort((a, b) => b.date.localeCompare(a.date)) }
+      return { title: name, subtitle: `案件${status ? ` · ${status}` : ''} · ${events.length} 個關聯事件`, events }
     }
     if (selection.kind === 'object') {
-      const name = selection.id.slice(2)
-      const events = g.objectEdges.filter(e => e.object === name).map(e => g.events.find(ev => ev.id === e.eventId)).filter((e): e is HermesGraphEventNode => !!e)
+      const events = lookup(g.objectEdges.filter(e => e.object === name).map(e => e.eventId))
       const objectType = g.objects.find(o => o.name === name)?.objectType
-      return { title: name, subtitle: `物件${objectType ? ` · ${objectType}` : ''} · ${events.length} 個關聯事件`, events: events.sort((a, b) => b.date.localeCompare(a.date)) }
+      return { title: name, subtitle: `物件${objectType ? ` · ${objectType}` : ''} · ${events.length} 個關聯事件`, events }
     }
-    const id = selection.id.slice(2)
-    const ev = g.events.find(e => e.id === id)
+    const ev = g.events.find(e => e.id === name)
     if (!ev) return null
     return {
       title: ev.title,
       subtitle: `事件 · ${ev.date}${ev.status ? ` · ${ev.status}` : ''}${ev.case ? ` · 案件：${ev.case}` : ''}`,
-      events: [],
+      events: [] as HermesGraphEventNode[],
     }
   }, [selection, g])
 
-  // 容器／canvas 元素一定要每次都掛載（不能用早期 return 整個跳過），不
-  // 然 ResizeObserver／rAF 物理迴圈那兩個 effect 第一次執行時 containerRef/
-  // canvasRef 還是 null（早期版本的 bug：loading 狀態時完全不畫 canvas，
-  // 等資料到位、canvas 真的掛上去，ResizeObserver 的 effect 依賴陣列是
-  // `[]` 不會重跑，canvas 永遠停在瀏覽器預設的 300×150 內部解析度，畫面
-  // 座標系統整個對不上，結果是「畫了但畫在看不到的地方」的全白畫面）。
-  // 改成無論資料是否就緒都畫出容器＋canvas，未就緒時只疊一層訊息蓋在上
-  // 面，ref 掛載時機固定在第一次 render，兩個 effect 才抓得到。
   const ready = !!(unlockedPassword && !error && data && data.available !== false && data.graph)
   const statusMessage = !unlockedPassword
     ? '需要先解鎖私領域才能查看關係宇宙'
@@ -558,8 +594,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         : null
 
   const m = data?.metrics
-  const graph = data?.graph
   const coreLabel: Record<CoreKind, string> = { person: '人', event: '事', object: '物', case: '案件' }
+  const isolatedCount = g ? g.events.length - g.events.filter(e => eventTouchedIds.has(e.id)).length : 0
 
   return (
     <FullPageShell onBack={onBack}>
@@ -568,20 +604,20 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           {(['person', 'event', 'object', 'case'] as CoreKind[]).map(k => (
             <button key={k} type="button" onClick={() => setCoreKind(k)} disabled={!ready} style={{
               padding: '0.4rem 0.9rem', borderRadius: '999px', cursor: ready ? 'pointer' : 'default', fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.06em',
-              background: coreKind === k ? 'rgba(245,166,35,0.14)' : 'transparent',
-              border: `1px solid ${coreKind === k ? COLOR.amberDim : COLOR.line}`,
+              background: coreKind === k ? 'rgba(245,166,35,0.16)' : 'transparent',
+              border: `1px solid ${coreKind === k ? COLOR.amber : COLOR.line}`,
               color: coreKind === k ? COLOR.amber : COLOR.steelDim, opacity: ready ? 1 : 0.4,
             }}>{coreLabel[k]}為核心</button>
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        {ready && m && graph && (
+        {ready && m && (
           <>
             <button type="button" onClick={() => setShowIsolatedEvents(v => !v)} style={{
               padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
               background: showIsolatedEvents ? 'rgba(245,166,35,0.1)' : 'transparent',
               border: `1px solid ${showIsolatedEvents ? COLOR.amberDim : COLOR.line}`, color: showIsolatedEvents ? COLOR.amber : COLOR.steelDim,
-            }}>孤立事件 · {m.eventsCount - (graph.events.filter(e => eventTouchedIds.has(e.id)).length)}</button>
+            }}>孤立事件 · {isolatedCount}</button>
             <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, display: 'flex', gap: '0.9rem' }}>
               <span><span style={{ color: nodeColor('person', coreKind) }}>●</span> 人 {m.peopleCount}</span>
               <span><span style={{ color: nodeColor('event', coreKind) }}>●</span> 事 {m.eventsCount}</span>
@@ -595,11 +631,11 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       <div ref={containerRef} style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <canvas
           ref={canvasRef}
-          style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none', cursor: draggingRef.current ? 'grabbing' : 'grab' }}
+          style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none', cursor: 'grab' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          onPointerLeave={handlePointerLeave}
           onWheel={handleWheel}
         />
 
@@ -611,9 +647,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
         {ready && detail && (
           <div style={{
-            position: 'absolute', left: '1.2rem', bottom: '1.2rem', width: 'min(360px, calc(100% - 2.4rem))',
-            padding: '0.8rem 1rem', background: 'rgba(18,19,25,0.92)', border: `1px solid ${COLOR.line}`, borderRadius: '6px',
-            backdropFilter: 'blur(4px)',
+            position: 'absolute', left: '1.2rem', bottom: '1.2rem', width: 'min(380px, calc(100% - 2.4rem))',
+            padding: '0.8rem 1rem', background: 'rgba(18,19,25,0.94)', border: `1px solid ${COLOR.line}`, borderRadius: '6px',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
               <div style={{ fontSize: '0.82rem', color: COLOR.ink, fontWeight: 600 }}>{detail.title}</div>
@@ -635,7 +670,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         )}
 
         <div style={{ position: 'absolute', right: '1rem', bottom: '1rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, opacity: 0.6, textAlign: 'right', lineHeight: 1.5 }}>
-          拖拉旋轉・滾輪縮放・點節點看詳情
+          拖拉旋轉・滾輪縮放・點節點置中看詳情
         </div>
       </div>
     </FullPageShell>
