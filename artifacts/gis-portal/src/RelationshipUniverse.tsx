@@ -27,8 +27,11 @@ import {
   type HermesGraphEventNode,
 } from './hermesGraphApi'
 
-type CoreKind = 'person' | 'event' | 'object'
 type NodeKind = 'person' | 'event' | 'case' | 'object'
+// 四種實體都能當核心——「人/事/物」是使用者最早提的三個，但案件（脈絡層）
+// 同樣是圖上獨立的一種節點，沒有理由排除在切換選項外，所以就是 NodeKind
+// 本身，不是它的子集。
+type CoreKind = NodeKind
 
 interface UNode {
   id: string
@@ -62,11 +65,20 @@ const ALPHA_DECAY = 0.992
 const ALPHA_MIN = 0.006
 const IDLE_ROTATE_SPEED = 0.0009
 
-function nodeColor(kind: NodeKind, isCore: boolean): string {
-  if (kind === 'person') return COLOR.amber
-  if (kind === 'case') return COLOR.ink
-  if (kind === 'object') return isCore ? COLOR.ink : COLOR.steel
-  return COLOR.steelDim // event
+// 之前這裡不管 isCore 是誰、person 一律畫 amber、event 一律 steelDim——等於
+// 「人為核心」永遠長得像核心，切到「事/物/案件為核心」時佈局雖然真的變
+// 了，顏色卻完全沒反應，使用者當然看不出核心換了誰。改成：目前被選為核
+// 心的那個 kind 一律 amber（醒目），其餘三種各自固定一個好分辨的暗色，
+// 四種暗色互不相同，才能在四種都不是核心的畫面上還分得出誰是誰。
+const NON_CORE_COLOR: Record<NodeKind, string> = {
+  person: COLOR.amberDim,
+  event: COLOR.steelDim,
+  case: COLOR.steel,
+  object: COLOR.inkDim,
+}
+
+function nodeColor(kind: NodeKind, coreKind: CoreKind): string {
+  return kind === coreKind ? COLOR.amber : NON_CORE_COLOR[kind]
 }
 
 function baseRadiusFor(kind: NodeKind, eventCount: number): number {
@@ -90,6 +102,14 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const nodesRef = useRef<UNode[]>([])
   const linksRef = useRef<ULink[]>([])
   const nodeByIdRef = useRef<Map<string, UNode>>(new Map())
+  // 點到的節點「慢慢置中不動」：每幀把整個宇宙的旋轉軸心從世界原點換成
+  // pivot，pivot 又每幀往「目前選取節點的即時座標」緩緩逼近（lerp，不是
+  // 瞬移，才有「慢慢」的感覺）。一旦 pivot 追上選取節點的座標，該節點的
+  // 座標減掉 pivot 後恆為 (0,0,0)，投影後精確落在螢幕正中央、不會因為物
+  // 理模擬或鏡頭旋轉而偏移——不需要額外釘住那個節點本身，其他節點跟連線
+  // 則會看起來繞著它公轉，資料量大時想盯著一個節點看細節非常好用。沒有
+  // 選取任何節點時，目標 pivot 就是原點，跟舊行為完全一樣。
+  const pivotRef = useRef({ x: 0, y: 0, z: 0 })
   const alphaRef = useRef(1)
   const coreKindRef = useRef<CoreKind>('person')
   const yawRef = useRef(0.6)
@@ -248,14 +268,24 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const { width, height } = sizeRef.current
       const cx = width / 2, cy = height / 2
 
+      const focusNode = selectionRef.current ? nodeByIdRef.current.get(selectionRef.current.id) : null
+      const pivot = pivotRef.current
+      const targetX = focusNode ? focusNode.x : 0, targetY = focusNode ? focusNode.y : 0, targetZ = focusNode ? focusNode.z : 0
+      pivot.x += (targetX - pivot.x) * 0.08
+      pivot.y += (targetY - pivot.y) * 0.08
+      pivot.z += (targetZ - pivot.z) * 0.08
+
       const nodes = nodesRef.current
       for (const node of nodes) {
         // yaw（繞 Y 軸）再 pitch（繞 X 軸）——順序固定，避免萬向鎖以外的意
-        // 外滾轉，兩個角度分別由水平/垂直拖拉量獨立控制，符合直覺。
-        const rx = node.x * cosY - node.z * sinY
-        const rz1 = node.x * sinY + node.z * cosY
-        const ry = node.y * cosP - rz1 * sinP
-        const rz = node.y * sinP + rz1 * cosP
+        // 外滾轉，兩個角度分別由水平/垂直拖拉量獨立控制，符合直覺。先減
+        // 掉 pivot 再旋轉，等於把旋轉軸心從世界原點換成 pivot（見上面
+        // pivotRef 的說明）。
+        const lx = node.x - pivot.x, ly = node.y - pivot.y, lz = node.z - pivot.z
+        const rx = lx * cosY - lz * sinY
+        const rz1 = lx * sinY + lz * cosY
+        const ry = ly * cosP - rz1 * sinP
+        const rz = ly * sinP + rz1 * cosP
 
         const perspectiveZ = rz + cameraDist
         const scale = perspectiveZ > 1 ? FOCAL_LENGTH / perspectiveZ : 0
@@ -283,7 +313,14 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const { width, height } = sizeRef.current
       ctx.clearRect(0, 0, width, height)
 
-      const neighborIds = computeNeighborIds(hoveredId ?? selection?.id ?? null)
+      // 讀 ref 不是讀 state：這個 render() 只在 data 變動時重新掛上 rAF
+      // 迴圈（見這個 effect 的依賴陣列 [data]），hoveredId/selection 之後
+      // 的每一次更新都不會讓這個迴圈重新啟動，draw() 若直接 closure 住
+      // state 變數，讀到的永遠是掛上迴圈那一刻的舊值（多半是 null）——
+      // hover 高亮、選取變色實際上永遠不會生效。改讀 hoveredIdRef/
+      // selectionRef，兩個 ref 在對應的 state 變動時同步更新，這裡才拿
+      // 得到當下最新值。
+      const neighborIds = computeNeighborIds(hoveredIdRef.current ?? selectionRef.current?.id ?? null)
 
       // Links first, painter's algorithm 不特別排序連線（連線本身很細，疊
       // 畫順序影響不大），但節點依深度由遠到近排序再畫，確保近端節點蓋在
@@ -303,10 +340,9 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
       const sorted = [...nodesRef.current].sort((a, b) => b.depth - a.depth)
       for (const node of sorted) {
-        const isCore = node.kind === coreKindRef.current
         const dimmed = neighborIds ? !neighborIds.has(node.id) : false
-        const isSelected = selection?.id === node.id
-        const color = isSelected ? COLOR.amber : nodeColor(node.kind, isCore)
+        const isSelected = selectionRef.current?.id === node.id
+        const color = isSelected ? COLOR.amber : nodeColor(node.kind, coreKindRef.current)
         const op = node.opacity * (dimmed ? 0.12 : 1)
         ctx.globalAlpha = Math.max(0.03, op)
         ctx.fillStyle = color
@@ -434,7 +470,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const z1 = -ry * Math.sin(pitch) + rz * Math.cos(pitch)
       const x0 = rx * Math.cos(yaw) + z1 * Math.sin(yaw)
       const z0 = -rx * Math.sin(yaw) + z1 * Math.cos(yaw)
-      node.x = x0; node.y = y0; node.z = z0
+      // 正向投影在旋轉前先減掉 pivot（見 pivotRef 說明），這裡是它的逆運
+      // 算，算出來的 x0/y0/z0 是「pivot 為原點」的座標，要加回 pivot 才是
+      // 節點真正的世界座標——沒加的話，只要目前有節點被選取置中，拖拉任
+      // 何節點都會系統性地偏移掉 pivot 那段距離。
+      const pivot = pivotRef.current
+      node.x = x0 + pivot.x; node.y = y0 + pivot.y; node.z = z0 + pivot.z
       node.vx = 0; node.vy = 0; node.vz = 0
       return
     }
@@ -518,13 +559,13 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
   const m = data?.metrics
   const graph = data?.graph
-  const coreLabel: Record<CoreKind, string> = { person: '人', event: '事', object: '物' }
+  const coreLabel: Record<CoreKind, string> = { person: '人', event: '事', object: '物', case: '案件' }
 
   return (
     <FullPageShell onBack={onBack}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center', padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
-          {(['person', 'event', 'object'] as CoreKind[]).map(k => (
+          {(['person', 'event', 'object', 'case'] as CoreKind[]).map(k => (
             <button key={k} type="button" onClick={() => setCoreKind(k)} disabled={!ready} style={{
               padding: '0.4rem 0.9rem', borderRadius: '999px', cursor: ready ? 'pointer' : 'default', fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.06em',
               background: coreKind === k ? 'rgba(245,166,35,0.14)' : 'transparent',
@@ -542,10 +583,10 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
               border: `1px solid ${showIsolatedEvents ? COLOR.amberDim : COLOR.line}`, color: showIsolatedEvents ? COLOR.amber : COLOR.steelDim,
             }}>孤立事件 · {m.eventsCount - (graph.events.filter(e => eventTouchedIds.has(e.id)).length)}</button>
             <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, display: 'flex', gap: '0.9rem' }}>
-              <span><span style={{ color: COLOR.amber }}>●</span> 人 {m.peopleCount}</span>
-              <span><span style={{ color: COLOR.steelDim }}>●</span> 事 {m.eventsCount}</span>
-              <span><span style={{ color: COLOR.ink }}>●</span> 案 {m.casesCount}</span>
-              <span><span style={{ color: COLOR.steel }}>●</span> 物 {m.objectsCount}</span>
+              <span><span style={{ color: nodeColor('person', coreKind) }}>●</span> 人 {m.peopleCount}</span>
+              <span><span style={{ color: nodeColor('event', coreKind) }}>●</span> 事 {m.eventsCount}</span>
+              <span><span style={{ color: nodeColor('case', coreKind) }}>●</span> 案 {m.casesCount}</span>
+              <span><span style={{ color: nodeColor('object', coreKind) }}>●</span> 物 {m.objectsCount}</span>
             </div>
           </>
         )}
