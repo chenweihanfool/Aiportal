@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, forceRadial, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
 import { COLOR, FONT } from './theme'
+import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, type HermesGraphEventNode, type HermesGraphEdge } from './hermesGraphApi'
+import { RelationshipUniverse } from './RelationshipUniverse'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -12,6 +13,18 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.4.0',
+    date: '2026-09-16',
+    summary: '關係圖追上事人物三實體架構，改成獨立全頁 3D 關係宇宙',
+    changes: [
+      '入口網原本的關係圖只有「人-事」兩種節點——但 9/5 起 HERMES 架構已經擴大成「事人物三實體 + 案件脈絡層」（L1~L5 pipeline），Events frontmatter 多了 case／objects 欄位、People/*.md 多了「## 關係人物」人際關係區塊、Cases/*.md 記錄案件狀態，這些全部沒進圖，數字又開始跟架構脫鉤',
+      'hermes_graph_snapshot 新增 objects（Events 自己的欄位，跟 case 同一批直接反推）、personRelations（People/*.md「## 關係人物」，Events 完全沒有這個資訊，獨立掃）、cases（Cases/*.md 的 name/status，純顯示用）三塊資料；/api/hermes-graph 新增案件節點、物件節點、事件↔案件邊、事件↔物件邊、人↔人邊（同一段關係兩邊 People 檔案各記一筆，讀取時用排序過的 [from,to] 去重）',
+      'collect.ps1 新增 objects YAML block 解析（跟既有 participants 的 person/role 同一套兩行一組 pairing 手法）、Get-HermesPersonRelations（正則解析「- [[人名]]（描述，共同參與：...）」這種夾雜 wikilink 的自然語言，格式對不上的行直接跳過不影響其他關係）、Get-HermesCases；全部用真實 vault 資料（290 事件／36 人物／11 案件／21 物件）跑過驗證，全數正確解析零錯誤',
+      '關係圖從戰情室裡的小面板獨立成全頁（#graph hash route）：可拖拉旋轉、滾輪縮放的假 3D 球體宇宙（手刻的簡化 3D 力學模擬＋透視投影，不是重新引入 three.js），節點無邊框、依鏡頭距離自動淡出；新增「人／事／物為核心」切換，核心類型節點放大並被力學往中心拉近、其餘類型散佈成外層球殼；戰情室裡的原面板縮成精簡摘要卡（人物／事件／案件／物件數量等關鍵指標）＋一個「展開完整關係宇宙 →」按鈕，不再塞下整張圖',
+      '拿掉 d3-force 依賴（舊的平面力導向圖改寫成全頁版的手刻 3D 模擬，不再需要這個函式庫）',
+    ],
+  },
   {
     version: '2.3.3',
     date: '2026-09-14',
@@ -264,35 +277,9 @@ async function apiFetchHermesActivity(adminPassword: string, limit = 20): Promis
   return data.activity
 }
 
-interface HermesGraphPersonNode { name: string; eventCount: number }
-interface HermesGraphEventNode { id: string; date: string; title: string; status: string | null; tags: string[] }
-interface HermesGraphEdge { person: string; eventId: string; role: string }
-
-interface HermesGraphMetrics {
-  peopleCount: number
-  eventsCount: number
-  avgParticipantsPerEvent: number
-  orphanEventRatioPct: number
-  trueOrphanEventRatioPct: number
-  newEventsThisWeek: number
-  newPeopleThisWeek: number
-  mostActivePerson: { name: string; eventCount: number } | null
-}
-
-interface HermesGraphData {
-  available: boolean
-  computedAt: string | null
-  metrics?: HermesGraphMetrics
-  graph?: { people: HermesGraphPersonNode[]; events: HermesGraphEventNode[]; edges: HermesGraphEdge[] }
-}
-
-async function apiFetchHermesGraph(adminPassword: string): Promise<HermesGraphData> {
-  const r = await fetch(`${API_BASE}api/hermes-graph`, {
-    headers: { 'x-admin-password': adminPassword },
-  })
-  if (!r.ok) throw new Error('Failed to fetch hermes graph')
-  return r.json() as Promise<HermesGraphData>
-}
+// HermesGraph* types + apiFetchHermesGraph moved to ./hermesGraphApi.ts so
+// RelationshipUniverse.tsx (the full-page #graph route) can share them
+// without a circular import back into this file.
 
 async function apiVerifyPassword(password: string): Promise<boolean> {
   const r = await fetch(`${API_BASE}api/dashboard`, {
@@ -1372,341 +1359,6 @@ function SubPanel({ title, sub, children }: { title: string; sub: string; childr
   )
 }
 
-// ─────────────────────────────────────────────
-// 人-事關係網路圖（2026-09-06 起，取代舊的知識庫健康度 4 項分數：轉化率／
-// 連結健康度／活化度／本週節奏量測的是 AI/知識/ 舊管線，9/1 事人雙實體改版
-// 後 Events/People 新架構完全不在計算範圍內，分數早就脫鉤——與其修那 4 個
-// 公式，改成直接把新架構的原始資料（Events/*.md frontmatter 的
-// participants 陣列）畫成類似 Obsidian Graph View 的網路圖，管線一旦停止
-// 寫入，圖立刻是空的或不再長大，不會再有「看不出脫鉤」的問題。
-// ─────────────────────────────────────────────
-interface GraphNode extends SimulationNodeDatum {
-  id: string
-  kind: 'person' | 'event'
-  label: string
-  radius: number
-  eventCount?: number
-  eventId?: string // only set on event nodes — key back into the `events` prop for the click-to-detail card
-  isOrphan?: boolean // event node with zero participants — no link ever touches it
-}
-
-type GraphLink = SimulationLinkDatum<GraphNode> & { key: string }
-
-const GRAPH_WIDTH = 760
-const GRAPH_HEIGHT = 460
-const LABEL_MARGIN = 16
-// 孤立節點顯示開關打開時，孤兒事件不再被 charge 力推到隨便一個角落夾在
-// viewBox 邊上（一長方框感很重，跟 Obsidian 完全不同）——改用 forceRadial
-// 把它們拉到一個以圖中心為圓心的固定半徑上，配合彼此之間的斥力自然沿著
-// 圓周散開，才是 Obsidian 那種「孤立節點圍成一圈」的觀感。半徑抓得比
-// canvas 短邊的一半小一截，確保整圈都在 viewBox 內、不會被裁到。
-const ORPHAN_RING_RADIUS = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) / 2 - 26
-
-function clampNodesToCanvas(nodes: GraphNode[]) {
-  // 保險絲：不管力學怎麼跑，每個 tick 後都夾回 viewBox 範圍內（含節點半徑
-  // 跟人物標籤要用的下緣空間）——拖拉時很容易把節點拖到邊界外，沒有這層
-  // 節點/標籤會直接被 SVG 裁掉看不見。
-  for (const n of nodes) {
-    const bottomMargin = n.kind === 'person' ? n.radius + LABEL_MARGIN : n.radius
-    n.x = Math.max(n.radius, Math.min(GRAPH_WIDTH - n.radius, n.x ?? GRAPH_WIDTH / 2))
-    n.y = Math.max(n.radius, Math.min(GRAPH_HEIGHT - bottomMargin, n.y ?? GRAPH_HEIGHT / 2))
-  }
-}
-
-function linkEndpointId(end: string | number | GraphNode): string {
-  return typeof end === 'object' ? end.id : String(end)
-}
-
-// 即時力導向模擬（不是算一次就畫死的靜態圖）：節點可以拖拉、滑鼠移過去會
-// 高亮關聯的節點跟連線、點事件節點會顯示詳細內容。用 useRef 存節點/連線陣
-// 列本身（d3 內部會直接 mutate 這些物件的 x/y/fx/fy），每個 tick 用一個遞
-// 增計數器觸發 React 重新渲染讀取最新座標，不是每個 tick 都整包 setState
-// 新陣列——避免高頻率模擬時不必要的陣列重建。
-function HermesEventGraph({ people, events, edges }: { people: HermesGraphPersonNode[]; events: HermesGraphEventNode[]; edges: HermesGraphEdge[] }) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const simRef = useRef<ReturnType<typeof forceSimulation<GraphNode>> | null>(null)
-  const nodesRef = useRef<GraphNode[]>([])
-  const linksRef = useRef<GraphLink[]>([])
-  const draggingIdRef = useRef<string | null>(null)
-  const [, setTick] = useState(0)
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const [selectedEvent, setSelectedEvent] = useState<HermesGraphEventNode | null>(null)
-  const [selectedPerson, setSelectedPerson] = useState<string | null>(null)
-  // 預設跟 Obsidian Graph View 一樣關閉——孤兒事件（沒有任何 participants
-  // 的事件）預設不畫，圖只顯示真正有關聯的人-事網路，畫面比較乾淨。
-  const [showOrphans, setShowOrphans] = useState(false)
-
-  const linkedEventIds = useMemo(() => new Set(edges.map(e => e.eventId)), [edges])
-  const orphanCount = useMemo(() => events.filter(e => !linkedEventIds.has(e.id)).length, [events, linkedEventIds])
-
-  useEffect(() => {
-    const visibleEvents = showOrphans ? events : events.filter(e => linkedEventIds.has(e.id))
-    if (people.length === 0 && visibleEvents.length === 0) {
-      nodesRef.current = []
-      linksRef.current = []
-      setTick(t => t + 1)
-      return
-    }
-
-    const nodes: GraphNode[] = [
-      ...people.map((p): GraphNode => ({
-        id: `p:${p.name}`, kind: 'person', label: p.name,
-        radius: Math.min(24, 7 + Math.sqrt(p.eventCount) * 4.2), eventCount: p.eventCount,
-      })),
-      ...visibleEvents.map((e): GraphNode => ({
-        id: `e:${e.id}`, kind: 'event', label: e.title, radius: 4, eventId: e.id,
-        isOrphan: !linkedEventIds.has(e.id),
-      })),
-    ]
-    const links: GraphLink[] = edges.map((edge, i) => ({ key: `${edge.person}|${edge.eventId}|${i}`, source: `p:${edge.person}`, target: `e:${edge.eventId}` }))
-    nodesRef.current = nodes
-    linksRef.current = links
-
-    // 多數事件彼此不相干（沒有共同的人物），圖裡其實是很多互不相連的小群
-    // 組——只有 charge + center 兩個力，各群組會被斥力越推越遠，飄到
-    // viewBox 外面看不到；加兩個很弱的 x/y 定位力把每個節點都溫和地拉回中
-    // 心附近，group 之間才不會散得無邊無際。孤兒節點不吃這兩個力（見下面
-    // forceRadial 的說明），不然兩股力互相打架，圓圈會被拉扁。
-    const sim = forceSimulation<GraphNode>(nodes)
-      .force('link', forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(34).strength(0.55))
-      .force('charge', forceManyBody().strength(-85))
-      .force('center', forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
-      .force('collide', forceCollide<GraphNode>().radius(d => d.radius + 3))
-      .force('x', forceX<GraphNode>(GRAPH_WIDTH / 2).strength(d => d.isOrphan ? 0 : 0.025))
-      .force('y', forceY<GraphNode>(GRAPH_HEIGHT / 2).strength(d => d.isOrphan ? 0 : 0.025))
-      // 孤兒節點（沒有任何連線）不受 link 力約束，單靠 charge 斥力會被越推
-      // 越遠，撞上 clampNodesToCanvas 的邊界夾死，一整排疊在 viewBox 四邊，
-      // 看起來像個方框——跟真正的 Obsidian 完全不像。這裡改用 forceRadial
-      // 把孤兒節點統一拉往「以圖中心為圓心、固定半徑」的圓周上，配合彼此
-      // 間的斥力自然沿圓周散開，才有 Obsidian 那種孤立節點圍成一圈的感覺；
-      // 非孤兒節點的 strength 是 0，不受這個力影響。
-      .force('radial', forceRadial<GraphNode>(ORPHAN_RING_RADIUS, GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2).strength(d => d.isOrphan ? 0.9 : 0))
-      .on('tick', () => {
-        clampNodesToCanvas(nodes)
-        setTick(t => t + 1)
-      })
-    simRef.current = sim
-
-    // 不預先手動 tick 到收斂再畫出來——讓模擬從初始亂數位置開始跑、畫面上
-    // 真的看得到節點飛進來收斂就定位的過程（跟 Obsidian Graph View 開圖時
-    // 的感覺一樣），alphaDecay 用預設值，跑到 alphaMin 以下會自己停止，不
-    // 會無限耗 CPU；拖拉節點時會重新加溫（見 handlePointerDown）。
-
-    return () => { sim.stop() }
-  }, [people, events, edges, showOrphans, linkedEventIds])
-
-  function toSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null {
-    const svg = svgRef.current
-    const ctm = svg?.getScreenCTM()
-    if (!svg || !ctm) return null
-    const pt = svg.createSVGPoint()
-    pt.x = clientX
-    pt.y = clientY
-    const p = pt.matrixTransform(ctm.inverse())
-    return { x: p.x, y: p.y }
-  }
-
-  function handlePointerDown(e: React.PointerEvent<SVGCircleElement>, node: GraphNode) {
-    e.currentTarget.setPointerCapture(e.pointerId)
-    draggingIdRef.current = node.id
-    node.fx = node.x
-    node.fy = node.y
-    simRef.current?.alphaTarget(0.3).restart()
-  }
-
-  function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    const draggingId = draggingIdRef.current
-    if (!draggingId) return
-    const p = toSvgPoint(e.clientX, e.clientY)
-    const node = nodesRef.current.find(n => n.id === draggingId)
-    if (p && node) { node.fx = p.x; node.fy = p.y }
-  }
-
-  function handlePointerUp() {
-    if (!draggingIdRef.current) return
-    const node = nodesRef.current.find(n => n.id === draggingIdRef.current)
-    if (node) { node.fx = null; node.fy = null }
-    draggingIdRef.current = null
-    simRef.current?.alphaTarget(0)
-  }
-
-  const neighborIds = useMemo(() => {
-    if (!hoveredId) return null
-    // 圖是二分圖（人只連事件、事件只連人，沒有人-人直接的邊），只算一跳鄰
-    // 居的話，滑鼠移到「使用者」上只會亮他自己參加的事件，不會亮同一場事
-    // 件裡的其他人——那些人明明也「相關聯」，卻因為隔了一個事件節點被當
-    // 成無關。這裡多走一跳：先找出直接相連的事件，再把那些事件的其他參
-    // 與者也一併收進來，「這個人／事件牽連到的一切」才會真的一起亮起來。
-    const set = new Set<string>([hoveredId])
-    const directEventIds = new Set<string>()
-    for (const l of linksRef.current) {
-      const s = linkEndpointId(l.source)
-      const t = linkEndpointId(l.target)
-      if (s === hoveredId) { set.add(t); if (t.startsWith('e:')) directEventIds.add(t) }
-      if (t === hoveredId) { set.add(s); if (s.startsWith('e:')) directEventIds.add(s) }
-    }
-    for (const l of linksRef.current) {
-      const s = linkEndpointId(l.source)
-      const t = linkEndpointId(l.target)
-      if (directEventIds.has(s)) set.add(t)
-      if (directEventIds.has(t)) set.add(s)
-    }
-    return set
-    // linksRef.current 只在資料變動（連帶 hoveredId 重置）時才會換掉，這裡
-    // 只依賴 hoveredId 就夠了，不用把 ref 本身放進依賴陣列。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hoveredId])
-
-  const selectedPersonEvents = useMemo(() => {
-    if (!selectedPerson) return []
-    const eventIds = new Set(edges.filter(e => e.person === selectedPerson).map(e => e.eventId))
-    return events.filter(e => eventIds.has(e.id)).sort((a, b) => b.date.localeCompare(a.date))
-  }, [selectedPerson, edges, events])
-
-  const nodes = nodesRef.current
-  const links = linksRef.current
-
-  if (people.length === 0 && events.length === 0) {
-    return (
-      <div style={{ fontSize: '0.75rem', color: COLOR.steelDim, padding: '2.5rem 0', textAlign: 'center' }}>
-        還沒有任何事件／人物資料——collect.ps1 還沒掃到 Events/，或 vault 裡還沒有任何事件
-      </div>
-    )
-  }
-
-  const orphanToggle = (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
-      <button
-        type="button"
-        onClick={() => setShowOrphans(v => !v)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
-          padding: '0.3rem 0.6rem', borderRadius: '999px', fontFamily: FONT.mono, fontSize: '0.62rem', letterSpacing: '0.04em',
-          background: showOrphans ? 'rgba(245,166,35,0.12)' : 'transparent',
-          border: `1px solid ${showOrphans ? COLOR.amberDim : COLOR.line}`,
-          color: showOrphans ? COLOR.amber : COLOR.steelDim,
-        }}
-      >
-        <span style={{
-          width: '8px', height: '8px', borderRadius: '50%',
-          background: showOrphans ? COLOR.amber : 'transparent', border: `1px solid ${showOrphans ? COLOR.amber : COLOR.steelDim}`,
-        }} />
-        孤立節點（無關聯事件）{orphanCount > 0 ? `· ${orphanCount}` : ''}
-      </button>
-    </div>
-  )
-
-  if (nodes.length === 0) {
-    // 有資料，但目前都被開關篩掉了（例如全部都是孤兒事件、開關又是關的）——
-    // 開關本身還是要留著，不然使用者沒辦法打開它把資料叫回來。
-    return (
-      <div>
-        {orphanToggle}
-        <div style={{ fontSize: '0.75rem', color: COLOR.steelDim, padding: '2.5rem 0', textAlign: 'center' }}>
-          目前沒有已連結的人-事關聯——{orphanCount > 0 ? '有孤立節點，打開上面的開關看看' : '資料還在累積中'}
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      {orphanToggle}
-      <svg
-        ref={svgRef}
-        width="100%" height={GRAPH_HEIGHT} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-        style={{ display: 'block', touchAction: 'none' }}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-      >
-        {links.map(link => {
-          const s = link.source as GraphNode
-          const t = link.target as GraphNode
-          if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return null
-          const dimmed = neighborIds ? !(neighborIds.has(s.id) && neighborIds.has(t.id)) : false
-          return <line key={link.key} x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke={COLOR.line} strokeWidth={1} opacity={dimmed ? 0.1 : 1} />
-        })}
-        {nodes.filter(n => n.kind === 'event').map(n => {
-          const dimmed = neighborIds ? !neighborIds.has(n.id) : false
-          return (
-            <circle
-              key={n.id} cx={n.x} cy={n.y} r={n.radius}
-              fill={selectedEvent && n.eventId === selectedEvent.id ? COLOR.amber : COLOR.steelDim}
-              fillOpacity={dimmed ? 0.15 : 0.8}
-              style={{ cursor: 'pointer' }}
-              onPointerDown={e => handlePointerDown(e, n)}
-              onMouseEnter={() => setHoveredId(n.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              onClick={() => { setSelectedEvent(events.find(e => e.id === n.eventId) ?? null); setSelectedPerson(null) }}
-            >
-              <title>{`${n.label}`}</title>
-            </circle>
-          )
-        })}
-        {nodes.filter(n => n.kind === 'person').map(n => {
-          const dimmed = neighborIds ? !neighborIds.has(n.id) : false
-          const isSelected = selectedPerson === n.label
-          return (
-            <g key={n.id} opacity={dimmed ? 0.2 : 1}>
-              <circle
-                cx={n.x} cy={n.y} r={n.radius} fill={COLOR.amber} fillOpacity={0.88}
-                stroke={isSelected ? COLOR.ink : 'none'} strokeWidth={isSelected ? 2 : 0}
-                style={{ cursor: 'pointer' }}
-                onPointerDown={e => handlePointerDown(e, n)}
-                onMouseEnter={() => setHoveredId(n.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                onClick={() => { setSelectedPerson(n.label); setSelectedEvent(null) }}
-              >
-                <title>{`${n.label} · ${n.eventCount ?? 0} 個事件`}</title>
-              </circle>
-              <text x={n.x} y={(n.y ?? 0) + n.radius + 12} textAnchor="middle" fontSize={10.5} fontFamily={FONT.mono} fill={COLOR.ink} style={{ pointerEvents: 'none' }}>{n.label}</text>
-            </g>
-          )
-        })}
-      </svg>
-      {selectedEvent && (
-        <div style={{ marginTop: '0.6rem', padding: '0.7rem 0.9rem', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '5px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-            <div style={{ fontSize: '0.78rem', color: COLOR.ink, fontWeight: 600 }}>{selectedEvent.title}</div>
-            <span onClick={() => setSelectedEvent(null)} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.8rem', flexShrink: 0 }}>✕</span>
-          </div>
-          <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginTop: '4px' }}>
-            {selectedEvent.date}{selectedEvent.status ? ` · ${selectedEvent.status}` : ''}
-          </div>
-          {selectedEvent.tags.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-              {selectedEvent.tags.map(tag => (
-                <span key={tag} style={{ fontSize: '0.62rem', color: COLOR.steel, background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 8px' }}>{tag}</span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {selectedPerson && (
-        <div style={{ marginTop: '0.6rem', padding: '0.7rem 0.9rem', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '5px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-            <div style={{ fontSize: '0.78rem', color: COLOR.ink, fontWeight: 600 }}>{selectedPerson} · {selectedPersonEvents.length} 個關聯事件</div>
-            <span onClick={() => setSelectedPerson(null)} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.8rem', flexShrink: 0 }}>✕</span>
-          </div>
-          <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '9rem', overflowY: 'auto' }}>
-            {selectedPersonEvents.map(ev => (
-              <div
-                key={ev.id}
-                onClick={() => { setSelectedEvent(ev); setSelectedPerson(null) }}
-                style={{ display: 'flex', gap: '8px', alignItems: 'baseline', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.68rem' }}
-              >
-                <span style={{ color: COLOR.steelDim, flexShrink: 0 }}>{ev.date}</span>
-                <span style={{ color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string | null }) {
   const [data, setData] = useState<HermesGraphData | null>(null)
   const [error, setError] = useState(false)
@@ -1721,7 +1373,7 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
   }, [unlockedPassword])
 
   return (
-    <SubPanel title="人-事關係網路圖" sub="HERMES 事人雙實體架構（Events/People）· 不計入幸福指數">
+    <SubPanel title="事人物關係網路" sub="HERMES 事人物三實體架構（Events/People/Cases/Objects）· 不計入幸福指數">
       {error ? (
         <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
       ) : data === null ? (
@@ -1733,18 +1385,25 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
             <StatCell label="人物數量" value={String(data.metrics.peopleCount)} />
             <StatCell label="事件數量" value={String(data.metrics.eventsCount)} />
+            <StatCell label="案件數量" value={String(data.metrics.casesCount)} sub={`${data.metrics.activeCasesCount} 進行中`} />
+            <StatCell label="物件數量" value={String(data.metrics.objectsCount)} />
             <StatCell label="平均關聯人數" value={data.metrics.avgParticipantsPerEvent.toFixed(1)} sub="每事件" />
             <StatCell label="真孤兒事件率" value={`${data.metrics.trueOrphanEventRatioPct}%`} valueColor={data.metrics.trueOrphanEventRatioPct >= 50 ? COLOR.warn : undefined} sub={`無人物且無案件（孤兒 ${data.metrics.orphanEventRatioPct}%）`} />
-            <StatCell label="本週新增事件" value={String(data.metrics.newEventsThisWeek)} />
-            <StatCell label="本週新增人物" value={String(data.metrics.newPeopleThisWeek)} />
           </div>
           {data.metrics.mostActivePerson && (
-            <div style={{ fontSize: '0.76rem', color: COLOR.steel, marginBottom: '0.7rem' }}>
+            <div style={{ fontSize: '0.76rem', color: COLOR.steel, marginBottom: '0.9rem' }}>
               這陣子最活躍：<span style={{ color: COLOR.amber, fontWeight: 600 }}>{data.metrics.mostActivePerson.name}</span>
               <span style={{ color: COLOR.steelDim }}>（{data.metrics.mostActivePerson.eventCount} 個事件）</span>
             </div>
           )}
-          <HermesEventGraph people={data.graph.people} events={data.graph.events} edges={data.graph.edges} />
+          <button
+            type="button"
+            onClick={() => { window.location.hash = 'graph' }}
+            style={{
+              width: '100%', padding: '0.7rem', borderRadius: '5px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.74rem', letterSpacing: '0.06em',
+              background: 'rgba(245,166,35,0.08)', border: `1px solid ${COLOR.amberDim}`, color: COLOR.amber,
+            }}
+          >展開完整關係宇宙 →</button>
           <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>
             {data.computedAt ? formatMinutesAgo(data.computedAt) : ''}
           </div>
@@ -2505,6 +2164,15 @@ export default function App() {
   const [adminAuth, setAdminAuth] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
+  // 全頁 3D 關係宇宙走 hash route（#graph），不是路徑 route——這個 SPA 沒
+  // 有接路由庫，路徑 route 在 refresh/直接貼網址時需要伺服端 SPA fallback
+  // 設定，hash 則完全是前端狀態，不需要動部署那端的反向代理規則。
+  const [hashRoute, setHashRoute] = useState(() => window.location.hash)
+  useEffect(() => {
+    const onHashChange = () => setHashRoute(window.location.hash)
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   const refreshSites = useCallback(async () => {
     try {
@@ -2574,6 +2242,10 @@ export default function App() {
     await apiDeleteSite(id, adminPassword)
     await refreshSites()
   }, [adminPassword, refreshSites])
+
+  if (hashRoute === '#graph') {
+    return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: COLOR.panelDeep, position: 'relative', overflow: 'hidden' }}>

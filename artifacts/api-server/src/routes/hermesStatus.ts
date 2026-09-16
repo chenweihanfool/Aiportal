@@ -6,6 +6,8 @@ import {
   hermesGraphSnapshotTable,
   type HermesStatusSnapshotRow,
   type HermesGraphEvent,
+  type HermesGraphPersonRelation,
+  type HermesGraphCaseMeta,
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 
@@ -108,13 +110,16 @@ router.get("/hermes-status", async (req: Request, res: Response) => {
   });
 });
 
-// HERMES's "事人雙實體" (event-person dual-entity) knowledge structure —
+// HERMES's "事人物三實體 + 案件脈絡層" knowledge structure —
 // collect.ps1 re-scans every Events/*.md file's frontmatter each run and
 // POSTs the full current set (not a diff, same "whole payload overwrite"
-// shape as hermes-status above). People/*.md is a script-maintained
-// backlink cache on HERMES's own side, not a separate source of truth, so
-// only `events` is ever posted or stored — every person node, edge, and
-// derived metric below is computed from `events` at read time.
+// shape as hermes-status above). `events` carries case/objects fields
+// directly (Events frontmatter is authoritative for those), so case nodes,
+// object nodes, and every events-derived metric below are computed from
+// `events` at read time — only `personRelations` (People/*.md 的
+// `## 關係人物`，Events 完全沒有這個資訊) and `cases`（Cases/*.md
+// frontmatter 的 name/status，純粹補案件節點的顯示狀態）是額外真的需要
+// collect.ps1 另外掃、另外存的東西。
 router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
   const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
   if (!authorized) {
@@ -123,13 +128,17 @@ router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
 
   const body = req.body as Record<string, unknown>;
   const events = Array.isArray(body["events"]) ? (body["events"] as HermesGraphEvent[]) : [];
+  const personRelations = Array.isArray(body["personRelations"])
+    ? (body["personRelations"] as HermesGraphPersonRelation[])
+    : [];
+  const cases = Array.isArray(body["cases"]) ? (body["cases"] as HermesGraphCaseMeta[]) : [];
 
   await db
     .insert(hermesGraphSnapshotTable)
-    .values({ id: "latest", events })
+    .values({ id: "latest", events, personRelations, cases })
     .onConflictDoUpdate({
       target: hermesGraphSnapshotTable.id,
-      set: { events, computedAt: new Date() },
+      set: { events, personRelations, cases, computedAt: new Date() },
     });
 
   return res.json({ success: true });
@@ -152,13 +161,20 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
   }
 
   const events = row.events;
+  const personRelations = row.personRelations ?? [];
+  const caseMetaByName = new Map((row.cases ?? []).map((c) => [c.name, c]));
 
   // 人物節點 + degree（連結數）從 events.participants 反推——People/*.md
   // 只是 HERMES 自己維護的反查快取，不是另一份要另外信任的來源。同一個
   // person 名稱視為同一個節點（沒有跨事件的 id，用顯示名稱本身當 key，跟
-  // frontmatter 的 `[[人名]]` wikilink 語意一致）。
+  // frontmatter 的 `[[人名]]` wikilink 語意一致）。案件節點／物件節點是同一
+  // 套邏輯：從 events 的 case / objects 欄位反推，名稱本身當 key。
   const peopleByName = new Map<string, { name: string; eventCount: number; firstDate: string }>();
+  const casesByName = new Map<string, { name: string; eventCount: number }>();
+  const objectsByName = new Map<string, { name: string; objectType: string | null; eventCount: number }>();
   const edges: Array<{ person: string; eventId: string; role: string }> = [];
+  const caseEdges: Array<{ eventId: string; case: string }> = [];
+  const objectEdges: Array<{ eventId: string; object: string }> = [];
   let totalParticipantLinks = 0;
   let orphanEventCount = 0;
   let trueOrphanEventCount = 0;
@@ -180,7 +196,34 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
         peopleByName.set(p.person, { name: p.person, eventCount: 1, firstDate: ev.date });
       }
     }
+
+    if (typeof ev.case === "string" && ev.case.length > 0) {
+      caseEdges.push({ eventId: ev.id, case: ev.case });
+      const existing = casesByName.get(ev.case);
+      if (existing) existing.eventCount++;
+      else casesByName.set(ev.case, { name: ev.case, eventCount: 1 });
+    }
+
+    for (const o of ev.objects ?? []) {
+      objectEdges.push({ eventId: ev.id, object: o.object });
+      const existing = objectsByName.get(o.object);
+      if (existing) existing.eventCount++;
+      else objectsByName.set(o.object, { name: o.object, objectType: o.objectType, eventCount: 1 });
+    }
   }
+
+  // 人↔人關係是雙向的，但 L3 在 People/*.md 兩邊各自的檔案都會寫一筆（陳
+  // 韋翰.md 記一筆到呂駿欣、呂駿欣.md 也記一筆回陳韋翰），collect.ps1 是照
+  // 檔案掃的，所以同一段關係在 personRelations 裡通常會出現兩次（from/to
+  // 對調）。用排序過的 [from, to] 當 key 去重，避免圖上同一對人之間畫出兩
+  // 條疊在一起的邊；兩邊描述文字不一定完全一樣，保留先出現的那筆即可，不
+  // 是要在這裡做語意合併。
+  const personRelationByKey = new Map<string, { from: string; to: string; description: string }>();
+  for (const rel of personRelations) {
+    const key = [rel.from, rel.to].sort().join("|");
+    if (!personRelationByKey.has(key)) personRelationByKey.set(key, rel);
+  }
+  const dedupedPersonRelations = Array.from(personRelationByKey.values());
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const newEventsThisWeek = events.filter((ev) => ev.date >= weekAgo).length;
@@ -188,6 +231,9 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
 
   const people = Array.from(peopleByName.values()).sort((a, b) => b.eventCount - a.eventCount);
   const mostActivePerson = people.length > 0 ? { name: people[0].name, eventCount: people[0].eventCount } : null;
+  const cases = Array.from(casesByName.values()).sort((a, b) => b.eventCount - a.eventCount);
+  const objects = Array.from(objectsByName.values()).sort((a, b) => b.eventCount - a.eventCount);
+  const activeCasesCount = cases.filter((c) => (caseMetaByName.get(c.name)?.status ?? "active") === "active").length;
 
   return res.json({
     available: true,
@@ -195,12 +241,16 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
     metrics: {
       peopleCount: people.length,
       eventsCount: events.length,
+      casesCount: cases.length,
+      objectsCount: objects.length,
       avgParticipantsPerEvent: events.length > 0 ? Math.round((totalParticipantLinks / events.length) * 10) / 10 : 0,
       orphanEventRatioPct: events.length > 0 ? Math.round((orphanEventCount / events.length) * 100) : 0,
       trueOrphanEventRatioPct: events.length > 0 ? Math.round((trueOrphanEventCount / events.length) * 100) : 0,
       newEventsThisWeek,
       newPeopleThisWeek,
       mostActivePerson,
+      activeCasesCount,
+      personRelationsCount: dedupedPersonRelations.length,
     },
     graph: {
       people: people.map((p) => ({ name: p.name, eventCount: p.eventCount })),
@@ -210,8 +260,14 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
         title: ev.title,
         status: ev.status,
         tags: ev.tags ?? [],
+        case: ev.case ?? null,
       })),
+      cases: cases.map((c) => ({ name: c.name, eventCount: c.eventCount, status: caseMetaByName.get(c.name)?.status ?? null })),
+      objects: objects.map((o) => ({ name: o.name, objectType: o.objectType, eventCount: o.eventCount })),
       edges,
+      caseEdges,
+      objectEdges,
+      personRelations: dedupedPersonRelations,
     },
   });
 });

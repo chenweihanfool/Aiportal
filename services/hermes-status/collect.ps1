@@ -92,6 +92,14 @@ $PeopleYamlPath = Join-Path $SocialFolderPath "people.yaml"
 # api-server 那邊從 events 陣列反推，見 routes/hermesStatus.ts。
 $EventsFolderPath = "F:\SynologyDrive\Events"
 
+# 2026-09-16 起擴大為「事人物三實體 + 案件脈絡層」——案件節點／物件節點都
+# 從 Events 自己的 case/objects 欄位反推（api-server 那邊做，同上一段的原
+# 則），不需要另外讀 Cases/Objects 資料夾。這兩個資料夾只讀取「Events 完
+# 全沒有的資訊」：People/*.md 的「## 關係人物」（人跟人怎麼認識，Events
+# 沒有這種欄位）、Cases/*.md frontmatter 的 status（純顯示用，不是拓撲）。
+$PeopleFolderPath = "F:\SynologyDrive\People"
+$CasesFolderPath = "F:\SynologyDrive\Cases"
+
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
 $LogDir = Join-Path $ScriptDir "logs"
 $ErrorLogPath = Join-Path $LogDir "hermes_status_error.log"
@@ -460,7 +468,9 @@ function Get-HermesEvents {
             $id = $null; $date = $null; $caseNo = $null; $case = $null; $location = $null; $status = $null
             $tags = @()
             $participants = @()
+            $objects = @()
             $pendingPerson = $null
+            $pendingObject = $null
 
             for ($i = 1; $i -lt $endIdx; $i++) {
                 $line = $lines[$i]
@@ -490,6 +500,19 @@ function Get-HermesEvents {
                     $pendingPerson = $null
                     $pendingIsNewFormat = $false
                 }
+                elseif ($line -match '^objects:\s*\[\]\s*$') { $objects = @() }
+                elseif ($line -match '^\s*-\s*object:\s*(.+)$') { $pendingObject = $Matches[1].Trim() }
+                elseif ($pendingObject -and $line -match '^\s*object_type:\s*(.+)$') {
+                    # objects 是 YAML block list（`objects:` 單獨一行起頭，底下
+                    # 縮排的 `- object: 名稱` + `object_type: 類型` 兩行一組），
+                    # 跟 participants 的 person/role 是同一種「兩行一組」pairing
+                    # 寫法，不是意外重複——單行 `objects: []` 的空陣列走上面那條
+                    # 分支單獨處理。
+                    $ot = $Matches[1].Trim()
+                    if ($ot -eq 'null') { $ot = $null }
+                    $objects += @{ object = $pendingObject; objectType = $ot }
+                    $pendingObject = $null
+                }
             }
 
             if (-not $id -or -not $date) { continue }  # 缺關鍵欄位的檔案跳過，不硬湊資料
@@ -514,12 +537,96 @@ function Get-HermesEvents {
                 status = $status
                 tags = @($tags)
                 participants = @($participants)
+                objects = @($objects)
             }
         } catch {
             Write-ErrorLog "Hermes graph: 解析 $($file.Name) 失敗: $_"
         }
     }
     return $events
+}
+
+# People/*.md 的「## 關係人物」區塊——人跟人怎麼認識，是 Events frontmatter
+# 完全沒有的資訊（Events 只知道「誰參加了哪個事件」，不知道「兩個人彼此的
+# 關係是什麼」），所以這是唯一真的需要另外讀 People/ 資料夾的地方。格式不
+# 是乾淨 YAML，是夾雜 wikilink 的自然語言一行一條（例："- [[呂駿欣]]（同案
+# 業務往來，共同參與：[[...]]）"），對不上正則的行直接跳過那一行，不讓整
+# 個檔案的其他關係、或其他檔案，連帶失敗——關係描述本身是自由格式文字，這
+# 裡只負責抓出「對到誰」跟「原始描述文字」，不進一步解析描述裡夾的共同參
+# 與事件清單（那是輔助說明，不是畫圖需要的拓撲資料）。
+function Get-HermesPersonRelations {
+    param([string]$FolderPath)
+    $relations = @()
+    if (-not (Test-Path $FolderPath)) { return $relations }
+
+    $files = Get-ChildItem -Path $FolderPath -Filter "*.md" | Where-Object { $_.Name -ne "README.md" }
+    foreach ($file in $files) {
+        try {
+            $lines = Get-Content -Path $file.FullName -Encoding UTF8
+            if ($lines.Count -eq 0 -or $lines[0] -ne "---") { continue }
+
+            $endIdx = -1
+            for ($i = 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -eq "---") { $endIdx = $i; break }
+            }
+            if ($endIdx -lt 0) { continue }
+
+            $name = $null
+            for ($i = 1; $i -lt $endIdx; $i++) {
+                if ($lines[$i] -match '^name:\s*(.+)$') { $name = $Matches[1].Trim() }
+            }
+            if (-not $name) { continue }  # 沒有 name 欄位的檔案（骨架未補齊）跳過
+
+            $inSection = $false
+            for ($i = $endIdx + 1; $i -lt $lines.Count; $i++) {
+                $line = $lines[$i]
+                if ($line -match '^##\s*關係人物\s*$') { $inSection = $true; continue }
+                if ($inSection -and $line -match '^##\s') { break }  # 下一個區塊標題，關係人物區塊結束
+                if ($inSection -and $line -match '^-\s*\[\[([^\]]+)\]\]（(.*)）\s*$') {
+                    $relations += @{ from = $name; to = $Matches[1]; description = $Matches[2] }
+                }
+            }
+        } catch {
+            Write-ErrorLog "Hermes graph: 解析人物關係 $($file.Name) 失敗: $_"
+        }
+    }
+    return $relations
+}
+
+# Cases/*.md frontmatter 的 name/status——純粹給案件節點補一個「目前狀態」
+# 顯示用，規模小（個位數到十幾個檔案）、格式穩定，用跟上面同一套「正則夠
+# 用就好」原則直接掃。案件節點本身即使沒有這份資料也能從 events 的 case
+# 欄位反推出來（見 api-server），這裡讀不到只是狀態顯示不出來，不影響拓撲。
+function Get-HermesCases {
+    param([string]$FolderPath)
+    $cases = @()
+    if (-not (Test-Path $FolderPath)) { return $cases }
+
+    $files = Get-ChildItem -Path $FolderPath -Filter "*.md" | Where-Object { $_.Name -ne "README.md" }
+    foreach ($file in $files) {
+        try {
+            $lines = Get-Content -Path $file.FullName -Encoding UTF8
+            if ($lines.Count -eq 0 -or $lines[0] -ne "---") { continue }
+
+            $endIdx = -1
+            for ($i = 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -eq "---") { $endIdx = $i; break }
+            }
+            if ($endIdx -lt 0) { continue }
+
+            $name = $null; $status = $null
+            for ($i = 1; $i -lt $endIdx; $i++) {
+                if ($lines[$i] -match '^name:\s*(.+)$') { $name = $Matches[1].Trim() }
+                elseif ($lines[$i] -match '^status:\s*(.+)$') { $status = $Matches[1].Trim() }
+            }
+            if (-not $name) { continue }
+
+            $cases += @{ name = $name; status = $status }
+        } catch {
+            Write-ErrorLog "Hermes graph: 解析案件 $($file.Name) 失敗: $_"
+        }
+    }
+    return $cases
 }
 
 # ── 社交指標：近 7 天觀測日/互動統計 → socialScore（HHI v2，新增） ────────
@@ -583,17 +690,23 @@ try {
     $ScriptHadError = $true
 }
 
-# ── HERMES 戰情室：人-事關係網路圖（取代舊的知識庫健康度 4 項分數）─────
-# 每次整包重新掃描 Events/*.md 並整批覆蓋，不是差異更新——跟 hermes-status
-# 那個 snapshot 一樣的「latest row 整包覆蓋」模式，人物節點/degree/孤兒事件
-# 率等衍生指標全部在 api-server 那邊從 events 反推，這裡只負責把 vault 裡
-# 的原始 frontmatter 掃出來。
+# ── HERMES 戰情室：事人物三實體關係網路圖（取代舊的知識庫健康度 4 項分數）──
+# 每次整包重新掃描 Events/People/Cases 並整批覆蓋，不是差異更新——跟
+# hermes-status 那個 snapshot 一樣的「latest row 整包覆蓋」模式，案件節點/
+# 物件節點/人物節點/degree/孤兒事件率等衍生指標全部在 api-server 那邊從
+# events 反推，這裡只負責把 vault 裡的原始 frontmatter／區塊掃出來。
 try {
     $hermesEvents = Get-HermesEvents -FolderPath $EventsFolderPath
-    # @(...) 強制陣列，理由同上面 social 區塊——事件數是 0 或 1 筆時，
-    # ConvertTo-Json 沒有這層保護會把陣列序列化成裸物件，api-server 那邊
-    # Array.isArray() 檢查就會直接判定成空陣列，整包資料等於沒送到。
-    $graphBody = @{ events = @($hermesEvents) } | ConvertTo-Json -Depth 6
+    $hermesPersonRelations = Get-HermesPersonRelations -FolderPath $PeopleFolderPath
+    $hermesCases = Get-HermesCases -FolderPath $CasesFolderPath
+    # @(...) 強制陣列，理由同上面 social 區塊——任一陣列筆數是 0 或 1 時，
+    # ConvertTo-Json 沒有這層保護會把陣列序列化成裸物件/單一物件，api-server
+    # 那邊 Array.isArray() 檢查就會直接判定成空陣列，整包資料等於沒送到。
+    $graphBody = @{
+        events = @($hermesEvents)
+        personRelations = @($hermesPersonRelations)
+        cases = @($hermesCases)
+    } | ConvertTo-Json -Depth 6
     Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-graph" -Method Post -Headers $Headers -Body ($graphBody | ConvertTo-AsciiJson) | Out-Null
 } catch {
     Write-ErrorLog "Hermes graph collection/POST failed: $_"
