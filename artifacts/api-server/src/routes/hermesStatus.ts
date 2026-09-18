@@ -15,6 +15,14 @@ const router = Router();
 
 const ADMIN_PASSWORD = process.env["ADMIN_PASSWORD"] ?? "85097110";
 
+// Vault 本人（"使用者" alias 已在 2026-09-08 併檔進這個名字，見
+// Events/2026-09-08_People-alias手動併檔完成使用者併入陳韋翰.md）——他幾乎
+// 是每一筆事件的參與者，「這陣子最活躍」這個指標的意義是「最近誰跟我互動
+// 最多」，不是「我自己最活躍」，本人自己永遠奪冠對這個問題沒有任何資訊
+// 量，所以只在算 mostActivePerson 時把他濾掉；人物節點本身、degree、其他
+// 統計都不受影響，他仍然正常出現在圖上跟人數計算裡。
+const SELF_PERSON_NAME = "陳韋翰";
+
 // Data collected by services/hermes-status/collect.ps1 on the deploy host
 // (Windows Task Scheduler, every few minutes) — CPU/RAM/disk via CIM, docker
 // container health via `docker ps`, scheduled-task results via
@@ -230,7 +238,10 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
   const newPeopleThisWeek = Array.from(peopleByName.values()).filter((p) => p.firstDate >= weekAgo).length;
 
   const people = Array.from(peopleByName.values()).sort((a, b) => b.eventCount - a.eventCount);
-  const mostActivePerson = people.length > 0 ? { name: people[0].name, eventCount: people[0].eventCount } : null;
+  const mostActiveOthers = people.filter((p) => p.name !== SELF_PERSON_NAME);
+  const mostActivePerson = mostActiveOthers.length > 0
+    ? { name: mostActiveOthers[0].name, eventCount: mostActiveOthers[0].eventCount }
+    : null;
   const cases = Array.from(casesByName.values()).sort((a, b) => b.eventCount - a.eventCount);
   const objects = Array.from(objectsByName.values()).sort((a, b) => b.eventCount - a.eventCount);
   const activeCasesCount = cases.filter((c) => (caseMetaByName.get(c.name)?.status ?? "active") === "active").length;
