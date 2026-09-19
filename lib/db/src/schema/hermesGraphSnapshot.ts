@@ -43,6 +43,26 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
     Array<{ from: string; to: string; description: string }>
   >(),
   cases: jsonb("cases").$type<Array<{ name: string; status: string | null }>>(),
+  // 2026-09-19 — L5 轉型「圖譜編織層」：樞紐檔（People/Objects/Cases）新增
+  // 「## 圖譜敘事」區塊（`L5-WEAVE：` 前綴，增補、永不收斂），「## 🧠 脈絡
+  // 洞察」／Cases 的「## 🧠 案件脈絡與目前進度」則改成只放時效警報
+  // （`L5：` 前綴）。跟 personRelations 同一種例外：這是樞紐檔本文才有的
+  // 敘述文字，Events 完全沒有這個資訊，沒有 events-derive 的替代方案，只
+  // 能單獨掃、單獨存。兩種前綴合併存成一個陣列（用 type 分辨），不是兩個
+  // 欄位——圖譜敘事這層 2026-09-19 才剛啟用，目前 vault 裡幾乎是空的，只
+  // 存這個欄位的話部署當下畫面什麼都不會有；合併現有的警報內容（23 則真
+  // 實資料）進來，才有東西可以顯示，之後圖譜敘事開始寫也會自動混進同一個
+  // 時間軸。collect.ps1 每個樞紐只送最新 20 則（見 collect.ps1 的說明），
+  // 防止「永不收斂」的敘事量隨時間把整包 payload 撐大到頂到 body limit。
+  hubNarratives: jsonb("hub_narratives").$type<
+    Array<{
+      hub: string; // 樞紐節點名稱（人名／案件名／物件名），跟 events.participants／case／objects.object 的名稱同一套 key
+      kind: "person" | "case" | "object";
+      date: string; // YYYY-MM-DD
+      type: "weave" | "alert"; // weave = 圖譜敘事（L5-WEAVE，增補式編織），alert = 🧠 時效警報（L5）
+      text: string;
+    }>
+  >(),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -50,3 +70,4 @@ export type HermesGraphSnapshotRow = typeof hermesGraphSnapshotTable.$inferSelec
 export type HermesGraphEvent = NonNullable<HermesGraphSnapshotRow["events"]>[number];
 export type HermesGraphPersonRelation = NonNullable<HermesGraphSnapshotRow["personRelations"]>[number];
 export type HermesGraphCaseMeta = NonNullable<HermesGraphSnapshotRow["cases"]>[number];
+export type HermesGraphHubNarrative = NonNullable<HermesGraphSnapshotRow["hubNarratives"]>[number];
