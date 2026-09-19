@@ -8,7 +8,7 @@
 // 節點 id 規則跟 RelationshipUniverse.tsx 一致：
 //   p:<人名>  e:<事件id>  c:<案件名>  o:<物件名>
 // ─────────────────────────────────────────────
-import type { HermesGraphData, HermesGraphEventNode } from './hermesGraphApi'
+import type { HermesGraphData, HermesGraphEventNode, HermesGraphHubNarrative } from './hermesGraphApi'
 
 export type NodeKind = 'person' | 'event' | 'case' | 'object'
 
@@ -42,6 +42,11 @@ export interface GraphIndex {
   relationDescription: Map<string, string>
   /** 人↔人共現：排序後的 "a|b" -> 共同參與的事件 id */
   coEvents: Map<string, string[]>
+  /** 樞紐節點 id（p:/c:/o:）-> 敘事時間軸（圖譜敘事 weave + 時效警報 alert
+   *  合併，已依日期新到舊排序），見 hermesGraphSnapshot.ts 的 hubNarratives 說明 */
+  narrativesByHub: Map<string, HermesGraphHubNarrative[]>
+  /** 敘事文字裡 [[名稱]] wikilink -> 節點 id，解析不到就原樣顯示文字 */
+  nodeIdByLabel: Map<string, string>
 }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
@@ -108,12 +113,42 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
     }
   }
 
+  // 樞紐敘事：kind 決定用哪個 id 前綴分組，跟其他區塊同一套 personId/
+  // caseId/objectId 的 key 慣例。同一樞紐可能同時有 weave 跟 alert 兩種
+  // type，混在同一個陣列裡依日期新到舊排序，詳情面板的「敘事」分頁自己
+  // 用 type 標籤區分，不在這裡先拆開存。
+  const narrativesByHub = new Map<string, HermesGraphHubNarrative[]>()
+  for (const n of graph.hubNarratives) {
+    const id = n.kind === 'person' ? personId(n.hub) : n.kind === 'case' ? caseId(n.hub) : objectId(n.hub)
+    const arr = narrativesByHub.get(id) ?? []
+    arr.push(n)
+    narrativesByHub.set(id, arr)
+  }
+  for (const arr of narrativesByHub.values()) arr.sort((a, b) => b.date.localeCompare(a.date))
+
+  // Wikilink 解析用的反查表：人/案/物直接用顯示名稱當 key；事件比較特殊——
+  // 敘事文字裡的 [[名稱]] 慣例是完整檔名（含日期前綴，例：
+  // 「2026-09-17_載爸媽台大回診...」），但 event.title 有時是「檔名去掉日
+  // 期前綴」的 fallback 值（見 collect.ps1 的 Get-HermesEvents），兩者對
+  // 不上，所以事件額外把「date_title」重組回檔名格式也收一份當 key。仍然
+  // 解析不到的 wikilink（例如指到某個沒有 # 標題、標題又被使用者自訂過的
+  // 事件）就原樣顯示文字，不是每個連結都保證能點——優雅降級。
+  const nodeIdByLabel = new Map<string, string>()
+  for (const p of graph.people) if (!nodeIdByLabel.has(p.name)) nodeIdByLabel.set(p.name, personId(p.name))
+  for (const c of graph.cases) if (!nodeIdByLabel.has(c.name)) nodeIdByLabel.set(c.name, caseId(c.name))
+  for (const o of graph.objects) if (!nodeIdByLabel.has(o.name)) nodeIdByLabel.set(o.name, objectId(o.name))
+  for (const e of graph.events) {
+    if (!nodeIdByLabel.has(e.title)) nodeIdByLabel.set(e.title, eventId(e.id))
+    const reconstructed = `${e.date}_${e.title}`
+    if (!nodeIdByLabel.has(reconstructed)) nodeIdByLabel.set(reconstructed, eventId(e.id))
+  }
+
   return {
     neighbors, labelOf, eventById, personEvents, eventParticipants, eventObjects,
     caseEvents, objectEvents,
     caseStatus: new Map(graph.cases.map(c => [c.name, c.status])),
     objectType: new Map(graph.objects.map(o => [o.name, o.objectType])),
-    relationDescription, coEvents,
+    relationDescription, coEvents, narrativesByHub, nodeIdByLabel,
   }
 }
 

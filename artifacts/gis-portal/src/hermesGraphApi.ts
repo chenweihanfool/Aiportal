@@ -14,6 +14,16 @@ export interface HermesGraphEdge { person: string; eventId: string; role: string
 export interface HermesGraphCaseEdge { eventId: string; case: string }
 export interface HermesGraphObjectEdge { eventId: string; object: string }
 export interface HermesGraphPersonRelation { from: string; to: string; description: string }
+// 2026-09-19 — L5 轉型「圖譜編織層」：People/Objects/Cases 樞紐檔的
+// 「## 圖譜敘事」（weave，增補式編織）+「## 🧠 ...」（alert，時效警報）
+// 合併成同一個陣列，用 type 分辨，見 hermesGraphSnapshot.ts 的欄位說明。
+export interface HermesGraphHubNarrative {
+  hub: string
+  kind: 'person' | 'case' | 'object'
+  date: string
+  type: 'weave' | 'alert'
+  text: string
+}
 
 export interface HermesGraphMetrics {
   peopleCount: number
@@ -43,6 +53,7 @@ export interface HermesGraphData {
     caseEdges: HermesGraphCaseEdge[]
     objectEdges: HermesGraphObjectEdge[]
     personRelations: HermesGraphPersonRelation[]
+    hubNarratives: HermesGraphHubNarrative[]
   }
 }
 

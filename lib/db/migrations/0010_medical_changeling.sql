@@ -1,0 +1,1 @@
+ALTER TABLE "hermes_graph_snapshot" ADD COLUMN "hub_narratives" jsonb;

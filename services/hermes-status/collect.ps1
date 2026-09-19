@@ -94,11 +94,16 @@ $EventsFolderPath = "F:\SynologyDrive\Events"
 
 # 2026-09-16 起擴大為「事人物三實體 + 案件脈絡層」——案件節點／物件節點都
 # 從 Events 自己的 case/objects 欄位反推（api-server 那邊做，同上一段的原
-# 則），不需要另外讀 Cases/Objects 資料夾。這兩個資料夾只讀取「Events 完
-# 全沒有的資訊」：People/*.md 的「## 關係人物」（人跟人怎麼認識，Events
-# 沒有這種欄位）、Cases/*.md frontmatter 的 status（純顯示用，不是拓撲）。
+# 則），不需要另外讀 Cases/Objects 資料夾拓撲。這兩個資料夾原本只讀取
+# 「Events 完全沒有的資訊」：People/*.md 的「## 關係人物」（人跟人怎麼認
+# 識，Events 沒有這種欄位）、Cases/*.md frontmatter 的 status（純顯示用，
+# 不是拓撲）。2026-09-19 起再加一項：People/Objects/Cases 三種樞紐檔本文
+# 的「## 圖譜敘事」「## 🧠 ...」區塊（Get-HermesHubNarratives），同樣是
+# Events 沒有的敘述文字，所以這裡新增 $ObjectsFolderPath——先前只有
+# Cases/People 需要單獨讀資料夾，Objects 現在也需要了。
 $PeopleFolderPath = "F:\SynologyDrive\People"
 $CasesFolderPath = "F:\SynologyDrive\Cases"
+$ObjectsFolderPath = "F:\SynologyDrive\Objects"
 
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
 $LogDir = Join-Path $ScriptDir "logs"
@@ -629,6 +634,88 @@ function Get-HermesCases {
     return $cases
 }
 
+# 2026-09-19 — L5 轉型「圖譜編織層」：樞紐檔（People/Objects/Cases）本文新
+# 增「## 圖譜敘事」區塊（`L5-WEAVE：` 前綴，增補式編織、永不收斂），原本的
+# 「## 🧠 脈絡洞察」（People/Objects）／「## 🧠 案件脈絡與目前進度」
+# （Cases）則改成只放時效性警報（`L5：` 前綴）。兩段內容合併成同一個陣
+# 列，用 type（weave/alert）分辨，不是兩個獨立欄位——圖譜敘事這層才剛啟
+# 用，vault 裡目前幾乎是空的（只有 People/爸爸.md、People/媽媽.md 有這個
+# 標題，而且內容是空的），只送這欄的話部署當下畫面什麼都不會有，所以把既
+# 有的警報內容一起併進來才有東西可顯示。Cases 的警報標題跟 People/Objects
+# 不一樣，用 $AlertHeading 參數區分，不能寫死一個字串。每個樞紐只保留最新
+# 20 則（混合 weave/alert 一起排序後截尾，不是各段各留 20 則）——敘事「永
+# 不收斂」，這是防止 payload 隨時間無限長大頂到 api-server body limit
+# 的第一道防線（見 hermesStatus.ts 對 express.json body limit 的說明）。
+function Get-HermesHubNarratives {
+    param(
+        [string]$FolderPath,
+        [string]$Kind,        # "person" | "case" | "object" —— 存進 hub 節點的 kind 欄位
+        [string]$AlertHeading # 完整 "## ..." 標題文字，Cases 跟 People/Objects 不同
+    )
+    $narratives = @()
+    if (-not (Test-Path $FolderPath)) { return $narratives }
+
+    $alertPattern = "^" + [regex]::Escape($AlertHeading) + "\s*$"
+    $weavePattern = '^##\s*圖譜敘事\s*$'
+
+    $files = Get-ChildItem -Path $FolderPath -Filter "*.md" | Where-Object { $_.Name -ne "README.md" }
+    foreach ($file in $files) {
+        try {
+            $lines = Get-Content -Path $file.FullName -Encoding UTF8
+            if ($lines.Count -eq 0 -or $lines[0] -ne "---") { continue }
+
+            $endIdx = -1
+            for ($i = 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -eq "---") { $endIdx = $i; break }
+            }
+            if ($endIdx -lt 0) { continue }
+
+            $name = $null
+            for ($i = 1; $i -lt $endIdx; $i++) {
+                if ($lines[$i] -match '^name:\s*(.+)$') { $name = $Matches[1].Trim() }
+            }
+            if (-not $name) { continue }  # 沒有 name 欄位的檔案（骨架未補齊）跳過
+
+            $hubItems = @()
+            $inSection = $false
+            for ($i = $endIdx + 1; $i -lt $lines.Count; $i++) {
+                $line = $lines[$i]
+                # 先比對「進入哪個敘事區塊」，再比對「離開區塊」的通用 ## 開頭
+                # ——順序反過來的話，圖譜敘事緊接在 🧠 區塊後面時會被誤判成離開。
+                if ($line -match $alertPattern -or $line -match $weavePattern) { $inSection = $true; continue }
+                if ($inSection -and $line -match '^##\s') { $inSection = $false; continue }
+                # 真實 vault 資料裡 L5 前綴不只「L5：」「L5-WEAVE：」兩種——實測
+                # 發現還有「L5（跨維度洞察）：」「L5（跨維度洞察，接續上則）：」
+                # 這種夾帶括號註記的變體（見 People/陳韋翰.md 等檔），所以冒號前
+                # 用 [^：:]* 容忍任意不含冒號的註記文字，不是寫死只認兩種固定
+                # 前綴——註記本身不進 text，只是放寬「認得出這是一筆 L5 產出」
+                # 的比對範圍。
+                if ($inSection -and $line -match '^-\s*(\d{4}-\d{2}-\d{2})\s+L5(-WEAVE)?[^：:]*[：:]\s*(.+)$') {
+                    $hubItems += @{
+                        hub = $name
+                        kind = $Kind
+                        date = $Matches[1]
+                        type = if ($Matches[2]) { "weave" } else { "alert" }
+                        text = $Matches[3].Trim()
+                    }
+                }
+            }
+
+            if ($hubItems.Count -gt 0) {
+                # @(...) 強制陣列——單一樞紐只有 1 則敘事時，Sort-Object /
+                # Select-Object 沒有這層保護會把結果解包成裸物件，後面
+                # `$narratives += $hubItems` 就會把它當成雜湊表本身而不是
+                # 一個元素的陣列去攤平，混進錯的結構。
+                $hubItems = @($hubItems | Sort-Object -Property date -Descending | Select-Object -First 20)
+                $narratives += $hubItems
+            }
+        } catch {
+            Write-ErrorLog "Hermes graph: 解析樞紐敘事 $($file.Name) 失敗: $_"
+        }
+    }
+    return $narratives
+}
+
 # ── 社交指標：近 7 天觀測日/互動統計 → socialScore（HHI v2，新增） ────────
 # 資料來源是 HERMES 自己 L1/L2 日記處理流程額外寫出的 social_interactions.jsonl
 # （見檔頭 $SocialInteractionsPath）——這支腳本只做檔案解析、產出聚合計數，
@@ -699,6 +786,13 @@ try {
     $hermesEvents = Get-HermesEvents -FolderPath $EventsFolderPath
     $hermesPersonRelations = Get-HermesPersonRelations -FolderPath $PeopleFolderPath
     $hermesCases = Get-HermesCases -FolderPath $CasesFolderPath
+    # 三種樞紐檔各自的 🧠 警報標題不同（Cases 是「案件脈絡與目前進度」，
+    # People/Objects 是「脈絡洞察」），合併成一個陣列送出——api-server 那邊
+    # 不分欄位，直接整包存進 hub_narratives。
+    $hermesHubNarratives = @()
+    $hermesHubNarratives += Get-HermesHubNarratives -FolderPath $PeopleFolderPath -Kind "person" -AlertHeading "## 🧠 脈絡洞察"
+    $hermesHubNarratives += Get-HermesHubNarratives -FolderPath $ObjectsFolderPath -Kind "object" -AlertHeading "## 🧠 脈絡洞察"
+    $hermesHubNarratives += Get-HermesHubNarratives -FolderPath $CasesFolderPath -Kind "case" -AlertHeading "## 🧠 案件脈絡與目前進度"
     # @(...) 強制陣列，理由同上面 social 區塊——任一陣列筆數是 0 或 1 時，
     # ConvertTo-Json 沒有這層保護會把陣列序列化成裸物件/單一物件，api-server
     # 那邊 Array.isArray() 檢查就會直接判定成空陣列，整包資料等於沒送到。
@@ -706,6 +800,7 @@ try {
         events = @($hermesEvents)
         personRelations = @($hermesPersonRelations)
         cases = @($hermesCases)
+        hubNarratives = @($hermesHubNarratives)
     } | ConvertTo-Json -Depth 6
     Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-graph" -Method Post -Headers $Headers -Body ($graphBody | ConvertTo-AsciiJson) | Out-Null
 } catch {

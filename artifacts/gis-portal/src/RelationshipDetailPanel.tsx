@@ -21,6 +21,8 @@ export interface Selection { kind: NodeKind; id: string }
 
 const KIND_LABEL: Record<NodeKind, string> = { person: '人物', event: '事件', case: '案件', object: '物件' }
 const KIND_COLOR: Record<NodeKind, string> = { person: '#aab4c4', event: '#8f97a6', case: '#d8d4c8', object: '#93a2b8' }
+const NARRATIVE_TYPE_LABEL: Record<'weave' | 'alert', string> = { weave: '編織', alert: '警報' }
+const NARRATIVE_TYPE_COLOR: Record<'weave' | 'alert', string> = { weave: COLOR.amber, alert: COLOR.warn }
 
 function Chip({ label, kind, hint, onClick }: { label: string; kind: NodeKind; hint?: string; onClick: () => void }) {
   return (
@@ -71,12 +73,18 @@ export function RelationshipDetailPanel({
   trail: Selection[]
   onTrailJump: (index: number) => void
 }) {
-  const [tab, setTab] = useState<'links' | 'insight'>('links')
+  const [tab, setTab] = useState<'links' | 'insight' | 'narrative'>('links')
   const index: GraphIndex = useMemo(() => buildIndex(graph), [graph])
   const { kind, name } = splitId(selection.id)
 
   const title = kind === 'event' ? (index.eventById.get(name)?.title ?? name) : name
   const go = (id: string) => onSelect({ kind: splitId(id).kind, id })
+  // 敘事分頁只對人/案/物三種樞紐節點有意義（Events frontmatter 是唯一真
+  // 相來源，L5 沒有事件本身的敘事層）——事件被選取時退回關聯分頁，不留一
+  // 個內容永遠是空的分頁。
+  const tabs = kind === 'event' ? (['links', 'insight'] as const) : (['links', 'insight', 'narrative'] as const)
+  const effectiveTab = tab === 'narrative' && kind === 'event' ? 'links' : tab
+  const tabLabel = (t: typeof effectiveTab) => t === 'links' ? '關聯' : t === 'insight' ? '洞察' : '敘事'
 
   return (
     <div style={{
@@ -110,12 +118,12 @@ export function RelationshipDetailPanel({
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '6px' }}>
-          {(['links', 'insight'] as const).map(t => (
+          {tabs.map(t => (
             <span key={t} onClick={() => setTab(t)} style={{
               cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.64rem', paddingBottom: '3px',
-              color: tab === t ? COLOR.amber : COLOR.steelDim,
-              borderBottom: `1px solid ${tab === t ? COLOR.amber : 'transparent'}`,
-            }}>{t === 'links' ? '關聯' : '洞察'}</span>
+              color: effectiveTab === t ? COLOR.amber : COLOR.steelDim,
+              borderBottom: `1px solid ${effectiveTab === t ? COLOR.amber : 'transparent'}`,
+            }}>{tabLabel(t)}</span>
           ))}
           <div style={{ flex: 1 }} />
           <span
@@ -126,9 +134,11 @@ export function RelationshipDetailPanel({
       </div>
 
       <div style={{ padding: '0 1rem 0.9rem', overflowY: 'auto' }}>
-        {tab === 'links'
+        {effectiveTab === 'links'
           ? <LinksTab index={index} kind={kind} name={name} go={go} />
-          : <InsightTab index={index} kind={kind} name={name} go={go} />}
+          : effectiveTab === 'insight'
+          ? <InsightTab index={index} kind={kind} name={name} go={go} />
+          : <NarrativeTab index={index} selectionId={selection.id} go={go} />}
       </div>
     </div>
   )
@@ -384,5 +394,54 @@ function InsightTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKi
       {ins.reusedAcrossCases && <Note tone="warn">這個物件跨了 {ins.cases.length} 個案件，可能是共用文件或歸檔需要確認。</Note>}
       {ins.handlers.length === 0 && ins.cases.length === 0 && <Note>這個物件目前只掛在沒有人物、也沒有案件的事件上。</Note>}
     </>
+  )
+}
+
+// 敘事文字裡的 [[名稱]] 解析成可點連結——解析不到對應節點（wikilink 指到
+// 圖上沒有的東西，或事件標題對不上重組後的檔名）就原樣顯示文字，不是每個
+// 連結都保證能點，見 graphInsights.ts 的 nodeIdByLabel 說明。
+function NarrativeText({ text, index, go }: { text: string; index: GraphIndex; go: (id: string) => void }) {
+  const parts = text.split(/(\[\[[^\]]+\]\])/g)
+  return (
+    <>
+      {parts.map((part, i) => {
+        const m = part.match(/^\[\[([^\]]+)\]\]$/)
+        if (!m) return <span key={i}>{part}</span>
+        const target = index.nodeIdByLabel.get(m[1])
+        if (!target) return <span key={i}>{m[1]}</span>
+        return (
+          <span
+            key={i}
+            onClick={() => go(target)}
+            style={{ color: COLOR.amber, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+          >{m[1]}</span>
+        )
+      })}
+    </>
+  )
+}
+
+// L5「圖譜編織層」的敘事分頁：圖譜敘事（weave，增補式編織）跟時效警報
+// （alert）合併成一個時間軸，用 type 標籤區分，不分兩個子分頁——這是使用
+// 者確認過的顯示方式（合併一軸比分開兩塊更容易看出敘事的演進脈絡）。
+function NarrativeTab({ index, selectionId, go }: { index: GraphIndex; selectionId: string; go: (id: string) => void }) {
+  const items = index.narrativesByHub.get(selectionId) ?? []
+  if (items.length === 0) {
+    return <Note>目前沒有 L5 圖譜編織或警報內容。</Note>
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '0.6rem' }}>
+      {items.map((n, i) => (
+        <div key={`${n.date}-${i}`} style={{ borderLeft: `2px solid ${NARRATIVE_TYPE_COLOR[n.type]}`, paddingLeft: '9px' }}>
+          <div style={{ display: 'flex', gap: '7px', alignItems: 'center', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim }}>
+            <span>{n.date}</span>
+            <span style={{ color: NARRATIVE_TYPE_COLOR[n.type] }}>{NARRATIVE_TYPE_LABEL[n.type]}</span>
+          </div>
+          <div style={{ fontSize: '0.68rem', color: COLOR.steel, lineHeight: 1.75, marginTop: '3px' }}>
+            <NarrativeText text={n.text} index={index} go={go} />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
