@@ -14,6 +14,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.7.1',
+    date: '2026-09-20',
+    summary: 'HERMES 戰情室的排程任務/近期活動/容器清單改成可收合，異常時標紅點',
+    changes: [
+      '排程任務狀態、近期活動、容器清單三塊子面板改成可收合、預設收起——平常這幾塊清單佔版面又沒什麼要看的，只有出狀況才需要點開；標題列點一下展開/收起，跟 HERMES 戰情室整區塊既有的收合互動同一套樣式',
+      '收起狀態下，排程任務標題旁在有任務失敗時、容器清單標題旁在有容器不是 running 或 unhealthy 時，會加一顆紅點提醒——不用先展開才知道該打開查看；紅點判斷邏輯（isTaskFailed / isContainerFailed）跟原本畫每一列圖示用的判斷共用同一份，不是另外寫一次',
+      '近期活動這塊沒有加紅點：這塊資料是 tail update.ps1 自己寫的 update.log，該腳本只在成功收尾時才寫一行「Done」，失敗一律在寫入前 exit 1，資料裡結構上就不存在「失敗」這個狀態可以判斷，硬加規則只會是假訊號',
+    ],
+  },
+  {
     version: '2.7.0',
     date: '2026-09-19',
     summary: '關係宇宙接上 L5「圖譜編織層」：樞紐節點新增「敘事」分頁',
@@ -1416,6 +1426,38 @@ function SubPanel({ title, sub, children }: { title: string; sub: string; childr
   )
 }
 
+// 跟 SubPanel 同一張卡片外觀，差別是標題列可點擊收合、預設收起——HERMES
+// 戰情室這幾塊清單（排程任務/近期活動/容器）平常沒事不用一直佔版面，異
+// 常時才需要點開看，所以標題邊加一顆紅點：平常收合也看得到「這裡有問題
+// 該打開」，不用先展開才知道。`hasAlert` 沒帶或 false 就不畫紅點——不是
+// 每個清單都有明確的「異常」訊號可判斷（例如近期活動目前只會記成功的部
+// 署，update.ps1 失敗時整支腳本 exit 1、從來不會寫進 log，所以那個分頁
+// 目前沒有紅點）。
+function CollapsibleSubPanel({
+  title, sub, hasAlert, children,
+}: { title: string; sub: string; hasAlert?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{
+      background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px', padding: '1rem 1.1rem',
+    }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: COLOR.ink }}>{title}</span>
+        {hasAlert && (
+          <span
+            title="有異常狀況，建議展開查看"
+            style={{ width: '7px', height: '7px', borderRadius: '50%', background: COLOR.crit, boxShadow: `0 0 5px ${COLOR.crit}`, flexShrink: 0 }}
+          />
+        )}
+        <span style={{ flex: 1 }} />
+        <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', color: COLOR.amberDim, fontSize: '0.7rem' }}>▶</span>
+      </div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, marginTop: '2px', marginBottom: open ? '0.7rem' : 0 }}>{sub}</div>
+      {open && children}
+    </div>
+  )
+}
+
 function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string | null }) {
   const [data, setData] = useState<HermesGraphData | null>(null)
   const [error, setError] = useState(false)
@@ -1473,10 +1515,25 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
 const TASK_RUNNING_RESULT = 267009 // 0x41301 SCHED_S_TASK_RUNNING
 const TASK_NOT_YET_RUN_RESULT = 267011 // 0x41303 SCHED_S_TASK_HAS_NOT_RUN
 
+// 抽出來給收合面板標題的紅點判斷共用，跟 HermesTaskRow 內部畫每一列圖示用
+// 的同一套判斷邏輯，不要兩處各寫一次、以後改一邊忘記改另一邊。
+function isTaskFailed(t: HermesScheduledTaskInfo): boolean {
+  const isRunning = t.lastTaskResult === TASK_RUNNING_RESULT
+  const isPending = t.lastTaskResult === TASK_NOT_YET_RUN_RESULT
+  return t.lastTaskResult !== null && !isRunning && !isPending && t.lastTaskResult !== 0
+}
+
+// 同理，容器「異常」的判斷也抽出來給紅點跟容器健康統計格共用。只需要
+// status/health 兩個欄位，用 Pick 而不是整個 HermesContainerInfo，呼叫端
+// 不用為了型別硬塞不相干的欄位（例如 HermesContainerRow 沒有 project）。
+function isContainerFailed(c: Pick<HermesContainerInfo, 'status' | 'health'>): boolean {
+  return !/up/i.test(c.status) || c.health === 'unhealthy'
+}
+
 function HermesTaskRow({ name, lastRunTime, lastTaskResult }: HermesScheduledTaskInfo) {
   const isRunning = lastTaskResult === TASK_RUNNING_RESULT
   const isPending = lastTaskResult === TASK_NOT_YET_RUN_RESULT
-  const isFailed = lastTaskResult !== null && !isRunning && !isPending && lastTaskResult !== 0
+  const isFailed = isTaskFailed({ name, lastRunTime, lastTaskResult })
   const dotClass = isRunning ? 'dot-run' : isFailed ? 'dot-warn' : 'dot-ok'
   const statusSuffix = isRunning ? ' · 執行中' : isPending ? ' · 尚未觸發過' : isFailed ? ` · 失敗 (${lastTaskResult})` : ''
   return (
@@ -1502,9 +1559,7 @@ function HermesActivityRow({ occurredAt, source, message }: HermesActivityEntry)
 }
 
 function HermesContainerRow({ name, status, health }: HermesContainerInfo) {
-  const isFailed = !/up/i.test(status)
-  const isUnhealthy = health === 'unhealthy'
-  const dotClass = isFailed || isUnhealthy ? 'dot-warn' : 'dot-ok'
+  const dotClass = isContainerFailed({ status, health }) ? 'dot-warn' : 'dot-ok'
   return (
     <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${COLOR.line}` }}>
       <span className={`dot ${dotClass}`} />
@@ -1565,7 +1620,7 @@ function HermesWarRoomSection({
             const worstDisk = availableStatus.disks.reduce<HermesDiskInfo | null>(
               (worst, d) => (!worst || d.percentUsed > worst.percentUsed ? d : worst), null,
             )
-            const containersOk = availableStatus.containers.filter(c => /up/i.test(c.status) && c.health !== 'unhealthy').length
+            const containersOk = availableStatus.containers.filter(c => !isContainerFailed(c)).length
             return (
               <div className="ip-stat-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
                 <StatCell label="CPU 負載" value={availableStatus.cpuPercent !== null ? `${Math.round(availableStatus.cpuPercent)}%` : '—'} valueColor={pctTone(availableStatus.cpuPercent)} />
@@ -1587,12 +1642,15 @@ function HermesWarRoomSection({
           })()}
 
           <div className="ip-board-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
-            <SubPanel title="排程任務狀態" sub="Windows Task Scheduler · 最近執行">
+            <CollapsibleSubPanel
+              title="排程任務狀態" sub="Windows Task Scheduler · 最近執行"
+              hasAlert={availableStatus.scheduledTasks.some(isTaskFailed)}
+            >
               {availableStatus.scheduledTasks.length === 0
                 ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無排程任務資料</div>
                 : availableStatus.scheduledTasks.map(t => <HermesTaskRow key={t.name} {...t} />)}
-            </SubPanel>
-            <SubPanel title="近期活動" sub="部署 / 備份紀錄">
+            </CollapsibleSubPanel>
+            <CollapsibleSubPanel title="近期活動" sub="部署 / 備份紀錄">
               {activityError
                 ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>活動紀錄讀取失敗</div>
                 : activity === null
@@ -1600,15 +1658,18 @@ function HermesWarRoomSection({
                   : activity.length === 0
                     ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無活動紀錄</div>
                     : activity.map(a => <HermesActivityRow key={a.id} {...a} />)}
-            </SubPanel>
+            </CollapsibleSubPanel>
           </div>
 
           <div style={{ marginTop: '0.9rem' }}>
-            <SubPanel title="容器清單" sub="Docker · 目前執行狀態">
+            <CollapsibleSubPanel
+              title="容器清單" sub="Docker · 目前執行狀態"
+              hasAlert={availableStatus.containers.some(isContainerFailed)}
+            >
               {availableStatus.containers.length === 0
                 ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無容器資料</div>
                 : availableStatus.containers.map(c => <HermesContainerRow key={c.name} {...c} />)}
-            </SubPanel>
+            </CollapsibleSubPanel>
           </div>
 
           <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, marginTop: '0.7rem', textAlign: 'right' }}>
