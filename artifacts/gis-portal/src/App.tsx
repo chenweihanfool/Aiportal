@@ -1592,8 +1592,8 @@ const PIPELINE_NODES: Record<PipelineNodeId, PipelineNodeMeta> = {
     description: '讀日記增量（上次「已處理」marker 之後的內容），萃取候選事件；同一班也萃取社交互動寫進 social_interactions.jsonl。',
   },
   L4: {
-    id: 'L4', label: 'L4 原始檔', sub: '08:15 / 14:15', monitored: true,
-    script: 'l4-agent-wrapper.py', schedule: '每天 2 班：08:15 / 14:15',
+    id: 'L4', label: 'L4 原始檔', sub: '11:35 / 17:15', monitored: true,
+    script: 'l4-agent-wrapper.py', schedule: '每天 2 班：11:35 / 17:15',
     description: '掃描 RAW_INTAKE 資料夾，OCR 辨識 PDF／名片／掃描件，萃取候選事件，格式跟 L1 輸出一致。',
   },
   L2: {
