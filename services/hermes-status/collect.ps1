@@ -105,6 +105,15 @@ $PeopleFolderPath = "F:\SynologyDrive\People"
 $CasesFolderPath = "F:\SynologyDrive\Cases"
 $ObjectsFolderPath = "F:\SynologyDrive\Objects"
 
+# HERMES 戰情室的 L1~L5 日記→知識萃取管線監控（2026-09-20 起）。L1~L5 不
+# 是 Windows 排程任務（Get-ScheduledTask 看不到），是 HERMES 內建
+# scheduler 的 cron job；各自的 wrapper（l{N}-agent-wrapper.py，跑在
+# HERMES 主機上，不是這支腳本管的）跑完會寫一份 heartbeat 到這個檔案。這
+# 支腳本跟這個檔案剛好跑在同一台部署主機上，直接讀本機路徑，不用另外開
+# API 或掛載——同一類「唯讀跨進程交接」，跟上面 $SocialInteractionsPath
+# 那份 social_interactions.jsonl 是同一個模式。
+$HeartbeatPath = "F:\SynologyDrive\AI\state\heartbeat.json"
+
 $CursorPath = Join-Path $ScriptDir "activity_cursor.json"
 $LogDir = Join-Path $ScriptDir "logs"
 $ErrorLogPath = Join-Path $LogDir "hermes_status_error.log"
@@ -805,6 +814,53 @@ try {
     Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-graph" -Method Post -Headers $Headers -Body ($graphBody | ConvertTo-AsciiJson) | Out-Null
 } catch {
     Write-ErrorLog "Hermes graph collection/POST failed: $_"
+    $ScriptHadError = $true
+}
+
+# heartbeat.json 用 snake_case（HERMES 那邊 Python 寫的），這裡轉成
+# camelCase 對齊 api-server 的 schema；epoch 統一換算成毫秒
+# （lastRunTs），不送 last_run 那個沒有時區標記的字串去給後端做 staleness
+# 判斷——秒數 -> 毫秒是唯一在這裡做的換算，其餘欄位原封不動 passthrough，
+# 紅綠燈判定留給 api-server 讀取時做（跟 hermes-graph 那段的分工一致）。
+# 單一層缺欄位或整個 heartbeat 缺這一層都回傳 $null，不讓格式異常擋住其
+# 他四層。
+function Convert-PipelineLayer {
+    param($Layer)
+    if (-not $Layer) { return $null }
+    $lastRunTs = $null
+    if ($null -ne $Layer.last_run_ts) { $lastRunTs = [long]([double]$Layer.last_run_ts * 1000) }
+    return @{
+        status          = if ($Layer.status) { $Layer.status } else { $null }
+        lastRun         = if ($Layer.last_run) { $Layer.last_run } else { $null }
+        lastRunTs       = $lastRunTs
+        processed       = if ($null -ne $Layer.processed) { [int]$Layer.processed } else { $null }
+        committed       = if ($null -ne $Layer.committed) { [int]$Layer.committed } else { $null }
+        failed          = if ($null -ne $Layer.failed) { [int]$Layer.failed } else { $null }
+        backlog         = if ($null -ne $Layer.backlog) { [int]$Layer.backlog } else { $null }
+        errorSummary    = if ($Layer.error_summary) { $Layer.error_summary } else { $null }
+        durationSeconds = if ($null -ne $Layer.duration_seconds) { [double]$Layer.duration_seconds } else { $null }
+    }
+}
+
+# ── HERMES L1~L5 知識萃取管線 heartbeat ─────────────────────────────────
+# 獨立的關注點，跟上面幾段一樣互不阻擋：heartbeat 檔案缺失或格式異常只記
+# 錯誤、不影響已經送出去的其他區塊。
+try {
+    if (Test-Path $HeartbeatPath) {
+        $heartbeat = Get-Content -Path $HeartbeatPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $pipelineBody = @{
+            l1 = Convert-PipelineLayer -Layer $heartbeat.L1
+            l2 = Convert-PipelineLayer -Layer $heartbeat.L2
+            l3 = Convert-PipelineLayer -Layer $heartbeat.L3
+            l4 = Convert-PipelineLayer -Layer $heartbeat.L4
+            l5 = Convert-PipelineLayer -Layer $heartbeat.L5
+        } | ConvertTo-Json -Depth 4
+        Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-pipeline" -Method Post -Headers $Headers -Body ($pipelineBody | ConvertTo-AsciiJson) | Out-Null
+    } else {
+        Write-ErrorLog "Pipeline heartbeat file not found: $HeartbeatPath"
+    }
+} catch {
+    Write-ErrorLog "Pipeline heartbeat collection/POST failed: $_"
     $ScriptHadError = $true
 }
 

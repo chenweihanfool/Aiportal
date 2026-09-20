@@ -4,11 +4,13 @@ import {
   hermesStatusSnapshotTable,
   hermesActivityLogTable,
   hermesGraphSnapshotTable,
+  hermesPipelineSnapshotTable,
   type HermesStatusSnapshotRow,
   type HermesGraphEvent,
   type HermesGraphPersonRelation,
   type HermesGraphCaseMeta,
   type HermesGraphHubNarrative,
+  type HermesPipelineLayerStatus,
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 
@@ -306,6 +308,116 @@ router.get("/hermes-activity", async (req: Request, res: Response) => {
 
   return res.json({
     activity: rows.map((r) => ({ id: r.id, occurredAt: r.occurredAt.toISOString(), source: r.source, message: r.message })),
+  });
+});
+
+// ── HERMES 戰情室：L1~L5 日記→知識萃取管線即時監控 ─────────────────────
+// 資料來自 HERMES 自己在 NAS 上跑的 l{N}-agent-wrapper.py（N=1..5），每次
+// 跑完寫一份 heartbeat 到本機 F:/SynologyDrive/AI/state/heartbeat.json；
+// collect.ps1 跟上面 hermes-status 那段一樣跑在同一台部署主機上，直接讀
+// 這個檔案、逐層 passthrough 過來，這裡不重算任何欄位，只在讀取時依
+// lastRunTs + 各層預期班距換算成紅綠燈——跟 hermes-graph 那邊「Events
+// frontmatter 是唯一真相來源，衍生指標一律在讀取時反推」同一個原則，不
+// 是另外存一份算好的健康狀態。
+//
+// 預期班距（HERMES 2026-09-20 控制頻道回覆提供）：L1/L4 6 小時、L2 9 小
+// 時、L3/L5 24 小時——超過班距的 2 倍才算 stale，不是超過班距本身就算
+// （每一班不保證剛好準點觸發，2 倍給排程抖動留餘裕）。
+const PIPELINE_CADENCE_HOURS: Record<"l1" | "l2" | "l3" | "l4" | "l5", number> = {
+  l1: 6,
+  l2: 9,
+  l3: 24,
+  l4: 6,
+  l5: 24,
+};
+
+const EMPTY_PIPELINE_LAYER: HermesPipelineLayerStatus = {
+  status: null,
+  lastRun: null,
+  lastRunTs: null,
+  processed: null,
+  committed: null,
+  failed: null,
+  backlog: null,
+  errorSummary: null,
+  durationSeconds: null,
+};
+
+type PipelineHealth = "ok" | "crit" | "unknown";
+
+// HERMES 特別提醒過：heartbeat 是 wrapper 自己寫的，曾經發生過「job 照跑
+// ok 但心跳檔凍結」的斷鏈，所以不能只信 status 欄位——lastRunTs 早於預期
+// 班距 2 倍的一律算 crit，不管 status 寫什麼。processed===0 不算異常
+// （當班沒有新內容是正常狀態），這裡完全不看 processed/committed/backlog。
+function computePipelineHealth(layer: HermesPipelineLayerStatus | null, cadenceHours: number): PipelineHealth {
+  if (!layer || layer.lastRunTs === null) return "unknown";
+  const hasError = (layer.failed ?? 0) > 0 || (layer.errorSummary ?? "").trim().length > 0;
+  const isStale = Date.now() - layer.lastRunTs > cadenceHours * 2 * 60 * 60 * 1000;
+  return hasError || isStale ? "crit" : "ok";
+}
+
+function pipelineLayerWithHealth(layer: HermesPipelineLayerStatus | null, cadenceHours: number) {
+  return { ...(layer ?? EMPTY_PIPELINE_LAYER), health: computePipelineHealth(layer, cadenceHours) };
+}
+
+router.post("/admin/hermes-pipeline", async (req: Request, res: Response) => {
+  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  if (!authorized) {
+    return res.status(403).json({ message: "需要管理員權限" });
+  }
+
+  const body = req.body as Record<string, unknown>;
+  const layer = (key: string): HermesPipelineLayerStatus | null => {
+    const v = body[key];
+    return v && typeof v === "object" ? (v as HermesPipelineLayerStatus) : null;
+  };
+
+  const row = {
+    id: "latest",
+    l1: layer("l1"),
+    l2: layer("l2"),
+    l3: layer("l3"),
+    l4: layer("l4"),
+    l5: layer("l5"),
+  };
+
+  await db
+    .insert(hermesPipelineSnapshotTable)
+    .values(row)
+    .onConflictDoUpdate({
+      target: hermesPipelineSnapshotTable.id,
+      set: { ...row, computedAt: new Date() },
+    });
+
+  return res.json({ success: true });
+});
+
+router.get("/hermes-pipeline", async (req: Request, res: Response) => {
+  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  if (!unlocked) {
+    return res.status(403).json({ message: "需要解鎖私領域才能查看" });
+  }
+
+  const [row] = await db
+    .select()
+    .from(hermesPipelineSnapshotTable)
+    .where(eq(hermesPipelineSnapshotTable.id, "latest"))
+    .limit(1);
+
+  if (!row) {
+    return res.json({ available: false });
+  }
+
+  return res.json({
+    available: true,
+    computedAt: row.computedAt.toISOString(),
+    layers: {
+      L1: pipelineLayerWithHealth(row.l1, PIPELINE_CADENCE_HOURS.l1),
+      L2: pipelineLayerWithHealth(row.l2, PIPELINE_CADENCE_HOURS.l2),
+      L3: pipelineLayerWithHealth(row.l3, PIPELINE_CADENCE_HOURS.l3),
+      L4: pipelineLayerWithHealth(row.l4, PIPELINE_CADENCE_HOURS.l4),
+      L5: pipelineLayerWithHealth(row.l5, PIPELINE_CADENCE_HOURS.l5),
+    },
   });
 });
 
