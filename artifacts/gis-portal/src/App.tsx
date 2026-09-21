@@ -7,6 +7,9 @@ import './portal.css'
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
+// 2026-09-21 起這裡存的是後端 /api/auth/verify 發的有效期 session token，
+// 不再是使用者輸入的密碼原文——名字沒改是因為「解鎖狀態」的語意沒變，變
+// 的只是底下存的憑證種類（見 apiVerifyPassword 的說明）。
 const UNLOCK_KEY = 'portal_unlocked'
 
 // ─────────────────────────────────────────────
@@ -413,13 +416,21 @@ async function apiFetchHermesPipeline(adminPassword: string): Promise<HermesPipe
 // RelationshipUniverse.tsx (the full-page #graph route) can share them
 // without a circular import back into this file.
 
-async function apiVerifyPassword(password: string): Promise<boolean> {
-  const r = await fetch(`${API_BASE}api/dashboard`, {
-    headers: { 'x-admin-password': password },
+// 回傳一個有效期限的 session token，不是密碼本身——後端 /api/auth/verify
+// 驗證密碼正確後發 token，前端只存這個 token（見 PasswordModal／
+// AdminAuthModal 兩處呼叫端），不再把密碼原文留在 localStorage 裡。同一個
+// token 之後就當「密碼」用，放進所有 API 呼叫的 x-admin-password header——
+// 後端的 isAuthorized() 同時接受密碼原文（給 collect.ps1 這類伺服器對伺服
+// 器呼叫）跟這裡發的 token（給瀏覽器），兩條路徑互不干擾。
+async function apiVerifyPassword(password: string): Promise<string | null> {
+  const r = await fetch(`${API_BASE}api/auth/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
   })
-  if (!r.ok) return false
-  const data = await r.json() as { unlocked: boolean }
-  return data.unlocked === true
+  if (!r.ok) return null
+  const data = await r.json() as { ok: boolean; token?: string }
+  return data.ok && data.token ? data.token : null
 }
 
 async function apiAddSite(data: Omit<SiteData, 'id'>, adminPassword: string): Promise<SiteData> {
@@ -2129,12 +2140,12 @@ function PasswordModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const ok = await apiVerifyPassword(input)
+    const token = await apiVerifyPassword(input)
     setLoading(false)
-    if (ok) {
-      localStorage.setItem(UNLOCK_KEY, input)
+    if (token) {
+      localStorage.setItem(UNLOCK_KEY, token)
       if (pendingUrl) window.open(pendingUrl, '_blank', 'noopener,noreferrer')
-      onSuccess(input)
+      onSuccess(token)
     } else {
       setError('密碼錯誤，請再試一次')
       setInput('')
@@ -2390,10 +2401,10 @@ function AdminAuthModal({ onSuccess, onCancel }: { onSuccess: (pw: string) => vo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const ok = await apiVerifyPassword(input)
+    const token = await apiVerifyPassword(input)
     setLoading(false)
-    if (ok) {
-      onSuccess(input)
+    if (token) {
+      onSuccess(token)
     } else {
       setError('通行碼錯誤')
       setInput('')

@@ -3,7 +3,7 @@ import { db, socialIndexHistoryTable } from "@workspace/db";
 import { desc, isNotNull } from "drizzle-orm";
 import { computeSocialIndex } from "../lib/socialIndex";
 import { taipeiDateString } from "../lib/summarySources";
-import { ADMIN_PASSWORD } from "../lib/adminPassword";
+import { isAuthorized } from "../lib/adminSession";
 
 const router = Router();
 
@@ -16,7 +16,7 @@ const router = Router();
 // TS via computeSocialIndex, which is what makes that math unit-testable
 // (see lib/socialIndex.test.ts) instead of being duplicated in PowerShell.
 router.post("/admin/social-index", async (req: Request, res: Response) => {
-  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const authorized = isAuthorized(req.headers["x-admin-password"]);
   if (!authorized) {
     return res.status(403).json({ message: "需要管理員權限" });
   }
@@ -75,7 +75,7 @@ router.post("/admin/social-index", async (req: Request, res: Response) => {
 // Trend-line chart data for the social-index card's expanded panel — same
 // private-zone password gate/shape as GET /mind-index/history.
 router.get("/social-index/history", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
   if (!unlocked) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }

@@ -13,7 +13,7 @@ import {
   type HermesPipelineLayerStatus,
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
-import { ADMIN_PASSWORD } from "../lib/adminPassword";
+import { isAuthorized } from "../lib/adminSession";
 
 const router = Router();
 
@@ -33,7 +33,7 @@ const SELF_PERSON_NAME = "陳韋翰";
 // it's a standalone route like /mind-index/history, not wired into
 // lib/summarySources.ts.
 router.post("/admin/hermes-status", async (req: Request, res: Response) => {
-  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const authorized = isAuthorized(req.headers["x-admin-password"]);
   if (!authorized) {
     return res.status(403).json({ message: "需要管理員權限" });
   }
@@ -67,7 +67,7 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
 // snapshot above: the same day can have multiple deploys/backups, so this
 // is append-only (hermes_activity_log has no date/id conflict target).
 router.post("/admin/hermes-activity", async (req: Request, res: Response) => {
-  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const authorized = isAuthorized(req.headers["x-admin-password"]);
   if (!authorized) {
     return res.status(403).json({ message: "需要管理員權限" });
   }
@@ -91,7 +91,7 @@ router.post("/admin/hermes-activity", async (req: Request, res: Response) => {
 const STALE_THRESHOLD_MS = 30 * 60 * 1000;
 
 router.get("/hermes-status", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
   if (!unlocked) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }
@@ -131,7 +131,7 @@ router.get("/hermes-status", async (req: Request, res: Response) => {
 // frontmatter 的 name/status，純粹補案件節點的顯示狀態）是額外真的需要
 // collect.ps1 另外掃、另外存的東西。
 router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
-  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const authorized = isAuthorized(req.headers["x-admin-password"]);
   if (!authorized) {
     return res.status(403).json({ message: "需要管理員權限" });
   }
@@ -158,7 +158,7 @@ router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
 });
 
 router.get("/hermes-graph", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
   if (!unlocked) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }
@@ -291,7 +291,7 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
 });
 
 router.get("/hermes-activity", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
   if (!unlocked) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }
@@ -363,7 +363,7 @@ function pipelineLayerWithHealth(layer: HermesPipelineLayerStatus | null, cadenc
 }
 
 router.post("/admin/hermes-pipeline", async (req: Request, res: Response) => {
-  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const authorized = isAuthorized(req.headers["x-admin-password"]);
   if (!authorized) {
     return res.status(403).json({ message: "需要管理員權限" });
   }
@@ -395,7 +395,7 @@ router.post("/admin/hermes-pipeline", async (req: Request, res: Response) => {
 });
 
 router.get("/hermes-pipeline", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
   if (!unlocked) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }
