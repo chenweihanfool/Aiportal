@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  typecheck-and-test:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy values only — nothing here connects to a real DB or admin panel.
+      # typecheck/tests never open a DB connection; api-server's fail-fast
+      # module-load check just needs ADMIN_PASSWORD set to something other
+      # than the old hardcoded-fallback placeholder.
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      ADMIN_PASSWORD: ci-dummy-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run typecheck
+
+      - run: pnpm run test
+
+      - run: pnpm run build
