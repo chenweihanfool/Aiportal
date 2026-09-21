@@ -17,6 +17,15 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.7.7',
+    date: '2026-09-21',
+    summary: '新增全站指令面板（⌘K / Ctrl+K）：任何畫面都能直接搜工具連結、跳關係宇宙',
+    changes: [
+      '按 ⌘K（Mac）或 Ctrl+K 隨時叫出全站搜尋，不用先滾到「工具連結」區塊展開才能搜——搜的是同一份工具連結資料（私領域＋公領域＋六維度裡本來就有連結的四個子系統），選中即開啟（私領域未解鎖會照舊跳密碼輸入），輸入「圖」／「關係」／「宇宙」／「graph」可以直接跳到完整關係宇宙頁面',
+      '在關係宇宙頁面按 ⌘K/Ctrl+K 不會另外跳出一個搜尋框——直接把焦點跟游標丟給那一頁本來就有的人/事/案/物搜尋框，兩邊快捷鍵手感一致，不會疊出兩層搜尋介面',
+    ],
+  },
+  {
     version: '2.7.6',
     date: '2026-09-21',
     summary: 'HERMES 戰情室新增每日歷史趨勢：CPU/記憶體/容器健康折線圖、L1~L5 管線健康色條',
@@ -2781,6 +2790,110 @@ function InstrumentPanelView({
 }
 
 // ─────────────────────────────────────────────
+// 全站指令面板（⌘K / Ctrl+K）——工具連結原本的搜尋框只在展開「工具連結」
+// 區塊時看得到、用得到，要先滾到那一區才能搜；這裡另外開一個任何時候都能
+// 用快捷鍵叫出來的全域搜尋，搜的是同一份 `sites`（工具連結＋六維度裡有連
+// 結的四個子系統本來就是同一份資料，不用另外處理），加一個永遠列在最前
+// 面、可以直接跳關係宇宙的捷徑項目。關係宇宙頁面自己的人/事/案/物搜尋不
+// 在這裡整合——那份資料只在進到 #graph 才會抓，這裡沒有必要為了指令面板
+// 多發一次通常用不到的請求，改成 RelationshipUniverse.tsx 自己接
+// ⌘K/Ctrl+K 去 focus 它既有的搜尋框（見該檔案）。
+// ─────────────────────────────────────────────
+function CommandPalette({
+  sites,
+  unlocked,
+  onSelect,
+  onNavigateGraph,
+}: {
+  sites: SiteData[]
+  unlocked: boolean
+  onSelect: (site: SiteData) => void
+  onNavigateGraph: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setOpen(o => !o)
+      } else if (e.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    setQuery('')
+    const t = setTimeout(() => inputRef.current?.focus(), 0)
+    return () => clearTimeout(t)
+  }, [open])
+
+  if (!open) return null
+
+  const q = query.trim().toLowerCase()
+  const matches = q.length === 0 ? sites : sites.filter(s => s.name.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q))
+  const graphKeywords = ['圖', '關係', '宇宙', 'graph']
+  const showGraphShortcut = q.length === 0 || graphKeywords.some(k => k.toLowerCase().includes(q) || q.includes(k))
+
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0.9rem',
+    cursor: 'pointer', borderRadius: '5px',
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', justifyContent: 'center', paddingTop: '12vh', background: 'rgba(10,11,14,0.75)' }}
+      onClick={e => { if (e.target === e.currentTarget) setOpen(false) }}
+    >
+      <div style={{
+        width: 'min(560px, calc(100% - 2.4rem))', maxHeight: '64vh', display: 'flex', flexDirection: 'column',
+        background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '8px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', overflow: 'hidden',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.8rem 1rem', borderBottom: `1px solid ${COLOR.line}`, flexShrink: 0 }}>
+          <span style={{ color: COLOR.amber, fontFamily: FONT.mono, fontSize: '0.9rem' }}>⌘</span>
+          <input
+            ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} autoComplete="off"
+            placeholder="搜尋工具連結，或輸入「圖」跳到關係宇宙…"
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: COLOR.ink, fontFamily: FONT.body, fontSize: '0.9rem' }}
+          />
+          <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, flexShrink: 0 }}>ESC</span>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '0.4rem' }}>
+          {showGraphShortcut && (
+            <div
+              onClick={() => { onNavigateGraph(); setOpen(false) }}
+              style={{ ...rowStyle, background: 'rgba(245,166,35,0.08)' }}
+            >
+              <span style={{ color: COLOR.amber }}>◈</span>
+              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>展開完整關係宇宙</span>
+              <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
+            </div>
+          )}
+          {matches.length === 0 ? (
+            <div style={{ textAlign: 'center', color: COLOR.steelDim, fontSize: '0.75rem', padding: '1.5rem 0' }}>找不到符合「{query}」的工具</div>
+          ) : matches.map(s => {
+            const locked = s.isPrivate && !unlocked
+            return (
+              <div key={s.id} onClick={() => { onSelect(s); setOpen(false) }} style={rowStyle}>
+                <span style={{ color: locked ? COLOR.warn : COLOR.steelDim, fontSize: '0.8rem', flexShrink: 0 }}>{locked ? '🔒' : '○'}</span>
+                <span style={{ color: COLOR.ink, fontSize: '0.82rem', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                <span style={{ color: COLOR.steelDim, fontSize: '0.68rem', flexShrink: 0, maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.subtitle}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // App
 // ─────────────────────────────────────────────
 export default function App() {
@@ -2895,6 +3008,13 @@ export default function App() {
           color: COLOR.steelDim, fontSize: '1rem', padding: '0.5rem 0.8rem', cursor: 'pointer', lineHeight: 1,
         }}
       >⚙</button>
+
+      <CommandPalette
+        sites={sites}
+        unlocked={unlocked}
+        onSelect={handleSiteClick}
+        onNavigateGraph={() => { window.location.hash = 'graph' }}
+      />
 
       {modal.visible && (
         <PasswordModal
