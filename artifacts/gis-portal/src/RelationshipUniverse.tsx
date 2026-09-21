@@ -203,6 +203,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const nodesRef = useRef<UNode[]>([])
   const linksRef = useRef<ULink[]>([])
   const nodeByIdRef = useRef<Map<string, UNode>>(new Map())
@@ -594,6 +595,21 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     cameraDistRef.current = Math.max(worldR * ZOOM_MIN_FACTOR, Math.min(worldR * ZOOM_MAX_FACTOR, next))
   }, [])
 
+  // 主控台（App.tsx 的 CommandPalette）用 ⌘K/Ctrl+K 開全站搜尋，但這一頁
+  // 已經有自己專門搜人/事/案/物的搜尋框，不需要另一層 overlay——這裡接同
+  // 一組快捷鍵，單純把焦點跟游標丟給既有的輸入框，兩邊快捷鍵記憶體感一致。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   const g = data?.graph
 
   // 搜尋：364 個事件用眼睛在球面上找不到，這是能不能實際用起來的關鍵。
@@ -639,6 +655,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         {ready && (
           <div style={{ position: 'relative', minWidth: '210px' }}>
             <input
+              ref={searchInputRef}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="搜尋人／事／案件／物件…"
