@@ -1,10 +1,9 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { db, portalSitesTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
+import { ADMIN_PASSWORD } from "../lib/adminPassword";
 
 const router = Router();
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "85097110";
 
 interface SiteLink {
   label: string;

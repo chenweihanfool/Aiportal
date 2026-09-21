@@ -2,10 +2,9 @@ import { Router, type Request, type Response } from "express";
 import { db, mindIndexHistoryTable } from "@workspace/db";
 import { desc, isNotNull } from "drizzle-orm";
 import { taipeiDateString } from "../lib/summarySources";
+import { ADMIN_PASSWORD } from "../lib/adminPassword";
 
 const router = Router();
-
-const ADMIN_PASSWORD = process.env["ADMIN_PASSWORD"] ?? "85097110";
 
 // Two independent pushers share this one endpoint, each owning a disjoint
 // set of fields, neither required to send the other's:

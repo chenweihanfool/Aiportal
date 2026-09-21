@@ -3,10 +3,9 @@ import { db, happinessIndexHistoryTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { fetchFreshSummaries } from "../lib/summarySources";
 import { SUMMARY_SOURCES } from "../lib/summarySources";
+import { ADMIN_PASSWORD } from "../lib/adminPassword";
 
 const router = Router();
-
-const ADMIN_PASSWORD = process.env["ADMIN_PASSWORD"] ?? "85097110";
 
 // Serves the subsystem summaries fetched DIRECTLY from their origin APIs on
 // every page load. Previously read from a 20-minute DB cache; now real-time
