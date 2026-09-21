@@ -17,6 +17,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.7.5',
+    date: '2026-09-21',
+    summary: '入口網站健診第一批：生活從容補上資料過期警告；解鎖改發 session token；ADMIN_PASSWORD 未設定時拒絕啟動',
+    changes: [
+      '「生活從容」卡片新增資料過期警告（超過 36 小時未更新），跟心智指標/社交指標同一套機制——這是六個維度裡唯一原本沒有這層保護的，來源的 Python 每日排程如果哪天默默停了，之前會一直顯示舊分數、沒有任何提示',
+      '解鎖私領域改成後端發一個 30 天效期的 session token，不再把密碼原文存進 localStorage——原本明碼永不過期，任何 XSS 或瀏覽器擴充套件只要能讀 storage 就等於拿到全部私領域＋admin 權限，改動對操作體驗沒有影響（一樣解鎖一次、裝置記住），只是底下存的憑證換了',
+      'api-server 啟動時檢查 ADMIN_PASSWORD 環境變數，沒設定或等於舊版寫死在程式碼裡的預設值就直接拒絕啟動，不再靜默用弱密碼上線',
+    ],
+  },
+  {
     version: '2.7.4',
     date: '2026-09-21',
     summary: '關係宇宙詳情面板可展開滿版閱讀，字級加大；敘事/事件合併成一條時間軸圖',
@@ -1132,6 +1142,12 @@ function DimensionGauge({
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, letterSpacing: '0.04em' }}>
         {normalizedScore !== null ? tone.label : (summary.status === 'pending' ? '資料準備中' : '暫時無法取得資料')}
       </div>
+      {/* 目前只有 vikunja（從容指數）的資料會帶 stale 欄位——其餘三個維度
+          每次開頁面都即時打原站 API，沒有「上次成功計算是多久以前」這個概
+          念可言。跟 MindIndexCard／SocialIndexCard 同一套文案/樣式，通用寫
+          在這裡而不是只寫在 VikunjaSummaryBody 裡，以後哪個維度也需要就不
+          用再抄一次。 */}
+      {data?.['stale'] === true && <div style={{ fontSize: '0.62rem', color: COLOR.warn }}>資料已超過 36 小時未更新</div>}
       {Body && data && (
         <div style={{ width: '100%', marginTop: '0.3rem' }} onClick={e => e.stopPropagation()}>
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
