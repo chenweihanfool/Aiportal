@@ -17,6 +17,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.7.6',
+    date: '2026-09-21',
+    summary: 'HERMES 戰情室新增每日歷史趨勢：CPU/記憶體/容器健康折線圖、L1~L5 管線健康色條',
+    changes: [
+      '「近期趨勢」新分頁：CPU 負載、記憶體、容器健康比例三條每日快照折線圖，跟幸福指數卡片用同一顆趨勢線元件——collect.ps1 本來就每 ~10 分鐘 push 一次，這次改成同時 upsert「今天」這一筆歷史，不需要另外開排程去抓',
+      '知識萃取管線面板新增「近 14 天歷史」：L1~L5 每層一排色條，一眼看出最近哪一層常常出問題，不是只看「現在」這個時間點——色條存的是每次 push 當下算出來的健康狀態（不是原始 heartbeat 欄位），讀取歷史時不會因為時間過去太久而全部被誤判成異常',
+      '兩個歷史面板都是懶載入：面板展開/點開才會真的發請求，平常收合不會多打 API',
+    ],
+  },
+  {
     version: '2.7.5',
     date: '2026-09-21',
     summary: '入口網站健診第一批：生活從容補上資料過期警告；解鎖改發 session token；ADMIN_PASSWORD 未設定時拒絕啟動',
@@ -420,6 +430,48 @@ async function apiFetchHermesPipeline(adminPassword: string): Promise<HermesPipe
   })
   if (!r.ok) throw new Error('Failed to fetch hermes pipeline')
   return r.json() as Promise<HermesPipelineData>
+}
+
+// 每日一筆的操作型監控趨勢（2026-09-21 起）——collect.ps1 每次 push 就
+// upsert「今天」那列，不是另外的排程快照，細節見後端 hermesStatusHistory.ts
+// / hermesPipelineHistory.ts 的說明。兩支都是懶載入（面板展開/點開才 fetch），
+// 跟既有的 30 天幸福指數歷史同一個節流考量。
+interface HermesStatusHistoryPoint {
+  date: string
+  cpuPercent: number | null
+  memPercent: number | null
+  worstDiskPercent: number | null
+  containersHealthy: number | null
+  containersTotal: number | null
+  tasksFailed: number | null
+  tasksTotal: number | null
+}
+
+async function apiFetchHermesStatusHistory(adminPassword: string, days = 30): Promise<HermesStatusHistoryPoint[]> {
+  const r = await fetch(`${API_BASE}api/hermes-status/history?days=${days}`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch hermes status history')
+  const data = await r.json() as { history: HermesStatusHistoryPoint[] }
+  return data.history
+}
+
+interface HermesPipelineHistoryPoint {
+  date: string
+  L1: HermesPipelineHealth | null
+  L2: HermesPipelineHealth | null
+  L3: HermesPipelineHealth | null
+  L4: HermesPipelineHealth | null
+  L5: HermesPipelineHealth | null
+}
+
+async function apiFetchHermesPipelineHistory(adminPassword: string, days = 14): Promise<HermesPipelineHistoryPoint[]> {
+  const r = await fetch(`${API_BASE}api/hermes-pipeline/history?days=${days}`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to fetch hermes pipeline history')
+  const data = await r.json() as { history: HermesPipelineHistoryPoint[] }
+  return data.history
 }
 
 // HermesGraph* types + apiFetchHermesGraph moved to ./hermesGraphApi.ts so
@@ -1822,6 +1874,62 @@ function HermesPipelineFlowDiagram({ data }: { data: HermesPipelineData | null }
   )
 }
 
+// 近 N 天每層健康狀態的色條（不是折線圖——health 是類別值 ok/crit/
+// unknown，不是連續數字，折線圖沒有意義）。懶載入：點「近 14 天歷史」才
+// fetch，跟其他歷史面板同一個節流考量。
+function PipelineHistoryStrip({ unlockedPassword }: { unlockedPassword: string | null }) {
+  const [open, setOpen] = useState(false)
+  const [history, setHistory] = useState<HermesPipelineHistoryPoint[] | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (!open || !unlockedPassword || history !== null) return
+    apiFetchHermesPipelineHistory(unlockedPassword)
+      .then(setHistory)
+      .catch(() => setError(true))
+  }, [open, unlockedPassword, history])
+
+  return (
+    <div style={{ marginTop: '0.7rem' }}>
+      <FormulaToggle expanded={open} onToggle={() => setOpen(x => !x)} labelCollapsed="近 14 天歷史 ▼" labelExpanded="收起 ▲" />
+      {open && (
+        error ? (
+          <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, marginTop: '0.5rem' }}>暫時無法取得資料</div>
+        ) : history === null ? (
+          <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, marginTop: '0.5rem' }}>載入中…</div>
+        ) : history.length === 0 ? (
+          <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, marginTop: '0.5rem' }}>還沒有歷史資料</div>
+        ) : (
+          <div style={{ marginTop: '0.6rem' }}>
+            {(['L1', 'L2', 'L3', 'L4', 'L5'] as const).map(layer => (
+              <div key={layer} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, width: '18px', flexShrink: 0 }}>{layer}</span>
+                <div style={{ display: 'flex', gap: '2px' }}>
+                  {history.map(h => {
+                    const health = h[layer]
+                    const color = health ? pipelineHealthColor(health) : COLOR.line
+                    return (
+                      <span
+                        key={h.date}
+                        title={`${h.date}：${health ? pipelineHealthLabel(health) : '尚無資料'}`}
+                        style={{ width: '10px', height: '10px', borderRadius: '2px', background: color, display: 'inline-block' }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: FONT.mono, fontSize: '0.58rem', color: COLOR.steelDim, marginTop: '4px' }}>
+              <span>{history[0]?.date}</span>
+              <span>{history[history.length - 1]?.date}</span>
+            </div>
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
 function HermesPipelinePanel({ unlockedPassword }: { unlockedPassword: string | null }) {
   const [data, setData] = useState<HermesPipelineData | null>(null)
   const [error, setError] = useState(false)
@@ -1849,6 +1957,7 @@ function HermesPipelinePanel({ unlockedPassword }: { unlockedPassword: string | 
             <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, marginBottom: '0.6rem' }}>尚無 heartbeat 資料，collect.ps1 還沒讀到 HERMES 主機上的 heartbeat.json——下方是管線架構圖，節點暫時顯示「尚無資料」</div>
           )}
           <HermesPipelineFlowDiagram data={data} />
+          <PipelineHistoryStrip unlockedPassword={unlockedPassword} />
           {data.computedAt && (
             <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>{formatMinutesAgo(data.computedAt)}</div>
           )}
@@ -1911,6 +2020,51 @@ function HermesContainerRow({ name, status, health }: HermesContainerInfo) {
       <span className={`dot ${dotClass}`} />
       <span style={{ color: COLOR.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       <span style={{ color: COLOR.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>{status}{health ? ` · ${health}` : ''}</span>
+    </div>
+  )
+}
+
+// 近期趨勢：CPU/記憶體/容器健康比例的每日快照折線圖，複用既有的
+// TrendLineChart（跟幸福指數 30 天趨勢同一顆元件）。懶載入——這個
+// CollapsibleSubPanel 預設收起，子元件要展開才會掛載、才會發這支請求，跟
+// 幸福指數卡片「詳細數據展開才 fetch history」同一個節流考量。
+function HermesTrendPanel({ unlockedPassword }: { unlockedPassword: string | null }) {
+  const [history, setHistory] = useState<HermesStatusHistoryPoint[] | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (!unlockedPassword) return
+    let cancelled = false
+    apiFetchHermesStatusHistory(unlockedPassword)
+      .then(d => { if (!cancelled) setHistory(d) })
+      .catch(() => { if (!cancelled) setError(true) })
+    return () => { cancelled = true }
+  }, [unlockedPassword])
+
+  if (error) return <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
+  if (history === null) return <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+  if (history.length < 2) return <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>還沒有足夠的歷史資料（每天累積一筆，過幾天回來看就有線了）</div>
+
+  const cpuPoints = history.filter((h): h is HermesStatusHistoryPoint & { cpuPercent: number } => h.cpuPercent !== null).map(h => ({ date: h.date, value: Math.round(h.cpuPercent) }))
+  const memPoints = history.filter((h): h is HermesStatusHistoryPoint & { memPercent: number } => h.memPercent !== null).map(h => ({ date: h.date, value: Math.round(h.memPercent) }))
+  const healthPoints = history
+    .filter((h): h is HermesStatusHistoryPoint & { containersHealthy: number; containersTotal: number } => h.containersTotal !== null && h.containersTotal > 0 && h.containersHealthy !== null)
+    .map(h => ({ date: h.date, value: Math.round((h.containersHealthy / h.containersTotal) * 100) }))
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem 1.4rem' }}>
+      <div>
+        <SubLabel>CPU 負載</SubLabel>
+        <TrendLineChart points={cpuPoints} color={COLOR.amber} height={64} />
+      </div>
+      <div>
+        <SubLabel>記憶體</SubLabel>
+        <TrendLineChart points={memPoints} color={COLOR.amber} height={64} />
+      </div>
+      <div>
+        <SubLabel>容器健康比例（%）</SubLabel>
+        <TrendLineChart points={healthPoints} color={COLOR.ok} height={64} />
+      </div>
     </div>
   )
 }
@@ -2019,6 +2173,12 @@ function HermesWarRoomSection({
               {availableStatus.containers.length === 0
                 ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無容器資料</div>
                 : availableStatus.containers.map(c => <HermesContainerRow key={c.name} {...c} />)}
+            </CollapsibleSubPanel>
+          </div>
+
+          <div style={{ marginTop: '0.9rem' }}>
+            <CollapsibleSubPanel title="近期趨勢" sub="CPU / 記憶體 / 容器健康 · 每日快照">
+              <HermesTrendPanel unlockedPassword={unlockedPassword} />
             </CollapsibleSubPanel>
           </div>
 
