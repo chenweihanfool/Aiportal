@@ -33,6 +33,15 @@ async function fetchJson(url: string, timeoutMs = 8000): Promise<unknown> {
 // production output of the standalone Python service
 // (services/busyness-index/), which writes to busyness_index_history on its
 // own daily cron. This just reads the latest row.
+//
+// 2026-09-21：這是六個 HHI 維度裡唯一沒有 staleness 保護的——mind/social
+// 兩個同樣「讀最近一筆」的維度都有 36 小時過期旗標（見 lib/mindIndex.ts
+// 的 STALE_THRESHOLD_MS），這裡先前沒有：compute_daily.py 的每日排程如果
+// 哪天默默停了，面板會一直顯示舊分數、不會有任何警告。補上同一套判定，
+// 36 小時對得上「每天一次」的排程週期（同 mind index 的理由：斷流超過一
+// 天半才算 stale，不是排程稍微晚跑就誤判）。
+const STALE_THRESHOLD_MS = 36 * 60 * 60 * 1000;
+
 async function fetchVikunjaBusynessFromHistory(): Promise<unknown> {
   const [row] = await db
     .select()
@@ -54,6 +63,7 @@ async function fetchVikunjaBusynessFromHistory(): Promise<unknown> {
     approximatedCount: row.approximatedCount,
     configVersion: row.configVersion,
     computedAt: row.computedAt,
+    stale: Date.now() - row.computedAt.getTime() > STALE_THRESHOLD_MS,
   };
 }
 
