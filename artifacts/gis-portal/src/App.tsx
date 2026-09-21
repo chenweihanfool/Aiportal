@@ -17,6 +17,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.7.9',
+    date: '2026-09-21',
+    summary: '清掉專案裡完全沒用到的舊版 UI 元件庫死碼，CSS 打包體積從 95KB 降到 1.4KB',
+    changes: [
+      '刪掉 components/ui/（52 個 shadcn 元件檔）、hooks/（use-mobile、use-toast）、lib/utils.ts、pages/not-found.tsx、index.css——這些是很早期版本（3D 小城鎮模式）留下的 scaffold，這個 app 改版成儀表板風格後就完全沒再被引用過，連 index.css 本身的顏色變數都還是沒填完的「red / *replace with H S L*」佔位符，從來沒真的生效過',
+      '同步清掉 package.json 裡只有這些死碼在用的 30 幾個相依套件（Radix UI 系列、cmdk、recharts、react-hook-form、zod、wouter…），vite.config.ts／tsconfig.json 對應的 Tailwind 外掛與路徑別名一併移除——不影響任何現有功能，純粹是少扛一包從未執行過的程式碼',
+      '效果：CSS 產物從 95.35KB 降到 1.38KB（少了從未使用的 Tailwind 工具類），JS 產物不受影響（那些套件從來沒被 import 進實際渲染路徑，本來就不會進 bundle）',
+    ],
+  },
+  {
     version: '2.7.8',
     date: '2026-09-21',
     summary: '管理後台新增「匯出資料」：一鍵下載 HHI/心智/社交/生活從容歷史＋工具連結清單成 JSON',
