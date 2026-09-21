@@ -17,6 +17,7 @@ import {
 import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { taipeiDateString } from "../lib/summarySources";
+import { notifyOnAlertTransition } from "../lib/notify";
 
 const router = Router();
 
@@ -96,14 +97,16 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
     (worst, d) => (worst === null || d.percentUsed > worst ? d.percentUsed : worst),
     null,
   );
+  const failedContainers = containers.filter((c) => isContainerFailedRow(c));
+  const failedTasks = scheduledTasks.filter((t) => isTaskFailedRow(t));
   const historyRow = {
     date: taipeiDateString(new Date()),
     cpuPercent: row.cpuPercent,
     memPercent: row.memPercent,
     worstDiskPercent,
-    containersHealthy: containers.filter((c) => !isContainerFailedRow(c)).length,
+    containersHealthy: containers.length - failedContainers.length,
     containersTotal: containers.length,
-    tasksFailed: scheduledTasks.filter((t) => isTaskFailedRow(t)).length,
+    tasksFailed: failedTasks.length,
     tasksTotal: scheduledTasks.length,
   };
   await db
@@ -113,6 +116,22 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
       target: hermesStatusHistoryTable.date,
       set: { ...historyRow, computedAt: new Date() },
     });
+
+  // 狀態改變才推播，不是每次 push 都發——見 notify.ts 的說明。
+  notifyOnAlertTransition(
+    "hermes-containers",
+    failedContainers.length > 0,
+    "Aiportal: HERMES containers",
+    `${failedContainers.length} 個容器異常：${failedContainers.map((c) => c.name).join("、")}`,
+    "容器已恢復正常",
+  );
+  notifyOnAlertTransition(
+    "hermes-tasks",
+    failedTasks.length > 0,
+    "Aiportal: HERMES scheduled tasks",
+    `${failedTasks.length} 個排程任務失敗：${failedTasks.map((t) => t.name).join("、")}`,
+    "排程任務已恢復正常",
+  );
 
   return res.json({ success: true });
 });
@@ -495,6 +514,19 @@ router.post("/admin/hermes-pipeline", async (req: Request, res: Response) => {
       target: hermesPipelineHistoryTable.date,
       set: { ...historyRow, computedAt: new Date() },
     });
+
+  // 狀態改變才推播，每層獨立追蹤——見 notify.ts 的說明。
+  (["l1", "l2", "l3", "l4", "l5"] as const).forEach((key) => {
+    const label = key.toUpperCase();
+    const health = historyRow[`${key}Health` as `${typeof key}Health`];
+    notifyOnAlertTransition(
+      `hermes-pipeline-${label}`,
+      health === "crit",
+      `Aiportal: HERMES pipeline ${label}`,
+      `知識萃取管線 ${label} 異常：超過預期班距未成功執行，或有錯誤`,
+      `${label} 已恢復正常`,
+    );
+  });
 
   return res.json({ success: true });
 });
