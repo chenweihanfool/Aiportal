@@ -33,4 +33,8 @@ jobs:
 
       - run: pnpm run test
 
-      - run: pnpm run build
+      # Only the two artifacts that actually make up this app — not the
+      # root `build` script, which recurses into every workspace package
+      # including mockup-sandbox (needs its own PORT env var, unrelated to
+      # this app, not part of the release build).
+      - run: pnpm --filter @workspace/gis-portal --filter @workspace/api-server run build
