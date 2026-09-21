@@ -17,6 +17,15 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.7.8',
+    date: '2026-09-21',
+    summary: '管理後台新增「匯出資料」：一鍵下載 HHI/心智/社交/生活從容歷史＋工具連結清單成 JSON',
+    changes: [
+      '管理後台（⚙）新增「匯出資料」按鈕，把幸福指數/心智指標/社交指標/生活從容四個每日歷史表 + 工具連結清單整包下載成一個 JSON 檔——自架的 DB 之外留一份可攜的個人資料備份，不需要另外連進資料庫手動 dump',
+      '不含 HERMES 戰情室那幾張「只留最新一筆」的操作型監控表（不是要長期保存的個人資料），也不含任何第三方 API 憑證',
+    ],
+  },
+  {
     version: '2.7.7',
     date: '2026-09-21',
     summary: '新增全站指令面板（⌘K / Ctrl+K）：任何畫面都能直接搜工具連結、跳關係宇宙',
@@ -530,6 +539,16 @@ async function apiDeleteSite(id: string, adminPassword: string): Promise<void> {
     headers: { 'x-admin-password': adminPassword },
   })
   if (!r.ok) throw new Error('Failed to delete site')
+}
+
+// 回傳 Blob 而不是先 parse 成 JSON 再重新 stringify——內容本來就是伺服器
+// 端已經序列化好的 JSON 文字，直接轉存成檔案不需要多一趟解析/重組。
+async function apiExportData(adminPassword: string): Promise<Blob> {
+  const r = await fetch(`${API_BASE}api/export`, {
+    headers: { 'x-admin-password': adminPassword },
+  })
+  if (!r.ok) throw new Error('Failed to export data')
+  return r.blob()
 }
 
 // ─────────────────────────────────────────────
@@ -2403,8 +2422,30 @@ function AdminPanel({ sites, adminPassword, onAdd, onEdit, onDelete, onClose }: 
   const [form, setForm] = useState(BLANK_FORM())
   const [busy, setBusy] = useState(false)
   const [apiError, setApiError] = useState('')
+  const [exporting, setExporting] = useState(false)
 
-  void adminPassword
+  // 個人資料備份——HHI/心智/社交/生活從容歷史 + 工具連結清單一鍵下載成
+  // JSON，自架 DB 之外留一份可攜複本。放在管理後台而不是隨處可見的按
+  // 鈕，因為這是維護性質的動作，跟站點 CRUD 同一個心智模型。
+  const handleExport = async () => {
+    setExporting(true)
+    setApiError('')
+    try {
+      const blob = await apiExportData(adminPassword)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `aiportal-export-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setApiError('匯出失敗，請再試一次')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const openEdit = (s: SiteData) => {
     setEditing(s); setAdding(false); setApiError('')
@@ -2469,7 +2510,13 @@ function AdminPanel({ sites, adminPassword, onAdd, onEdit, onDelete, onClose }: 
             <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.amberDim, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '6px' }}>⚙ 管理後台</div>
             <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>網站管理</div>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${COLOR.line}`, borderRadius: '4px', color: COLOR.steel, padding: '0.4rem 1rem', cursor: 'pointer', fontSize: '0.78rem', fontFamily: FONT.body }}>關閉</button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => { void handleExport() }} disabled={exporting}
+              style={{ background: 'transparent', border: `1px solid ${COLOR.amberDim}`, borderRadius: '4px', color: COLOR.amber, padding: '0.4rem 1rem', cursor: exporting ? 'default' : 'pointer', fontSize: '0.78rem', fontFamily: FONT.body, opacity: exporting ? 0.6 : 1 }}
+            >{exporting ? '匯出中…' : '匯出資料 ⤓'}</button>
+            <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${COLOR.line}`, borderRadius: '4px', color: COLOR.steel, padding: '0.4rem 1rem', cursor: 'pointer', fontSize: '0.78rem', fontFamily: FONT.body }}>關閉</button>
+          </div>
         </div>
 
         {apiError && (
