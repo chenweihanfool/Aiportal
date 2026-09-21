@@ -5,6 +5,8 @@ import {
   hermesActivityLogTable,
   hermesGraphSnapshotTable,
   hermesPipelineSnapshotTable,
+  hermesStatusHistoryTable,
+  hermesPipelineHistoryTable,
   type HermesStatusSnapshotRow,
   type HermesGraphEvent,
   type HermesGraphPersonRelation,
@@ -14,6 +16,7 @@ import {
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
+import { taipeiDateString } from "../lib/summarySources";
 
 const router = Router();
 
@@ -24,6 +27,26 @@ const router = Router();
 // 量，所以只在算 mostActivePerson 時把他濾掉；人物節點本身、degree、其他
 // 統計都不受影響，他仍然正常出現在圖上跟人數計算裡。
 const SELF_PERSON_NAME = "陳韋翰";
+
+// Windows SCHED_S_TASK_RUNNING / SCHED_S_TASK_HAS_NOT_RUN — same two magic
+// result codes App.tsx's isTaskFailed() treats as "not actually a failure".
+// Duplicated here (not imported — gis-portal and api-server don't share a
+// UI-logic package) because the daily history snapshot below needs the same
+// "is this task row failed" judgment the frontend already makes per-row;
+// keep in sync with App.tsx's isTaskFailed/isContainerFailed if that logic
+// ever changes.
+const TASK_RUNNING_RESULT = 267009;
+const TASK_NOT_YET_RUN_RESULT = 267011;
+
+function isTaskFailedRow(t: { lastTaskResult: number | null }): boolean {
+  const isRunning = t.lastTaskResult === TASK_RUNNING_RESULT;
+  const isPending = t.lastTaskResult === TASK_NOT_YET_RUN_RESULT;
+  return t.lastTaskResult !== null && !isRunning && !isPending && t.lastTaskResult !== 0;
+}
+
+function isContainerFailedRow(c: { status: string; health: string | null }): boolean {
+  return !/up/i.test(c.status) || c.health === "unhealthy";
+}
 
 // Data collected by services/hermes-status/collect.ps1 on the deploy host
 // (Windows Task Scheduler, every few minutes) — CPU/RAM/disk via CIM, docker
@@ -42,13 +65,20 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
   const num = (key: string): number | null => (typeof body[key] === "number" ? (body[key] as number) : null);
   const arr = (key: string): unknown[] => (Array.isArray(body[key]) ? (body[key] as unknown[]) : []);
 
+  // NonNullable — arr() always returns an array (never the column's nullable
+  // "not written yet" state), so the history aggregation below can safely
+  // .reduce()/.filter() without a null check that could never actually fire.
+  const disks = arr("disks") as NonNullable<HermesStatusSnapshotRow["disks"]>;
+  const containers = arr("containers") as NonNullable<HermesStatusSnapshotRow["containers"]>;
+  const scheduledTasks = arr("scheduledTasks") as NonNullable<HermesStatusSnapshotRow["scheduledTasks"]>;
+
   const row = {
     id: "latest",
     cpuPercent: num("cpuPercent"),
     memPercent: num("memPercent"),
-    disks: arr("disks") as HermesStatusSnapshotRow["disks"],
-    containers: arr("containers") as HermesStatusSnapshotRow["containers"],
-    scheduledTasks: arr("scheduledTasks") as HermesStatusSnapshotRow["scheduledTasks"],
+    disks,
+    containers,
+    scheduledTasks,
   };
 
   await db
@@ -57,6 +87,31 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
     .onConflictDoUpdate({
       target: hermesStatusSnapshotTable.id,
       set: { ...row, computedAt: new Date() },
+    });
+
+  // 每日一筆的趨勢紀錄——跟 mind/social index 同一套「每次 push 就 upsert
+  // 今天那列」模式，見 hermesStatusHistory.ts 的說明。這裡只是把同一包資料
+  // 多算幾個彙總欄位存下來，不是另外呼叫一次來源。
+  const worstDiskPercent = disks.reduce<number | null>(
+    (worst, d) => (worst === null || d.percentUsed > worst ? d.percentUsed : worst),
+    null,
+  );
+  const historyRow = {
+    date: taipeiDateString(new Date()),
+    cpuPercent: row.cpuPercent,
+    memPercent: row.memPercent,
+    worstDiskPercent,
+    containersHealthy: containers.filter((c) => !isContainerFailedRow(c)).length,
+    containersTotal: containers.length,
+    tasksFailed: scheduledTasks.filter((t) => isTaskFailedRow(t)).length,
+    tasksTotal: scheduledTasks.length,
+  };
+  await db
+    .insert(hermesStatusHistoryTable)
+    .values(historyRow)
+    .onConflictDoUpdate({
+      target: hermesStatusHistoryTable.date,
+      set: { ...historyRow, computedAt: new Date() },
     });
 
   return res.json({ success: true });
@@ -117,6 +172,37 @@ router.get("/hermes-status", async (req: Request, res: Response) => {
     scheduledTasks: row.scheduledTasks ?? [],
     computedAt: row.computedAt.toISOString(),
     stale,
+  });
+});
+
+// 每日趨勢——跟 /happiness/history、/mind-index/history 同樣的形狀跟
+// private-zone 密碼閘門，給 CPU/RAM/磁碟/容器健康/排程任務成功率畫趨勢線。
+router.get("/hermes-status/history", async (req: Request, res: Response) => {
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
+  if (!unlocked) {
+    return res.status(403).json({ message: "需要解鎖私領域才能查看" });
+  }
+
+  const daysParam = Number(req.query["days"]);
+  const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 365) : 30;
+
+  const rows = await db
+    .select()
+    .from(hermesStatusHistoryTable)
+    .orderBy(desc(hermesStatusHistoryTable.date))
+    .limit(days);
+
+  return res.json({
+    history: rows.reverse().map((r) => ({
+      date: r.date,
+      cpuPercent: r.cpuPercent,
+      memPercent: r.memPercent,
+      worstDiskPercent: r.worstDiskPercent,
+      containersHealthy: r.containersHealthy,
+      containersTotal: r.containersTotal,
+      tasksFailed: r.tasksFailed,
+      tasksTotal: r.tasksTotal,
+    })),
   });
 });
 
@@ -391,6 +477,25 @@ router.post("/admin/hermes-pipeline", async (req: Request, res: Response) => {
       set: { ...row, computedAt: new Date() },
     });
 
+  // 每日一筆的趨勢紀錄，存的是「這次 push 當下」算出來的健康狀態，不是原始
+  // heartbeat 欄位——見 hermesPipelineHistory.ts 的說明，為什麼不能留到讀取
+  // 歷史時才重算。
+  const historyRow = {
+    date: taipeiDateString(new Date()),
+    l1Health: computePipelineHealth(row.l1, PIPELINE_CADENCE_HOURS.l1),
+    l2Health: computePipelineHealth(row.l2, PIPELINE_CADENCE_HOURS.l2),
+    l3Health: computePipelineHealth(row.l3, PIPELINE_CADENCE_HOURS.l3),
+    l4Health: computePipelineHealth(row.l4, PIPELINE_CADENCE_HOURS.l4),
+    l5Health: computePipelineHealth(row.l5, PIPELINE_CADENCE_HOURS.l5),
+  };
+  await db
+    .insert(hermesPipelineHistoryTable)
+    .values(historyRow)
+    .onConflictDoUpdate({
+      target: hermesPipelineHistoryTable.date,
+      set: { ...historyRow, computedAt: new Date() },
+    });
+
   return res.json({ success: true });
 });
 
@@ -420,6 +525,36 @@ router.get("/hermes-pipeline", async (req: Request, res: Response) => {
       L4: pipelineLayerWithHealth(row.l4, PIPELINE_CADENCE_HOURS.l4),
       L5: pipelineLayerWithHealth(row.l5, PIPELINE_CADENCE_HOURS.l5),
     },
+  });
+});
+
+// 每日趨勢——每層存的是 ok/crit/unknown 字串（見 hermesPipelineHistory.ts
+// 為什麼不能讀取時重算），前端拿這個畫「近 N 天每天健康狀態」的色條，不是
+// 折線圖（health 是類別值不是連續數字）。
+router.get("/hermes-pipeline/history", async (req: Request, res: Response) => {
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
+  if (!unlocked) {
+    return res.status(403).json({ message: "需要解鎖私領域才能查看" });
+  }
+
+  const daysParam = Number(req.query["days"]);
+  const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 365) : 30;
+
+  const rows = await db
+    .select()
+    .from(hermesPipelineHistoryTable)
+    .orderBy(desc(hermesPipelineHistoryTable.date))
+    .limit(days);
+
+  return res.json({
+    history: rows.reverse().map((r) => ({
+      date: r.date,
+      L1: r.l1Health,
+      L2: r.l2Health,
+      L3: r.l3Health,
+      L4: r.l4Health,
+      L5: r.l5Health,
+    })),
   });
 });
 

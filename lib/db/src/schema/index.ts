@@ -8,3 +8,5 @@ export * from "./hermesStatusSnapshot";
 export * from "./hermesActivityLog";
 export * from "./hermesGraphSnapshot";
 export * from "./hermesPipelineSnapshot";
+export * from "./hermesStatusHistory";
+export * from "./hermesPipelineHistory";
