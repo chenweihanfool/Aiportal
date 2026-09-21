@@ -411,6 +411,26 @@ export function objectInsight(index: GraphIndex, name: string): ObjectInsight {
   }
 }
 
+// 給詳情面板「時間軸」分頁用——人/案/物三種樞紐節點各自關聯的事件，統一轉
+// 成同一種形狀，好跟 narrativesByHub 的敘事項目合併成一條時間軸。案件/物
+// 件的 caseEvents／objectEvents 已經照日期排過序，這裡不重排，交給呼叫端
+// 跟敘事合併後統一排序。
+export function entityEvents(
+  index: GraphIndex, kind: NodeKind, name: string,
+): Array<{ id: string; date: string; title: string; status: string | null }> {
+  const ids: Iterable<string> =
+    kind === 'person' ? (index.personEvents.get(name) ?? [])
+    : kind === 'case' ? (index.caseEvents.get(name) ?? [])
+    : kind === 'object' ? (index.objectEvents.get(name) ?? [])
+    : []
+  const out: Array<{ id: string; date: string; title: string; status: string | null }> = []
+  for (const id of ids) {
+    const ev = index.eventById.get(id)
+    if (ev) out.push({ id: ev.id, date: ev.date, title: ev.title, status: ev.status })
+  }
+  return out
+}
+
 export interface SearchHit { id: string; kind: NodeKind; label: string; sub: string }
 
 /** 跨四種類型的子字串搜尋。刻意不限制在目前的核心類型——使用者通常不知道
