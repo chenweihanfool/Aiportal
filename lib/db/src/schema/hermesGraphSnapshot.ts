@@ -63,6 +63,21 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
       text: string;
     }>
   >(),
+  // 2026-09-21 — L5 TASK D「樞紐觀察評價」：樞紐檔新增獨立「## 樞紐觀察評
+  // 價」區塊（`L5-EVAL：` 前綴），跟「## 圖譜敘事」平行但語意相反——敘事是
+  // 永不收斂的累積時間軸，這個是每輪整段覆寫的單一快照（第一人稱、≤300
+  // 字，選取樞紐時顯示「目前為止的觀察評價」，不是時間軸項目）。collect.ps1
+  // 只送每個樞紐最新一則（覆蓋語義下正常只有 0 或 1 則），不像 hubNarratives
+  // 需要留 20 則歷史；跟 personRelations／hubNarratives 同一種例外，Events
+  // 完全沒有這個資訊，只能單獨掃、單獨存。
+  hubAssessments: jsonb("hub_assessments").$type<
+    Array<{
+      hub: string;
+      kind: "person" | "case" | "object";
+      date: string; // YYYY-MM-DD，L5 產出當天，不含 HH:MM
+      text: string;
+    }>
+  >(),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -71,3 +86,4 @@ export type HermesGraphEvent = NonNullable<HermesGraphSnapshotRow["events"]>[num
 export type HermesGraphPersonRelation = NonNullable<HermesGraphSnapshotRow["personRelations"]>[number];
 export type HermesGraphCaseMeta = NonNullable<HermesGraphSnapshotRow["cases"]>[number];
 export type HermesGraphHubNarrative = NonNullable<HermesGraphSnapshotRow["hubNarratives"]>[number];
+export type HermesGraphHubAssessment = NonNullable<HermesGraphSnapshotRow["hubAssessments"]>[number];

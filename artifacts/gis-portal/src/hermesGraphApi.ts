@@ -24,6 +24,15 @@ export interface HermesGraphHubNarrative {
   type: 'weave' | 'alert'
   text: string
 }
+// 2026-09-21 — L5 TASK D「樞紐觀察評價」：跟 hubNarratives 平行但語意相
+// 反——敘事是累積時間軸，這是每輪整段覆寫的單一快照（第一人稱、≤300 字），
+// 每個樞紐正常只有 0 或 1 筆，見 hermesGraphSnapshot.ts 的欄位說明。
+export interface HermesGraphHubAssessment {
+  hub: string
+  kind: 'person' | 'case' | 'object'
+  date: string
+  text: string
+}
 
 export interface HermesGraphMetrics {
   peopleCount: number
@@ -54,6 +63,7 @@ export interface HermesGraphData {
     objectEdges: HermesGraphObjectEdge[]
     personRelations: HermesGraphPersonRelation[]
     hubNarratives: HermesGraphHubNarrative[]
+    hubAssessments: HermesGraphHubAssessment[]
   }
 }
 
