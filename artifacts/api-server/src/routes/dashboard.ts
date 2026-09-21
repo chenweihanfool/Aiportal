@@ -3,7 +3,7 @@ import { db, happinessIndexHistoryTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { fetchFreshSummaries } from "../lib/summarySources";
 import { SUMMARY_SOURCES } from "../lib/summarySources";
-import { ADMIN_PASSWORD } from "../lib/adminPassword";
+import { isAuthorized } from "../lib/adminSession";
 
 const router = Router();
 
@@ -15,7 +15,7 @@ const router = Router();
 // Private subsystems' data is redacted unless the caller unlocks with the
 // same admin password used for the private link zone.
 router.get("/dashboard", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
 
   try {
     const freshMap = await fetchFreshSummaries();
@@ -83,7 +83,7 @@ router.get("/dashboard", async (req: Request, res: Response) => {
 // day and there's no reason to re-send a growing history array on every
 // page-load poll. Same private-zone password gate as /dashboard.
 router.get("/happiness/history", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
   if (!unlocked) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }

@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { db, mindIndexHistoryTable } from "@workspace/db";
 import { desc, isNotNull } from "drizzle-orm";
 import { taipeiDateString } from "../lib/summarySources";
-import { ADMIN_PASSWORD } from "../lib/adminPassword";
+import { isAuthorized } from "../lib/adminSession";
 
 const router = Router();
 
@@ -28,7 +28,7 @@ const router = Router();
 // the Python busyness-index service already writes straight to Postgres
 // rather than api-server reading a file it produces.
 router.post("/admin/mind-index", async (req: Request, res: Response) => {
-  const authorized = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const authorized = isAuthorized(req.headers["x-admin-password"]);
   if (!authorized) {
     return res.status(403).json({ message: "需要管理員權限" });
   }
@@ -79,7 +79,7 @@ router.post("/admin/mind-index", async (req: Request, res: Response) => {
 // Trend-line chart data for the mind-index card's expanded panel — same
 // private-zone password gate and shape as /api/happiness/history.
 router.get("/mind-index/history", async (req: Request, res: Response) => {
-  const unlocked = req.headers["x-admin-password"] === ADMIN_PASSWORD;
+  const unlocked = isAuthorized(req.headers["x-admin-password"]);
   if (!unlocked) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }
