@@ -12,6 +12,7 @@ import {
   type HermesGraphPersonRelation,
   type HermesGraphCaseMeta,
   type HermesGraphHubNarrative,
+  type HermesGraphHubAssessment,
   type HermesPipelineLayerStatus,
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
@@ -250,13 +251,16 @@ router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
   const hubNarratives = Array.isArray(body["hubNarratives"])
     ? (body["hubNarratives"] as HermesGraphHubNarrative[])
     : [];
+  const hubAssessments = Array.isArray(body["hubAssessments"])
+    ? (body["hubAssessments"] as HermesGraphHubAssessment[])
+    : [];
 
   await db
     .insert(hermesGraphSnapshotTable)
-    .values({ id: "latest", events, personRelations, cases, hubNarratives })
+    .values({ id: "latest", events, personRelations, cases, hubNarratives, hubAssessments })
     .onConflictDoUpdate({
       target: hermesGraphSnapshotTable.id,
-      set: { events, personRelations, cases, hubNarratives, computedAt: new Date() },
+      set: { events, personRelations, cases, hubNarratives, hubAssessments, computedAt: new Date() },
     });
 
   return res.json({ success: true });
@@ -281,6 +285,7 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
   const events = row.events;
   const personRelations = row.personRelations ?? [];
   const hubNarratives = row.hubNarratives ?? [];
+  const hubAssessments = row.hubAssessments ?? [];
   const caseMetaByName = new Map((row.cases ?? []).map((c) => [c.name, c]));
 
   // 人物節點 + degree（連結數）從 events.participants 反推——People/*.md
@@ -391,6 +396,7 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
       objectEdges,
       personRelations: dedupedPersonRelations,
       hubNarratives,
+      hubAssessments,
     },
   });
 });

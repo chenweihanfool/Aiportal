@@ -79,6 +79,26 @@ function Note({ children, tone }: { children: React.ReactNode; tone?: 'warn' | '
   )
 }
 
+// 洞察分頁最上面的「目前評價」——L5 每輪覆蓋的第一人稱快照，跟分頁其他內
+// 容（拓撲推導出來的洞察）不是同一種東西，用左側色條 + 斜體跟其他區塊區
+// 分開來，視覺上讀成「這是一則被寫下來的評語」而不是一項數據。
+function AssessmentNote({ assessment }: { assessment: { date: string; text: string } }) {
+  return (
+    <div style={{
+      marginBottom: '0.7rem', padding: '0.6rem 0.75rem', borderRadius: '6px',
+      background: 'rgba(255,255,255,0.03)', borderLeft: `3px solid ${COLOR.amber}`,
+    }}>
+      <div style={{
+        fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim,
+        letterSpacing: '0.08em', marginBottom: '4px',
+      }}>目前評價 · {assessment.date}</div>
+      <div style={{ fontSize: 'calc(var(--ds, 1) * 0.7rem)', lineHeight: 1.65, color: COLOR.ink, fontStyle: 'italic' }}>
+        {assessment.text}
+      </div>
+    </div>
+  )
+}
+
 export function RelationshipDetailPanel({
   graph, selection, onSelect, onClose, onSetPathAnchor, pathAnchor, trail, onTrailJump,
 }: {
@@ -312,11 +332,19 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
 }
 
 function InsightTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind; name: string; go: (id: string) => void }) {
+  // 「目前評價」只對人/案/物三種樞紐節點有意義（事件不是樞紐，L5 不會給
+  // 事件寫評價），跟其餘三個分支各自的洞察內容放在同一個 id 命名慣例下查。
+  const assessment = kind === 'person' ? index.currentAssessmentByHub.get(personId(name))
+    : kind === 'case' ? index.currentAssessmentByHub.get(caseId(name))
+    : kind === 'object' ? index.currentAssessmentByHub.get(objectId(name))
+    : undefined
+
   if (kind === 'person') {
     const ins = personInsight(index, name)
     const nothing = ins.collaborators.length === 0 && ins.secondDegree.length === 0 && ins.bridgeGroups.length === 0
     return (
       <>
+        {assessment && <AssessmentNote assessment={assessment} />}
         {ins.collaborators.length > 0 && (
           <Section title="最常同場的人">
             {ins.collaborators.map(c => (
@@ -362,6 +390,7 @@ function InsightTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKi
     const ins = caseInsight(index, name)
     return (
       <>
+        {assessment && <AssessmentNote assessment={assessment} />}
         <Note>
           期間 {ins.firstDate} ~ {ins.lastDate}
           {ins.spanDays !== null && `（跨 ${ins.spanDays} 天）`}
@@ -420,6 +449,7 @@ function InsightTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKi
   const ins = objectInsight(index, name)
   return (
     <>
+      {assessment && <AssessmentNote assessment={assessment} />}
       {ins.firstDate && <Note>出現期間：{ins.firstDate} ~ {ins.lastDate}。</Note>}
       {ins.handlers.length > 0 && (
         <Section title="經手人">

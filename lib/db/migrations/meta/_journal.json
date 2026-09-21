@@ -92,6 +92,13 @@
       "when": 1789967913782,
       "tag": "0012_vengeful_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789970726169,
+      "tag": "0013_worthless_talos",
+      "breakpoints": true
     }
   ]
 }

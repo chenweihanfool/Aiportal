@@ -70,6 +70,11 @@ function buildGraph(): Graph {
       { hub: 'CaseA', kind: 'case', date: '2026-01-01', type: 'weave', text: '案件啟動' },
       { hub: 'CaseA', kind: 'case', date: '2026-01-10', type: 'weave', text: '案件跟進' },
     ],
+    hubAssessments: [
+      { hub: 'Alice', kind: 'person', date: '2026-01-05', text: '早期評價' },
+      { hub: 'Alice', kind: 'person', date: '2026-01-12', text: '最新評價' },
+      { hub: 'CaseA', kind: 'case', date: '2026-01-10', text: '案件目前評價' },
+    ],
   }
 }
 
@@ -120,6 +125,20 @@ describe('buildIndex', () => {
     expect(index.nodeIdByLabel.get('CaseA')).toBe(caseId('CaseA'))
     expect(index.nodeIdByLabel.get('Kickoff')).toBe(eventId('e1'))
     expect(index.nodeIdByLabel.get('2026-01-01_Kickoff')).toBe(eventId('e1'))
+  })
+
+  it('keeps only the newest-dated assessment per hub', () => {
+    expect(index.currentAssessmentByHub.get(personId('Alice')))
+      .toEqual({ date: '2026-01-12', text: '最新評價' })
+  })
+
+  it('keys assessments by kind-specific id, not shared across node types', () => {
+    expect(index.currentAssessmentByHub.get(caseId('CaseA')))
+      .toEqual({ date: '2026-01-10', text: '案件目前評價' })
+  })
+
+  it('has no entry for a hub with no assessment', () => {
+    expect(index.currentAssessmentByHub.has(personId('Bob'))).toBe(false)
   })
 })
 

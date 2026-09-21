@@ -725,6 +725,69 @@ function Get-HermesHubNarratives {
     return $narratives
 }
 
+# 2026-09-21 — L5 TASK D「樞紐觀察評價」：樞紐檔新增獨立「## 樞紐觀察評
+# 價」區塊（`L5-EVAL：` 前綴，帶 HH:MM），跟「## 圖譜敘事」平行但語意相
+# 反——敘事永不收斂、增補式編織，這裡每輪整段覆寫，只存最新一則第一人稱
+# 快照（≤300 字）。跟 Get-HermesHubNarratives 共用同一套 frontmatter 解析
+# （讀 `name:` 欄位當 hub key，不是檔名——理由同上面那支函式），但只認這一
+# 種標題、這一種前綴，也不留歷史。覆蓋語義下正常只會有 0 或 1 則（L5 自檢
+# 會擋多寫），這裡防禦性地在意外出現多則時只取日期最新那筆，不假設上游一
+# 定乾淨。
+function Get-HermesHubAssessments {
+    param(
+        [string]$FolderPath,
+        [string]$Kind # "person" | "case" | "object" —— 存進 hub 節點的 kind 欄位
+    )
+    $assessments = @()
+    if (-not (Test-Path $FolderPath)) { return $assessments }
+
+    $sectionPattern = '^##\s*樞紐觀察評價\s*$'
+
+    $files = Get-ChildItem -Path $FolderPath -Filter "*.md" | Where-Object { $_.Name -ne "README.md" }
+    foreach ($file in $files) {
+        try {
+            $lines = Get-Content -Path $file.FullName -Encoding UTF8
+            if ($lines.Count -eq 0 -or $lines[0] -ne "---") { continue }
+
+            $endIdx = -1
+            for ($i = 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -eq "---") { $endIdx = $i; break }
+            }
+            if ($endIdx -lt 0) { continue }
+
+            $name = $null
+            for ($i = 1; $i -lt $endIdx; $i++) {
+                if ($lines[$i] -match '^name:\s*(.+)$') { $name = $Matches[1].Trim() }
+            }
+            if (-not $name) { continue }  # 沒有 name 欄位的檔案（骨架未補齊）跳過
+
+            $hits = @()
+            $inSection = $false
+            for ($i = $endIdx + 1; $i -lt $lines.Count; $i++) {
+                $line = $lines[$i]
+                if ($line -match $sectionPattern) { $inSection = $true; continue }
+                if ($inSection -and $line -match '^##\s') { $inSection = $false; continue }
+                if ($inSection -and $line -match '^-\s*(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\s+L5-EVAL[：:]\s*(.+)$') {
+                    $hits += @{ date = $Matches[1]; text = $Matches[2].Trim() }
+                }
+            }
+
+            if ($hits.Count -gt 0) {
+                $latest = $hits | Sort-Object -Property date -Descending | Select-Object -First 1
+                $assessments += @{
+                    hub = $name
+                    kind = $Kind
+                    date = $latest.date
+                    text = $latest.text
+                }
+            }
+        } catch {
+            Write-ErrorLog "Hermes graph: 解析樞紐觀察評價 $($file.Name) 失敗: $_"
+        }
+    }
+    return $assessments
+}
+
 # ── 社交指標：近 7 天觀測日/互動統計 → socialScore（HHI v2，新增） ────────
 # 資料來源是 HERMES 自己 L1/L2 日記處理流程額外寫出的 social_interactions.jsonl
 # （見檔頭 $SocialInteractionsPath）——這支腳本只做檔案解析、產出聚合計數，
@@ -802,6 +865,12 @@ try {
     $hermesHubNarratives += Get-HermesHubNarratives -FolderPath $PeopleFolderPath -Kind "person" -AlertHeading "## 🧠 脈絡洞察"
     $hermesHubNarratives += Get-HermesHubNarratives -FolderPath $ObjectsFolderPath -Kind "object" -AlertHeading "## 🧠 脈絡洞察"
     $hermesHubNarratives += Get-HermesHubNarratives -FolderPath $CasesFolderPath -Kind "case" -AlertHeading "## 🧠 案件脈絡與目前進度"
+    # 「樞紐觀察評價」跟上面敘事共用同一份樞紐檔，但獨立掃（見
+    # Get-HermesHubAssessments 說明：不同標題、覆蓋語義而非累積）。
+    $hermesHubAssessments = @()
+    $hermesHubAssessments += Get-HermesHubAssessments -FolderPath $PeopleFolderPath -Kind "person"
+    $hermesHubAssessments += Get-HermesHubAssessments -FolderPath $ObjectsFolderPath -Kind "object"
+    $hermesHubAssessments += Get-HermesHubAssessments -FolderPath $CasesFolderPath -Kind "case"
     # @(...) 強制陣列，理由同上面 social 區塊——任一陣列筆數是 0 或 1 時，
     # ConvertTo-Json 沒有這層保護會把陣列序列化成裸物件/單一物件，api-server
     # 那邊 Array.isArray() 檢查就會直接判定成空陣列，整包資料等於沒送到。
@@ -810,6 +879,7 @@ try {
         personRelations = @($hermesPersonRelations)
         cases = @($hermesCases)
         hubNarratives = @($hermesHubNarratives)
+        hubAssessments = @($hermesHubAssessments)
     } | ConvertTo-Json -Depth 6
     Invoke-RestMethod -Uri "$ApiBaseUrl/api/admin/hermes-graph" -Method Post -Headers $Headers -Body ($graphBody | ConvertTo-AsciiJson) | Out-Null
 } catch {

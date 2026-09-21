@@ -45,6 +45,10 @@ export interface GraphIndex {
   /** 樞紐節點 id（p:/c:/o:）-> 敘事時間軸（圖譜敘事 weave + 時效警報 alert
    *  合併，已依日期新到舊排序），見 hermesGraphSnapshot.ts 的 hubNarratives 說明 */
   narrativesByHub: Map<string, HermesGraphHubNarrative[]>
+  /** 樞紐節點 id -> L5 每輪覆蓋的「目前評價」快照（第一人稱、≤300 字），
+   *  跟 narrativesByHub 語意相反：這裡只有最新一筆，不是時間軸，見
+   *  hermesGraphSnapshot.ts 的 hubAssessments 欄位說明 */
+  currentAssessmentByHub: Map<string, { date: string; text: string }>
   /** 敘事文字裡 [[名稱]] wikilink -> 節點 id，解析不到就原樣顯示文字 */
   nodeIdByLabel: Map<string, string>
 }
@@ -126,6 +130,16 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
   }
   for (const arr of narrativesByHub.values()) arr.sort((a, b) => b.date.localeCompare(a.date))
 
+  // 樞紐觀察評價：跟上面 narrativesByHub 同一套 id 前綴慣例，但每個樞紐只
+  // 保留日期最新的一筆——覆蓋語義下 collect.ps1 正常只會送 0 或 1 筆，這裡
+  // 防禦性地在意外出現多筆時只留最新，不假設上游一定乾淨。
+  const currentAssessmentByHub = new Map<string, { date: string; text: string }>()
+  for (const a of graph.hubAssessments) {
+    const id = a.kind === 'person' ? personId(a.hub) : a.kind === 'case' ? caseId(a.hub) : objectId(a.hub)
+    const existing = currentAssessmentByHub.get(id)
+    if (!existing || a.date > existing.date) currentAssessmentByHub.set(id, { date: a.date, text: a.text })
+  }
+
   // Wikilink 解析用的反查表：人/案/物直接用顯示名稱當 key；事件比較特殊——
   // 敘事文字裡的 [[名稱]] 慣例是完整檔名（含日期前綴，例：
   // 「2026-09-17_載爸媽台大回診...」），但 event.title 有時是「檔名去掉日
@@ -148,7 +162,7 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
     caseEvents, objectEvents,
     caseStatus: new Map(graph.cases.map(c => [c.name, c.status])),
     objectType: new Map(graph.objects.map(o => [o.name, o.objectType])),
-    relationDescription, coEvents, narrativesByHub, nodeIdByLabel,
+    relationDescription, coEvents, narrativesByHub, currentAssessmentByHub, nodeIdByLabel,
   }
 }
 
