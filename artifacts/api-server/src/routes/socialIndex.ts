@@ -3,10 +3,9 @@ import { db, socialIndexHistoryTable } from "@workspace/db";
 import { desc, isNotNull } from "drizzle-orm";
 import { computeSocialIndex } from "../lib/socialIndex";
 import { taipeiDateString } from "../lib/summarySources";
+import { ADMIN_PASSWORD } from "../lib/adminPassword";
 
 const router = Router();
-
-const ADMIN_PASSWORD = process.env["ADMIN_PASSWORD"] ?? "85097110";
 
 // Unlike mind-index (two independent pushers sharing one row), social-index
 // has exactly ONE pusher — collect.ps1, ~every 10 min — so every push

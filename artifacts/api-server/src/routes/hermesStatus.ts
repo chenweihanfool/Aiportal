@@ -13,10 +13,9 @@ import {
   type HermesPipelineLayerStatus,
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
+import { ADMIN_PASSWORD } from "../lib/adminPassword";
 
 const router = Router();
-
-const ADMIN_PASSWORD = process.env["ADMIN_PASSWORD"] ?? "85097110";
 
 // Vault 本人（"使用者" alias 已在 2026-09-08 併檔進這個名字，見
 // Events/2026-09-08_People-alias手動併檔完成使用者併入陳韋翰.md）——他幾乎
