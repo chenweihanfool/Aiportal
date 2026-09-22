@@ -473,3 +473,84 @@ export function searchNodes(
   hits.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label))
   return hits.slice(0, limit).map(({ score: _score, ...hit }) => hit)
 }
+
+export interface RecentActivityItem { id: string; kind: NodeKind; label: string; date: string }
+// hub 只可能是 person/case/object（事件不是樞紐，L5 不會對事件寫敘事/評
+// 價），比 NodeKind 窄一點，讓呼叫端把 kind 轉回節點 id 時不用處理 'event'
+// 這個永遠不會出現的分支。
+export interface RecentNarrativeItem { hub: string; kind: 'person' | 'case' | 'object'; date: string; text: string }
+
+export interface RecentActivity {
+  newPeople: RecentActivityItem[]
+  newEvents: RecentActivityItem[]
+  newCases: RecentActivityItem[]
+  newObjects: RecentActivityItem[]
+  /** L5 圖譜敘事（type=weave）裡 sinceDate 之後新增的段落 */
+  newNarratives: RecentNarrativeItem[]
+  /** L5 樞紐觀察評價裡 sinceDate 之後被刷新過的——語意是「被覆蓋更新」不
+   *  是「新增」，UI 端要用不同字眼跟上面的敘事區分開 */
+  refreshedAssessments: RecentNarrativeItem[]
+}
+
+/** sinceDate（YYYY-MM-DD，含）之後才出現/更新的東西，給「最近新增」面板
+ *  用。人/案/物節點本身沒有獨立的建立時間，「首次出現」= 這個節點關聯到
+ *  的最早一筆事件日期——跟這個檔案其餘部分同一個原則：一切從 events 反
+ *  推，不假設節點有自己的時間戳。 */
+export function recentActivity(
+  index: GraphIndex,
+  graph: NonNullable<HermesGraphData['graph']>,
+  sinceDate: string,
+): RecentActivity {
+  const firstDateOf = (evIds: Iterable<string>): string | null => {
+    let earliest: string | null = null
+    for (const id of evIds) {
+      const d = index.eventById.get(id)?.date
+      if (d && (!earliest || d < earliest)) earliest = d
+    }
+    return earliest
+  }
+
+  const newPeople: RecentActivityItem[] = []
+  for (const p of graph.people) {
+    const first = firstDateOf(index.personEvents.get(p.name) ?? [])
+    if (first && first >= sinceDate) newPeople.push({ id: personId(p.name), kind: 'person', label: p.name, date: first })
+  }
+
+  // caseEvents／objectEvents 已經依日期由舊到新排過序（見 buildIndex），
+  // 第一筆就是最早出現的日期，不用像人物那樣重新掃一輪找最小值。
+  const newCases: RecentActivityItem[] = []
+  for (const c of graph.cases) {
+    const ids = index.caseEvents.get(c.name) ?? []
+    const first = ids.length > 0 ? (index.eventById.get(ids[0])?.date ?? null) : null
+    if (first && first >= sinceDate) newCases.push({ id: caseId(c.name), kind: 'case', label: c.name, date: first })
+  }
+
+  const newObjects: RecentActivityItem[] = []
+  for (const o of graph.objects) {
+    const ids = index.objectEvents.get(o.name) ?? []
+    const first = ids.length > 0 ? (index.eventById.get(ids[0])?.date ?? null) : null
+    if (first && first >= sinceDate) newObjects.push({ id: objectId(o.name), kind: 'object', label: o.name, date: first })
+  }
+
+  const newEvents: RecentActivityItem[] = graph.events
+    .filter(e => e.date >= sinceDate)
+    .map(e => ({ id: eventId(e.id), kind: 'event' as const, label: e.title, date: e.date }))
+
+  const newNarratives: RecentNarrativeItem[] = graph.hubNarratives
+    .filter(n => n.type === 'weave' && n.date >= sinceDate)
+    .map(n => ({ hub: n.hub, kind: n.kind, date: n.date, text: n.text }))
+
+  const refreshedAssessments: RecentNarrativeItem[] = graph.hubAssessments
+    .filter(a => a.date >= sinceDate)
+    .map(a => ({ hub: a.hub, kind: a.kind, date: a.date, text: a.text }))
+
+  const byDateDesc = <T extends { date: string }>(a: T, b: T) => b.date.localeCompare(a.date)
+  newPeople.sort(byDateDesc)
+  newCases.sort(byDateDesc)
+  newObjects.sort(byDateDesc)
+  newEvents.sort(byDateDesc)
+  newNarratives.sort(byDateDesc)
+  refreshedAssessments.sort(byDateDesc)
+
+  return { newPeople, newEvents, newCases, newObjects, newNarratives, refreshedAssessments }
+}
