@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildIndex, shortestPath, personInsight, caseInsight, eventInsight, objectInsight,
-  entityEvents, searchNodes, personId, eventId, caseId, objectId, splitId,
+  entityEvents, searchNodes, recentActivity, personId, eventId, caseId, objectId, splitId,
 } from './graphInsights'
 import type { HermesGraphData } from './hermesGraphApi'
 
@@ -340,5 +340,42 @@ describe('searchNodes', () => {
   it('respects the result limit', () => {
     const hits = searchNodes(graph, 'e', 'event', 2)
     expect(hits).toHaveLength(2)
+  })
+})
+
+describe('recentActivity', () => {
+  const graph = buildGraph()
+  const index = buildIndex(graph)
+
+  it('only includes nodes whose first event is on/after sinceDate, newest first', () => {
+    const activity = recentActivity(index, graph, '2026-03-01')
+    expect(activity.newPeople.map(p => p.label)).toEqual(['Ivy', 'Henry', 'Frank', 'Grace', 'Eve'])
+    expect(activity.newCases.map(c => c.label)).toEqual(['CaseB'])
+    expect(activity.newObjects.map(o => o.label)).toEqual(['Car'])
+    expect(activity.newEvents.map(e => e.id)).toEqual([eventId('e8'), eventId('e7'), eventId('e6'), eventId('e5')])
+  })
+
+  it('excludes narratives and assessments dated before sinceDate', () => {
+    const activity = recentActivity(index, graph, '2026-03-01')
+    expect(activity.newNarratives).toEqual([])
+    expect(activity.refreshedAssessments).toEqual([])
+  })
+
+  it('includes narratives and assessments dated on/after sinceDate, newest first', () => {
+    const activity = recentActivity(index, graph, '2026-01-01')
+    expect(activity.newNarratives.map(n => n.date)).toEqual(['2026-01-10', '2026-01-01'])
+    expect(activity.refreshedAssessments.map(a => a.date)).toEqual(['2026-01-12', '2026-01-10', '2026-01-05'])
+  })
+
+  it('returns every category empty when sinceDate is after all activity', () => {
+    const activity = recentActivity(index, graph, '2026-05-01')
+    expect(activity).toEqual({
+      newPeople: [], newEvents: [], newCases: [], newObjects: [], newNarratives: [], refreshedAssessments: [],
+    })
+  })
+
+  it('treats sinceDate as inclusive', () => {
+    const activity = recentActivity(index, graph, '2026-03-01')
+    expect(activity.newEvents.some(e => e.id === eventId('e5'))).toBe(true)
   })
 })

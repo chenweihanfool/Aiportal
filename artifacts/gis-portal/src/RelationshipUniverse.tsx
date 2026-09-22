@@ -22,7 +22,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
-import { buildIndex, searchNodes, shortestPath, splitId } from './graphInsights'
+import {
+  buildIndex, searchNodes, shortestPath, splitId, recentActivity,
+  personId, caseId, objectId, type RecentActivity, type RecentActivityItem,
+} from './graphInsights'
 import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPanel'
 
 type NodeKind = 'person' | 'event' | 'case' | 'object'
@@ -62,6 +65,8 @@ const satelliteCapFor = (m: number) => Math.max(0.3, Math.min(1.05, 0.16 * Math.
 // 最遠端節點的不透明度下限。第一版是 0.05（幾乎透明），整張圖因此灰濛濛；
 // 0.32 仍然看得出前後深度，但不會讓任何節點糊掉。
 const DEPTH_MIN_OPACITY = 0.32
+// 「最近新增」面板的上次造訪時間戳，見下方 effect 的說明。
+const LAST_VISIT_STORAGE_KEY = 'relationshipUniverse.lastVisitAt'
 
 // 核心那一類一律 amber，其餘三類一律中性灰——刻意都不帶橘黃，否則「amber
 // ＝目前的核心」這個唯一的顏色語意就被破壞（第一版非核心人物用 amberDim
@@ -200,6 +205,9 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   // 走過的節點鏈：讓「一直串聯下去」可以回頭，不會走幾步就迷路
   const [trail, setTrail] = useState<Selection[]>([])
   const [pathAnchor, setPathAnchor] = useState<string | null>(null)
+  // 「最近新增」面板的 cutoff 日期跟關閉狀態，見下方 effect 的說明。
+  const [activitySince, setActivitySince] = useState<string | null>(null)
+  const [activityDismissed, setActivityDismissed] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -250,6 +258,26 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     if (!unlockedPassword) return
     apiFetchHermesGraph(unlockedPassword).then(setData).catch(() => setError(true))
   }, [unlockedPassword])
+
+  // 「最近新增」的 cutoff：讀「上次造訪」時間，不是固定時間窗——固定 7 天
+  // 在兩週才開一次時會漏掉，在一天開好幾次時又一直顯示同一批。讀出來的
+  // cutoff 只在這裡用一次，不會馬上覆寫 localStorage；要使用者按下面板的
+  // 「知道了」（dismissActivity）才更新，這樣中途重整頁面看到的還是同一
+  // 批，不會因為單純看了一眼就被標記已讀。沒有記錄（第一次用這個功能）
+  // 就退回抓最近 7 天當預設。
+  useEffect(() => {
+    let raw: string | null = null
+    try { raw = localStorage.getItem(LAST_VISIT_STORAGE_KEY) } catch { /* 私密瀏覽/被封鎖時忽略，退回預設窗 */ }
+    const fallback = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const parsedMs = raw ? Number(raw) : NaN
+    const since = Number.isFinite(parsedMs) ? new Date(parsedMs).toISOString().slice(0, 10) : fallback
+    setActivitySince(since)
+  }, [])
+
+  const dismissActivity = useCallback(() => {
+    setActivityDismissed(true)
+    try { localStorage.setItem(LAST_VISIT_STORAGE_KEY, String(Date.now())) } catch { /* 存不了就算了，下次照舊退回 7 天預設 */ }
+  }, [])
 
   const eventTouchedIds = useMemo(() => {
     // 「孤立事件」＝完全沒有任何邊碰到（無 participants、無 case、無
@@ -626,6 +654,15 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   }, [g, pathAnchor, selection])
   useEffect(() => { pathSetRef.current = pathIds ? new Set(pathIds) : null }, [pathIds])
 
+  const activity = useMemo(
+    () => (g && activitySince ? recentActivity(buildIndex(g), g, activitySince) : null),
+    [g, activitySince],
+  )
+  const activityTotal = activity
+    ? activity.newPeople.length + activity.newEvents.length + activity.newCases.length
+      + activity.newObjects.length + activity.newNarratives.length + activity.refreshedAssessments.length
+    : 0
+
   const ready = !!(unlockedPassword && !error && data && data.available !== false && data.graph)
   const statusMessage = !unlockedPassword
     ? '需要先解鎖私領域才能查看關係宇宙'
@@ -733,6 +770,10 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           />
         )}
 
+        {ready && activity && activityTotal > 0 && !activityDismissed && (
+          <RecentActivityPanel activity={activity} total={activityTotal} onDismiss={dismissActivity} onSelect={selectNode} />
+        )}
+
         {ready && pathIds && pathIds.length > 1 && g && (
           <div style={{
             position: 'absolute', left: '1.2rem', top: '1rem', width: 'min(520px, calc(100% - 2.4rem))',
@@ -771,6 +812,107 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         </div>
       </div>
     </FullPageShell>
+  )
+}
+
+const RECENT_KIND_LABEL: Record<'person' | 'case' | 'object' | 'event', string> = { person: '新人物', case: '新案件', object: '新物件', event: '新事件' }
+
+function hubNodeId(kind: 'person' | 'case' | 'object', hub: string): string {
+  return kind === 'person' ? personId(hub) : kind === 'case' ? caseId(hub) : objectId(hub)
+}
+
+/** 「最近新增」面板：右上角，跟左上角的關聯路徑卡、左下角的詳情卡各佔一
+ *  角，不會疊在一起。只在有東西可顯示時掛載（activityTotal > 0 才 render
+ *  這個元件），所以不用自己處理空狀態。 */
+function RecentActivityPanel({
+  activity, total, onDismiss, onSelect,
+}: {
+  activity: RecentActivity
+  total: number
+  onDismiss: () => void
+  onSelect: (sel: Selection) => void
+}) {
+  const itemSections: Array<{ kind: 'person' | 'case' | 'object' | 'event'; items: RecentActivityItem[] }> = [
+    { kind: 'person', items: activity.newPeople },
+    { kind: 'case', items: activity.newCases },
+    { kind: 'object', items: activity.newObjects },
+    { kind: 'event', items: activity.newEvents },
+  ]
+
+  return (
+    <div style={{
+      position: 'absolute', right: '1.2rem', top: '1rem', width: 'min(340px, calc(100% - 2.4rem))',
+      maxHeight: 'calc(100% - 2.4rem)', overflowY: 'auto',
+      padding: '0.7rem 0.85rem', background: 'rgba(18,19,25,0.97)', border: `1px solid ${COLOR.amberDim}`, borderRadius: '6px',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.amber, letterSpacing: '0.06em' }}>最近新增 · 共 {total} 項</span>
+        <span onClick={onDismiss} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.75rem' }}>✕</span>
+      </div>
+
+      {itemSections.filter(s => s.items.length > 0).map(s => (
+        <div key={s.kind} style={{ marginTop: '0.5rem' }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim, marginBottom: '4px' }}>{RECENT_KIND_LABEL[s.kind]} · {s.items.length}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {s.items.slice(0, 20).map(it => (
+              <span
+                key={it.id}
+                onClick={() => onSelect({ kind: it.kind, id: it.id })}
+                title={`${it.label}（${it.date}）`}
+                style={{
+                  cursor: 'pointer', fontSize: '0.64rem', padding: '2px 7px', borderRadius: '999px',
+                  background: 'rgba(255,255,255,0.04)', border: `1px solid ${COLOR.line}`, color: COLOR.ink,
+                  maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}
+              >{it.label}</span>
+            ))}
+            {s.items.length > 20 && <span style={{ fontSize: '0.6rem', color: COLOR.steelDim, alignSelf: 'center' }}>+{s.items.length - 20}</span>}
+          </div>
+        </div>
+      ))}
+
+      {activity.newNarratives.length > 0 && (
+        <div style={{ marginTop: '0.5rem' }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim, marginBottom: '4px' }}>新敘事 · {activity.newNarratives.length}</div>
+          {activity.newNarratives.slice(0, 6).map((n, i) => (
+            <div
+              key={`${n.hub}-${n.date}-${i}`}
+              onClick={() => onSelect({ kind: n.kind, id: hubNodeId(n.kind, n.hub) })}
+              style={{ cursor: 'pointer', fontSize: '0.62rem', color: COLOR.steel, lineHeight: 1.5, marginBottom: '3px' }}
+            >
+              <span style={{ color: COLOR.amberDim }}>{n.hub}</span>：{n.text.length > 36 ? `${n.text.slice(0, 35)}…` : n.text}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activity.refreshedAssessments.length > 0 && (
+        <div style={{ marginTop: '0.5rem' }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim, marginBottom: '4px' }}>評價剛更新 · {activity.refreshedAssessments.length}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {activity.refreshedAssessments.map(a => (
+              <span
+                key={a.hub}
+                onClick={() => onSelect({ kind: a.kind, id: hubNodeId(a.kind, a.hub) })}
+                title={`${a.hub}（${a.date}）`}
+                style={{
+                  cursor: 'pointer', fontSize: '0.64rem', padding: '2px 7px', borderRadius: '999px',
+                  background: 'rgba(255,255,255,0.04)', border: `1px solid ${COLOR.line}`, color: COLOR.ink,
+                }}
+              >{a.hub}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div
+        onClick={onDismiss}
+        style={{
+          marginTop: '0.65rem', textAlign: 'center', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.6rem',
+          color: COLOR.amberDim, padding: '0.32rem', border: `1px solid ${COLOR.amberDim}`, borderRadius: '999px',
+        }}
+      >知道了</div>
+    </div>
   )
 }
 
