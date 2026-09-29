@@ -51,3 +51,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# host-specific compose settings (see docker-compose.override.example.yml)
+docker-compose.override.yml

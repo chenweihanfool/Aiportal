@@ -1,0 +1,24 @@
+# 主機專屬設定範例：讓 api-server 與 db-migrate 都能連到「同一台 Docker 主機上、
+# 另一個 compose 專案／網路裡」的 Postgres 容器（例：容器名 pg13，位於外部網路 pgnet）。
+#
+# 用法：複製成 docker-compose.override.yml（Docker Compose 會自動合併，且此檔名已在 .gitignore），
+# 把 pgnet 換成實際的外部網路名稱。**兩個服務都要掛**——只掛 api-server 時，
+# `docker compose --profile migrate run db-migrate` 會 `getaddrinfo EAI_AGAIN <資料庫主機名>`。
+#
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#   docker compose --profile migrate config   # 確認 api-server 與 db-migrate 都列出該網路
+#
+# 詳見 docs/deploy-migrate.md。
+services:
+  api-server:
+    networks:
+      - default
+      - pgnet
+  db-migrate:
+    networks:
+      - default
+      - pgnet
+
+networks:
+  pgnet:
+    external: true
