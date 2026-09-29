@@ -140,7 +140,14 @@ router.get("/sites", async (req: Request, res: Response) => {
   res.json({ sites: rows.map(toApiSite) });
 });
 
-router.post("/sites", requireAdmin, async (req: Request, res: Response) => {
+// 寫入端點同時開在 `/sites*` 與 `/admin/sites*` 兩種前綴：前端（gis-portal App.tsx）實際打的是
+// `/api/admin/sites*`（POST／PATCH／DELETE），舊版只註冊 `/sites*` 且沒有 PATCH，於是「新增／編輯／刪除網站」
+// 全部 404（部署機曾靠未提交的熱修撐著，任何一次重建都會復發）。保留 `/sites*` 是為了相容既有呼叫端。
+// GET `/sites` 維持公開讀取，不加 admin 前綴。
+const SITES_WRITE_PATHS = ["/sites", "/admin/sites"];
+const SITES_ITEM_PATHS = ["/sites/:id", "/admin/sites/:id"];
+
+router.post(SITES_WRITE_PATHS, requireAdmin, async (req: Request, res: Response) => {
   const { name, subtitle, links, worldXZ, isPrivate, subsystemId } = req.body as {
     name: string;
     subtitle?: string;
@@ -167,7 +174,8 @@ router.post("/sites", requireAdmin, async (req: Request, res: Response) => {
   res.status(201).json({ site: toApiSite(inserted) });
 });
 
-router.put("/sites/:id", requireAdmin, async (req: Request, res: Response) => {
+// PUT 與 PATCH 共用同一個處理器：body 只帶要改的欄位（部分更新），前端用 PATCH，舊呼叫端用 PUT。
+const updateSite = async (req: Request, res: Response) => {
   const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
@@ -203,9 +211,12 @@ router.put("/sites/:id", requireAdmin, async (req: Request, res: Response) => {
   }
 
   res.json({ site: toApiSite(updated) });
-});
+};
 
-router.delete("/sites/:id", requireAdmin, async (req: Request, res: Response) => {
+router.put(SITES_ITEM_PATHS, requireAdmin, updateSite);
+router.patch(SITES_ITEM_PATHS, requireAdmin, updateSite);
+
+router.delete(SITES_ITEM_PATHS, requireAdmin, async (req: Request, res: Response) => {
   const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
