@@ -91,6 +91,68 @@ body,
   }
 }
 
+/* ─── Instrument panel — 桌面版（寬螢幕）版面 ───
+   手機／窄視窗：主內容在上、工具連結在下（維持原樣）。
+   ≥1100px：左側常駐「工具連結」側欄（預設展開、可獨立捲動、不必捲到最下面），
+   右側主區依寬度把「幸福指數」與「六維度」並排、HERMES 戰情室橫跨整列。 */
+.ip-layout {
+  display: flex;
+  flex-direction: column;
+}
+.ip-aside { order: 2; }
+.ip-main { order: 1; }
+/* flex 項目內的 margin 不會與外層折疊；歸零，保持手機版與改版前逐像素相同 */
+.ip-aside .ip-tools { margin-bottom: 0 !important; }
+
+@media (min-width: 1100px) {
+  .ip-scroll {
+    padding: 1.2rem 1.6rem 2rem !important;
+  }
+  .ip-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    gap: 1.2rem;
+    align-items: start;
+  }
+  .ip-aside {
+    order: 0;
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - 8.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .ip-aside .ip-tools {
+    margin-bottom: 0 !important;
+    padding: 1.1rem 1rem 1rem !important;
+  }
+  .ip-tools .ip-switch-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.3rem !important;
+  }
+  .ip-tools .ip-switch-grid > div {
+    padding: 0.5rem 0.8rem !important;
+  }
+  .ip-main {
+    order: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+    gap: 1.1rem;
+    align-items: start;
+  }
+  .ip-main > section,
+  .ip-war > section {
+    margin-bottom: 0 !important;
+  }
+  .ip-war {
+    grid-column: 1 / -1;
+  }
+  .ip-main .ip-dim-row {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ip-needle, .ip-arc-value, .dot-run {
     animation: none !important;
