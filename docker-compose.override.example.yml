@@ -22,3 +22,10 @@ services:
 networks:
   pgnet:
     external: true
+
+# 前端掛在「網域根」時（反向代理把整個網域轉給 gis-portal），把下面三行取消註解並併入上面的 services: 區塊，
+# 讓建置時 BASE_PATH 為空字串（預設 /aiportal/ 是路徑式託管）。空字串要加引號。
+#   gis-portal:
+#     build:
+#       args:
+#         BASE_PATH: ""
