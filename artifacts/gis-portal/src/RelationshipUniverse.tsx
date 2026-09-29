@@ -27,6 +27,8 @@ import {
   personId, caseId, objectId, type RecentActivity, type RecentActivityItem,
 } from './graphInsights'
 import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPanel'
+import { GraphShell } from './GraphShell'
+import { consumeGraphFocus } from './graphFocus'
 
 type NodeKind = 'person' | 'event' | 'case' | 'object'
 // 四種實體都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
@@ -343,6 +345,15 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     for (const n of nodes) { n.x = n.tx * 0.25; n.y = n.ty * 0.25; n.z = n.tz * 0.25 }
     setSelection(null)
   }, [data, showIsolatedEvents, eventTouchedIds, fitCameraTo])
+
+  // 從時間軸的事件晶片跳過來：資料載入後聚焦該節點（見 graphFocus.ts）。
+  // ⚠️ 必須宣告在上面那個「建節點」effect 之後：effect 依宣告順序執行，而那個 effect 結尾會
+  // setSelection(null) 重置選取——放在它前面，聚焦會在同一輪被立刻清掉（實測踩過）。
+  useEffect(() => {
+    if (!data) return
+    const f = consumeGraphFocus()
+    if (f) selectNode(f)
+  }, [data, selectNode])
 
   // 切換核心類型：只重算目標座標，節點自己補間過去。
   useEffect(() => {
@@ -677,7 +688,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const isolatedCount = g ? g.events.length - g.events.filter(e => eventTouchedIds.has(e.id)).length : 0
 
   return (
-    <FullPageShell onBack={onBack}>
+    <GraphShell tab="universe" onBack={onBack}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center', padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
           {(['person', 'event', 'object', 'case'] as CoreKind[]).map(k => (
@@ -811,7 +822,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           拖拉旋轉・滾輪縮放・點節點置中看詳情
         </div>
       </div>
-    </FullPageShell>
+    </GraphShell>
   )
 }
 
@@ -912,18 +923,6 @@ function RecentActivityPanel({
           color: COLOR.amberDim, padding: '0.32rem', border: `1px solid ${COLOR.amberDim}`, borderRadius: '999px',
         }}
       >知道了</div>
-    </div>
-  )
-}
-
-function FullPageShell({ children, onBack }: { children: React.ReactNode; onBack: () => void }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
-        <span onClick={onBack} style={{ cursor: 'pointer', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.04em' }}>← 返回儀表板</span>
-        <span style={{ color: COLOR.ink, fontSize: '0.82rem', fontWeight: 600 }}>事人物關係宇宙</span>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
     </div>
   )
 }

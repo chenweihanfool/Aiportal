@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, type HermesGraphEventNode, type HermesGraphEdge } from './hermesGraphApi'
 import { RelationshipUniverse } from './RelationshipUniverse'
+import { TimelineView } from './TimelineView'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -3063,6 +3064,9 @@ export default function App() {
 
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
+  }
+  if (hashRoute === '#graph/timeline') {
+    return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
   }
 
   return (
