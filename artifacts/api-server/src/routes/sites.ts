@@ -95,13 +95,24 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
+// 缺 body（沒帶 Content-Type: application/json，Express 會給 undefined）或 body 不是物件時回 400，
+// 而不是在解構時丟 TypeError 變成 500。放在 requireAdmin 之後：未授權者永遠先得到 401。
+function requireJsonObjectBody(req: Request, res: Response, next: NextFunction): void {
+  const b: unknown = req.body;
+  if (typeof b !== "object" || b === null || Array.isArray(b)) {
+    res.status(400).json({ error: "Invalid body" });
+    return;
+  }
+  next();
+}
+
 // 這支是「憑密碼換 token」的唯一入口——body 裡的 password 必須是真正的
 // ADMIN_PASSWORD，不接受 isAuthorized()（那會連既有 token 都放行，失去
 // 「憑證換發」這一步本身要驗證的意義）。前端的 apiVerifyPassword 現在打
 // 這支（原本沒被用到，長期是死路由——真正在用的解鎖流程繞去打
 // /api/dashboard 探測 unlocked 欄位），換回一個有效期的 session token 存
 // 進 localStorage，不再是密碼原文。
-router.post("/auth/verify", (req: Request, res: Response) => {
+router.post("/auth/verify", requireJsonObjectBody, (req: Request, res: Response) => {
   const { password } = req.body as { password?: string };
   if (password === ADMIN_PASSWORD) {
     const { token, expiresAt } = createSession();
@@ -147,7 +158,7 @@ router.get("/sites", async (req: Request, res: Response) => {
 const SITES_WRITE_PATHS = ["/sites", "/admin/sites"];
 const SITES_ITEM_PATHS = ["/sites/:id", "/admin/sites/:id"];
 
-router.post(SITES_WRITE_PATHS, requireAdmin, async (req: Request, res: Response) => {
+router.post(SITES_WRITE_PATHS, requireAdmin, requireJsonObjectBody, async (req: Request, res: Response) => {
   const { name, subtitle, links, worldXZ, isPrivate, subsystemId } = req.body as {
     name: string;
     subtitle?: string;
@@ -213,8 +224,8 @@ const updateSite = async (req: Request, res: Response) => {
   res.json({ site: toApiSite(updated) });
 };
 
-router.put(SITES_ITEM_PATHS, requireAdmin, updateSite);
-router.patch(SITES_ITEM_PATHS, requireAdmin, updateSite);
+router.put(SITES_ITEM_PATHS, requireAdmin, requireJsonObjectBody, updateSite);
+router.patch(SITES_ITEM_PATHS, requireAdmin, requireJsonObjectBody, updateSite);
 
 router.delete(SITES_ITEM_PATHS, requireAdmin, async (req: Request, res: Response) => {
   const id = parseInt(String(req.params["id"] ?? ""), 10);

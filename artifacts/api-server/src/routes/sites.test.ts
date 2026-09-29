@@ -73,6 +73,25 @@ describe("sites 寫入端點的權限（HTTP，不碰資料庫）", () => {
     expect(r.status).toBe(401);
   });
 
+  it.each([["PATCH", "/api/admin/sites/1"], ["PUT", "/api/sites/1"], ["POST", "/api/admin/sites"]])(
+    "%s %s 已授權但沒帶 body → 400（不是 500）；未授權仍先得 401", async (method, path) => {
+      const authed = await fetch(`${base}${path}`, { method, headers: { "x-admin-password": "sites-test-pwd" } });   // 無 Content-Type、無 body
+      expect(authed.status).toBe(400);
+      const anon = await fetch(`${base}${path}`, { method });
+      expect(anon.status).toBe(401);
+    });
+
+  it("body 是陣列或字串也回 400", async () => {
+    for (const payload of ["[]", '"x"', "null"]) {
+      const r = await fetch(`${base}/api/admin/sites/1`, { method: "PATCH", headers: { "x-admin-password": "sites-test-pwd", "content-type": "application/json" }, body: payload });
+      expect(r.status).toBe(400);
+    }
+  });
+
+  it("/auth/verify 沒帶 body → 400（不是 500）", async () => {
+    expect((await fetch(`${base}/api/auth/verify`, { method: "POST" })).status).toBe(400);
+  });
+
   it("密碼錯誤 → 401", async () => {
     const r = await fetch(`${base}/api/admin/sites/1`, { method: "PATCH", headers: { "x-admin-password": "wrong", "content-type": "application/json" }, body: "{}" });
     expect(r.status).toBe(401);
