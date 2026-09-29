@@ -18,6 +18,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.10.0',
+    date: '2026-09-29',
+    summary: '首頁桌面版改版：工具連結常駐左側、不必再捲到最下面，寬螢幕並排顯示，手機版不變',
+    changes: [
+      '桌面／寬螢幕（視窗寬 ≥1100px）首頁改為兩欄：左側常駐「工具連結」側欄，全部工具（含私領域的財務、健身、任務、旅遊）一次列出、預設展開、附一行說明與搜尋框，可獨立捲動，一進首頁就能直接點，不用再捲到最底再按「展開連結列表」',
+      '右側主區依寬度自動並排：HERMES 戰情室橫跨整列，「幸福指數」與「六維度子系統」左右並排（六維度固定 3×2），寬螢幕不再只用到畫面左側一小塊、右邊一大片留白',
+      '手機與窄視窗（<1100px）版面與行為完全不變：仍是單欄、工具連結在最下面預設收合',
+    ],
+  },
+  {
     version: '2.9.0',
     date: '2026-09-29',
     summary: '關係圖頁新增「時間軸」：把每日／週／月／季／年摘要整塊以編年體瀏覽，預設一句話、點擊開原文',
@@ -849,9 +859,9 @@ function Gauge({
 // within it share the same background/border tokens so the whole page reads
 // as one panel, not a wall of unrelated widgets.
 // ─────────────────────────────────────────────
-function Unit({ code, title, children }: { code: string; title: string; children: React.ReactNode }) {
+function Unit({ code, title, children, className }: { code: string; title: string; children: React.ReactNode; className?: string }) {
   return (
-    <section style={{
+    <section className={className} style={{
       position: 'relative',
       background: `linear-gradient(180deg, ${COLOR.panelRaised}, ${COLOR.panel})`,
       border: `1px solid ${COLOR.line}`,
@@ -2269,7 +2279,21 @@ function HermesWarRoomSection({
 // 工具連結 — private plain-link sites (no dashboard summary) merged with all
 // public sites into one searchable, collapsible control panel.
 // ─────────────────────────────────────────────
-function SwitchTile({ site, unlocked, onSelect }: { site: SiteData; unlocked: boolean; onSelect: (site: SiteData) => void }) {
+// 桌面版（寬螢幕）版面：≥1100px 時工具連結改放左側常駐側欄、預設展開。
+// 只用來決定「要不要展開／要不要多顯示副標題」；版面排列本身由 portal.css 的 media query 決定。
+const DESKTOP_QUERY = '(min-width: 1100px)'
+function useIsDesktop(): boolean {
+  const [d, setD] = useState(() => typeof window !== 'undefined' && window.matchMedia(DESKTOP_QUERY).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_QUERY)
+    const on = () => setD(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return d
+}
+
+function SwitchTile({ site, unlocked, onSelect, showSubtitle = false }: { site: SiteData; unlocked: boolean; onSelect: (site: SiteData) => void; showSubtitle?: boolean }) {
   const isLocked = site.isPrivate && !unlocked
   return (
     <div
@@ -2293,6 +2317,11 @@ function SwitchTile({ site, unlocked, onSelect }: { site: SiteData; unlocked: bo
       <span style={{ fontFamily: FONT.mono, fontSize: '0.76rem', color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {isLocked && '🔒 '}{site.name}
       </span>
+      {showSubtitle && site.subtitle && (
+        <span style={{ marginLeft: 'auto', paddingLeft: '0.5rem', fontSize: '0.66rem', color: COLOR.steelDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1, minWidth: 0 }}>
+          {site.subtitle}
+        </span>
+      )}
     </div>
   )
 }
@@ -2308,6 +2337,7 @@ function ToolLinksZone({
   unlocked: boolean
   onSelect: (site: SiteData) => void
 }) {
+  const desktop = useIsDesktop()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
@@ -2317,18 +2347,18 @@ function ToolLinksZone({
   const filteredPublic = publicSites.filter(matches)
   const total = privateSites.length + publicSites.length
   const totalMatched = filteredPrivate.length + filteredPublic.length
-  const isOpen = open || searchActive
+  const isOpen = desktop || open || searchActive
 
   return (
-    <Unit code="04" title="工具連結 · Control Panel">
-      <div
+    <Unit code="04" title="工具連結 · Control Panel" className="ip-tools">
+      {!desktop && <div
         onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '1rem', marginTop: '-0.4rem' }}
       >
         <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', color: COLOR.amberDim, fontSize: '0.8rem' }}>▶</span>
         <span style={{ fontSize: '0.78rem', color: COLOR.steel }}>{isOpen ? '收起連結列表' : '展開連結列表'}</span>
         <span style={{ fontFamily: FONT.mono, fontSize: '0.68rem', color: COLOR.steelDim }}>{searchActive ? `${totalMatched} / ${total}` : `${total} 個`}</span>
-      </div>
+      </div>}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '4px', padding: '0.55rem 0.9rem', marginBottom: '1.1rem' }}>
         <span style={{ color: COLOR.amber, fontFamily: FONT.mono, fontSize: '0.85rem' }}>◎</span>
@@ -2344,7 +2374,7 @@ function ToolLinksZone({
             <div style={{ marginBottom: '1.1rem' }}>
               <SubLabel>私領域</SubLabel>
               <div className="ip-switch-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.7rem' }}>
-                {filteredPrivate.map(s => <SwitchTile key={s.id} site={s} unlocked={unlocked} onSelect={onSelect} />)}
+                {filteredPrivate.map(s => <SwitchTile key={s.id} site={s} unlocked={unlocked} onSelect={onSelect} showSubtitle={desktop} />)}
               </div>
             </div>
           )}
@@ -2352,7 +2382,7 @@ function ToolLinksZone({
             <div>
               <SubLabel>公領域</SubLabel>
               <div className="ip-switch-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.7rem' }}>
-                {filteredPublic.map(s => <SwitchTile key={s.id} site={s} unlocked={unlocked} onSelect={onSelect} />)}
+                {filteredPublic.map(s => <SwitchTile key={s.id} site={s} unlocked={unlocked} onSelect={onSelect} showSubtitle={desktop} />)}
               </div>
             </div>
           )}
@@ -2789,6 +2819,7 @@ function InstrumentPanelView({
   // 預設展開（原本預設收合）——人-事網路圖是這裡現在的主要內容，不是輔助
   // 的維運監控資訊了，藏起來反而失去意義；見 2026-09-06 改版說明。
   const [hermesOpen, setHermesOpen] = useState(true)
+  const desktop = useIsDesktop()
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
@@ -2813,9 +2844,16 @@ function InstrumentPanelView({
       </div>
 
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
+        <div className="ip-layout">
+          <aside className="ip-aside">
+        <ToolLinksZone privateSites={desktop ? privateSites : plainSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
+
+          </aside>
+          <div className="ip-main">
         {/* HERMES 戰情室搬到幸福指數上方、預設展開——人-事網路圖現在是這裡
             的主要內容，不再是可有可無的維運監控附加區塊，見 2026-09-06 改版
             說明。折疊開關還留著，方便手機上想先跳過看下面內容的人收起來。 */}
+        <div className="ip-war">
         <div
           onClick={() => setHermesOpen(o => !o)}
           style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: hermesOpen ? '0' : '1.1rem' }}
@@ -2838,8 +2876,9 @@ function InstrumentPanelView({
             />
           </Unit>
         )}
+        </div>
 
-        <Unit code="02" title="翰翰仔幸福指數 · Hanhan Happiness Index">
+        <Unit code="02" title="翰翰仔幸福指數 · Hanhan Happiness Index" className="ip-hhi">
           <HappinessHeroCard
             summary={hhiSummary}
             unlocked={unlocked}
@@ -2848,7 +2887,7 @@ function InstrumentPanelView({
           />
         </Unit>
 
-        <Unit code="03" title="六維度子系統 · Subsystem Readouts">
+        <Unit code="03" title="六維度子系統 · Subsystem Readouts" className="ip-dims">
           <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
             {richSites.map(s => {
               const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
@@ -2869,7 +2908,8 @@ function InstrumentPanelView({
           </div>
         </Unit>
 
-        <ToolLinksZone privateSites={plainSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
+          </div>
+        </div>
 
         <div style={{ marginTop: '1.4rem', paddingTop: '1rem', borderTop: `1px solid ${COLOR.line}`, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, letterSpacing: '0.06em' }}>
           <span>AIPORTAL · INSTRUMENT PANEL</span>
