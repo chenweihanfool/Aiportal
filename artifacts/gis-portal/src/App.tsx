@@ -18,6 +18,19 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.9.0',
+    date: '2026-09-29',
+    summary: '關係圖頁新增「時間軸」：把每日／週／月／季／年摘要整塊以編年體瀏覽，預設一句話、點擊開原文',
+    changes: [
+      '關係圖頁新增「時間軸」分頁（網址 #graph/timeline，與既有 #graph 同一套路由）：日／週／月／季／年切換、由新到舊、依月份／年份分組；每列只顯示日期＋（日層）心智指標徽章＋單行截斷的一句話＋當日事件數，一眼掃過整段時間',
+      '點擊任一列會開原文對話框：完整報表以 Markdown 渲染（表格、清單、引用、粗體都保留；手寫渲染器、不使用 innerHTML，連結只放行 http／https／mailto）；可用 ←／→ 切換較舊／較新一期，週／月／季／年報可下鑽到涵蓋的下層期間再「返回」；當日事件晶片點下去會關閉對話框並跳到關係圖聚焦該事件',
+      '沒有日報的日子不補寫，以虛線占位列明示（「無日報 · 當日 N 件事件」／「本期無報告」）；週報區間若是推算的標 ~，季報自述順延的標 ⚠；私領域未解鎖時只顯示提示、不送出任何時間軸請求',
+      '資料來源：新資料表 hermes_timeline_entry（DB migration 0014）＋ POST /api/admin/hermes-timeline、GET /api/hermes-timeline 兩組端點；HERMES 端的 hermes-timeline-pusher 每天在日報歸檔後增量推入，另有每天 08:38 的補漏班；不需要任何新的 LLM 呼叫',
+      '修正：管理後台的新增／編輯／刪除網站，原本在乾淨部署下會 404（前端打 /api/admin/sites*、後端只註冊 /sites* 且沒有 PATCH）——後端補上 /api/admin/sites* 與 PATCH（相容舊路徑）；缺 body、空更新或必填欄位缺漏改回 400，不再是 500',
+      '部署面：db-migrate 連外部資料庫網路與帳本權限的前置條件寫進 docs/deploy-migrate.md（含授權 SQL 與 docker-compose.override.example.yml），遷移失敗時會印出指向文件的提示；前端 BASE_PATH 改為 Dockerfile build arg',
+    ],
+  },
+  {
     version: '2.8.1',
     date: '2026-09-22',
     summary: '關係宇宙新增「最近新增」面板：打開就知道上次看過後多了哪些人/事/案/物',
