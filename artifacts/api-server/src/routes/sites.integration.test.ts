@@ -84,6 +84,22 @@ describe.skipIf(!enabled)("sites 寫入端點（真實 Postgres）", () => {
     expect((await call("PATCH", "/admin/sites/abc", { name: "x" })).status).toBe(400);
   });
 
+  it("POST 省略 isPrivate／subtitle／subsystemId 仍可新增（有預設值），isPrivate 預設 false", async () => {
+    const r = await call("POST", "/admin/sites", { name: "最小站", links: [], worldXZ: [0, 0] });
+    expect(r.status).toBe(201);
+    const site = (await list()).find((s) => s.name === "最小站")!;
+    expect(site.isPrivate).toBe(false);
+    expect(site.subtitle).toBe("");
+  });
+
+  it("空更新 {} → 400 且資料不變；POST 缺必填欄位 → 400 且不新增", async () => {
+    const created = (await (await call("POST", "/admin/sites", body({ name: "不動" }))).json()) as { site: { id: string } };
+    const before = await list();
+    expect((await call("PATCH", `/admin/sites/${created.site.id}`, {})).status).toBe(400);
+    expect((await call("POST", "/admin/sites", {})).status).toBe(400);
+    expect(await list()).toEqual(before);
+  });
+
   it("無密碼寫入被擋，資料不變", async () => {
     const before = (await list()).length;
     expect((await call("POST", "/admin/sites", body(), null)).status).toBe(401);

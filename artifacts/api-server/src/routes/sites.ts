@@ -168,6 +168,14 @@ router.post(SITES_WRITE_PATHS, requireAdmin, requireJsonObjectBody, async (req: 
     subsystemId?: string | null;
   };
 
+  // 必填欄位（對應 NOT NULL、無預設值的欄位）缺漏或型別不對 → 400，而不是在 name.trim()／worldXZ[0] 或 DB 層炸成 500。
+  // isPrivate／subtitle／subsystemId 有預設或可省略，不在此要求。
+  const validWorld = Array.isArray(worldXZ) && worldXZ.length === 2 && worldXZ.every((n) => typeof n === "number" && Number.isFinite(n));
+  if (typeof name !== "string" || name.trim() === "" || !Array.isArray(links) || !validWorld) {
+    res.status(400).json({ error: "name, links and worldXZ are required" });
+    return;
+  }
+
   const [inserted] = await db
     .insert(portalSitesTable)
     .values({
@@ -209,6 +217,12 @@ const updateSite = async (req: Request, res: Response) => {
   if (worldXZ !== undefined) { updates.worldX = worldXZ[0]; updates.worldZ = worldXZ[1]; }
   if (isPrivate !== undefined) updates.isPrivate = isPrivate;
   if (subsystemId !== undefined) updates.subsystemId = subsystemId?.trim() || null;
+
+  // 合法但沒有任何可更新欄位（例如 `{}`）：drizzle 的 .set({}) 會丟 "No values to set" → 500，改回 400。
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "No fields to update" });
+    return;
+  }
 
   const [updated] = await db
     .update(portalSitesTable)

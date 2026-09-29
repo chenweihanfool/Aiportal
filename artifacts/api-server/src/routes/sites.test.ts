@@ -81,6 +81,21 @@ describe("sites 寫入端點的權限（HTTP，不碰資料庫）", () => {
       expect(anon.status).toBe(401);
     });
 
+  it.each([["PATCH", "/api/admin/sites/1"], ["PUT", "/api/sites/1"]])(
+    "%s %s 帶合法但空的 JSON 物件 {} → 400（不是 500）", async (method, path) => {
+      const r = await fetch(`${base}${path}`, { method, headers: { "x-admin-password": "sites-test-pwd", "content-type": "application/json" }, body: "{}" });
+      expect(r.status).toBe(400);
+      expect(((await r.json()) as { error: string }).error).toBe("No fields to update");
+    });
+
+  it.each([
+    [{}], [{ name: "x" }], [{ name: "  ", links: [], worldXZ: [0, 0] }], [{ name: "x", links: "no", worldXZ: [0, 0] }],
+    [{ name: "x", links: [], worldXZ: [0] }], [{ name: "x", links: [], worldXZ: ["a", 1] }], [{ name: 5, links: [], worldXZ: [0, 0] }],
+  ])("POST /api/admin/sites 必填欄位缺漏或型別不對 %j → 400（不是 500）", async (payload) => {
+    const r = await fetch(`${base}/api/admin/sites`, { method: "POST", headers: { "x-admin-password": "sites-test-pwd", "content-type": "application/json" }, body: JSON.stringify(payload) });
+    expect(r.status).toBe(400);
+  });
+
   it("body 是陣列或字串也回 400", async () => {
     for (const payload of ["[]", '"x"', "null"]) {
       const r = await fetch(`${base}/api/admin/sites/1`, { method: "PATCH", headers: { "x-admin-password": "sites-test-pwd", "content-type": "application/json" }, body: payload });
