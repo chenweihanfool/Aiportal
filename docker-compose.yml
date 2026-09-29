@@ -14,6 +14,10 @@ services:
       ADVENTURELOG_API_BASE_URL: ${ADVENTURELOG_API_BASE_URL}
       ADVENTURELOG_API_TOKEN: ${ADVENTURELOG_API_TOKEN}
       NTFY_TOPIC_URL: ${NTFY_TOPIC_URL}
+      # 摘要來源網址：程式碼以 `??` 取預設值，空字串不會 fallback，所以這裡必須用 `:-` 帶出同一組預設值，
+      # 而不是 `${VAR}`（未設會展開成空字串）。要改指向其他主機時在 .env 設定即可。
+      PF_CWH_SUMMARY_URL: ${PF_CWH_SUMMARY_URL:-https://cwh2023.synology.me/pf/api/public/summary}
+      FITNESSFORGE_SUMMARY_URL: ${FITNESSFORGE_SUMMARY_URL:-https://cwh2023.synology.me/fitness/api/public/summary}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
