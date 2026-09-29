@@ -110,7 +110,7 @@ body,
   }
   .ip-layout {
     display: grid;
-    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    grid-template-columns: clamp(240px, 17vw, 320px) minmax(0, 1fr);
     gap: 1.2rem;
     align-items: start;
   }
@@ -128,16 +128,17 @@ body,
     padding: 1.1rem 1rem 1rem !important;
   }
   .ip-tools .ip-switch-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     gap: 0.3rem !important;
   }
   .ip-tools .ip-switch-grid > div {
     padding: 0.5rem 0.8rem !important;
+    min-width: 0;
   }
   .ip-main {
     order: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.1rem;
     align-items: start;
   }
@@ -148,8 +149,30 @@ body,
   .ip-war {
     grid-column: 1 / -1;
   }
+  /* 兩欄並排時每張卡只有約 440–800px：用 container query 依「卡片自己的寬度」決定內部排法，
+     而不是依視窗寬——窄卡片時幸福指數的儀表與雷達上下排、六維度改 2 欄；寬卡片維持左右／3 欄。 */
+  .ip-hhi, .ip-dims {
+    container-type: inline-size;
+  }
   .ip-main .ip-dim-row {
     grid-template-columns: repeat(3, 1fr) !important;
+  }
+  @container (max-width: 620px) {
+    .ip-primary-grid {
+      grid-template-columns: 1fr !important;
+      justify-items: center;
+    }
+    .ip-main .ip-dim-row {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+  }
+}
+
+/* 視窗 ≥1240px：幸福指數與六維度左右並排（此時側欄 240–320px，主區 ≥ 約 930px、每張卡 ≥ 約 450px）；
+   <1240px 維持單欄全寬。用固定兩欄而不是 auto-fit，避免超寬螢幕被切成三欄而右側留白。 */
+@media (min-width: 1240px) {
+  .ip-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

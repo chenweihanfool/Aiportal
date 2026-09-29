@@ -23,7 +23,7 @@ const VERSION_HISTORY = [
     summary: '首頁桌面版改版：工具連結常駐左側、不必再捲到最下面，寬螢幕並排顯示，手機版不變',
     changes: [
       '桌面／寬螢幕（視窗寬 ≥1100px）首頁改為兩欄：左側常駐「工具連結」側欄，全部工具（含私領域的財務、健身、任務、旅遊）一次列出、預設展開、附一行說明與搜尋框，可獨立捲動，一進首頁就能直接點，不用再捲到最底再按「展開連結列表」',
-      '右側主區依寬度自動並排：HERMES 戰情室橫跨整列，「幸福指數」與「六維度子系統」左右並排（六維度固定 3×2），寬螢幕不再只用到畫面左側一小塊、右邊一大片留白',
+      '右側主區：HERMES 戰情室橫跨整列；視窗寬 ≥1240px 時「幸福指數」與「六維度子系統」左右並排（卡片夠寬 3×2、較窄時 2×3，儀表與雷達自動改上下排），寬螢幕不再只用到畫面左側一小塊、右邊一大片留白；1100–1239px 為單欄',
       '手機與窄視窗（<1100px）版面與行為完全不變：仍是單欄、工具連結在最下面預設收合',
     ],
   },
@@ -2318,7 +2318,7 @@ function SwitchTile({ site, unlocked, onSelect, showSubtitle = false }: { site: 
         {isLocked && '🔒 '}{site.name}
       </span>
       {showSubtitle && site.subtitle && (
-        <span style={{ marginLeft: 'auto', paddingLeft: '0.5rem', fontSize: '0.66rem', color: COLOR.steelDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1, minWidth: 0 }}>
+        <span style={{ marginLeft: 'auto', paddingLeft: '0.5rem', fontSize: '0.66rem', color: COLOR.steelDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 100, minWidth: 0 }}>
           {site.subtitle}
         </span>
       )}
