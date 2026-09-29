@@ -12,7 +12,11 @@ FROM base AS build
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile --filter "@workspace/gis-portal..."
-RUN BASE_PATH=/aiportal/ pnpm --filter @workspace/gis-portal run build
+# BASE_PATH 是「前端掛在網址哪一層」：預設 /aiportal/（路徑式託管，維持原行為）；
+# 掛在網域根（例：反向代理把整個網域轉給本容器）請在建置時傳 --build-arg BASE_PATH=（空字串），
+# 否則前端會把 API 打到 /aiportal/api/...（不存在）。compose 用法見 docker-compose.override.example.yml。
+ARG BASE_PATH=/aiportal/
+RUN BASE_PATH="${BASE_PATH}" pnpm --filter @workspace/gis-portal run build
 
 FROM nginx:alpine AS runtime
 COPY artifacts/gis-portal/nginx.conf /etc/nginx/conf.d/default.conf
