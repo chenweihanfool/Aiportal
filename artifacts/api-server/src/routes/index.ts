@@ -5,6 +5,7 @@ import dashboardRouter from "./dashboard";
 import mindIndexRouter from "./mindIndex";
 import socialIndexRouter from "./socialIndex";
 import hermesStatusRouter from "./hermesStatus";
+import hermesTimelineRouter from "./hermesTimeline";
 import exportRouter from "./export";
 
 const router: IRouter = Router();
@@ -15,6 +16,7 @@ router.use(dashboardRouter);
 router.use(mindIndexRouter);
 router.use(socialIndexRouter);
 router.use(hermesStatusRouter);
+router.use(hermesTimelineRouter);
 router.use(exportRouter);
 
 export default router;
