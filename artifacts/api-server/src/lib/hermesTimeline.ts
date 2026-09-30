@@ -203,7 +203,8 @@ export interface TimelineListItem {
   generation: number | null;
   eventCount: number;
   events: Array<{ id: string; title: string }>; // 僅 day 級，最多 EVENT_CHIP_LIMIT 筆
-  mindScore: number | null;                     // 僅 day 級
+  mindScore: number | null;                     // 僅 day 級；＝知識庫健康分數（mind_index_history.score，見 docs 說明）
+  hhiScore: number | null;                      // 僅 day 級；＝幸福指數當日顯示分數（happiness_index_history.displayed_score）
 }
 export const EVENT_CHIP_LIMIT = 8;
 
@@ -216,6 +217,7 @@ export interface BuildListArgs {
   rows: ReportRow[];
   events: EventRef[];
   mindScores: Map<string, number | null>;
+  hhiScores?: Map<string, number>;              // 省略＝沒有幸福指數資料（舊呼叫端相容）
   today: string;
   limit: number;
   cursor: string | null;
@@ -223,24 +225,26 @@ export interface BuildListArgs {
 
 export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCursor: string | null } {
   const { level, rows, events, mindScores, today } = a;
+  const hhiScores = a.hhiScores ?? new Map<string, number>();
   const items: TimelineListItem[] = rows
     .filter((r) => r.startDate <= today)
     .map((r) => ({
       level, periodKey: r.periodKey, startDate: r.startDate, endDate: r.endDate, title: r.title,
       summary: r.summary, hasReport: true, rangeInferred: r.rangeInferred, periodNote: r.periodNote,
-      generation: r.generation, eventCount: 0, events: [], mindScore: null,
+      generation: r.generation, eventCount: 0, events: [], mindScore: null, hhiScore: null,
     }));
   const have = new Set(rows.map((r) => r.periodKey));
   if (level === "day") {
-    // 沒有日報、但當天有事件或心智指標的日子 → 占位列（仍可點開看事件與分數）
+    // 沒有日報、但當天有事件或任一分數（知識庫健康／幸福指數）的日子 → 占位列（仍可點開看事件與分數）
     const days = new Set<string>();
     for (const e of events) if (e.date <= today) days.add(e.date);
     for (const d of mindScores.keys()) if (d <= today) days.add(d);
+    for (const d of hhiScores.keys()) if (d <= today) days.add(d);
     for (const d of days) {
       if (have.has(d)) continue;
       items.push({
         level, periodKey: d, startDate: d, endDate: d, title: d, summary: "", hasReport: false,
-        rangeInferred: false, periodNote: null, generation: null, eventCount: 0, events: [], mindScore: null,
+        rangeInferred: false, periodNote: null, generation: null, eventCount: 0, events: [], mindScore: null, hhiScore: null,
       });
     }
   } else {
@@ -249,7 +253,7 @@ export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCu
       if (p.startDate > today) continue;
       items.push({
         ...p, summary: "", hasReport: false, rangeInferred: true, periodNote: null, generation: null,
-        eventCount: 0, events: [], mindScore: null,
+        eventCount: 0, events: [], mindScore: null, hhiScore: null,
       });
     }
   }
@@ -259,6 +263,7 @@ export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCu
     if (level === "day") {
       it.events = evs.slice(0, EVENT_CHIP_LIMIT).map((e) => ({ id: e.id, title: e.title }));
       it.mindScore = mindScores.get(it.periodKey) ?? null;
+      it.hhiScore = hhiScores.get(it.periodKey) ?? null;
     }
   }
   items.sort((x, y) => (y.startDate.localeCompare(x.startDate)) || y.periodKey.localeCompare(x.periodKey));

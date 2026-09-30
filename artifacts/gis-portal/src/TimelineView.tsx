@@ -8,11 +8,16 @@ import {
   type TimelineDetail, type TimelineItem, type TimelineLevel,
 } from './timelineApi'
 import {
-  LEVELS, LEVEL_LABEL, groupItems, itemKey, mergePages, neighbors, oneLine, rowDateLabel, scoreBadge,
+  LEVELS, LEVEL_LABEL, groupItems, hhiBadge, itemKey, mergePages, neighbors, oneLine, rowDateLabel, scoreBadge,
 } from './timelineLogic'
 
 const LEVEL_KEY = 'kb.timeline.level'
 const TONE: Record<'ok' | 'warn' | 'concern', string> = { ok: COLOR.ok, warn: COLOR.warn, concern: COLOR.concern }
+const HHI_TONE: Record<'great' | 'ok' | 'warn' | 'concern' | 'crit', string> = {
+  great: COLOR.amber, ok: COLOR.ok, warn: COLOR.warn, concern: COLOR.concern, crit: COLOR.crit,
+}
+const BADGE_STYLE = { fontFamily: FONT.mono, fontSize: '0.66rem', borderRadius: 4, padding: '0 0.3rem', whiteSpace: 'nowrap' } as const
+const MOBILE_BADGE = { fontSize: '0.6rem', padding: '0 0.2rem' } as const   // 手機寬度不夠，徽章縮小以保留摘要的可讀寬度
 
 function readLevel(): TimelineLevel {
   try {
@@ -160,6 +165,7 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
                 )}
                 {g.items.map(it => {
                   const badge = scoreBadge(it.mindScore)
+                  const hhi = hhiBadge(it.hhiScore)
                   const dim = !it.hasReport
                   return (
                     <button key={itemKey(it)} type="button" data-testid="timeline-row" onClick={e => openItem(it, e.currentTarget)}
@@ -170,8 +176,13 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
                         {rowDateLabel(it)}{it.rangeInferred ? <span title="涵蓋區間為推算" style={{ color: COLOR.warn }}> ~</span> : null}
                       </span>
                       {level === 'day' && (
-                        <span style={{ flex: '0 0 auto', width: '2.9rem', display: 'flex', justifyContent: 'center' }}>
-                          {badge && <span title="當日心智指標" style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: TONE[badge.tone], border: `1px solid ${TONE[badge.tone]}`, borderRadius: 4, padding: '0 0.3rem' }}>{badge.text}</span>}
+                        <span style={{ flex: '0 0 auto', display: 'flex', gap: isMobile ? '0.15rem' : '0.3rem', alignItems: 'center' }}>
+                          <span style={{ width: isMobile ? '3.1rem' : '3.5rem', display: 'flex', justifyContent: 'center' }}>
+                            {badge && <span data-testid="badge-kb" title="知識庫健康（HERMES 知識庫管線的運作分數）" style={{ ...BADGE_STYLE, ...(isMobile ? MOBILE_BADGE : {}), color: TONE[badge.tone], border: `1px solid ${TONE[badge.tone]}` }}>知 {badge.text}</span>}
+                          </span>
+                          <span style={{ width: isMobile ? '2.2rem' : '2.6rem', display: 'flex', justifyContent: 'center' }}>
+                            {hhi && <span data-testid="badge-hhi" title="幸福指數（當日顯示分數，與自己近 90 天比較）" style={{ ...BADGE_STYLE, ...(isMobile ? MOBILE_BADGE : {}), color: HHI_TONE[hhi.tone], border: `1px solid ${HHI_TONE[hhi.tone]}` }}>幸 {hhi.text}</span>}
+                          </span>
                         </span>
                       )}
                       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.84rem' }}>
@@ -245,7 +256,8 @@ function TimelineDialog(props: {
                 {d.startDate === d.endDate ? d.startDate : `${d.startDate} ~ ${d.endDate}`}
                 {d.rangeInferred && <span style={{ color: COLOR.warn }}>　（涵蓋區間為推算）</span>}
                 {!d.hasReport && <span style={{ color: COLOR.warn }}>　（無報告，以下為降級內容）</span>}
-                {d.mindScore !== null && <span>　心智指標 {d.mindScore.toFixed(1)}</span>}
+                {d.mindScore !== null && <span>　知識庫健康 {d.mindScore.toFixed(1)}</span>}
+                {d.hhiScore !== null && <span>　幸福指數 {Math.round(d.hhiScore)}</span>}
               </div>
             )}
           </div>

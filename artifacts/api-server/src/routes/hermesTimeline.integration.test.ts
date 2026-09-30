@@ -47,6 +47,7 @@ describe.skipIf(!enabled)("hermes-timeline API（真實 Postgres）", () => {
     await db.db.delete(db.hermesTimelineEntryTable);
     await db.db.delete(db.hermesGraphSnapshotTable);
     await db.db.delete(db.mindIndexHistoryTable);
+    await db.db.delete(db.happinessIndexHistoryTable);
   });
 
   it("requires the admin password for POST and both GETs", async () => {
@@ -86,6 +87,26 @@ describe.skipIf(!enabled)("hermes-timeline API（真實 Postgres）", () => {
     expect(body.items[0]).toMatchObject({ hasReport: true, eventCount: 1, mindScore: 98.9 });
     expect(body.items[2]).toMatchObject({ hasReport: false, eventCount: 1 });
     expect(JSON.stringify(body)).not.toContain("未來");
+  });
+
+  it("day list and detail carry the happiness displayed score alongside the knowledge-base score", async () => {
+    const hhiRow = (date: string, displayed: number) => ({
+      date, finalScore: displayed + 1, displayedScore: displayed, baseScore: 60, weakestScore: 40, weakestComponent: "fitness",
+      availableComponents: ["fitness"], configVersion: "test",
+    });
+    await post([ent("day", "2026-09-28", "2026-09-28", "2026-09-28")]);
+    await db.db.insert(db.mindIndexHistoryTable).values({ date: "2026-09-28", score: 98.9 });
+    await db.db.insert(db.happinessIndexHistoryTable).values([hhiRow("2026-09-28", 62), hhiRow("2026-09-24", 55)]);
+    const list = await (await get("/hermes-timeline?level=day")).json() as { items: Array<Record<string, unknown>> };
+    expect(list.items.map((i) => i["periodKey"])).toEqual(["2026-09-28", "2026-09-24"]);   // 只有幸福指數的日子 → 占位列
+    expect(list.items[0]).toMatchObject({ mindScore: 98.9, hhiScore: 62 });
+    expect(list.items[1]).toMatchObject({ hasReport: false, mindScore: null, hhiScore: 55 });
+    const d = await (await get("/hermes-timeline/day/2026-09-28")).json() as { mindScore: number; hhiScore: number };
+    expect(d).toMatchObject({ mindScore: 98.9, hhiScore: 62 });
+    const ph = await (await get("/hermes-timeline/day/2026-09-24")).json() as { hasReport: boolean; mindScore: number | null; hhiScore: number };
+    expect(ph).toMatchObject({ hasReport: false, mindScore: null, hhiScore: 55 });          // 只有幸福指數也能開啟降級內容
+    const wk = await (await get("/hermes-timeline?level=week")).json() as { items: Array<Record<string, unknown>> };
+    expect(wk.items.every((i) => i["hhiScore"] === null)).toBe(true);
   });
 
   it("paginates with cursor across the real table", async () => {

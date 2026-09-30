@@ -28,7 +28,7 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 // ── 假資料 ──
 const mk = (level, periodKey, startDate, endDate, over = {}) => ({
   level, periodKey, startDate, endDate, title: periodKey, summary: `這是 ${periodKey} 的一句話摘要，內容比較長一點用來確認單行截斷不會撐開列高，一直寫到超過一行的寬度為止。`,
-  hasReport: true, rangeInferred: false, periodNote: null, generation: 3, eventCount: 0, events: [], mindScore: null, ...over,
+  hasReport: true, rangeInferred: false, periodNote: null, generation: 3, eventCount: 0, events: [], mindScore: null, hhiScore: null, ...over,
 })
 const days = []
 for (let i = 0; i < 40; i++) {
@@ -38,6 +38,7 @@ for (let i = 0; i < 40; i++) {
     hasReport: !noReport,
     summary: noReport ? '' : `${ds} 今天主要在整理管線設定，決定先收斂路徑設定再擴充功能，另外還要把驗證流程一起補齊，這句話刻意寫得很長，用來確認列表只顯示單行並以刪節號截斷，不會把列高撐開。`,
     mindScore: i % 5 === 0 ? 98.8 - i * 0.3 : null,
+    hhiScore: i % 3 === 0 ? 62 : null,
     eventCount: i === 0 ? 3 : i === 3 ? 2 : 0,
     events: i === 0 ? [{ id: 'ev1', title: '事件甲：整理檢核表' }, { id: 'ev2', title: '事件乙' }, { id: 'ev3', title: '事件丙' }] : i === 3 ? [{ id: 'ev4', title: '沒有日報那天的事件' }] : [],
   }))
@@ -141,6 +142,9 @@ async function newPage(viewport, unlocked = true) {
   check('長摘要被單行截斷（列高 < 60px）', h < 60, `height=${h.toFixed(1)}`)
   const lefts = await page.locator('[data-testid=timeline-row]').evaluateAll(rows => rows.slice(0, 12).filter(r => !r.textContent.includes('無日報')).map(r => Math.round([...r.querySelectorAll('span')].find(sp => sp.textContent.includes('今天主要'))?.getBoundingClientRect().left ?? -1)))
   check('有／無分數徽章的列，一句話左緣對齊', new Set(lefts).size === 1, `lefts=${[...new Set(lefts)].join(',')}`)
+  check('日級列表顯示兩種徽章：「知」知識庫健康、「幸」幸福指數（各自可缺，欄位固定所以不影響對齊）',
+    (await page.locator('[data-testid=badge-kb]').count()) > 0 && (await page.locator('[data-testid=badge-hhi]').count()) > 0
+    && (await page.locator('[data-testid=badge-hhi]').first().innerText()).startsWith('幸 ') && (await page.locator('[data-testid=badge-kb]').first().innerText()).startsWith('知 '))
   check('列表確實顯示了一句話（不是「無摘要」占位）', (await page.locator('[data-testid=timeline-row]').first().innerText()).includes('今天主要在整理管線設定'))
   check('長摘要以刪節號截斷（scrollWidth > clientWidth）', await page.locator('[data-testid=timeline-row]').first().locator('span:has-text("今天主要在整理管線設定")').last().evaluate(e => e.scrollWidth > e.clientWidth))
   check('無日報的日子顯示占位文字並含當日事件數', (await page.locator('text=無日報 · 當日 2 件事件').count()) === 1)

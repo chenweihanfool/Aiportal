@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, hermesTimelineEntryTable, hermesGraphSnapshotTable, mindIndexHistoryTable } from "@workspace/db";
+import { db, hermesTimelineEntryTable, hermesGraphSnapshotTable, mindIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { taipeiDateString } from "../lib/summarySources";
@@ -52,6 +52,13 @@ async function loadMindScores(): Promise<Map<string, number | null>> {
   return new Map(rows.map((r) => [String(r.date), r.score ?? null]));
 }
 
+async function loadHappinessScores(): Promise<Map<string, number>> {
+  // 幸福指數當日「顯示分數」（displayed_score：與儀表板歷史圖／/api/happiness/history 同一個數字）。
+  // 只有 23:55 快照 job 會寫入這張表，所以「今天」在快照前沒有值——徽章不顯示，不用即時暫定值冒充。
+  const rows = await db.select({ date: happinessIndexHistoryTable.date, score: happinessIndexHistoryTable.displayedScore }).from(happinessIndexHistoryTable);
+  return new Map(rows.map((r) => [String(r.date), r.score]));
+}
+
 router.post("/admin/hermes-timeline", async (req: Request, res: Response) => {
   if (!isAuthorized(req.headers["x-admin-password"])) {
     return res.status(403).json({ message: "需要管理員權限" });
@@ -92,13 +99,14 @@ router.get("/hermes-timeline", async (req: Request, res: Response) => {
   const limit = Number.isInteger(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 30;
   const cursor = typeof req.query["cursor"] === "string" ? req.query["cursor"] : null;
 
-  const [rows, events, mindScores] = await Promise.all([
+  const [rows, events, mindScores, hhiScores] = await Promise.all([
     loadRows(level),
     loadEvents(),
     level === "day" ? loadMindScores() : Promise.resolve(new Map<string, number | null>()),
+    level === "day" ? loadHappinessScores() : Promise.resolve(new Map<string, number>()),
   ]);
   const { items, nextCursor } = buildList({
-    level, rows, events, mindScores, today: taipeiDateString(new Date()), limit, cursor,
+    level, rows, events, mindScores, hhiScores, today: taipeiDateString(new Date()), limit, cursor,
   });
   return res.json({ level, items, nextCursor });
 });
@@ -123,16 +131,16 @@ router.get("/hermes-timeline/:level/:periodKey", async (req: Request, res: Respo
   const childLevel = CHILD_LEVEL[level];
 
   if (!entry) {
-    // 沒有日報的日子：只要當天有事件或心智指標，仍可開啟（降級內容，明示 hasReport=false）
+    // 沒有日報的日子：只要當天有事件或任一分數（知識庫健康／幸福指數），仍可開啟（降級內容，明示 hasReport=false）
     if (level === "day") {
-      const scores = await loadMindScores();
+      const [scores, hhi] = await Promise.all([loadMindScores(), loadHappinessScores()]);
       const evs = events.filter((e) => e.date === periodKey && e.date <= today);
-      if (evs.length > 0 || scores.has(periodKey)) {
+      if (evs.length > 0 || scores.has(periodKey) || hhi.has(periodKey)) {
         return res.json({
           level, periodKey, startDate: periodKey, endDate: periodKey, title: periodKey, summary: "", bodyMd: "",
           hasReport: false, rangeInferred: false, periodNote: null, generation: null,
           eventCount: evs.length, events: evs.map((e) => ({ id: e.id, title: e.title })),
-          mindScore: scores.get(periodKey) ?? null, children: [],
+          mindScore: scores.get(periodKey) ?? null, hhiScore: hhi.get(periodKey) ?? null, children: [],
         });
       }
     }
@@ -141,13 +149,14 @@ router.get("/hermes-timeline/:level/:periodKey", async (req: Request, res: Respo
 
   const evs = events.filter((e) => e.date >= entry.startDate && e.date <= entry.endDate && e.date <= today);
   const mindScore = level === "day" ? ((await loadMindScores()).get(periodKey) ?? null) : null;
+  const hhiScore = level === "day" ? ((await loadHappinessScores()).get(periodKey) ?? null) : null;
   const children = childLevel ? buildChildren(await loadRows(childLevel), entry.startDate, entry.endDate) : [];
   return res.json({
     level, periodKey, startDate: entry.startDate, endDate: entry.endDate, title: entry.title, summary: entry.summary,
     bodyMd: entry.bodyMd, hasReport: true, rangeInferred: entry.rangeInferred, periodNote: entry.periodNote,
     generation: entry.generation, eventCount: evs.length,
     events: level === "day" ? evs.map((e) => ({ id: e.id, title: e.title })) : [],
-    mindScore, children,
+    mindScore, hhiScore, children,
   });
 });
 
