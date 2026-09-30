@@ -70,8 +70,18 @@ export function neighbors(items: TimelineItem[], key: string): { older: Timeline
   return { older: items[i + 1] ?? null, newer: items[i - 1] ?? null }
 }
 
-/** 心智指標徽章：分數與色調（與儀表板的 ok／warn／concern 語意一致）。 */
+/** 知識庫健康徽章（後端欄位仍叫 mindScore＝mind_index_history.score）：分數與色調（與儀表板的 ok／warn／concern 語意一致）。
+ *  它衡量 HERMES 知識庫管線的運作（轉化率／連結／活化／節奏），不是使用者本人的狀態——幸福指數見 hhiBadge。 */
 export function scoreBadge(score: number | null): { text: string; tone: 'ok' | 'warn' | 'concern' } | null {
   if (score === null || Number.isNaN(score)) return null
   return { text: score.toFixed(1), tone: score >= 90 ? 'ok' : score >= 75 ? 'warn' : 'concern' }
+}
+
+/** 幸福指數徽章：整數分數（displayed_score）；色調門檻與儀表板 hhiTone 相同（80／65／50／35）。
+ *  幸福指數 v3 是「對照自己近 90 天的百分位」，分數會落在 50 上下，與知識庫健康（96–99）不是同一把尺，門檻也因此不同。 */
+export type HhiTone = 'great' | 'ok' | 'warn' | 'concern' | 'crit'
+export function hhiBadge(score: number | null): { text: string; tone: HhiTone } | null {
+  if (score === null || Number.isNaN(score)) return null
+  const tone: HhiTone = score >= 80 ? 'great' : score >= 65 ? 'ok' : score >= 50 ? 'warn' : score >= 35 ? 'concern' : 'crit'
+  return { text: String(Math.round(score)), tone }
 }

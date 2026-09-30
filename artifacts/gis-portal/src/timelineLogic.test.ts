@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { TimelineItem } from './timelineApi'
-import { groupHeader, groupItems, itemKey, mergePages, neighbors, oneLine, rowDateLabel, scoreBadge } from './timelineLogic'
+import { groupHeader, groupItems, hhiBadge, itemKey, mergePages, neighbors, oneLine, rowDateLabel, scoreBadge } from './timelineLogic'
 
 const item = (level: TimelineItem['level'], key: string, start: string, end = start, over: Partial<TimelineItem> = {}): TimelineItem => ({
   level, periodKey: key, startDate: start, endDate: end, title: key, summary: `摘要${key}`, hasReport: true,
-  rangeInferred: false, periodNote: null, generation: 3, eventCount: 0, events: [], mindScore: null, ...over,
+  rangeInferred: false, periodNote: null, generation: 3, eventCount: 0, events: [], mindScore: null, hhiScore: null, ...over,
 })
 
 describe('rowDateLabel', () => {
@@ -77,5 +77,17 @@ describe('scoreBadge', () => {
     expect(scoreBadge(98.84)?.text).toBe('98.8')
     expect(scoreBadge(null)).toBeNull()
     expect(scoreBadge(Number.NaN)).toBeNull()
+  })
+})
+
+describe('hhiBadge', () => {
+  it.each([[95, 'great'], [80, 'great'], [79, 'ok'], [65, 'ok'], [64, 'warn'], [50, 'warn'], [49, 'concern'], [35, 'concern'], [34, 'crit'], [0, 'crit']])('%s → %s', (s, tone) => {
+    expect(hhiBadge(s)?.tone).toBe(tone)
+  })
+  it('shows an integer and hides null/NaN', () => {
+    expect(hhiBadge(62)?.text).toBe('62')
+    expect(hhiBadge(61.6)?.text).toBe('62')
+    expect(hhiBadge(null)).toBeNull()
+    expect(hhiBadge(Number.NaN)).toBeNull()
   })
 })

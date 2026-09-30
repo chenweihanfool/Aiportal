@@ -115,6 +115,24 @@ describe("buildList (day)", () => {
     expect(items.some((i) => i.periodKey === "2026-10-02")).toBe(false);
   });
 
+  it("attaches the happiness score per day; hhi-only days become placeholder rows; other levels and future days carry none", () => {
+    const hhi = new Map<string, number>([["2026-09-28", 62], ["2026-09-24", 55], ["2026-10-03", 70]]);
+    const { items } = buildList({ ...base, hhiScores: hhi, rows: [row("day", "2026-09-28", "2026-09-28")] });
+    expect(items.map((i) => i.periodKey)).toEqual(["2026-09-28", "2026-09-26", "2026-09-25", "2026-09-24"]);
+    expect(items[0]).toMatchObject({ mindScore: 98.9, hhiScore: 62 });          // 兩個分數互不覆蓋
+    expect(items[1]).toMatchObject({ mindScore: null, hhiScore: null });        // 只有事件的日子
+    expect(items[2]).toMatchObject({ mindScore: 97.1, hhiScore: null });        // 只有知識庫健康
+    expect(items[3]).toMatchObject({ hasReport: false, mindScore: null, hhiScore: 55 });   // 只有幸福指數 → 占位列
+    expect(items.some((i) => i.periodKey === "2026-10-03")).toBe(false);        // 未來日不顯示
+    const week = buildList({ ...base, level: "week", hhiScores: hhi, rows: [row("week", "2026-第39週", "2026-09-20", "2026-09-26")] });
+    expect(week.items.every((i) => i.hhiScore === null && i.mindScore === null)).toBe(true);
+  });
+
+  it("omitting hhiScores keeps the old behavior (hhiScore null everywhere)", () => {
+    const { items } = buildList({ ...base, rows: [row("day", "2026-09-28", "2026-09-28")] });
+    expect(items.every((i) => i.hhiScore === null)).toBe(true);
+  });
+
   it("caps event chips at 8 but keeps the true count", () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ id: `x${i}`, date: "2026-09-28", title: `t${i}` }));
     const { items } = buildList({ ...base, events: many, rows: [row("day", "2026-09-28", "2026-09-28")] });
