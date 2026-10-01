@@ -555,7 +555,7 @@ export function abstractionInsight(index: GraphIndex, kind: 'concept' | 'method'
 // 跟敘事合併後統一排序。
 export function entityEvents(
   index: GraphIndex, kind: NodeKind, name: string,
-): Array<{ id: string; date: string; title: string; status: string | null }> {
+): Array<{ id: string; date: string; title: string; status: string | null; case: string | null }> {
   const ids: Iterable<string> =
     kind === 'person' ? (index.personEvents.get(name) ?? [])
     : kind === 'case' ? (index.caseEvents.get(name) ?? [])
@@ -563,10 +563,10 @@ export function entityEvents(
     : kind === 'concept' ? (index.conceptEvents.get(name) ?? [])
     : kind === 'method' ? (index.methodEvents.get(name) ?? [])
     : []
-  const out: Array<{ id: string; date: string; title: string; status: string | null }> = []
+  const out: Array<{ id: string; date: string; title: string; status: string | null; case: string | null }> = []
   for (const id of ids) {
     const ev = index.eventById.get(id)
-    if (ev) out.push({ id: ev.id, date: ev.date, title: ev.title, status: ev.status })
+    if (ev) out.push({ id: ev.id, date: ev.date, title: ev.title, status: ev.status, case: ev.case })
   }
   return out
 }

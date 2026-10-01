@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { COLOR, FONT } from './theme'
-import { parseMarkdown, type Block, type Inline } from './markdownLite'
+import { parseInline, parseMarkdown, type Block, type Inline } from './markdownLite'
 
 // 把 markdownLite 的結構轉成 React 元素——只產生元素、不使用 dangerouslySetInnerHTML。
 // resolveWikilink／onNavigate：提供時，能解析到站內節點的 wikilink 會變成可點連結（點了跳到該節點）；
@@ -62,4 +62,9 @@ export function MarkdownView({
 }: { text: string; fontSize?: string } & LinkOpts) {
   const opts: LinkOpts = { resolveWikilink, onNavigate }
   return <div style={{ fontSize, color: COLOR.steel, wordBreak: 'break-word' }}>{parseMarkdown(text).map((b, i) => renderBlock(b, i, opts))}</div>
+}
+
+/** 單行內文（不產生段落區塊）：給敘事條列這種「一句話」的場合用，wikilink 規則同 MarkdownView。 */
+export function InlineText({ text, resolveWikilink, onNavigate }: { text: string } & LinkOpts) {
+  return <>{renderInline(parseInline(text), { resolveWikilink, onNavigate })}</>
 }
