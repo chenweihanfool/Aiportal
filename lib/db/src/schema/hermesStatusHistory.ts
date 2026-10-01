@@ -1,4 +1,4 @@
-import { pgTable, date, real, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, date, real, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
 
 // 每日一筆的「今天最後一次快照」趨勢紀錄——跟 mind_index_history／
 // social_index_history 同一種模式：collect.ps1 每 ~10 分鐘 POST 一次
@@ -13,6 +13,13 @@ export const hermesStatusHistoryTable = pgTable("hermes_status_history", {
   cpuPercent: real("cpu_percent"),
   memPercent: real("mem_percent"),
   worstDiskPercent: real("worst_disk_percent"),
+  // 磁碟容量歷史（2026-10-01，VPS 容量有限而知識庫會膨脹，要能看出成長速度）：
+  // 取「使用率最高的那顆碟」當天最後一次的已用／剩餘／總量（GB），以及當天最後一次的佔用分項。
+  // 預估「幾天後寫滿」不存——讀取時用這幾欄現算（衍生值讀取時算）。
+  diskUsedGb: real("disk_used_gb"),
+  diskFreeGb: real("disk_free_gb"),
+  diskTotalGb: real("disk_total_gb"),
+  storage: jsonb("storage").$type<Array<{ label: string; bytes: number }>>(),
   containersHealthy: integer("containers_healthy"),
   containersTotal: integer("containers_total"),
   tasksFailed: integer("tasks_failed"),

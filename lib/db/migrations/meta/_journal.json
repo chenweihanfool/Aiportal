@@ -113,6 +113,13 @@
       "when": 1790834562939,
       "tag": "0015_big_sentry",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790849125158,
+      "tag": "0016_lonely_black_queen",
+      "breakpoints": true
     }
   ]
 }
