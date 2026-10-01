@@ -5,7 +5,11 @@ import { parseInline, parseMarkdown, type Block, type Inline } from './markdownL
 // 把 markdownLite 的結構轉成 React 元素——只產生元素、不使用 dangerouslySetInnerHTML。
 // resolveWikilink／onNavigate：提供時，能解析到站內節點的 wikilink 會變成可點連結（點了跳到該節點）；
 // 沒提供或解析不到就維持純文字。
-interface LinkOpts { resolveWikilink?: (target: string) => string | null; onNavigate?: (nodeId: string) => void }
+interface LinkOpts {
+  resolveWikilink?: (target: string) => string | null
+  onNavigate?: (nodeId: string) => void
+  onOpenAttachment?: (path: string) => void   // 提供時，![[附件/…]] 變成可點開預覽；沒提供就是純文字
+}
 
 function renderInline(nodes: Inline[], opts: LinkOpts): ReactNode[] {
   return nodes.map((n, i) => {
@@ -25,6 +29,21 @@ function renderInline(nodes: Inline[], opts: LinkOpts): ReactNode[] {
             tabIndex={0}
             onClick={() => opts.onNavigate?.(id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opts.onNavigate?.(id) } }}
+            style={{ color: COLOR.amber, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px' }}
+          >{n.text}</span>
+        )
+      }
+      case 'embed': {
+        if (!opts.onOpenAttachment) return n.text
+        const open = () => opts.onOpenAttachment?.(n.path)
+        return (
+          <span
+            key={i}
+            role="button"
+            tabIndex={0}
+            title={n.path}
+            onClick={open}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() } }}
             style={{ color: COLOR.amber, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px' }}
           >{n.text}</span>
         )
@@ -58,13 +77,13 @@ function renderBlock(b: Block, i: number, opts: LinkOpts): ReactNode {
 }
 
 export function MarkdownView({
-  text, fontSize = '0.84rem', resolveWikilink, onNavigate,
+  text, fontSize = '0.84rem', resolveWikilink, onNavigate, onOpenAttachment,
 }: { text: string; fontSize?: string } & LinkOpts) {
-  const opts: LinkOpts = { resolveWikilink, onNavigate }
+  const opts: LinkOpts = { resolveWikilink, onNavigate, onOpenAttachment }
   return <div style={{ fontSize, color: COLOR.steel, wordBreak: 'break-word' }}>{parseMarkdown(text).map((b, i) => renderBlock(b, i, opts))}</div>
 }
 
 /** 單行內文（不產生段落區塊）：給敘事條列這種「一句話」的場合用，wikilink 規則同 MarkdownView。 */
-export function InlineText({ text, resolveWikilink, onNavigate }: { text: string } & LinkOpts) {
-  return <>{renderInline(parseInline(text), { resolveWikilink, onNavigate })}</>
+export function InlineText({ text, resolveWikilink, onNavigate, onOpenAttachment }: { text: string } & LinkOpts) {
+  return <>{renderInline(parseInline(text), { resolveWikilink, onNavigate, onOpenAttachment })}</>
 }

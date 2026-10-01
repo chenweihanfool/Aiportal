@@ -20,6 +20,7 @@ import { apiFetchHermesDoc, type HermesDoc } from './hermesDocApi'
 import { MarkdownView, InlineText } from './MarkdownView'
 import { groupByMonth, parseNarrative, sortNewestFirst } from './nodeTimeline'
 import { describeSource, stripSourceSection } from './docContent'
+import { AttachmentViewer } from './AttachmentViewer'
 import {
   buildIndex, resolveWikilink, personInsight, caseInsight, eventInsight, objectInsight, abstractionInsight, entityEvents,
   personId, eventId, caseId, objectId, conceptId, methodId, splitId,
@@ -218,6 +219,7 @@ type DocState = { status: 'loading' } | { status: 'missing' } | { status: 'error
 
 function ContentTab({ password, kind, name, go, resolve }: { password: string | null; kind: NodeKind; name: string; go: (id: string) => void; resolve: (target: string) => string | null }) {
   const [state, setState] = useState<DocState>({ status: 'loading' })
+  const [viewing, setViewing] = useState<string | null>(null)   // 正在預覽的附件路徑
   useEffect(() => {
     if (!password || (kind !== 'event' && kind !== 'concept' && kind !== 'method')) return
     let cancelled = false
@@ -246,17 +248,23 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
           事件{doc.date ? ` · ${doc.date}` : ''}
         </div>
         {bodyText.trim()
-          ? <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} resolveWikilink={resolve} onNavigate={go} /></div>
+          ? <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} resolveWikilink={resolve} onNavigate={go} onOpenAttachment={password ? setViewing : undefined} /></div>
           : <Note>這個事件的檔案沒有正文，只有標題與欄位。</Note>}
         {doc.truncated && <Note tone="warn">正文過長，這裡只顯示前段（完整內容在 vault 的事件檔）。</Note>}
         {doc.sources.length > 0 && (
           <Section title="來源">
             {doc.sources.map(s => {
               const line = describeSource(s)
+              const previewable = s.type === 'attachment' && !!password
               return (
-                <span key={`${s.type}:${s.path}`} title={s.path} style={{
+                <span key={`${s.type}:${s.path}`} title={s.path}
+                  role={previewable ? 'button' : undefined} tabIndex={previewable ? 0 : undefined}
+                  onClick={previewable ? () => setViewing(s.path) : undefined}
+                  onKeyDown={previewable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewing(s.path) } } : undefined}
+                  style={{
                   display: 'inline-flex', gap: '6px', alignItems: 'baseline', maxWidth: '100%', padding: '3px 9px', borderRadius: '999px',
-                  background: 'rgba(255,255,255,0.03)', border: `1px solid ${COLOR.line}`, fontSize: 'calc(var(--ds, 1) * 0.66rem)', color: COLOR.ink,
+                  background: 'rgba(255,255,255,0.03)', border: `1px solid ${previewable ? COLOR.amberDim : COLOR.line}`, fontSize: 'calc(var(--ds, 1) * 0.66rem)',
+                  color: previewable ? COLOR.amber : COLOR.ink, cursor: previewable ? 'pointer' : 'default',
                 }}>
                   <span style={{ color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)' }}>{line.label}</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line.text}</span>
@@ -265,6 +273,7 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
             })}
           </Section>
         )}
+        {viewing && password && <AttachmentViewer password={password} path={viewing} onClose={() => setViewing(null)} />}
       </>
     )
   }

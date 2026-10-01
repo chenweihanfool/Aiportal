@@ -25,3 +25,15 @@ export function stripSourceSection(md: string): string {
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
+
+export type AttachmentKind = 'image' | 'pdf' | 'text' | 'other'
+
+/** 附件預覽的種類（與 api-server lib/attachmentFile.ts 的白名單一致）；'other' 不提供預覽。 */
+export function attachmentKind(path: string): AttachmentKind {
+  const m = /\.([A-Za-z0-9]+)$/.exec(path.trim())
+  const ext = m ? m[1].toLowerCase() : ''
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'image'
+  if (ext === 'pdf') return 'pdf'
+  if (ext === 'txt' || ext === 'md') return 'text'
+  return 'other'
+}

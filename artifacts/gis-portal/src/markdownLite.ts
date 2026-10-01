@@ -15,6 +15,7 @@ export type Inline =
   | { t: 'code'; v: string }
   | { t: 'link'; href: string; c: Inline[] }
   | { t: 'wikilink'; target: string; text: string }
+  | { t: 'embed'; path: string; text: string }   // ![[附件/…]]：呼叫端可選擇讓它可點開預覽
 
 export type Block =
   | { t: 'h'; level: number; c: Inline[] }
@@ -63,7 +64,11 @@ export function parseInline(src: string): Inline[] {
       flush(); out.push({ t: 'strong', c: parseInline(m[2]) }); i += m[0].length; continue
     }
     if ((m = /^!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/.exec(rest))) {            // ![[附件/x.png]] 內嵌 → 「📎 檔名」
-      flush(); out.push({ t: 'text', v: `📎 ${pathBase(m[1])}` }); i += m[0].length; continue
+      flush()
+      const target = m[1].trim()
+      if (target.startsWith('附件/')) out.push({ t: 'embed', path: target, text: `📎 ${pathBase(target)}` })
+      else out.push({ t: 'text', v: `📎 ${pathBase(m[1])}` })
+      i += m[0].length; continue
     }
     if ((m = /^\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/.exec(rest))) {          // [[wikilink|alias]]
       flush(); out.push({ t: 'wikilink', target: m[1].trim(), text: wikilinkText(m[1], m[2]) }); i += m[0].length; continue
