@@ -11,3 +11,4 @@ export * from "./hermesPipelineSnapshot";
 export * from "./hermesStatusHistory";
 export * from "./hermesPipelineHistory";
 export * from "./hermesTimelineEntry";
+export * from "./hermesDoc";
