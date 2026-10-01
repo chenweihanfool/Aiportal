@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildIndex, shortestPath, personInsight, caseInsight, eventInsight, objectInsight,
   entityEvents, searchNodes, recentActivity, personId, eventId, caseId, objectId, splitId,
-  conceptId, methodId, abstractionInsight,
+  conceptId, methodId, abstractionInsight, resolveWikilink, normalizeLabel,
 } from './graphInsights'
 import type { HermesGraphData } from './hermesGraphApi'
 
@@ -457,5 +457,47 @@ describe('concepts and methods (抽象層)', () => {
     expect(ins.people.map(p => p.name)).toContain('Alice')
     expect(ins.coMethods).toEqual([{ name: '漸進式部署', events: 1 }])
     expect(ins.coConcepts).toEqual([])
+  })
+})
+
+describe('resolveWikilink (正文裡的 [[…]] → 圖上節點)', () => {
+  const g: Graph = {
+    ...buildGraph(),
+    events: [
+      { id: 'e1', date: '2026-08-11', title: '通霄115非都二圖第1階段驗收撥款函（通地二字第1150003251號）', status: null, tags: [], case: null },
+      { id: 'e2', date: '2026-09-21', title: '向銅鑼所索取教育訓練資料', status: null, tags: [], case: null },
+    ],
+    objects: [{ name: '12_115年度「現況測量」自我檢查紀錄表9-all.pdf', objectType: 'document', eventCount: 1 }],
+    people: [{ name: '陳韋翰', eventCount: 1 }],
+    cases: [{ name: '115非都二圖委外', eventCount: 2, status: 'open' }],
+    concepts: [{ name: '單一事實來源', eventCount: 2, promoted: true }],
+  }
+  const index = buildIndex(g)
+
+  it('resolves people, cases, objects and concepts by name', () => {
+    expect(resolveWikilink(index, '陳韋翰')).toBe(personId('陳韋翰'))
+    expect(resolveWikilink(index, '115非都二圖委外')).toBe(caseId('115非都二圖委外'))
+    expect(resolveWikilink(index, '12_115年度「現況測量」自我檢查紀錄表9-all.pdf')).toBe(objectId('12_115年度「現況測量」自我檢查紀錄表9-all.pdf'))
+    expect(resolveWikilink(index, '單一事實來源')).toBe(conceptId('單一事實來源'))
+  })
+
+  it('resolves an event by "date_title" file stem, with folder prefix and .md', () => {
+    expect(resolveWikilink(index, '2026-09-21_向銅鑼所索取教育訓練資料')).toBe(eventId('e2'))
+    expect(resolveWikilink(index, 'Events/2026-09-21_向銅鑼所索取教育訓練資料.md')).toBe(eventId('e2'))
+  })
+
+  it('tolerates full-width vs half-width punctuation and whitespace (the same drift behind the duplicate event files)', () => {
+    expect(resolveWikilink(index, '2026-08-11_通霄115非都二圖第1階段驗收撥款函(通地二字第1150003251號)')).toBe(eventId('e1'))
+    expect(resolveWikilink(index, '2026-08-11_通霄115非都二圖第1階段驗收撥款函（通地二字第 1150003251 號）')).toBe(eventId('e1'))
+    expect(normalizeLabel(' A：B（C） ')).toBe('a:b(c)')
+  })
+
+  it('never resolves diary, attachment, 人類/ or AI/ paths, nor unknown names', () => {
+    expect(resolveWikilink(index, '日記/2026-09-04.md')).toBeNull()
+    expect(resolveWikilink(index, '附件/陳韋翰.png')).toBeNull()
+    expect(resolveWikilink(index, '人類/通霄專案/陳韋翰')).toBeNull()
+    expect(resolveWikilink(index, 'AI/知識/陳韋翰.md')).toBeNull()
+    expect(resolveWikilink(index, '不存在的東西')).toBeNull()
+    expect(resolveWikilink(index, '   ')).toBeNull()
   })
 })

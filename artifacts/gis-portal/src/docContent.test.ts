@@ -1,21 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeSource, softenWikilinks, stripSourceSection } from './docContent'
-
-describe('softenWikilinks', () => {
-  it('turns embeds, diary links, aliases and plain links into readable text', () => {
-    expect(softenWikilinks('見 ![[附件/圖 1.jpg]] 與 [[日記/2026-09-04.md]]，[[X/事件名.md|別名]]、[[另一個事件]]。'))
-      .toBe('見 📎 圖 1.jpg 與 日記 2026-09-04，別名、另一個事件。')
-  })
-
-  it('leaves ordinary markdown and links untouched', () => {
-    const md = '## 摘要\n[官網](https://example.com) 與 `code`'
-    expect(softenWikilinks(md)).toBe(md)
-  })
-
-  it('handles an embed with an alias and trailing slashes', () => {
-    expect(softenWikilinks('![[附件/報告.pdf|年度報告]]')).toBe('📎 報告.pdf')
-  })
-})
+import { describeSource, stripSourceSection } from './docContent'
 
 describe('describeSource', () => {
   it('shows only the date for diaries and the file name for attachments', () => {

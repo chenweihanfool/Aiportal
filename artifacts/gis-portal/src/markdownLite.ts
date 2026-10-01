@@ -3,6 +3,8 @@
 // 為什麼手寫、不引入 marked＋DOMPurify：報表用到的語法有限（標題、粗體、清單、表格、引用、連結、行內 code），
 // 輸出是 React 節點而不是 HTML 字串——**沒有 innerHTML，就沒有 XSS 面**，也不需要新增依賴。
 // 連結只放行 http／https／mailto；其他協定（javascript:、data: …）一律降級成純文字。
+// Obsidian wikilink（[[目標|別名]]）解析成 wikilink 節點：預設只顯示文字，呼叫端（MarkdownView）提供解析函式
+// 時才會變成站內可點的連結（解析不到的維持純文字）；內嵌 ![[附件/…]] 一律顯示為「📎 檔名」。
 // 設計：kb-pipeline docs/timeline-design.md。
 
 export type Inline =
@@ -12,6 +14,7 @@ export type Inline =
   | { t: 'em'; c: Inline[] }
   | { t: 'code'; v: string }
   | { t: 'link'; href: string; c: Inline[] }
+  | { t: 'wikilink'; target: string; text: string }
 
 export type Block =
   | { t: 'h'; level: number; c: Inline[] }
@@ -30,6 +33,19 @@ export function safeHref(href: string): string | null {
   return SAFE_HREF.test(h) ? h : null
 }
 
+/** 路徑的最後一段（去掉資料夾與 .md）。 */
+export function pathBase(path: string): string {
+  const name = path.trim().split('/').filter(Boolean).pop() ?? path.trim()
+  return name.replace(/\.md$/i, '')
+}
+
+/** wikilink 的顯示文字：有別名用別名；日記連結顯示「日記 日期」；其餘取檔名（去資料夾與 .md）。 */
+export function wikilinkText(target: string, alias?: string): string {
+  if (alias && alias.trim()) return alias.trim()
+  if (target.trim().startsWith('日記/')) return `日記 ${pathBase(target)}`
+  return pathBase(target)
+}
+
 export function parseInline(src: string): Inline[] {
   const out: Inline[] = []
   let buf = ''
@@ -46,8 +62,11 @@ export function parseInline(src: string): Inline[] {
       && (m[1] === '**' || !/[A-Za-z0-9_]/.test(src[i + m[0].length] ?? ''))) {
       flush(); out.push({ t: 'strong', c: parseInline(m[2]) }); i += m[0].length; continue
     }
-    if ((m = /^\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/.exec(rest))) {          // [[wikilink|alias]] → 顯示文字
-      flush(); out.push({ t: 'text', v: (m[2] || m[1]).trim() }); i += m[0].length; continue
+    if ((m = /^!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/.exec(rest))) {            // ![[附件/x.png]] 內嵌 → 「📎 檔名」
+      flush(); out.push({ t: 'text', v: `📎 ${pathBase(m[1])}` }); i += m[0].length; continue
+    }
+    if ((m = /^\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/.exec(rest))) {          // [[wikilink|alias]]
+      flush(); out.push({ t: 'wikilink', target: m[1].trim(), text: wikilinkText(m[1], m[2]) }); i += m[0].length; continue
     }
     if ((m = /^\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/.exec(rest))) {
       const href = safeHref(m[2])

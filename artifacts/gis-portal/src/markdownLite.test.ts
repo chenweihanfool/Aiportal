@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseInline, parseMarkdown, safeHref } from './markdownLite'
+import { parseInline, parseMarkdown, safeHref, wikilinkText, pathBase } from './markdownLite'
 
 const plain = (nodes: ReturnType<typeof parseInline>): string =>
-  nodes.map(n => n.t === 'text' ? n.v : n.t === 'br' ? '\n' : n.t === 'code' ? n.v : plain(n.c)).join('')
+  nodes.map(n => n.t === 'text' ? n.v : n.t === 'br' ? '\n' : n.t === 'code' ? n.v : n.t === 'wikilink' ? n.text : plain(n.c)).join('')
 
 describe('safeHref（連結協定白名單）', () => {
   it.each([
@@ -43,6 +43,15 @@ describe('parseInline', () => {
   })
   it('renders wikilinks as their alias or name', () => {
     expect(plain(parseInline('見 [[2026-09-28_事件標題]] 與 [[人名|別名]]'))).toBe('見 2026-09-28_事件標題 與 別名')
+  })
+  it('parses wikilinks into wikilink nodes carrying the raw target and a readable text', () => {
+    expect(parseInline('[[Events/2026-08-11_通霄函.md]]')).toEqual([{ t: 'wikilink', target: 'Events/2026-08-11_通霄函.md', text: '2026-08-11_通霄函' }])
+    expect(parseInline('[[日記/2026-09-04.md]]')).toEqual([{ t: 'wikilink', target: '日記/2026-09-04.md', text: '日記 2026-09-04' }])
+    expect(parseInline('[[X/事件名.md|別名]]')).toEqual([{ t: 'wikilink', target: 'X/事件名.md', text: '別名' }])
+  })
+  it('turns an embed into a plain "📎 file name" text (never a wikilink node)', () => {
+    expect(parseInline('![[附件/圖 1.jpg]]')).toEqual([{ t: 'text', v: '📎 圖 1.jpg' }])
+    expect(parseInline('![[附件/報告.pdf|年度報告]]')).toEqual([{ t: 'text', v: '📎 報告.pdf' }])
   })
   it('never produces raw html nodes (angle brackets stay text)', () => {
     const n = parseInline('<script>alert(1)</script> <img src=x onerror=alert(1)>')
@@ -96,5 +105,18 @@ describe('parseMarkdown blocks', () => {
     const t0 = Date.now()
     parseMarkdown('*'.repeat(5000) + '\n' + '['.repeat(2000) + '\n' + '`'.repeat(3000) + '\n' + '**a'.repeat(1500))
     expect(Date.now() - t0).toBeLessThan(2000)
+  })
+})
+
+describe('wikilink text helpers', () => {
+  it('pathBase strips folders and .md', () => {
+    expect(pathBase('Events/2026-08-11_通霄函.md')).toBe('2026-08-11_通霄函')
+    expect(pathBase('  單獨名稱  ')).toBe('單獨名稱')
+    expect(pathBase('附件/子/報告.pdf')).toBe('報告.pdf')
+  })
+  it('wikilinkText prefers the alias, labels diary links, otherwise the base name', () => {
+    expect(wikilinkText('日記/2026-09-04.md')).toBe('日記 2026-09-04')
+    expect(wikilinkText('人物名', ' 別名 ')).toBe('別名')
+    expect(wikilinkText('Objects/某文件.md')).toBe('某文件')
   })
 })

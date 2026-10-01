@@ -29,9 +29,9 @@ import { COLOR, FONT } from './theme'
 import type { HermesGraphData } from './hermesGraphApi'
 import { apiFetchHermesDoc, type HermesDoc } from './hermesDocApi'
 import { MarkdownView } from './MarkdownView'
-import { describeSource, softenWikilinks, stripSourceSection } from './docContent'
+import { describeSource, stripSourceSection } from './docContent'
 import {
-  buildIndex, personInsight, caseInsight, eventInsight, objectInsight, abstractionInsight, entityEvents,
+  buildIndex, resolveWikilink, personInsight, caseInsight, eventInsight, objectInsight, abstractionInsight, entityEvents,
   personId, eventId, caseId, objectId, conceptId, methodId, splitId,
   type GraphIndex, type NodeKind,
 } from './graphInsights'
@@ -217,7 +217,7 @@ export function RelationshipDetailPanel({
         maxWidth: expanded ? '1080px' : undefined, width: '100%', margin: expanded ? '0 auto' : undefined,
       }}>
         {effectiveTab === 'content'
-          ? <ContentTab password={unlockedPassword} kind={kind} name={name} go={go} />
+          ? <ContentTab password={unlockedPassword} kind={kind} name={name} go={go} resolve={t => resolveWikilink(index, t)} />
           : effectiveTab === 'links'
           ? <LinksTab index={index} kind={kind} name={name} go={go} />
           : effectiveTab === 'insight'
@@ -232,7 +232,7 @@ export function RelationshipDetailPanel({
 // 內容由 HERMES 每 10 分鐘增量推送；查無＝尚未同步（不是錯誤），明說而不是顯示空白。
 type DocState = { status: 'loading' } | { status: 'missing' } | { status: 'error' } | { status: 'ok'; doc: HermesDoc }
 
-function ContentTab({ password, kind, name, go }: { password: string | null; kind: NodeKind; name: string; go: (id: string) => void }) {
+function ContentTab({ password, kind, name, go, resolve }: { password: string | null; kind: NodeKind; name: string; go: (id: string) => void; resolve: (target: string) => string | null }) {
   const [state, setState] = useState<DocState>({ status: 'loading' })
   useEffect(() => {
     if (!password || (kind !== 'event' && kind !== 'concept' && kind !== 'method')) return
@@ -252,7 +252,7 @@ function ContentTab({ password, kind, name, go }: { password: string | null; kin
   const doc = state.doc
   // 事件正文的「## 來源」段與下方結構化來源列重複，有來源列時就拿掉
   const rawBody = doc.kind === 'event' && doc.sources.length > 0 ? stripSourceSection(doc.bodyMd) : doc.bodyMd
-  const bodyText = softenWikilinks(rawBody)
+  const bodyText = rawBody
   const bodySize = 'calc(var(--ds, 1) * 0.74rem)'
 
   if (doc.kind === 'event') {
@@ -262,7 +262,7 @@ function ContentTab({ password, kind, name, go }: { password: string | null; kin
           事件{doc.date ? ` · ${doc.date}` : ''}
         </div>
         {bodyText.trim()
-          ? <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} /></div>
+          ? <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} resolveWikilink={resolve} onNavigate={go} /></div>
           : <Note>這個事件的檔案沒有正文，只有標題與欄位。</Note>}
         {doc.truncated && <Note tone="warn">正文過長，這裡只顯示前段（完整內容在 vault 的事件檔）。</Note>}
         {doc.sources.length > 0 && (
@@ -292,7 +292,7 @@ function ContentTab({ password, kind, name, go }: { password: string | null; kin
         {label} · {doc.contexts.length} 個事件 · {doc.promoted ? '已晉升' : '候選（僅 1 個事件，尚未被重複驗證）'}
       </div>
       {doc.aliases.length > 0 && <Note>事件裡的其他說法：{doc.aliases.map(a => `「${a}」`).join('、')}（管線已合併到這個名稱）。</Note>}
-      {bodyText.trim() && <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} /></div>}
+      {bodyText.trim() && <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} resolveWikilink={resolve} onNavigate={go} /></div>}
       {doc.truncated && <Note tone="warn">說明過長，這裡只顯示前段。</Note>}
       <Section title="出現脈絡（新→舊）">{null}</Section>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '-0.1rem' }}>
