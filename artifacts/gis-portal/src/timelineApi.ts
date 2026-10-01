@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 export type TimelineLevel = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
-export interface TimelineEventChip { id: string; title: string }
+export interface TimelineEventChip { id: string; title: string; createdAt: string | null }   // createdAt＝事件檔建立時間（ISO）；舊資料為 null
 
 export interface TimelineItem {
   level: TimelineLevel
@@ -18,7 +18,7 @@ export interface TimelineItem {
   periodNote: string | null   // 例：季報自述「涵蓋順延為 5–7 月」
   generation: number | null
   eventCount: number
-  events: TimelineEventChip[] // 僅 day 級，最多 8 個
+  events: TimelineEventChip[] // 僅 day 級；清單最多 8 個、單筆詳情給全部；依建立時間新→舊
   mindScore: number | null    // 僅 day 級；＝知識庫健康分數（徽章顯示為「知識庫健康」）
   hhiScore: number | null     // 僅 day 級；＝幸福指數當日顯示分數（23:55 快照後才有；今天在快照前為 null）
 }

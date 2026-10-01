@@ -41,6 +41,9 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
       // 管線合併後標準名。可選欄位——舊事件／舊版 pusher 沒有，讀取端一律容忍；
       // events 是 jsonb，所以不需要 DB migration。節點、eventCount、晉升旗標都在
       // GET /hermes-graph 讀取時反推（lib/hermesAbstractions.ts），不存。
+      // 2026-10 — 事件檔的建立時間（ISO 8601，含時區）。可選欄位：舊版 pusher 沒有，讀取端一律容忍（日報「當日事件」
+      // 時間軸才用；沒有就排在最後並明標無時間）。jsonb，不需 DB migration。
+      createdAt?: string | null;
       concepts?: Array<{ name: string; relation?: string }>;
       methods?: Array<{ name: string; relation?: string }>;
     }>

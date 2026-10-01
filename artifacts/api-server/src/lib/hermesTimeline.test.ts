@@ -6,6 +6,8 @@ import {
   encodeCursor,
   isValidDate,
   missingPeriods,
+  sortDayEvents,
+  toChip,
   validateEntries,
   type EventRef,
   type ReportRow,
@@ -193,4 +195,38 @@ describe("buildChildren", () => {
     expect(buildChildren(days, "2026-09-22", "2026-09-28").map((c) => c.periodKey)).toEqual(["2026-09-23"]);
     expect(buildChildren(days, "2026-09-15", "2026-09-28").map((c) => c.periodKey)).toEqual(["2026-09-21", "2026-09-23"]);
   });
+});
+
+describe("day events: newest-first by creation time", () => {
+  const ev = (id: string, createdAt?: string | null): EventRef => ({ id, date: "2026-10-01", title: id, createdAt });
+
+  it("sorts new→old and puts events without a usable time last, keeping their original order", () => {
+    const out = sortDayEvents([
+      ev("none1"), ev("old", "2026-10-01T08:00:00+08:00"), ev("bad", "not a date"), ev("new", "2026-10-01T21:30:00+08:00"),
+      ev("none2", null), ev("mid", "2026-10-01T12:00:00+08:00"),
+    ]);
+    expect(out.map((e) => e.id)).toEqual(["new", "mid", "old", "none1", "bad", "none2"]);
+  })
+
+  it("compares real instants, not strings (different offsets)", () => {
+    const out = sortDayEvents([ev("a", "2026-10-01T10:00:00+08:00"), ev("b", "2026-10-01T03:00:00Z")]);   // b = 11:00 +08 → newer
+    expect(out.map((e) => e.id)).toEqual(["b", "a"]);
+  })
+
+  it("keeps the input order for identical timestamps and does not mutate the input", () => {
+    const input = [ev("x", "2026-10-01T10:00:00Z"), ev("y", "2026-10-01T10:00:00Z")];
+    expect(sortDayEvents(input).map((e) => e.id)).toEqual(["x", "y"]);
+    expect(input.map((e) => e.id)).toEqual(["x", "y"]);
+  })
+
+  it("toChip carries createdAt and defaults to null for old snapshots", () => {
+    expect(toChip(ev("a", "2026-10-01T10:00:00Z"))).toEqual({ id: "a", title: "a", createdAt: "2026-10-01T10:00:00Z" });
+    expect(toChip({ id: "b", date: "2026-10-01", title: "b" }).createdAt).toBeNull();
+  })
+
+  it("buildList gives the list rows the newest events first (before the 8-chip cut)", () => {
+    const many: EventRef[] = Array.from({ length: 12 }, (_, i) => ev(`e${i}`, `2026-10-01T${String(8 + i).padStart(2, "0")}:00:00+08:00`));
+    const { items } = buildList({ level: "day", events: many, rows: [], mindScores: new Map(), today: "2026-10-02", limit: 30, cursor: null });
+    expect(items[0].events.map((e) => e.id)).toEqual(["e11", "e10", "e9", "e8", "e7", "e6", "e5", "e4"]);
+  })
 });

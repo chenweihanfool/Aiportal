@@ -188,7 +188,33 @@ export interface ReportRow {
   rangeInferred: boolean;
   periodNote: string | null;
 }
-export interface EventRef { id: string; date: string; title: string }
+export interface EventRef { id: string; date: string; title: string; createdAt?: string | null }
+
+/** 當日事件的顯示項：createdAt＝事件檔的建立時間（ISO 8601）；舊 pusher 沒送＝null。 */
+export interface EventChip { id: string; title: string; createdAt: string | null }
+
+export function toChip(e: EventRef): EventChip {
+  return { id: e.id, title: e.title, createdAt: e.createdAt ?? null };
+}
+
+function createdMs(e: EventRef): number | null {
+  if (!e.createdAt) return null;
+  const t = Date.parse(e.createdAt);
+  return Number.isNaN(t) ? null : t;
+}
+
+/** 當日事件依建立時間「新→舊」；沒有（或無法解析）建立時間的排在最後，彼此維持原順序（穩定排序）。 */
+export function sortDayEvents(evs: EventRef[]): EventRef[] {
+  return evs
+    .map((e, i) => ({ e, i, t: createdMs(e) }))
+    .sort((a, b) => {
+      if (a.t === null && b.t === null) return a.i - b.i;
+      if (a.t === null) return 1;
+      if (b.t === null) return -1;
+      return b.t - a.t || a.i - b.i;
+    })
+    .map((x) => x.e);
+}
 
 export interface TimelineListItem {
   level: TimelineLevel;
@@ -202,7 +228,7 @@ export interface TimelineListItem {
   periodNote: string | null;
   generation: number | null;
   eventCount: number;
-  events: Array<{ id: string; title: string }>; // 僅 day 級，最多 EVENT_CHIP_LIMIT 筆
+  events: EventChip[];                          // 僅 day 級；清單最多 EVENT_CHIP_LIMIT 筆，單筆詳情給全部；皆依建立時間新→舊
   mindScore: number | null;                     // 僅 day 級；＝知識庫健康分數（mind_index_history.score，見 docs 說明）
   hhiScore: number | null;                      // 僅 day 級；＝幸福指數當日顯示分數（happiness_index_history.displayed_score）
 }
@@ -261,7 +287,7 @@ export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCu
     const evs = eventsWithin(events, it.startDate, it.endDate, today);
     it.eventCount = evs.length;
     if (level === "day") {
-      it.events = evs.slice(0, EVENT_CHIP_LIMIT).map((e) => ({ id: e.id, title: e.title }));
+      it.events = sortDayEvents(evs).slice(0, EVENT_CHIP_LIMIT).map(toChip);
       it.mindScore = mindScores.get(it.periodKey) ?? null;
       it.hhiScore = hhiScores.get(it.periodKey) ?? null;
     }
