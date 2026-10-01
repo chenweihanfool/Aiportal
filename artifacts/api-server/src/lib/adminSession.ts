@@ -11,6 +11,11 @@ import { ADMIN_PASSWORD } from "./adminPassword";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
 const sessions = new Map<string, number>(); // token -> expiresAt（epoch ms）
 
+// Google 登入（見 lib/googleAuth.ts）通過後，googleSessionBridge 會把「這個請求已是白名單登入者」
+// 轉成這個只存在於本 process 記憶體的隨機值，放進 x-admin-password，讓既有每個私領域路由
+// 的 isAuthorized(header) 不必逐一改寫就認得登入者。它不會離開伺服器，瀏覽器猜不到。
+export const GOOGLE_BRIDGE_TOKEN = randomBytes(32).toString("hex");
+
 export function createSession(): { token: string; expiresAt: number } {
   const token = randomBytes(32).toString("hex");
   const expiresAt = Date.now() + SESSION_TTL_MS;
@@ -35,6 +40,6 @@ function isValidSessionToken(token: string): boolean {
 // createSession() 發的 session token（給瀏覽器）。
 export function isAuthorized(headerValue: string | string[] | undefined): boolean {
   if (typeof headerValue !== "string" || headerValue.length === 0) return false;
-  if (headerValue === ADMIN_PASSWORD) return true;
+  if (headerValue === ADMIN_PASSWORD || headerValue === GOOGLE_BRIDGE_TOKEN) return true;
   return isValidSessionToken(headerValue);
 }
