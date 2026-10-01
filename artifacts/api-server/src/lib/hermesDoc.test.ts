@@ -56,6 +56,13 @@ describe("makeExcerpt", () => {
     expect(makeExcerpt("")).toBe("");
   });
 
+  it("skips navigation sections (人物／物件／See Also／來源) but keeps narrative text and 更新紀錄", () => {
+    const body = "這是事件的敘述。\n\n## 相關人物\n- [[陳韋翰]]\n\n## See Also\n- [[另一事件]]\n\n## 來源\n- [[日記/2026-09-04.md]]\n\n## 更新紀錄\n- 2026-09-05 補充細節";
+    expect(makeExcerpt(body)).toBe("這是事件的敘述。 2026-09-05 補充細節");
+    expect(makeExcerpt("## 相關人物\n- [[陳韋翰]]\n\n## 來源\n- x")).toBe("");
+    expect(makeExcerpt("### 來源\n只是三級標題底下的字")).toBe("只是三級標題底下的字");
+  });
+
   it("uses a wikilink alias and the file base name", () => {
     expect(makeExcerpt("見 [[附件/報告.pdf|年度報告]] 與 ![[附件/圖.png]]")).toBe("見 年度報告 與 圖.png");
   });

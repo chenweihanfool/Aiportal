@@ -76,13 +76,24 @@ function plainLine(line: string): string {
     .trim();
 }
 
-/** 事件正文的摘錄：略過標題行、分隔線、表格分隔列與空行，取前幾句，超過 EXCERPT_CHARS 加「…」。 */
+// 事件正文裡這幾段是導覽／來源清單（人物、物件、相關事件、來源的 wikilink），不是敘述；摘錄時跳過
+// （實機事件檔只有這幾種二級標題加上「更新紀錄」「備註」；敘述文字在第一個標題之前與更新紀錄裡）。
+const NAV_SECTIONS = new Set(["相關人物", "相關物件", "See Also", "來源"]);
+
+/** 事件正文的摘錄：略過標題行、導覽段落（NAV_SECTIONS）、分隔線、表格分隔列與空行，取前幾句，
+ *  超過 EXCERPT_CHARS 加「…」。 */
 export function makeExcerpt(body: string, max = EXCERPT_CHARS): string {
   const parts: string[] = [];
   let len = 0;
+  let inNav = false;
   for (const raw of body.split(/\r?\n/)) {
     const t = raw.trim();
-    if (!t || /^#{1,6}\s/.test(t) || /^[-*_]{3,}$/.test(t) || /^\|?[\s:|-]+\|?$/.test(t)) continue;
+    const h = /^#{1,6}\s+(.*?)\s*$/.exec(t);
+    if (h) {
+      inNav = /^##\s/.test(t) && NAV_SECTIONS.has(h[1]);
+      continue;
+    }
+    if (inNav || !t || /^[-*_]{3,}$/.test(t) || /^\|?[\s:|-]+\|?$/.test(t)) continue;
     const p = plainLine(t);
     if (!p) continue;
     parts.push(p);
