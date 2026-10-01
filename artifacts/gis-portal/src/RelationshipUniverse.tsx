@@ -617,8 +617,9 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           ctx.arc(n.sx, n.sy, selected ? r * 1.35 : r, 0, Math.PI * 2)
           ctx.fill()
         }
-        // 索引節點（人／案／物／概念／方法）：圓內標關聯事件數。半徑太小（遠端或縮得很小）時不標，不然糊成一團。
-        if (n.kind !== 'event' && r >= 5.2) {
+        // 核心索引節點（目前核心類型的人／案／物／概念／方法）：圓內標關聯事件數。外圍節點不標（使用者要求），
+        // 半徑太小（遠端或縮得很小）時也不標，不然糊成一團。
+        if (n.kind === coreNow && n.kind !== 'event' && r >= 5.2) {
           const digits = String(n.eventCount)
           ctx.globalAlpha = nodeAlpha
           ctx.font = `600 ${Math.max(7, Math.min(15, r * (digits.length > 2 ? 0.8 : 1)))}px ${FONT.mono}`
@@ -646,14 +647,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           }
         }
       } else {
-        // 索引節點（人／案／物／概念／方法，候選除外）一律是標籤候選，依關聯數由大到小排優先；
-        // 實際畫哪些交給下面的碰撞排除。事件節點太多（幾百個）：只有「事件為核心且 ≤90 個」才標。
-        const hubs = nodes.filter(n => n.kind !== 'event' && !n.candidate).sort((a, b) => b.eventCount - a.eventCount)
-        labelled.push(...hubs.slice(0, 220))
-        if (coreNow === 'event') {
-          const evs = nodes.filter(n => n.kind === 'event')
-          if (evs.length <= 90) labelled.push(...evs)
-        }
+        // 名稱只標「核心類型」的節點（外圍不標，使用者要求；選取／hover 時另有鄰居標籤，見上面）。
+        // 核心是索引節點（人／案／物／概念／方法）：依關聯數由大到小排優先，實際畫哪些交給下面的碰撞排除；
+        // 核心是事件：幾百個標不下，只有 ≤90 個才標。
+        const coreNodes = nodes.filter(n => n.kind === coreNow && !n.candidate)
+        if (coreNow !== 'event') labelled.push(...coreNodes.sort((a, b) => b.eventCount - a.eventCount).slice(0, 220))
+        else if (coreNodes.length <= 90) labelled.push(...coreNodes)
       }
 
       ctx.font = `11px ${FONT.mono}`
