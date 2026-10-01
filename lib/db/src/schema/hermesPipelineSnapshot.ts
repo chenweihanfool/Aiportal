@@ -24,6 +24,9 @@ export interface HermesPipelineLayerStatus {
   backlog: number | null;
   errorSummary: string | null;
   durationSeconds: number | null;
+  // 該層實際班表（人話，如「每日 10:30、16:30、20:30」），由 pipeline-status-pusher 讀 jobs.json 的 enabled 班次帶上；
+  // 舊 pusher 不送就是 undefined，面板退回前端的靜態說明
+  schedule?: string[];
 }
 
 // Single-row "latest known state" table, same shape as hermes_status_snapshot

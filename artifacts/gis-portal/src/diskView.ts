@@ -1,7 +1,7 @@
 // 戰情室「硬碟容量」面板的純函式（格式化、分項占比、與過去比較、預估文字）。
 // 預估本身由後端 diskForecast.ts 算好給前端，這裡只負責把結果講成人話。
 
-export interface StorageItem { label: string; bytes: number }
+export interface StorageItem { label: string; bytes: number; note?: string }
 export interface DiskForecastInfo {
   basedOnDays: number
   insufficient: boolean
@@ -30,6 +30,8 @@ export interface StorageShare {
   share: number
   /** 與基準日相比的變化（bytes）；沒有基準資料為 null */
   delta: number | null
+  /** 附註，例如「可回收 17.3 GB」 */
+  note?: string
 }
 
 /** 分項由大到小；若提供已用總量，差額另列「其他（未歸類）」，讓使用者看得到沒被量到的部分。 */
@@ -43,6 +45,7 @@ export function storageShares(items: StorageItem[], usedBytes: number | null, pa
     bytes: it.bytes,
     share: base > 0 ? it.bytes / base : 0,
     delta: pastMap ? (pastMap.has(it.label) ? it.bytes - pastMap.get(it.label)! : null) : null,
+    ...(it.note ? { note: it.note } : {}),
   }))
   if (usedBytes !== null && usedBytes > sum) {
     rows.push({ label: '其他（未歸類）', bytes: usedBytes - sum, share: (usedBytes - sum) / base, delta: null })

@@ -64,14 +64,17 @@ export function diskAlertLevel(percentUsed: number | null, freeGb: number | null
 
 // 佔用分項：[{label, bytes}]。只收合法的、上限 30 筆，label 截 60 字——這是量測資料不是使用者輸入，
 // 但仍不信任形狀（舊 pusher 不送、壞資料不要讓整包快照被拒）。
-export function parseStorage(v: unknown): Array<{ label: string; bytes: number }> | null {
+export function parseStorage(v: unknown): Array<{ label: string; bytes: number; note?: string }> | null {
   if (!Array.isArray(v)) return null;
-  const out: Array<{ label: string; bytes: number }> = [];
+  const out: Array<{ label: string; bytes: number; note?: string }> = [];
   for (const it of v.slice(0, 30)) {
     if (!it || typeof it !== "object") continue;
-    const { label, bytes } = it as { label?: unknown; bytes?: unknown };
+    const { label, bytes, note } = it as { label?: unknown; bytes?: unknown; note?: unknown };
     if (typeof label !== "string" || !label.trim() || typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) continue;
-    out.push({ label: label.trim().slice(0, 60), bytes: Math.round(bytes) });
+    const row: { label: string; bytes: number; note?: string } = { label: label.trim().slice(0, 60), bytes: Math.round(bytes) };
+    // note：例如「可回收 17.3 GB」——只收非空字串，截 80 字
+    if (typeof note === "string" && note.trim()) row.note = note.trim().slice(0, 80);
+    out.push(row);
   }
   return out;
 }

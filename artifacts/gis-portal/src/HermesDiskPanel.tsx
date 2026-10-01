@@ -108,6 +108,7 @@ export function HermesDiskPanel({
                     )}
                   </span>
                 </div>
+                {s.note && <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.amber, marginTop: '1px' }}>{s.note}</div>}
                 <div style={{ height: '4px', background: COLOR.line, borderRadius: '2px', marginTop: '3px' }}>
                   <div style={{ width: `${Math.min(100, Math.max(1, s.share * 100))}%`, height: '100%', background: s.label.startsWith('其他') ? COLOR.steelDim : COLOR.amber, borderRadius: '2px' }} />
                 </div>

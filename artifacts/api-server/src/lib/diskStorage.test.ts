@@ -28,3 +28,18 @@ describe("parseStorage", () => {
     expect(r[0]!.label).toHaveLength(60)
   })
 })
+
+describe("parseStorage note", () => {
+  it("keeps a trimmed non-empty note (capped at 80 chars) and omits blank or non-string notes", () => {
+    const r = parseStorage([
+      { label: "build cache", bytes: 1, note: "  可回收 17.3 GB  " },
+      { label: "a", bytes: 2, note: "" },
+      { label: "b", bytes: 3, note: 5 },
+      { label: "c", bytes: 4, note: "x".repeat(100) },
+    ])!
+    expect(r[0]).toEqual({ label: "build cache", bytes: 1, note: "可回收 17.3 GB" })
+    expect(r[1]).toEqual({ label: "a", bytes: 2 })
+    expect(r[2]).toEqual({ label: "b", bytes: 3 })
+    expect(r[3]!.note).toHaveLength(80)
+  })
+})
