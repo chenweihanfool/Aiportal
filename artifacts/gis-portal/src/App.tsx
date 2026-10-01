@@ -21,6 +21,15 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.19.0',
+    date: '2026-10-01',
+    summary: '入口網站新增 Google 登入（個人使用、白名單）',
+    changes: [
+      '新增 Google 登入：只有白名單 email（ALLOWED_GOOGLE_EMAILS）進得來；session 為簽章 cookie，不進資料庫，把 email 從白名單拿掉即立即失效。做法對齊 pf，沿用同一個 Google OAuth 用戶端',
+      '未設 REQUIRE_GOOGLE_LOGIN 時行為不變（密碼解鎖照舊，右下角多一個「Google 登入」入口），可先驗證能登入；設為 1 後整站強制登入，未登入只看到登入頁。HERMES／collect.ps1 等伺服器推送仍用 x-admin-password，不受影響',
+    ],
+  },
+  {
     version: '2.18.0',
     date: '2026-10-01',
     summary: '事件內容可預覽附件（圖片／PDF／文字）',
