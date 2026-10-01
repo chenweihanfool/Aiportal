@@ -49,9 +49,13 @@ describe('parseInline', () => {
     expect(parseInline('[[日記/2026-09-04.md]]')).toEqual([{ t: 'wikilink', target: '日記/2026-09-04.md', text: '日記 2026-09-04' }])
     expect(parseInline('[[X/事件名.md|別名]]')).toEqual([{ t: 'wikilink', target: 'X/事件名.md', text: '別名' }])
   })
-  it('turns an embed into a plain "📎 file name" text (never a wikilink node)', () => {
-    expect(parseInline('![[附件/圖 1.jpg]]')).toEqual([{ t: 'text', v: '📎 圖 1.jpg' }])
-    expect(parseInline('![[附件/報告.pdf|年度報告]]')).toEqual([{ t: 'text', v: '📎 報告.pdf' }])
+  it('turns an attachment embed into an embed node labelled "📎 file name" (never a wikilink node)', () => {
+    expect(parseInline('![[附件/圖 1.jpg]]')).toEqual([{ t: 'embed', path: '附件/圖 1.jpg', text: '📎 圖 1.jpg' }])
+    expect(parseInline('![[附件/報告.pdf|年度報告]]')).toEqual([{ t: 'embed', path: '附件/報告.pdf', text: '📎 報告.pdf' }])
+  })
+
+  it('keeps an embed that is not under 附件/ as plain text', () => {
+    expect(parseInline('![[其他/圖.jpg]]')).toEqual([{ t: 'text', v: '📎 圖.jpg' }])
   })
   it('never produces raw html nodes (angle brackets stay text)', () => {
     const n = parseInline('<script>alert(1)</script> <img src=x onerror=alert(1)>')

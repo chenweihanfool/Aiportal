@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeSource, stripSourceSection } from './docContent'
+import { attachmentKind, describeSource, stripSourceSection } from './docContent'
 
 describe('describeSource', () => {
   it('shows only the date for diaries and the file name for attachments', () => {
@@ -27,4 +27,12 @@ describe('stripSourceSection', () => {
   it('handles a body that is only a source section', () => {
     expect(stripSourceSection('## 來源\n- x')).toBe('')
   })
+})
+
+describe('attachmentKind', () => {
+  it.each([
+    ['附件/a.PNG', 'image'], ['附件/a.jpeg', 'image'], ['附件/a.webp', 'image'],
+    ['附件/公文.pdf', 'pdf'], ['附件/x.txt', 'text'], ['附件/x.md', 'text'],
+    ['附件/x.docx', 'other'], ['附件/x.html', 'other'], ['附件/noext', 'other'],
+  ])('%s → %s', (p, k) => { expect(attachmentKind(p)).toBe(k) })
 })
