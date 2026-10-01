@@ -51,8 +51,9 @@ describe('parseNarrative', () => {
     expect(parseNarrative('   ')).toEqual({ headline: '', items: [] })
   })
 
-  it('splits on newlines and 「；」 too', () => {
-    expect(parseNarrative('甲事；乙事\n丙事').items.map(i => i.text)).toEqual(['乙事', '丙事'])
+  it('splits on 「；」 (legacy single paragraph) and on newlines (structured)', () => {
+    expect(parseNarrative('甲事；乙事；丙事').items.map(i => i.text)).toEqual(['乙事', '丙事'])
+    expect(parseNarrative('甲事\n乙事\n丙事').items.map(i => i.text)).toEqual(['乙事', '丙事'])
   })
 
   it('L5 結構化格式（換行分隔）：首行為標題，每行一條，行內句號不再切開', () => {
