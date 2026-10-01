@@ -17,6 +17,8 @@ import {
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
+import { describePostSource, shouldRejectEmptyGraph } from "../lib/graphGuard";
+import { logger } from "../lib/logger";
 import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
 import { deriveAbstractions } from "../lib/hermesAbstractions";
@@ -311,6 +313,19 @@ router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
   const hubAssessments = Array.isArray(body["hubAssessments"])
     ? (body["hubAssessments"] as HermesGraphHubAssessment[])
     : [];
+
+  // 空 events 不得洗掉既有的圖（見 lib/graphGuard.ts）；每次推送都記下來源與筆數，方便追查是哪個寫入端。
+  const source = describePostSource(req.headers, req.ip);
+  const [existing] = await db
+    .select({ events: hermesGraphSnapshotTable.events })
+    .from(hermesGraphSnapshotTable)
+    .where(eq(hermesGraphSnapshotTable.id, "latest"))
+    .limit(1);
+  if (shouldRejectEmptyGraph(events.length, existing?.events?.length)) {
+    logger.warn({ source, incomingEvents: events.length, existingEvents: existing?.events?.length }, "[hermes-graph] 拒絕以空 events 覆寫既有的圖");
+    return res.status(409).json({ success: false, ignored: true, reason: "empty-events", message: "events 為空，已保留既有的圖" });
+  }
+  logger.info({ source, events: events.length }, "[hermes-graph] 接受推送");
 
   await db
     .insert(hermesGraphSnapshotTable)
