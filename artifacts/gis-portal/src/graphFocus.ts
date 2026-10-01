@@ -3,7 +3,7 @@
 // 是因為兩個畫面走 hash route、不同時掛載。所有讀寫都包 try/catch（隱私模式或被封鎖時降級為「只切頁、不聚焦」）。
 export const GRAPH_FOCUS_KEY = 'kb.graph.focus'
 
-export interface GraphFocus { kind: 'person' | 'event' | 'case' | 'object'; id: string }
+export interface GraphFocus { kind: 'person' | 'event' | 'case' | 'object' | 'concept' | 'method'; id: string }
 
 export function requestGraphFocus(focus: GraphFocus): void {
   try { sessionStorage.setItem(GRAPH_FOCUS_KEY, JSON.stringify(focus)) } catch { /* ignore */ }
@@ -15,7 +15,7 @@ export function consumeGraphFocus(): GraphFocus | null {
     if (!raw) return null
     sessionStorage.removeItem(GRAPH_FOCUS_KEY)
     const v = JSON.parse(raw) as Partial<GraphFocus>
-    if (v && typeof v.id === 'string' && (v.kind === 'person' || v.kind === 'event' || v.kind === 'case' || v.kind === 'object')) {
+    if (v && typeof v.id === 'string' && (v.kind === 'person' || v.kind === 'event' || v.kind === 'case' || v.kind === 'object' || v.kind === 'concept' || v.kind === 'method')) {
       return { kind: v.kind, id: v.id }
     }
   } catch { /* ignore */ }

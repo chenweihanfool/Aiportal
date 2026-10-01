@@ -21,19 +21,27 @@
 // ─────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { COLOR, FONT } from './theme'
-import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
+import {
+  apiFetchHermesGraph, type HermesGraphData, type HermesGraphAbstractionNode,
+  type HermesGraphConceptEdge, type HermesGraphMethodEdge,
+} from './hermesGraphApi'
 import {
   buildIndex, searchNodes, shortestPath, splitId, recentActivity,
-  personId, caseId, objectId, type RecentActivity, type RecentActivityItem,
+  personId, caseId, objectId, conceptId, methodId, type RecentActivity, type RecentActivityItem,
+  type NodeKind,
 } from './graphInsights'
 import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPanel'
 import { GraphShell } from './GraphShell'
 import { consumeGraphFocus } from './graphFocus'
 
-type NodeKind = 'person' | 'event' | 'case' | 'object'
-// 四種實體都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
-// 立的一種節點，沒有理由排除。
+// 六種節點都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
+// 立的一種節點；概念／方法是 2026-10 加的抽象層（見 isAbstraction）。
 type CoreKind = NodeKind
+
+/** 概念／方法是「抽象層」：從具體事件萃取出來的想法與做法，不是具體的人事物。
+ *  畫法刻意跟具體節點分開——半透明薄框、放在最外圈（見 computeLayout），讓使用者
+ *  一眼分得出「這是被重複驗證的抽象」還是「具體發生過的東西」。 */
+const isAbstraction = (k: NodeKind): k is 'concept' | 'method' => k === 'concept' || k === 'method'
 
 interface UNode {
   id: string
@@ -41,6 +49,8 @@ interface UNode {
   label: string
   baseRadius: number
   eventCount: number
+  /** 抽象層節點才有意義：只出現在 1 個事件（尚未晉升）。畫得更淡、框用虛線。 */
+  candidate: boolean
   // 目前座標往目標座標補間；目標座標由 computeLayout 一次算好，不是每幀
   // 被力學推著跑。
   x: number; y: number; z: number
@@ -78,6 +88,10 @@ const NON_CORE_COLOR: Record<NodeKind, string> = {
   event: '#5d6472',
   case: '#8f8f88',
   object: '#74839a',
+  // 抽象層刻意帶一點色相（藍／綠）而不是灰階：它們用薄框＋半透明另外表示，而且
+  // 都不是橘黃，所以「amber ＝目前的核心」的語意不受影響。
+  concept: '#7fa6dc',
+  method: '#86c4a0',
 }
 
 function nodeColor(kind: NodeKind, coreKind: CoreKind): string {
@@ -88,6 +102,7 @@ function baseRadiusFor(kind: NodeKind, eventCount: number): number {
   if (kind === 'person') return Math.min(20, 5.5 + Math.sqrt(eventCount) * 3)
   if (kind === 'case') return Math.min(17, 5 + Math.sqrt(eventCount) * 2.6)
   if (kind === 'object') return Math.min(13, 4 + Math.sqrt(eventCount) * 2.2)
+  if (isAbstraction(kind)) return Math.min(15, 5 + Math.sqrt(eventCount) * 2.4)
   return 2.8 // event
 }
 
@@ -126,7 +141,11 @@ function hash01(s: string): number {
 
 /** 算出每個節點的目標座標。核心類型在內層球面、其衛星在外一層的球冠
  *  裡、沒有核心鄰居的在最外層球殼。回傳最外層半徑給深度淡出當基準。 */
-function computeLayout(nodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): number {
+function computeLayout(allNodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): number {
+  // 非核心的概念／方法不跟具體節點混排：先只排其餘節點，抽象層最後獨立放到
+  // 更外面一層（見函式尾端）。核心是概念／方法時，它們就是核心球面，照一般流程。
+  const outerAbstractions = allNodes.filter(n => isAbstraction(n.kind) && n.kind !== coreKind)
+  const nodes = outerAbstractions.length > 0 ? allNodes.filter(n => !(isAbstraction(n.kind) && n.kind !== coreKind)) : allNodes
   const coreNodes = nodes.filter(n => n.kind === coreKind)
   const coreIds = new Set(coreNodes.map(n => n.id))
   // 半徑全部隨節點數成長，而且刻意不封頂：球面能容納的節點數 ∝ R²，所以
@@ -193,7 +212,37 @@ function computeLayout(nodes: UNode[], neighbors: Map<string, Set<string>>, core
     n.tx = u[0] * r; n.ty = u[1] * r; n.tz = u[2] * r
   })
 
-  return outerR * 1.1
+  if (outerAbstractions.length === 0) return outerR * 1.1
+
+  // 抽象層：方向取「它關聯的事件」目前目標座標的重心（相關的抽象就落在相關事件那
+  // 一側，連線不會橫貫整個宇宙），再加一點由 id 穩定決定的抖動避免同重心的疊在一
+  // 起；沒有任何已定位鄰居的就用黃金角均分。半徑在 outerR 之外，概念比方法更外一
+  // 點，兩種彼此也不混在同一層。
+  const abstractR = outerR * 1.28
+  const pos = new Map(nodes.map(n => [n.id, n]))
+  outerAbstractions.sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0))
+  outerAbstractions.forEach((n, i) => {
+    let cx = 0, cy = 0, cz = 0, cnt = 0
+    for (const id of neighbors.get(n.id) ?? []) {
+      const nb = pos.get(id)
+      if (!nb) continue
+      const len = Math.hypot(nb.tx, nb.ty, nb.tz) || 1
+      cx += nb.tx / len; cy += nb.ty / len; cz += nb.tz / len; cnt++
+    }
+    let dx: number, dy: number, dz: number
+    if (cnt > 0 && Math.hypot(cx, cy, cz) > 1e-6) {
+      const jitter = 0.35
+      dx = cx / cnt + (hash01(`${n.id}x`) - 0.5) * jitter
+      dy = cy / cnt + (hash01(`${n.id}y`) - 0.5) * jitter
+      dz = cz / cnt + (hash01(`${n.id}z`) - 0.5) * jitter
+    } else {
+      [dx, dy, dz] = fibDir(i, outerAbstractions.length)
+    }
+    const dl = Math.hypot(dx, dy, dz) || 1
+    const r = abstractR * (n.kind === 'concept' ? 1.08 : 0.98) * (0.97 + hash01(n.id) * 0.06)
+    n.tx = (dx / dl) * r; n.ty = (dy / dl) * r; n.tz = (dz / dl) * r
+  })
+  return abstractR * 1.18
 }
 
 export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPassword: string | null; onBack: () => void }) {
@@ -201,6 +250,11 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const [error, setError] = useState(false)
   const [coreKind, setCoreKind] = useState<CoreKind>('person')
   const [showIsolatedEvents, setShowIsolatedEvents] = useState(false)
+  // 抽象層（概念／方法）預設開、但只顯示已晉升的（≥2 事件）；候選（僅 1 事件）
+  // 預設關，要自己勾選才看——候選是單次語意判斷的產物，一次全部畫出來會把圖面灌滿
+  // 雜訊，也會掩蓋「已經被重複驗證的」那批。
+  const [showAbstractions, setShowAbstractions] = useState(true)
+  const [showCandidates, setShowCandidates] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -281,6 +335,29 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     try { localStorage.setItem(LAST_VISIT_STORAGE_KEY, String(Date.now())) } catch { /* 存不了就算了，下次照舊退回 7 天預設 */ }
   }, [])
 
+  // 目前畫面上要顯示的概念／方法節點與邊（依兩個開關過濾）。舊版 API 沒有這些欄位
+  // 時全部是空的，畫面行為跟加這功能之前完全一樣。
+  const visibleAbstractions = useMemo(() => {
+    const g = data?.graph
+    const empty = {
+      concepts: [] as HermesGraphAbstractionNode[],
+      methods: [] as HermesGraphAbstractionNode[],
+      conceptEdges: [] as HermesGraphConceptEdge[],
+      methodEdges: [] as HermesGraphMethodEdge[],
+    }
+    if (!g || !showAbstractions) return empty
+    const keep = (n: { promoted: boolean }) => showCandidates || n.promoted
+    const concepts = (g.concepts ?? []).filter(keep)
+    const methods = (g.methods ?? []).filter(keep)
+    const cNames = new Set(concepts.map(c => c.name))
+    const mNames = new Set(methods.map(m => m.name))
+    return {
+      concepts, methods,
+      conceptEdges: (g.conceptEdges ?? []).filter(e => cNames.has(e.concept)),
+      methodEdges: (g.methodEdges ?? []).filter(e => mNames.has(e.method)),
+    }
+  }, [data, showAbstractions, showCandidates])
+
   const eventTouchedIds = useMemo(() => {
     // 「孤立事件」＝完全沒有任何邊碰到（無 participants、無 case、無
     // objects）。四實體圖要三種邊都算過一遍才是真正孤立，只看 participants
@@ -291,8 +368,11 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     for (const e of g.edges) s.add(e.eventId)
     for (const e of g.caseEdges) s.add(e.eventId)
     for (const e of g.objectEdges) s.add(e.eventId)
+    // 只算「畫面上看得到的」概念／方法邊：只掛在被隱藏的候選上的事件仍算孤立
+    for (const e of visibleAbstractions.conceptEdges) s.add(e.eventId)
+    for (const e of visibleAbstractions.methodEdges) s.add(e.eventId)
     return s
-  }, [data])
+  }, [data, visibleAbstractions])
 
   // 建節點／連線／鄰接表。只在資料或「孤立事件顯示開關」變動時重建；切換
   // 核心類型不重建，只重算目標座標（見下一個 effect），節點才會從目前位
@@ -306,8 +386,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     }
 
     const visibleEvents = showIsolatedEvents ? g.events : g.events.filter(e => eventTouchedIds.has(e.id))
-    const mk = (id: string, kind: NodeKind, label: string, eventCount: number): UNode => ({
-      id, kind, label, eventCount, baseRadius: baseRadiusFor(kind, eventCount),
+    const mk = (id: string, kind: NodeKind, label: string, eventCount: number, candidate = false): UNode => ({
+      id, kind, label, eventCount, candidate, baseRadius: baseRadiusFor(kind, eventCount),
       x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0,
       sx: 0, sy: 0, screenRadius: 0, opacity: 1, depth: 0,
     })
@@ -317,6 +397,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       ...visibleEvents.map(e => mk(`e:${e.id}`, 'event', e.title, 1)),
       ...g.cases.map(c => mk(`c:${c.name}`, 'case', c.name, c.eventCount)),
       ...g.objects.map(o => mk(`o:${o.name}`, 'object', o.name, o.eventCount)),
+      ...visibleAbstractions.concepts.map(k => mk(conceptId(k.name), 'concept', k.name, k.eventCount, !k.promoted)),
+      ...visibleAbstractions.methods.map(m => mk(methodId(m.name), 'method', m.name, m.eventCount, !m.promoted)),
     ]
     const byId = new Map(nodes.map(n => [n.id, n]))
 
@@ -331,6 +413,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     for (const e of g.edges) connect(`p:${e.person}`, `e:${e.eventId}`, `pe:${e.person}|${e.eventId}`)
     for (const e of g.caseEdges) connect(`e:${e.eventId}`, `c:${e.case}`, `ec:${e.eventId}|${e.case}`)
     for (const e of g.objectEdges) connect(`e:${e.eventId}`, `o:${e.object}`, `eo:${e.eventId}|${e.object}`)
+    for (const e of visibleAbstractions.conceptEdges) connect(`e:${e.eventId}`, conceptId(e.concept), `ek:${e.eventId}|${e.concept}`)
+    for (const e of visibleAbstractions.methodEdges) connect(`e:${e.eventId}`, methodId(e.method), `em:${e.eventId}|${e.method}`)
     for (const r of g.personRelations) connect(`p:${r.from}`, `p:${r.to}`, `pp:${r.from}|${r.to}`)
 
     nodesRef.current = nodes
@@ -344,7 +428,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     // 出現在最終位置那種生硬感。
     for (const n of nodes) { n.x = n.tx * 0.25; n.y = n.ty * 0.25; n.z = n.tz * 0.25 }
     setSelection(null)
-  }, [data, showIsolatedEvents, eventTouchedIds, fitCameraTo])
+  }, [data, showIsolatedEvents, eventTouchedIds, visibleAbstractions, fitCameraTo])
 
   // 從時間軸的事件晶片跳過來：資料載入後聚焦該節點（見 graphFocus.ts）。
   // ⚠️ 必須宣告在上面那個「建節點」effect 之後：effect 依宣告順序執行，而那個 effect 結尾會
@@ -483,10 +567,34 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         }
 
         ctx.globalAlpha = selected ? 1 : n.opacity * (lit ? 1 : 0.16)
-        ctx.fillStyle = selected ? COLOR.amber : nodeColor(n.kind, coreNow)
-        ctx.beginPath()
-        ctx.arc(n.sx, n.sy, selected ? r * 1.35 : r, 0, Math.PI * 2)
-        ctx.fill()
+        const color = selected ? COLOR.amber : nodeColor(n.kind, coreNow)
+        if (isAbstraction(n.kind)) {
+          // 抽象層：半透明填色＋薄框（概念＝圓環、方法＝菱形）；候選更淡、框用虛線。
+          // 核心是抽象類型時填色加深，讓「目前的核心」仍然一眼看得出來。
+          const rr = selected ? r * 1.35 : r
+          const base = ctx.globalAlpha
+          const isCore = n.kind === coreNow
+          ctx.beginPath()
+          if (n.kind === 'concept') ctx.arc(n.sx, n.sy, rr, 0, Math.PI * 2)
+          else {
+            const d = rr * 1.25
+            ctx.moveTo(n.sx, n.sy - d); ctx.lineTo(n.sx + d, n.sy); ctx.lineTo(n.sx, n.sy + d); ctx.lineTo(n.sx - d, n.sy); ctx.closePath()
+          }
+          ctx.fillStyle = color
+          ctx.globalAlpha = base * (isCore || selected ? 0.4 : n.candidate ? 0.1 : 0.2)
+          ctx.fill()
+          ctx.globalAlpha = base * (n.candidate ? 0.65 : 1)
+          ctx.strokeStyle = color
+          ctx.lineWidth = 1
+          ctx.setLineDash(n.candidate ? [3, 3] : [])
+          ctx.stroke()
+          ctx.setLineDash([])
+        } else {
+          ctx.fillStyle = color
+          ctx.beginPath()
+          ctx.arc(n.sx, n.sy, selected ? r * 1.35 : r, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
       ctx.globalAlpha = 1
 
@@ -507,6 +615,10 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       } else {
         const coreNodes = nodes.filter(n => n.kind === coreNow)
         if (coreNodes.length <= 90) labelled.push(...coreNodes)
+        // 抽象層本身不多（已晉升的通常只有幾十個），而且使用者就是衝著它們來的，
+        // 沒選取時也標出已晉升的名字（候選太多太淡，不標）；碰撞排除會處理重疊。
+        const promoted = nodes.filter(n => isAbstraction(n.kind) && n.kind !== coreNow && !n.candidate)
+        if (promoted.length <= 40) labelled.push(...promoted)
       }
 
       ctx.font = `11px ${FONT.mono}`
@@ -684,14 +796,19 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         : null
 
   const m = data?.metrics
-  const coreLabel: Record<CoreKind, string> = { person: '人', event: '事', object: '物', case: '案件' }
+  const coreLabel: Record<CoreKind, string> = { person: '人', event: '事', object: '物', case: '案件', concept: '概念', method: '方法' }
+  const candidateTotal = (m?.candidateConceptsCount ?? 0) + (m?.candidateMethodsCount ?? 0)
+  const hasAbstractions = !!g && ((g.concepts?.length ?? 0) + (g.methods?.length ?? 0)) > 0
+  const coreChoices: CoreKind[] = showAbstractions && hasAbstractions
+    ? ['person', 'event', 'object', 'case', 'concept', 'method']
+    : ['person', 'event', 'object', 'case']
   const isolatedCount = g ? g.events.length - g.events.filter(e => eventTouchedIds.has(e.id)).length : 0
 
   return (
     <GraphShell tab="universe" onBack={onBack}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center', padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
-          {(['person', 'event', 'object', 'case'] as CoreKind[]).map(k => (
+          {coreChoices.map(k => (
             <button key={k} type="button" onClick={() => setCoreKind(k)} disabled={!ready} style={{
               padding: '0.4rem 0.9rem', borderRadius: '999px', cursor: ready ? 'pointer' : 'default', fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.06em',
               background: coreKind === k ? 'rgba(245,166,35,0.16)' : 'transparent',
@@ -706,7 +823,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
               ref={searchInputRef}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="搜尋人／事／案件／物件…"
+              placeholder="搜尋人／事／案件／物件／概念／方法…"
               style={{
                 width: '100%', padding: '0.4rem 0.7rem', borderRadius: '999px',
                 background: COLOR.panel, border: `1px solid ${searchQuery ? COLOR.amberDim : COLOR.line}`,
@@ -741,11 +858,35 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
               background: showIsolatedEvents ? 'rgba(245,166,35,0.1)' : 'transparent',
               border: `1px solid ${showIsolatedEvents ? COLOR.amberDim : COLOR.line}`, color: showIsolatedEvents ? COLOR.amber : COLOR.steelDim,
             }}>孤立事件 · {isolatedCount}</button>
+            {hasAbstractions && (
+              <button type="button" onClick={() => {
+                setShowAbstractions(v => !v)
+                // 關掉抽象層時，核心若是概念／方法就退回「人」，不然畫面會沒有核心節點
+                if (showAbstractions && isAbstraction(coreKind)) setCoreKind('person')
+              }} title="概念／方法：從事件萃取出的想法與做法（半透明薄框、在最外圈）" style={{
+                padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
+                background: showAbstractions ? 'rgba(127,166,220,0.12)' : 'transparent',
+                border: `1px solid ${showAbstractions ? NON_CORE_COLOR.concept : COLOR.line}`, color: showAbstractions ? NON_CORE_COLOR.concept : COLOR.steelDim,
+              }}>概念／方法層</button>
+            )}
+            {hasAbstractions && showAbstractions && (
+              <button type="button" onClick={() => setShowCandidates(v => !v)} title="候選＝只在 1 個事件出現、尚未被重複驗證的概念／方法（虛線、較淡）" style={{
+                padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
+                background: showCandidates ? 'rgba(245,166,35,0.1)' : 'transparent',
+                border: `1px solid ${showCandidates ? COLOR.amberDim : COLOR.line}`, color: showCandidates ? COLOR.amber : COLOR.steelDim,
+              }}>顯示候選 · {candidateTotal}</button>
+            )}
             <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, display: 'flex', gap: '0.9rem' }}>
               <span><span style={{ color: nodeColor('person', coreKind) }}>●</span> 人 {m.peopleCount}</span>
               <span><span style={{ color: nodeColor('event', coreKind) }}>●</span> 事 {m.eventsCount}</span>
               <span><span style={{ color: nodeColor('case', coreKind) }}>●</span> 案 {m.casesCount}</span>
               <span><span style={{ color: nodeColor('object', coreKind) }}>●</span> 物 {m.objectsCount}</span>
+              {hasAbstractions && showAbstractions && (
+                <>
+                  <span title="概念（圓環）：已晉升 ≥2 事件"><span style={{ color: nodeColor('concept', coreKind) }}>◯</span> 概念 {m.conceptsCount ?? 0}</span>
+                  <span title="方法（菱形）：已晉升 ≥2 事件"><span style={{ color: nodeColor('method', coreKind) }}>◇</span> 方法 {m.methodsCount ?? 0}</span>
+                </>
+              )}
             </div>
           </>
         )}
