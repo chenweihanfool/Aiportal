@@ -32,7 +32,7 @@ import {
 } from './graphInsights'
 import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPanel'
 import { GraphShell } from './GraphShell'
-import { coreHeatColor, heatT, outerHeatColor, CORE_RAMP } from './graphHeat'
+import { coreHeatColor, makeHeatScale, outerHeatColor, CORE_RAMP } from './graphHeat'
 import { consumeGraphFocus } from './graphFocus'
 
 // 六種節點都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
@@ -406,18 +406,20 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       ...visibleAbstractions.concepts.map(k => mk(conceptId(k.name), 'concept', k.name, k.eventCount, !k.promoted)),
       ...visibleAbstractions.methods.map(m => mk(methodId(m.name), 'method', m.name, m.eventCount, !m.promoted)),
     ]
-    // 熱度：同一類節點內，依關聯事件數（平方根）相對於該類最小／最大值。事件節點關聯數恆為 1，不套用。
-    const range = new Map<NodeKind, { min: number; max: number }>()
+    // 熱度：同一類節點內依關聯事件數的名次百分位為主、對數為輔（見 graphHeat.ts：關聯數長尾很重，
+    // 線性／平方根映射會讓整張圖只剩兩種顏色）。事件節點關聯數恆為 1，不套用。
+    const countsByKind = new Map<NodeKind, number[]>()
     for (const n of nodes) {
       if (n.kind === 'event') continue
-      const r = range.get(n.kind)
-      if (!r) range.set(n.kind, { min: n.eventCount, max: n.eventCount })
-      else { r.min = Math.min(r.min, n.eventCount); r.max = Math.max(r.max, n.eventCount) }
+      const arr = countsByKind.get(n.kind)
+      if (arr) arr.push(n.eventCount)
+      else countsByKind.set(n.kind, [n.eventCount])
     }
+    const scaleByKind = new Map([...countsByKind].map(([k, arr]) => [k, makeHeatScale(arr)] as const))
     for (const n of nodes) {
-      const r = range.get(n.kind)
-      if (!r) continue
-      n.heat = heatT(n.eventCount, r.min, r.max)
+      const scale = scaleByKind.get(n.kind)
+      if (!scale) continue
+      n.heat = scale(n.eventCount)
       n.colorCore = coreHeatColor(n.heat)
       n.colorOuter = outerHeatColor(NON_CORE_COLOR[n.kind], n.heat)
     }
@@ -617,8 +619,9 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           ctx.arc(n.sx, n.sy, selected ? r * 1.35 : r, 0, Math.PI * 2)
           ctx.fill()
         }
-        // 索引節點（人／案／物／概念／方法）：圓內標關聯事件數。半徑太小（遠端或縮得很小）時不標，不然糊成一團。
-        if (n.kind !== 'event' && r >= 5.2) {
+        // 核心索引節點（目前核心類型的人／案／物／概念／方法）：圓內標關聯事件數。外圍節點不標（使用者要求），
+        // 半徑太小（遠端或縮得很小）時也不標，不然糊成一團。
+        if (n.kind === coreNow && n.kind !== 'event' && r >= 5.2) {
           const digits = String(n.eventCount)
           ctx.globalAlpha = nodeAlpha
           ctx.font = `600 ${Math.max(7, Math.min(15, r * (digits.length > 2 ? 0.8 : 1)))}px ${FONT.mono}`
@@ -646,14 +649,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           }
         }
       } else {
-        // 索引節點（人／案／物／概念／方法，候選除外）一律是標籤候選，依關聯數由大到小排優先；
-        // 實際畫哪些交給下面的碰撞排除。事件節點太多（幾百個）：只有「事件為核心且 ≤90 個」才標。
-        const hubs = nodes.filter(n => n.kind !== 'event' && !n.candidate).sort((a, b) => b.eventCount - a.eventCount)
-        labelled.push(...hubs.slice(0, 220))
-        if (coreNow === 'event') {
-          const evs = nodes.filter(n => n.kind === 'event')
-          if (evs.length <= 90) labelled.push(...evs)
-        }
+        // 名稱只標「核心類型」的節點（外圍不標，使用者要求；選取／hover 時另有鄰居標籤，見上面）。
+        // 核心是索引節點（人／案／物／概念／方法）：依關聯數由大到小排優先，實際畫哪些交給下面的碰撞排除；
+        // 核心是事件：幾百個標不下，只有 ≤90 個才標。
+        const coreNodes = nodes.filter(n => n.kind === coreNow && !n.candidate)
+        if (coreNow !== 'event') labelled.push(...coreNodes.sort((a, b) => b.eventCount - a.eventCount).slice(0, 220))
+        else if (coreNodes.length <= 90) labelled.push(...coreNodes)
       }
 
       ctx.font = `11px ${FONT.mono}`
@@ -1017,7 +1018,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           {ready && (
             <div title="索引節點（人／案／物／概念／方法）的顏色越深，代表關聯的事件越多；圓內的數字是關聯事件數">
               顏色越深＝關聯越多{' '}
-              <span style={{ display: 'inline-block', width: '46px', height: '6px', borderRadius: '3px', verticalAlign: 'middle', background: `linear-gradient(90deg, ${CORE_RAMP.floor}, ${CORE_RAMP.peak})` }} />
+              <span style={{ display: 'inline-block', width: '46px', height: '6px', borderRadius: '3px', verticalAlign: 'middle', background: `linear-gradient(90deg, ${CORE_RAMP.floor}, ${CORE_RAMP.mid}, ${CORE_RAMP.peak})` }} />
             </div>
           )}
           拖拉旋轉・＋－縮放（電腦可用滾輪）・點節點看詳情
