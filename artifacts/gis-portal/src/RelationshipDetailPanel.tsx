@@ -28,15 +28,19 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { COLOR, FONT } from './theme'
 import type { HermesGraphData } from './hermesGraphApi'
 import {
-  buildIndex, personInsight, caseInsight, eventInsight, objectInsight, entityEvents,
-  personId, eventId, caseId, objectId, splitId,
+  buildIndex, personInsight, caseInsight, eventInsight, objectInsight, abstractionInsight, entityEvents,
+  personId, eventId, caseId, objectId, conceptId, methodId, splitId,
   type GraphIndex, type NodeKind,
 } from './graphInsights'
 
 export interface Selection { kind: NodeKind; id: string }
 
-const KIND_LABEL: Record<NodeKind, string> = { person: '人物', event: '事件', case: '案件', object: '物件' }
-const KIND_COLOR: Record<NodeKind, string> = { person: '#aab4c4', event: '#8f97a6', case: '#d8d4c8', object: '#93a2b8' }
+const KIND_LABEL: Record<NodeKind, string> = { person: '人物', event: '事件', case: '案件', object: '物件', concept: '概念', method: '方法' }
+const KIND_COLOR: Record<NodeKind, string> = {
+  person: '#aab4c4', event: '#8f97a6', case: '#d8d4c8', object: '#93a2b8',
+  // 概念／方法在宇宙裡是半透明薄框的抽象層，用偏藍／偏綠跟具體節點的灰階區分
+  concept: '#7fa6dc', method: '#86c4a0',
+}
 // 時間軸三種項目共用的顏色/標籤——事件是中性灰（跟 KIND_COLOR.event 同一
 // 支色），敘事沿用 L5 既有的 weave=amber／alert=warn 語意。
 const TIMELINE_DOT_COLOR: Record<'event' | 'weave' | 'alert', string> = { event: '#8f97a6', weave: COLOR.amber, alert: COLOR.warn }
@@ -77,6 +81,14 @@ function Note({ children, tone }: { children: React.ReactNode; tone?: 'warn' | '
       color: tone === 'warn' ? COLOR.warn : COLOR.steel,
     }}>{children}</div>
   )
+}
+
+// 事件卡上概念／方法 chip 的提示：關係標籤 + 候選標記（只出現過 1 次）
+function abstractionHint(index: GraphIndex, id: string, relation: string | null): string | undefined {
+  const parts: string[] = []
+  if (relation) parts.push(relation)
+  if (index.promotedById.get(id) === false) parts.push('候選')
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
 // 洞察分頁最上面的「目前評價」——L5 每輪覆蓋的第一人稱快照，跟分頁其他內
@@ -248,6 +260,8 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
     const ev = index.eventById.get(name)
     const parts = index.eventParticipants.get(name) ?? []
     const objs = index.eventObjects.get(name) ?? []
+    const concepts = index.eventConcepts.get(name) ?? []
+    const methods = index.eventMethods.get(name) ?? []
     return (
       <>
         <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
@@ -275,7 +289,17 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
             {objs.map(o => <Chip key={o} label={o} kind="object" onClick={() => go(objectId(o))} />)}
           </Section>
         )}
-        {parts.length === 0 && !ev?.case && objs.length === 0 && (
+        {concepts.length > 0 && (
+          <Section title="體現的概念">
+            {concepts.map(c => <Chip key={c.name} label={c.name} kind="concept" hint={abstractionHint(index, conceptId(c.name), c.relation)} onClick={() => go(conceptId(c.name))} />)}
+          </Section>
+        )}
+        {methods.length > 0 && (
+          <Section title="使用的方法">
+            {methods.map(m => <Chip key={m.name} label={m.name} kind="method" hint={abstractionHint(index, methodId(m.name), m.relation)} onClick={() => go(methodId(m.name))} />)}
+          </Section>
+        )}
+        {parts.length === 0 && !ev?.case && objs.length === 0 && concepts.length === 0 && methods.length === 0 && (
           <Note tone="warn">這是一筆孤立事件：沒有參與者、沒有掛案件、也沒有關聯物件。</Note>
         )}
       </>
@@ -303,6 +327,30 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
             return ev ? <Chip key={id} label={ev.title} kind="event" hint={ev.date} onClick={() => go(eventId(id))} /> : null
           })}
         </Section>
+      </>
+    )
+  }
+
+  if (kind === 'concept' || kind === 'method') {
+    const ids = (kind === 'concept' ? index.conceptEvents : index.methodEvents).get(name) ?? []
+    const own = kind === 'concept' ? index.eventConcepts : index.eventMethods
+    const label = kind === 'concept' ? '概念' : '方法'
+    const promoted = index.promotedById.get(kind === 'concept' ? conceptId(name) : methodId(name)) ?? ids.length >= 2
+    return (
+      <>
+        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+          {label} · {ids.length} 事件 · {promoted ? '已晉升' : '候選（僅 1 個事件，尚未被重複驗證）'}
+        </div>
+        <Section title={kind === 'concept' ? '體現於事件（新→舊）' : '應用於事件（新→舊）'}>
+          {ids.slice().reverse().map(id => {
+            const ev = index.eventById.get(id)
+            const rel = (own.get(id) ?? []).find(r => r.name === name)?.relation
+            return ev ? <Chip key={id} label={ev.title} kind="event" hint={rel ? `${ev.date} · ${rel}` : ev.date} onClick={() => go(eventId(id))} /> : null
+          })}
+        </Section>
+        <Note>
+          事件上記的是管線合併後的標準名；當初日記裡的原始說法不在這份資料中（只留在 vault 的抽象帳本）。
+        </Note>
       </>
     )
   }
@@ -442,6 +490,43 @@ function InsightTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKi
         )}
         {ins.isolated && <Note tone="warn">孤立事件：沒有任何關聯可以推導。</Note>}
         {!ins.isolated && !ins.positionInCase && ins.sameDay.length === 0 && <Note>沒有同案件時序或同日事件可對照。</Note>}
+      </>
+    )
+  }
+
+  if (kind === 'concept' || kind === 'method') {
+    const ins = abstractionInsight(index, kind, name)
+    const label = kind === 'concept' ? '概念' : '方法'
+    return (
+      <>
+        {ins.firstDate && <Note>出現期間：{ins.firstDate} ~ {ins.lastDate}，共 {ins.eventCount} 個事件。</Note>}
+        {!ins.promoted && (
+          <Note tone="warn">這是候選{label}：只在 1 個事件出現過，是不是同一個說法的不同寫法、或單次語意判斷的雜訊，還需要更多事件驗證。</Note>
+        )}
+        {ins.relations.length > 0 && (
+          <Note>與事件的關係：{ins.relations.map(r => `${r.relation} ${r.events} 次`).join('、')}。</Note>
+        )}
+        {ins.people.length > 0 && (
+          <Section title="出現過的人物">
+            {ins.people.map(p => <Chip key={p.name} label={p.name} kind="person" hint={`${p.events} 次`} onClick={() => go(personId(p.name))} />)}
+          </Section>
+        )}
+        {ins.cases.length > 0 && (
+          <Section title="跨越的案件">
+            {ins.cases.map(c => <Chip key={c.name} label={c.name} kind="case" hint={`${c.events} 次`} onClick={() => go(caseId(c.name))} />)}
+          </Section>
+        )}
+        {ins.coConcepts.length > 0 && (
+          <Section title="常一起出現的概念">
+            {ins.coConcepts.map(c => <Chip key={c.name} label={c.name} kind="concept" hint={`${c.events} 次`} onClick={() => go(conceptId(c.name))} />)}
+          </Section>
+        )}
+        {ins.coMethods.length > 0 && (
+          <Section title="常一起出現的方法">
+            {ins.coMethods.map(m => <Chip key={m.name} label={m.name} kind="method" hint={`${m.events} 次`} onClick={() => go(methodId(m.name))} />)}
+          </Section>
+        )}
+        {ins.cases.length > 1 && <Note>這個{label}跨了 {ins.cases.length} 個案件——這正是抽象層存在的價值：不同脈絡下重複出現的做法或想法。</Note>}
       </>
     )
   }

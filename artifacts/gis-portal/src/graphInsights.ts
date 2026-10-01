@@ -6,21 +6,25 @@
 // pipeline 風險，改這裡不影響 collect.ps1／DB／L3。
 //
 // 節點 id 規則跟 RelationshipUniverse.tsx 一致：
-//   p:<人名>  e:<事件id>  c:<案件名>  o:<物件名>
+//   p:<人名>  e:<事件id>  c:<案件名>  o:<物件名>  k:<概念名>  m:<方法名>
+// （概念用 k 是因為 c 已被案件佔用。）
 // ─────────────────────────────────────────────
 import type { HermesGraphData, HermesGraphEventNode, HermesGraphHubNarrative } from './hermesGraphApi'
 
-export type NodeKind = 'person' | 'event' | 'case' | 'object'
+export type NodeKind = 'person' | 'event' | 'case' | 'object' | 'concept' | 'method'
 
 export const personId = (name: string) => `p:${name}`
 export const eventId = (id: string) => `e:${id}`
 export const caseId = (name: string) => `c:${name}`
 export const objectId = (name: string) => `o:${name}`
+export const conceptId = (name: string) => `k:${name}`
+export const methodId = (name: string) => `m:${name}`
 
 export function splitId(id: string): { kind: NodeKind; name: string } {
   const prefix = id.slice(0, 1)
   const name = id.slice(2)
-  const kind: NodeKind = prefix === 'p' ? 'person' : prefix === 'c' ? 'case' : prefix === 'o' ? 'object' : 'event'
+  const kind: NodeKind = prefix === 'p' ? 'person' : prefix === 'c' ? 'case' : prefix === 'o' ? 'object'
+    : prefix === 'k' ? 'concept' : prefix === 'm' ? 'method' : 'event'
   return { kind, name }
 }
 
@@ -36,6 +40,14 @@ export interface GraphIndex {
   /** 案件名 -> 事件 id，已依日期由舊到新排序 */
   caseEvents: Map<string, string[]>
   objectEvents: Map<string, string[]>
+  /** 概念名／方法名 -> 事件 id（由舊到新）。舊版 API 沒有這些欄位時是空 Map。 */
+  conceptEvents: Map<string, string[]>
+  methodEvents: Map<string, string[]>
+  /** 事件 id -> 它體現的概念／使用的方法（含關係標籤，例：體現、應用） */
+  eventConcepts: Map<string, Array<{ name: string; relation: string | null }>>
+  eventMethods: Map<string, Array<{ name: string; relation: string | null }>>
+  /** 概念／方法節點 id（k:/m:）-> 是否已晉升（≥2 事件）；false = 候選 */
+  promotedById: Map<string, boolean>
   caseStatus: Map<string, string | null>
   objectType: Map<string, string | null>
   /** 人↔人：排序後的 "a|b" -> L5 寫在 People/*.md「## 關係人物」的描述文字 */
@@ -68,6 +80,9 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
   for (const e of graph.events) labelOf.set(eventId(e.id), e.title)
   for (const c of graph.cases) labelOf.set(caseId(c.name), c.name)
   for (const o of graph.objects) labelOf.set(objectId(o.name), o.name)
+  const promotedById = new Map<string, boolean>()
+  for (const k of graph.concepts ?? []) { labelOf.set(conceptId(k.name), k.name); promotedById.set(conceptId(k.name), k.promoted) }
+  for (const m of graph.methods ?? []) { labelOf.set(methodId(m.name), m.name); promotedById.set(methodId(m.name), m.promoted) }
 
   const personEvents = new Map<string, Set<string>>()
   const eventParticipants = new Map<string, Array<{ person: string; role: string }>>()
@@ -96,6 +111,26 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
     const eo = eventObjects.get(e.eventId) ?? []; eo.push(e.object); eventObjects.set(e.eventId, eo)
   }
   for (const [, ids] of objectEvents) ids.sort((a, b) => dateOf(a).localeCompare(dateOf(b)))
+
+  const conceptEvents = new Map<string, string[]>()
+  const eventConcepts = new Map<string, Array<{ name: string; relation: string | null }>>()
+  for (const e of graph.conceptEdges ?? []) {
+    if (!eventById.has(e.eventId)) continue
+    link(eventId(e.eventId), conceptId(e.concept))
+    const ce = conceptEvents.get(e.concept) ?? []; ce.push(e.eventId); conceptEvents.set(e.concept, ce)
+    const ec = eventConcepts.get(e.eventId) ?? []; ec.push({ name: e.concept, relation: e.relation }); eventConcepts.set(e.eventId, ec)
+  }
+  for (const [, ids] of conceptEvents) ids.sort((a, b) => dateOf(a).localeCompare(dateOf(b)))
+
+  const methodEvents = new Map<string, string[]>()
+  const eventMethods = new Map<string, Array<{ name: string; relation: string | null }>>()
+  for (const e of graph.methodEdges ?? []) {
+    if (!eventById.has(e.eventId)) continue
+    link(eventId(e.eventId), methodId(e.method))
+    const me = methodEvents.get(e.method) ?? []; me.push(e.eventId); methodEvents.set(e.method, me)
+    const em = eventMethods.get(e.eventId) ?? []; em.push({ name: e.method, relation: e.relation }); eventMethods.set(e.eventId, em)
+  }
+  for (const [, ids] of methodEvents) ids.sort((a, b) => dateOf(a).localeCompare(dateOf(b)))
 
   const relationDescription = new Map<string, string>()
   for (const r of graph.personRelations) {
@@ -151,6 +186,8 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
   for (const p of graph.people) if (!nodeIdByLabel.has(p.name)) nodeIdByLabel.set(p.name, personId(p.name))
   for (const c of graph.cases) if (!nodeIdByLabel.has(c.name)) nodeIdByLabel.set(c.name, caseId(c.name))
   for (const o of graph.objects) if (!nodeIdByLabel.has(o.name)) nodeIdByLabel.set(o.name, objectId(o.name))
+  for (const k of graph.concepts ?? []) if (!nodeIdByLabel.has(k.name)) nodeIdByLabel.set(k.name, conceptId(k.name))
+  for (const m of graph.methods ?? []) if (!nodeIdByLabel.has(m.name)) nodeIdByLabel.set(m.name, methodId(m.name))
   for (const e of graph.events) {
     if (!nodeIdByLabel.has(e.title)) nodeIdByLabel.set(e.title, eventId(e.id))
     const reconstructed = `${e.date}_${e.title}`
@@ -159,7 +196,7 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
 
   return {
     neighbors, labelOf, eventById, personEvents, eventParticipants, eventObjects,
-    caseEvents, objectEvents,
+    caseEvents, objectEvents, conceptEvents, methodEvents, eventConcepts, eventMethods, promotedById,
     caseStatus: new Map(graph.cases.map(c => [c.name, c.status])),
     objectType: new Map(graph.objects.map(o => [o.name, o.objectType])),
     relationDescription, coEvents, narrativesByHub, currentAssessmentByHub, nodeIdByLabel,
@@ -425,6 +462,59 @@ export function objectInsight(index: GraphIndex, name: string): ObjectInsight {
   }
 }
 
+export interface AbstractionInsight {
+  promoted: boolean
+  eventCount: number
+  firstDate: string | null
+  lastDate: string | null
+  /** 這個概念／方法跟事件的關係標籤分布（例：體現 3、應用 1）；沒標的不列 */
+  relations: Array<{ relation: string; events: number }>
+  /** 出現過的事件所涉及的人，依次數排序 */
+  people: Array<{ name: string; events: number }>
+  cases: Array<{ name: string; events: number }>
+  /** 在同一批事件裡一起出現的其他概念／方法 */
+  coConcepts: Array<{ name: string; events: number }>
+  coMethods: Array<{ name: string; events: number }>
+}
+
+export function abstractionInsight(index: GraphIndex, kind: 'concept' | 'method', name: string): AbstractionInsight {
+  const ids = (kind === 'concept' ? index.conceptEvents : index.methodEvents).get(name) ?? []
+  const own = kind === 'concept' ? index.eventConcepts : index.eventMethods
+  const relations = new Map<string, number>()
+  const people = new Map<string, number>()
+  const cases = new Map<string, number>()
+  const coConcepts = new Map<string, number>()
+  const coMethods = new Map<string, number>()
+  const dates: string[] = []
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
+  for (const id of ids) {
+    const ev = index.eventById.get(id)
+    if (ev?.date) dates.push(ev.date)
+    if (ev?.case) bump(cases, ev.case)
+    for (const p of index.eventParticipants.get(id) ?? []) bump(people, p.person)
+    const mine = (own.get(id) ?? []).find(r => r.name === name)
+    if (mine?.relation) bump(relations, mine.relation)
+    for (const c of index.eventConcepts.get(id) ?? []) if (!(kind === 'concept' && c.name === name)) bump(coConcepts, c.name)
+    for (const m of index.eventMethods.get(id) ?? []) if (!(kind === 'method' && m.name === name)) bump(coMethods, m.name)
+  }
+  dates.sort()
+  const rank = (m: Map<string, number>) =>
+    Array.from(m.entries()).map(([k, events]) => ({ key: k, events }))
+      .sort((p, q) => q.events - p.events || p.key.localeCompare(q.key))
+  const named = (m: Map<string, number>) => rank(m).map(({ key, events }) => ({ name: key, events }))
+  return {
+    promoted: index.promotedById.get(kind === 'concept' ? conceptId(name) : methodId(name)) ?? ids.length >= 2,
+    eventCount: ids.length,
+    firstDate: dates[0] ?? null,
+    lastDate: dates[dates.length - 1] ?? null,
+    relations: rank(relations).map(({ key, events }) => ({ relation: key, events })),
+    people: named(people),
+    cases: named(cases),
+    coConcepts: named(coConcepts),
+    coMethods: named(coMethods),
+  }
+}
+
 // 給詳情面板「時間軸」分頁用——人/案/物三種樞紐節點各自關聯的事件，統一轉
 // 成同一種形狀，好跟 narrativesByHub 的敘事項目合併成一條時間軸。案件/物
 // 件的 caseEvents／objectEvents 已經照日期排過序，這裡不重排，交給呼叫端
@@ -436,6 +526,8 @@ export function entityEvents(
     kind === 'person' ? (index.personEvents.get(name) ?? [])
     : kind === 'case' ? (index.caseEvents.get(name) ?? [])
     : kind === 'object' ? (index.objectEvents.get(name) ?? [])
+    : kind === 'concept' ? (index.conceptEvents.get(name) ?? [])
+    : kind === 'method' ? (index.methodEvents.get(name) ?? [])
     : []
   const out: Array<{ id: string; date: string; title: string; status: string | null }> = []
   for (const id of ids) {
@@ -447,7 +539,7 @@ export function entityEvents(
 
 export interface SearchHit { id: string; kind: NodeKind; label: string; sub: string }
 
-/** 跨四種類型的子字串搜尋。刻意不限制在目前的核心類型——使用者通常不知道
+/** 跨六種類型（人／事／案／物／概念／方法）的子字串搜尋。刻意不限制在目前的核心類型——使用者通常不知道
  *  要找的東西被歸成哪一類；但同類型內把「目前核心」排前面。 */
 export function searchNodes(
   graph: NonNullable<HermesGraphData['graph']>,
@@ -469,6 +561,8 @@ export function searchNodes(
   for (const p of graph.people) push(personId(p.name), 'person', p.name, `人物 · ${p.eventCount} 事件`)
   for (const c of graph.cases) push(caseId(c.name), 'case', c.name, `案件 · ${c.eventCount} 事件`)
   for (const o of graph.objects) push(objectId(o.name), 'object', o.name, `物件${o.objectType ? ` · ${o.objectType}` : ''}`)
+  for (const k of graph.concepts ?? []) push(conceptId(k.name), 'concept', k.name, `概念 · ${k.eventCount} 事件${k.promoted ? '' : ' · 候選'}`)
+  for (const m of graph.methods ?? []) push(methodId(m.name), 'method', m.name, `方法 · ${m.eventCount} 事件${m.promoted ? '' : ' · 候選'}`)
   for (const e of graph.events) push(eventId(e.id), 'event', e.title, `事件 · ${e.date}`)
   hits.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label))
   return hits.slice(0, limit).map(({ score: _score, ...hit }) => hit)

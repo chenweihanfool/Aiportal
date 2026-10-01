@@ -37,6 +37,12 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
       tags: string[];
       participants: Array<{ person: string; role: string }>;
       objects: Array<{ object: string; objectType: string | null }>;
+      // 2026-10 — 概念／方法（知識抽象層）：kb-pipeline 的 graph pusher 帶上來的
+      // 管線合併後標準名。可選欄位——舊事件／舊版 pusher 沒有，讀取端一律容忍；
+      // events 是 jsonb，所以不需要 DB migration。節點、eventCount、晉升旗標都在
+      // GET /hermes-graph 讀取時反推（lib/hermesAbstractions.ts），不存。
+      concepts?: Array<{ name: string; relation?: string }>;
+      methods?: Array<{ name: string; relation?: string }>;
     }>
   >(),
   personRelations: jsonb("person_relations").$type<

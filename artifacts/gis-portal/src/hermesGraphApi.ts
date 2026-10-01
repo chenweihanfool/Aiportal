@@ -13,6 +13,12 @@ export interface HermesGraphObjectNode { name: string; objectType: string | null
 export interface HermesGraphEdge { person: string; eventId: string; role: string }
 export interface HermesGraphCaseEdge { eventId: string; case: string }
 export interface HermesGraphObjectEdge { eventId: string; object: string }
+// 2026-10 — 概念／方法（知識抽象層）。節點與邊都是後端從 events 反推的；
+// promoted = 出現在 ≥2 個事件（跟管線的晉升門檻一致），只出現 1 次的是候選。
+// 全部是可選欄位：舊版 API 不會回這些，前端一律當空陣列。
+export interface HermesGraphAbstractionNode { name: string; eventCount: number; promoted: boolean }
+export interface HermesGraphConceptEdge { eventId: string; concept: string; relation: string | null }
+export interface HermesGraphMethodEdge { eventId: string; method: string; relation: string | null }
 export interface HermesGraphPersonRelation { from: string; to: string; description: string }
 // 2026-09-19 — L5 轉型「圖譜編織層」：People/Objects/Cases 樞紐檔的
 // 「## 圖譜敘事」（weave，增補式編織）+「## 🧠 ...」（alert，時效警報）
@@ -47,6 +53,11 @@ export interface HermesGraphMetrics {
   mostActivePerson: { name: string; eventCount: number } | null
   activeCasesCount: number
   personRelationsCount: number
+  /** 已晉升（≥2 事件）的概念／方法數；候選（僅 1 事件）另計。舊版 API 沒有這些欄位。 */
+  conceptsCount?: number
+  methodsCount?: number
+  candidateConceptsCount?: number
+  candidateMethodsCount?: number
 }
 
 export interface HermesGraphData {
@@ -61,6 +72,10 @@ export interface HermesGraphData {
     edges: HermesGraphEdge[]
     caseEdges: HermesGraphCaseEdge[]
     objectEdges: HermesGraphObjectEdge[]
+    concepts?: HermesGraphAbstractionNode[]
+    methods?: HermesGraphAbstractionNode[]
+    conceptEdges?: HermesGraphConceptEdge[]
+    methodEdges?: HermesGraphMethodEdge[]
     personRelations: HermesGraphPersonRelation[]
     hubNarratives: HermesGraphHubNarrative[]
     hubAssessments: HermesGraphHubAssessment[]

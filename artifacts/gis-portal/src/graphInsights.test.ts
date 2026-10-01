@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildIndex, shortestPath, personInsight, caseInsight, eventInsight, objectInsight,
   entityEvents, searchNodes, recentActivity, personId, eventId, caseId, objectId, splitId,
+  conceptId, methodId, abstractionInsight,
 } from './graphInsights'
 import type { HermesGraphData } from './hermesGraphApi'
 
@@ -377,5 +378,84 @@ describe('recentActivity', () => {
   it('treats sinceDate as inclusive', () => {
     const activity = recentActivity(index, graph, '2026-03-01')
     expect(activity.newEvents.some(e => e.id === eventId('e5'))).toBe(true)
+  })
+})
+
+describe('concepts and methods (抽象層)', () => {
+  function withAbstractions(): Graph {
+    return {
+      ...buildGraph(),
+      concepts: [
+        { name: '單一事實來源', eventCount: 2, promoted: true },
+        { name: '候選概念', eventCount: 1, promoted: false },
+      ],
+      methods: [{ name: '漸進式部署', eventCount: 2, promoted: true }],
+      conceptEdges: [
+        { eventId: 'e2', concept: '單一事實來源', relation: '體現' },
+        { eventId: 'e1', concept: '單一事實來源', relation: null },
+        { eventId: 'e5', concept: '候選概念', relation: null },
+        { eventId: 'ghost', concept: '單一事實來源', relation: null }, // 事件不存在：略過
+      ],
+      methodEdges: [
+        { eventId: 'e1', method: '漸進式部署', relation: '應用' },
+        { eventId: 'e5', method: '漸進式部署', relation: null },
+      ],
+    }
+  }
+
+  it('round-trips k:/m: prefixes without colliding with case (c:)', () => {
+    expect(splitId(conceptId('x'))).toEqual({ kind: 'concept', name: 'x' })
+    expect(splitId(methodId('x'))).toEqual({ kind: 'method', name: 'x' })
+    expect(splitId(caseId('x'))).toEqual({ kind: 'case', name: 'x' })
+  })
+
+  it('links events to concepts/methods and sorts their events by date ascending', () => {
+    const index = buildIndex(withAbstractions())
+    expect(index.conceptEvents.get('單一事實來源')).toEqual(['e1', 'e2'])
+    expect(index.neighbors.get(conceptId('單一事實來源'))).toEqual(new Set([eventId('e1'), eventId('e2')]))
+    expect(index.eventMethods.get('e1')).toEqual([{ name: '漸進式部署', relation: '應用' }])
+    expect(index.promotedById.get(conceptId('候選概念'))).toBe(false)
+    expect(index.promotedById.get(methodId('漸進式部署'))).toBe(true)
+  })
+
+  it('tolerates an old API response with no concept/method fields', () => {
+    const index = buildIndex(buildGraph())
+    expect(index.conceptEvents.size).toBe(0)
+    expect(index.eventConcepts.size).toBe(0)
+    expect(searchNodes(buildGraph(), '概念', 'person')).toEqual([])
+  })
+
+  it('exposes concept/method events through entityEvents (timeline tab)', () => {
+    const index = buildIndex(withAbstractions())
+    expect(entityEvents(index, 'concept', '單一事實來源').map(e => e.id)).toEqual(['e1', 'e2'])
+    expect(entityEvents(index, 'method', '漸進式部署').map(e => e.id)).toEqual(['e1', 'e5'])
+  })
+
+  it('finds concepts and methods in search and marks candidates', () => {
+    const hits = searchNodes(withAbstractions(), '概念', 'person')
+    const cand = hits.find(h => h.id === conceptId('候選概念'))
+    expect(cand?.kind).toBe('concept')
+    expect(cand?.sub).toContain('候選')
+    const promoted = searchNodes(withAbstractions(), '漸進', 'person')[0]
+    expect(promoted).toMatchObject({ id: methodId('漸進式部署'), kind: 'method' })
+    expect(promoted.sub).not.toContain('候選')
+  })
+
+  it('shortestPath can route through a shared concept', () => {
+    const index = buildIndex(withAbstractions())
+    // Bob(e1) — e1 — 單一事實來源 — e2 — Carol
+    const path = shortestPath(index, personId('Bob'), personId('Carol'))
+    expect(path).not.toBeNull()
+  })
+
+  it('abstractionInsight summarises relations, people, cases and co-occurring names', () => {
+    const index = buildIndex(withAbstractions())
+    const ins = abstractionInsight(index, 'concept', '單一事實來源')
+    expect(ins).toMatchObject({ promoted: true, eventCount: 2, firstDate: '2026-01-01', lastDate: '2026-01-10' })
+    expect(ins.relations).toEqual([{ relation: '體現', events: 1 }])
+    expect(ins.cases).toEqual([{ name: 'CaseA', events: 2 }])
+    expect(ins.people.map(p => p.name)).toContain('Alice')
+    expect(ins.coMethods).toEqual([{ name: '漸進式部署', events: 1 }])
+    expect(ins.coConcepts).toEqual([])
   })
 })

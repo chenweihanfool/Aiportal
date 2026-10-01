@@ -19,6 +19,7 @@ import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
+import { deriveAbstractions } from "../lib/hermesAbstractions";
 
 const router = Router();
 
@@ -361,6 +362,8 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
   const cases = Array.from(casesByName.values()).sort((a, b) => b.eventCount - a.eventCount);
   const objects = Array.from(objectsByName.values()).sort((a, b) => b.eventCount - a.eventCount);
   const activeCasesCount = cases.filter((c) => (caseMetaByName.get(c.name)?.status ?? "active") === "active").length;
+  // 概念／方法：同樣從 events 反推（舊事件沒有欄位就是空），見 lib/hermesAbstractions.ts
+  const abstractions = deriveAbstractions(events);
 
   return res.json({
     available: true,
@@ -378,6 +381,10 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
       mostActivePerson,
       activeCasesCount,
       personRelationsCount: dedupedPersonRelations.length,
+      conceptsCount: abstractions.concepts.filter((c) => c.promoted).length,
+      methodsCount: abstractions.methods.filter((m) => m.promoted).length,
+      candidateConceptsCount: abstractions.concepts.filter((c) => !c.promoted).length,
+      candidateMethodsCount: abstractions.methods.filter((m) => !m.promoted).length,
     },
     graph: {
       people: people.map((p) => ({ name: p.name, eventCount: p.eventCount })),
@@ -394,6 +401,10 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
       edges,
       caseEdges,
       objectEdges,
+      concepts: abstractions.concepts,
+      methods: abstractions.methods,
+      conceptEdges: abstractions.conceptEdges,
+      methodEdges: abstractions.methodEdges,
       personRelations: dedupedPersonRelations,
       hubNarratives,
       hubAssessments,
