@@ -32,6 +32,7 @@ import {
 } from './graphInsights'
 import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPanel'
 import { GraphShell } from './GraphShell'
+import { coreHeatColor, heatT, outerHeatColor, CORE_RAMP } from './graphHeat'
 import { consumeGraphFocus } from './graphFocus'
 
 // 六種節點都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
@@ -51,6 +52,9 @@ interface UNode {
   eventCount: number
   /** 抽象層節點才有意義：只出現在 1 個事件（尚未晉升）。畫得更淡、框用虛線。 */
   candidate: boolean
+  /** 熱度 0~1（同類節點內的相對關聯數）與兩套預先算好的顏色：當核心時用 colorCore（琥珀→深橘），
+   *  不是核心時用 colorOuter（灰藍→更深的同色相）。大小不再代表關聯數，見 graphHeat.ts。 */
+  heat: number; colorCore: string; colorOuter: string
   // 目前座標往目標座標補間；目標座標由 computeLayout 一次算好，不是每幀
   // 被力學推著跑。
   x: number; y: number; z: number
@@ -98,12 +102,13 @@ function nodeColor(kind: NodeKind, coreKind: CoreKind): string {
   return kind === coreKind ? COLOR.amber : NON_CORE_COLOR[kind]
 }
 
-function baseRadiusFor(kind: NodeKind, eventCount: number): number {
-  if (kind === 'person') return Math.min(20, 5.5 + Math.sqrt(eventCount) * 3)
-  if (kind === 'case') return Math.min(17, 5 + Math.sqrt(eventCount) * 2.6)
-  if (kind === 'object') return Math.min(13, 4 + Math.sqrt(eventCount) * 2.2)
-  if (isAbstraction(kind)) return Math.min(15, 5 + Math.sqrt(eventCount) * 2.4)
-  return 2.8 // event
+// 節點大小只依類型、不再依關聯數（關聯數改用顏色深淺表示，並直接以數字標在索引節點上）。
+// 索引節點（人／案／物／概念／方法）要夠大才放得下數字。
+function baseRadiusFor(kind: NodeKind): number {
+  if (kind === 'event') return 2.8
+  if (kind === 'object') return 7.5
+  if (kind === 'case') return 8.5
+  return 9 // person、concept、method
 }
 
 /** 黃金角螺旋撒點：n 個方向盡量均勻分佈在單位球面上，沒有極點擠成一團的
@@ -387,7 +392,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
     const visibleEvents = showIsolatedEvents ? g.events : g.events.filter(e => eventTouchedIds.has(e.id))
     const mk = (id: string, kind: NodeKind, label: string, eventCount: number, candidate = false): UNode => ({
-      id, kind, label, eventCount, candidate, baseRadius: baseRadiusFor(kind, eventCount),
+      id, kind, label, eventCount, candidate, baseRadius: baseRadiusFor(kind),
+      heat: 0, colorCore: COLOR.amber, colorOuter: NON_CORE_COLOR[kind],
       x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0,
       sx: 0, sy: 0, screenRadius: 0, opacity: 1, depth: 0,
     })
@@ -400,6 +406,21 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       ...visibleAbstractions.concepts.map(k => mk(conceptId(k.name), 'concept', k.name, k.eventCount, !k.promoted)),
       ...visibleAbstractions.methods.map(m => mk(methodId(m.name), 'method', m.name, m.eventCount, !m.promoted)),
     ]
+    // 熱度：同一類節點內，依關聯事件數（平方根）相對於該類最小／最大值。事件節點關聯數恆為 1，不套用。
+    const range = new Map<NodeKind, { min: number; max: number }>()
+    for (const n of nodes) {
+      if (n.kind === 'event') continue
+      const r = range.get(n.kind)
+      if (!r) range.set(n.kind, { min: n.eventCount, max: n.eventCount })
+      else { r.min = Math.min(r.min, n.eventCount); r.max = Math.max(r.max, n.eventCount) }
+    }
+    for (const n of nodes) {
+      const r = range.get(n.kind)
+      if (!r) continue
+      n.heat = heatT(n.eventCount, r.min, r.max)
+      n.colorCore = coreHeatColor(n.heat)
+      n.colorOuter = outerHeatColor(NON_CORE_COLOR[n.kind], n.heat)
+    }
     const byId = new Map(nodes.map(n => [n.id, n]))
 
     const links: ULink[] = []
@@ -567,7 +588,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         }
 
         ctx.globalAlpha = selected ? 1 : n.opacity * (lit ? 1 : 0.16)
-        const color = selected ? COLOR.amber : nodeColor(n.kind, coreNow)
+        const nodeAlpha = ctx.globalAlpha
+        const color = selected ? COLOR.amber : (n.kind === coreNow ? n.colorCore : n.colorOuter)
         if (isAbstraction(n.kind)) {
           // 抽象層：半透明填色＋薄框（概念＝圓環、方法＝菱形）；候選更淡、框用虛線。
           // 核心是抽象類型時填色加深，讓「目前的核心」仍然一眼看得出來。
@@ -595,6 +617,17 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           ctx.arc(n.sx, n.sy, selected ? r * 1.35 : r, 0, Math.PI * 2)
           ctx.fill()
         }
+        // 索引節點（人／案／物／概念／方法）：圓內標關聯事件數。半徑太小（遠端或縮得很小）時不標，不然糊成一團。
+        if (n.kind !== 'event' && r >= 5.2) {
+          const digits = String(n.eventCount)
+          ctx.globalAlpha = nodeAlpha
+          ctx.font = `600 ${Math.max(7, Math.min(15, r * (digits.length > 2 ? 0.8 : 1)))}px ${FONT.mono}`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillStyle = isAbstraction(n.kind) ? color : '#14161c'
+          ctx.fillText(digits, n.sx, n.sy + 0.5)
+          ctx.textBaseline = 'alphabetic'
+        }
       }
       ctx.globalAlpha = 1
 
@@ -613,12 +646,14 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           }
         }
       } else {
-        const coreNodes = nodes.filter(n => n.kind === coreNow)
-        if (coreNodes.length <= 90) labelled.push(...coreNodes)
-        // 抽象層本身不多（已晉升的通常只有幾十個），而且使用者就是衝著它們來的，
-        // 沒選取時也標出已晉升的名字（候選太多太淡，不標）；碰撞排除會處理重疊。
-        const promoted = nodes.filter(n => isAbstraction(n.kind) && n.kind !== coreNow && !n.candidate)
-        if (promoted.length <= 40) labelled.push(...promoted)
+        // 索引節點（人／案／物／概念／方法，候選除外）一律是標籤候選，依關聯數由大到小排優先；
+        // 實際畫哪些交給下面的碰撞排除。事件節點太多（幾百個）：只有「事件為核心且 ≤90 個」才標。
+        const hubs = nodes.filter(n => n.kind !== 'event' && !n.candidate).sort((a, b) => b.eventCount - a.eventCount)
+        labelled.push(...hubs.slice(0, 220))
+        if (coreNow === 'event') {
+          const evs = nodes.filter(n => n.kind === 'event')
+          if (evs.length <= 90) labelled.push(...evs)
+        }
       }
 
       ctx.font = `11px ${FONT.mono}`
@@ -631,7 +666,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const priority = labelled.slice().sort((p, q) => {
         if (p.id === selectedId) return -1
         if (q.id === selectedId) return 1
-        if (q.screenRadius !== p.screenRadius) return q.screenRadius - p.screenRadius
+        // 大小不再代表關聯數，優先序改看關聯數：越熱門的名字越先佔位
+        if (q.eventCount !== p.eventCount) return q.eventCount - p.eventCount
         return p.depth - q.depth
       })
       for (const n of priority) {
@@ -746,6 +782,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     cameraDistRef.current = Math.max(worldR * ZOOM_MIN_FACTOR, Math.min(worldR * ZOOM_MAX_FACTOR, next))
   }, [])
 
+  // 手機沒有滾輪也不方便雙指縮放：提供 ＋／－ 按鈕。跟滾輪同一套上下限（相對於宇宙半徑）。
+  const zoomBy = useCallback((factor: number) => {
+    const worldR = worldRadiusRef.current
+    cameraDistRef.current = Math.max(worldR * ZOOM_MIN_FACTOR, Math.min(worldR * ZOOM_MAX_FACTOR, cameraDistRef.current * factor))
+  }, [])
+
   // 主控台（App.tsx 的 CommandPalette）用 ⌘K/Ctrl+K 開全站搜尋，但這一頁
   // 已經有自己專門搜人/事/案/物的搜尋框，不需要另一層 overlay——這裡接同
   // 一組快捷鍵，單純把焦點跟游標丟給既有的輸入框，兩邊快捷鍵記憶體感一致。
@@ -807,10 +849,10 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   return (
     <GraphShell tab="universe" onBack={onBack}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center', padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
-        <div style={{ display: 'flex', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
           {coreChoices.map(k => (
             <button key={k} type="button" onClick={() => setCoreKind(k)} disabled={!ready} style={{
-              padding: '0.4rem 0.9rem', borderRadius: '999px', cursor: ready ? 'pointer' : 'default', fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.06em',
+              padding: '0.4rem 0.9rem', borderRadius: '999px', cursor: ready ? 'pointer' : 'default', fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.06em', whiteSpace: 'nowrap',
               background: coreKind === k ? 'rgba(245,166,35,0.16)' : 'transparent',
               border: `1px solid ${coreKind === k ? COLOR.amber : COLOR.line}`,
               color: coreKind === k ? COLOR.amber : COLOR.steelDim, opacity: ready ? 1 : 0.4,
@@ -960,8 +1002,25 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           </div>
         )}
 
-        <div style={{ position: 'absolute', right: '1rem', bottom: '1rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, opacity: 0.6, textAlign: 'right', lineHeight: 1.5 }}>
-          拖拉旋轉・滾輪縮放・點節點置中看詳情
+        {ready && (
+          <div style={{ position: 'absolute', right: '0.8rem', bottom: '3.2rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {([['＋', 0.8, '放大'], ['－', 1.25, '縮小']] as const).map(([label, factor, aria]) => (
+              <button key={aria} type="button" aria-label={aria} onClick={() => zoomBy(factor)} style={{
+                width: '44px', height: '44px', borderRadius: '50%', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1,
+                background: 'rgba(26,28,34,0.92)', border: `1px solid ${COLOR.lineBright}`, color: COLOR.ink, touchAction: 'manipulation',
+              }}>{label}</button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ position: 'absolute', right: '1rem', bottom: '1rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, opacity: 0.75, textAlign: 'right', lineHeight: 1.6 }}>
+          {ready && (
+            <div title="索引節點（人／案／物／概念／方法）的顏色越深，代表關聯的事件越多；圓內的數字是關聯事件數">
+              顏色越深＝關聯越多{' '}
+              <span style={{ display: 'inline-block', width: '46px', height: '6px', borderRadius: '3px', verticalAlign: 'middle', background: `linear-gradient(90deg, ${CORE_RAMP.floor}, ${CORE_RAMP.peak})` }} />
+            </div>
+          )}
+          拖拉旋轉・＋－縮放（電腦可用滾輪）・點節點看詳情
         </div>
       </div>
     </GraphShell>
