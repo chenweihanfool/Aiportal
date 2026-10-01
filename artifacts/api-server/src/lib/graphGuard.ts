@@ -14,3 +14,9 @@ export function describePostSource(headers: Record<string, string | string[] | u
   const trim = (s: string | null): string | null => (s === null ? null : s.slice(0, 200));
   return { ip: ip ?? null, forwardedFor: trim(one(headers["x-forwarded-for"])), userAgent: trim(one(headers["user-agent"])) };
 }
+
+/** 整包覆寫型的推送端點，body 必須帶有該端點的核心陣列欄位（欄位存在，內容可為空）。
+ *  沒帶＝不是真正的推送（空 body、`{"probe":true}` 之類的探針或打錯端點），回 400 而不是當成空資料寫入。 */
+export function hasArrayField(body: unknown, key: string): boolean {
+  return typeof body === "object" && body !== null && Array.isArray((body as Record<string, unknown>)[key]);
+}

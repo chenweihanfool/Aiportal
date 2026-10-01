@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { describePostSource, shouldRejectEmptyGraph } from "./graphGuard"
+import { describePostSource, hasArrayField, shouldRejectEmptyGraph } from "./graphGuard"
 
 describe("shouldRejectEmptyGraph", () => {
   it("rejects an empty push over an existing non-empty graph", () => {
@@ -28,5 +28,21 @@ describe("describePostSource", () => {
     expect(describePostSource({}, undefined)).toEqual({ ip: null, forwardedFor: null, userAgent: null })
     expect(describePostSource({ "x-forwarded-for": ["a", "b"] }, undefined).forwardedFor).toBe("a")
     expect(describePostSource({ "user-agent": "x".repeat(500) }, undefined).userAgent).toHaveLength(200)
+  })
+})
+
+describe("hasArrayField", () => {
+  it("accepts a body that carries the array field, even when it is empty", () => {
+    expect(hasArrayField({ events: [] }, "events")).toBe(true)
+    expect(hasArrayField({ events: [{ id: 1 }], other: 1 }, "events")).toBe(true)
+  })
+  it("rejects probes and malformed bodies", () => {
+    expect(hasArrayField({}, "events")).toBe(false)
+    expect(hasArrayField({ probe: true }, "events")).toBe(false)
+    expect(hasArrayField({ events: "x" }, "events")).toBe(false)
+    expect(hasArrayField({ events: null }, "events")).toBe(false)
+    expect(hasArrayField(undefined, "events")).toBe(false)
+    expect(hasArrayField(null, "events")).toBe(false)
+    expect(hasArrayField([], "events")).toBe(false)
   })
 })

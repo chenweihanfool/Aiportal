@@ -17,7 +17,7 @@ import {
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
-import { describePostSource, shouldRejectEmptyGraph } from "../lib/graphGuard";
+import { describePostSource, hasArrayField, shouldRejectEmptyGraph } from "../lib/graphGuard";
 import { logger } from "../lib/logger";
 import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
@@ -86,6 +86,10 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "需要管理員權限" });
   }
 
+  // 整包覆寫＋寫入每日趨勢列：沒有 disks 陣列的不是真正的狀態推送（空 body／探針），不得覆寫快照與趨勢。
+  if (!hasArrayField(req.body, "disks")) {
+    return res.status(400).json({ message: "缺少 disks 陣列，不是有效的狀態推送" });
+  }
   const body = req.body as Record<string, unknown>;
   const num = (key: string): number | null => (typeof body[key] === "number" ? (body[key] as number) : null);
   const arr = (key: string): unknown[] => (Array.isArray(body[key]) ? (body[key] as unknown[]) : []);
@@ -301,6 +305,10 @@ router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "需要管理員權限" });
   }
 
+  // events 缺漏（空 body／探針）不是推送：回 400，不當成「0 筆事件」寫入。events 存在但為空的情況由下面的守門處理。
+  if (!hasArrayField(req.body, "events")) {
+    return res.status(400).json({ message: "缺少 events 陣列，不是有效的關係圖推送" });
+  }
   const body = req.body as Record<string, unknown>;
   const events = Array.isArray(body["events"]) ? (body["events"] as HermesGraphEvent[]) : [];
   const personRelations = Array.isArray(body["personRelations"])
