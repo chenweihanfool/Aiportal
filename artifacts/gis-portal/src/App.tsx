@@ -6,6 +6,7 @@ import { describeForecast, type DiskAlertLevel, type DiskForecastInfo, type Stor
 import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, type HermesGraphEventNode, type HermesGraphEdge } from './hermesGraphApi'
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { TimelineView } from './TimelineView'
+import { AccountBadge } from './AuthGate'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -20,6 +21,14 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.19.1',
+    date: '2026-10-01',
+    summary: '登入狀態顯示在網頁標頭',
+    changes: [
+      '已用 Google 登入時，標頭右上顯示登入的 email 與「登出」；尚未登入時顯示「Google 登入」入口（原本是固定在畫面左下角的小字，不明顯且可能蓋住內容）',
+    ],
+  },
   {
     version: '2.19.0',
     date: '2026-10-01',
@@ -2992,6 +3001,7 @@ function InstrumentPanelView({
           <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, textAlign: 'right', lineHeight: 1.6 }}>
             {sites.length > 0 ? `${sites.length} PORTALS AVAILABLE` : 'CONNECTING...'}
           </div>
+          <AccountBadge />
           <VersionHistory />
         </div>
       </div>
