@@ -912,6 +912,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         {ready && g && selection && (
           <RelationshipDetailPanel
             graph={g}
+            unlockedPassword={unlockedPassword}
             selection={selection}
             onSelect={selectNode}
             onClose={() => { setSelection(null); setPathAnchor(null) }}

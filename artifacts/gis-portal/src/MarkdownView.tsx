@@ -39,6 +39,6 @@ function renderBlock(b: Block, i: number): ReactNode {
   }
 }
 
-export function MarkdownView({ text }: { text: string }) {
-  return <div style={{ fontSize: '0.84rem', color: COLOR.steel, wordBreak: 'break-word' }}>{parseMarkdown(text).map(renderBlock)}</div>
+export function MarkdownView({ text, fontSize = '0.84rem' }: { text: string; fontSize?: string }) {
+  return <div style={{ fontSize, color: COLOR.steel, wordBreak: 'break-word' }}>{parseMarkdown(text).map(renderBlock)}</div>
 }

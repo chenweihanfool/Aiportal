@@ -24,9 +24,12 @@
 //      都有日期可畫進時間軸，所以洞察維持獨立分頁，只有「有日期」的東西
 //      （敘事＋事件）進時間軸。
 // ─────────────────────────────────────────────
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { COLOR, FONT } from './theme'
 import type { HermesGraphData } from './hermesGraphApi'
+import { apiFetchHermesDoc, type HermesDoc } from './hermesDocApi'
+import { MarkdownView } from './MarkdownView'
+import { describeSource, softenWikilinks, stripSourceSection } from './docContent'
 import {
   buildIndex, personInsight, caseInsight, eventInsight, objectInsight, abstractionInsight, entityEvents,
   personId, eventId, caseId, objectId, conceptId, methodId, splitId,
@@ -112,9 +115,10 @@ function AssessmentNote({ assessment }: { assessment: { date: string; text: stri
 }
 
 export function RelationshipDetailPanel({
-  graph, selection, onSelect, onClose, onSetPathAnchor, pathAnchor, trail, onTrailJump,
+  graph, unlockedPassword, selection, onSelect, onClose, onSetPathAnchor, pathAnchor, trail, onTrailJump,
 }: {
   graph: NonNullable<HermesGraphData['graph']>
+  unlockedPassword: string | null
   selection: Selection
   onSelect: (sel: Selection) => void
   onClose: () => void
@@ -123,7 +127,8 @@ export function RelationshipDetailPanel({
   trail: Selection[]
   onTrailJump: (index: number) => void
 }) {
-  const [tab, setTab] = useState<'links' | 'insight' | 'timeline'>('links')
+  // 事件／概念／方法有「內容」分頁（內容層，見 ContentTab），預設開在這頁；其他節點沒有內容文件，退回關聯。
+  const [tab, setTab] = useState<'content' | 'links' | 'insight' | 'timeline'>('content')
   const [expanded, setExpanded] = useState(false)
   const index: GraphIndex = useMemo(() => buildIndex(graph), [graph])
   const { kind, name } = splitId(selection.id)
@@ -133,9 +138,14 @@ export function RelationshipDetailPanel({
   // 時間軸分頁只對人/案/物三種樞紐節點有意義（事件節點自己就是時間軸上的
   // 一個點，沒有「它自己的時間軸」可畫）——事件被選取時退回關聯分頁，不留
   // 一個內容永遠是空的分頁。
-  const tabs = kind === 'event' ? (['links', 'insight'] as const) : (['links', 'insight', 'timeline'] as const)
-  const effectiveTab = tab === 'timeline' && kind === 'event' ? 'links' : tab
-  const tabLabel = (t: typeof effectiveTab) => t === 'links' ? '關聯' : t === 'insight' ? '洞察' : '時間軸'
+  const hasContent = kind === 'event' || kind === 'concept' || kind === 'method'
+  const tabs: Array<'content' | 'links' | 'insight' | 'timeline'> = [
+    ...(hasContent ? ['content' as const] : []),
+    'links', 'insight',
+    ...(kind === 'event' ? [] : ['timeline' as const]),
+  ]
+  const effectiveTab = tab === 'timeline' && kind === 'event' ? 'links' : tab === 'content' && !hasContent ? 'links' : tab
+  const tabLabel = (t: typeof effectiveTab) => t === 'content' ? '內容' : t === 'links' ? '關聯' : t === 'insight' ? '洞察' : '時間軸'
 
   // --ds 只控制字級（見檔頭說明），跟版面尺寸（下面的 containerStyle）分
   //開算，展開時兩者都變大，但邏輯互不依賴。
@@ -206,13 +216,110 @@ export function RelationshipDetailPanel({
         padding: expanded ? '0 1.6rem 1.6rem' : '0 1rem 0.9rem', overflowY: 'auto', flex: 1, minHeight: 0,
         maxWidth: expanded ? '1080px' : undefined, width: '100%', margin: expanded ? '0 auto' : undefined,
       }}>
-        {effectiveTab === 'links'
+        {effectiveTab === 'content'
+          ? <ContentTab password={unlockedPassword} kind={kind} name={name} go={go} />
+          : effectiveTab === 'links'
           ? <LinksTab index={index} kind={kind} name={name} go={go} />
           : effectiveTab === 'insight'
           ? <InsightTab index={index} kind={kind} name={name} go={go} />
           : <TimelineTab index={index} kind={kind} name={name} selectionId={selection.id} go={go} expanded={expanded} />}
       </div>
     </div>
+  )
+}
+
+// 內容分頁（內容層）：事件＝正文＋來源；概念／方法＝hub 本文（有才有）＋「出現脈絡」時間軸。
+// 內容由 HERMES 每 10 分鐘增量推送；查無＝尚未同步（不是錯誤），明說而不是顯示空白。
+type DocState = { status: 'loading' } | { status: 'missing' } | { status: 'error' } | { status: 'ok'; doc: HermesDoc }
+
+function ContentTab({ password, kind, name, go }: { password: string | null; kind: NodeKind; name: string; go: (id: string) => void }) {
+  const [state, setState] = useState<DocState>({ status: 'loading' })
+  useEffect(() => {
+    if (!password || (kind !== 'event' && kind !== 'concept' && kind !== 'method')) return
+    let cancelled = false
+    setState({ status: 'loading' })
+    apiFetchHermesDoc(password, kind, name)
+      .then(doc => { if (!cancelled) setState(doc ? { status: 'ok', doc } : { status: 'missing' }) })
+      .catch(() => { if (!cancelled) setState({ status: 'error' }) })
+    return () => { cancelled = true }
+  }, [password, kind, name])
+
+  if (state.status === 'loading') return <Note>載入內容中…</Note>
+  if (state.status === 'error') return <Note tone="warn">暫時無法取得內容，稍後再試。</Note>
+  if (state.status === 'missing') {
+    return <Note>這筆內容還沒同步到入口網站（HERMES 每 10 分鐘推送一次；新事件或剛部署時可能還沒到）。關聯與洞察分頁不受影響。</Note>
+  }
+  const doc = state.doc
+  // 事件正文的「## 來源」段與下方結構化來源列重複，有來源列時就拿掉
+  const rawBody = doc.kind === 'event' && doc.sources.length > 0 ? stripSourceSection(doc.bodyMd) : doc.bodyMd
+  const bodyText = softenWikilinks(rawBody)
+  const bodySize = 'calc(var(--ds, 1) * 0.74rem)'
+
+  if (doc.kind === 'event') {
+    return (
+      <>
+        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+          事件{doc.date ? ` · ${doc.date}` : ''}
+        </div>
+        {bodyText.trim()
+          ? <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} /></div>
+          : <Note>這個事件的檔案沒有正文，只有標題與欄位。</Note>}
+        {doc.truncated && <Note tone="warn">正文過長，這裡只顯示前段（完整內容在 vault 的事件檔）。</Note>}
+        {doc.sources.length > 0 && (
+          <Section title="來源">
+            {doc.sources.map(s => {
+              const line = describeSource(s)
+              return (
+                <span key={`${s.type}:${s.path}`} title={s.path} style={{
+                  display: 'inline-flex', gap: '6px', alignItems: 'baseline', maxWidth: '100%', padding: '3px 9px', borderRadius: '999px',
+                  background: 'rgba(255,255,255,0.03)', border: `1px solid ${COLOR.line}`, fontSize: 'calc(var(--ds, 1) * 0.66rem)', color: COLOR.ink,
+                }}>
+                  <span style={{ color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)' }}>{line.label}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line.text}</span>
+                </span>
+              )
+            })}
+          </Section>
+        )}
+      </>
+    )
+  }
+
+  const label = doc.kind === 'concept' ? '概念' : '方法'
+  return (
+    <>
+      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+        {label} · {doc.contexts.length} 個事件 · {doc.promoted ? '已晉升' : '候選（僅 1 個事件，尚未被重複驗證）'}
+      </div>
+      {doc.aliases.length > 0 && <Note>事件裡的其他說法：{doc.aliases.map(a => `「${a}」`).join('、')}（管線已合併到這個名稱）。</Note>}
+      {bodyText.trim() && <div style={{ marginTop: '0.4rem' }}><MarkdownView text={bodyText} fontSize={bodySize} /></div>}
+      {doc.truncated && <Note tone="warn">說明過長，這裡只顯示前段。</Note>}
+      <Section title="出現脈絡（新→舊）">{null}</Section>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '-0.1rem' }}>
+        {doc.contexts.map(c => (
+          <div key={c.eventId} style={{ borderLeft: `2px solid ${COLOR.line}`, paddingLeft: '0.7rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'baseline', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: COLOR.steelDim }}>
+              <span>{c.date}</span>
+              {c.relation && <span style={{ color: COLOR.amberDim }}>{c.relation}</span>}
+              {c.as && <span>原措辭「{c.as}」</span>}
+            </div>
+            <div
+              onClick={() => go(eventId(c.eventId))}
+              style={{ cursor: 'pointer', fontSize: 'calc(var(--ds, 1) * 0.74rem)', color: COLOR.ink, lineHeight: 1.5, marginTop: '2px' }}
+            >{c.title}</div>
+            {c.evidence && (
+              <div style={{ fontSize: 'calc(var(--ds, 1) * 0.68rem)', color: COLOR.steel, lineHeight: 1.6, marginTop: '3px', fontStyle: 'italic' }}>
+                日記：「{c.evidence}」
+              </div>
+            )}
+            {c.excerpt && <div style={{ fontSize: 'calc(var(--ds, 1) * 0.66rem)', color: COLOR.steelDim, lineHeight: 1.6, marginTop: '3px' }}>{c.excerpt}</div>}
+          </div>
+        ))}
+      </div>
+      {!doc.contexts.some(c => c.evidence) && (
+        <Note>日記裡的逐字引文要等管線開始記錄後，對之後新出現的引用才有；目前這裡只顯示事件標題與正文摘錄。</Note>
+      )}
+    </>
   )
 }
 
