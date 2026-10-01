@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { COLOR, FONT } from './theme'
+import { HermesDiskPanel, type DiskHistoryPoint } from './HermesDiskPanel'
+import { describeForecast, type DiskAlertLevel, type DiskForecastInfo, type StorageItem } from './diskView'
 import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, type HermesGraphEventNode, type HermesGraphEdge } from './hermesGraphApi'
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { TimelineView } from './TimelineView'
@@ -17,6 +19,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.16.0',
+    date: '2026-10-01',
+    summary: '戰情室新增「硬碟容量」：用量、佔用分項、預估幾天後寫滿，並在容量吃緊時預警',
+    changes: [
+      'VPS 容量有限、知識庫會持續長大，所以除了「現在用了幾 %」，新面板（預設展開）還看三件事：①已用空間的每日曲線 ②佔用分項（vault／資料庫／docker／日誌等，與約 7 天前比增減）③依近 14 天的成長速度推估「幾天後寫滿」；使用率 ≥80%、剩餘 <3 GB 或預估 <45 天會亮紅點與警示等級',
+      '預估是讀取時用每日歷史現算（最小平方法，需至少 3 天資料），不另存結果；歷史表新增已用／剩餘／總量與分項欄位（migration 0016，全為可為空的新欄位，舊資料不受影響）；分項需 status pusher 量測後上報，沒上報前面板如實顯示「尚無分項資料」',
+      '容器健康在尚未取得容器清單時顯示「—／尚未取得（需主機端收集）」，不再顯示會被誤解為全掛的 0 / 0；排程任務面板副標改為 HERMES cron（不再寫 Windows Task Scheduler）',
+    ],
+  },
   {
     version: '2.15.0',
     date: '2026-10-01',
@@ -514,6 +526,10 @@ interface HermesStatusData {
   memPercent: number | null
   disks: HermesDiskInfo[]
   containers: HermesContainerInfo[]
+  /** 磁碟佔用分項、成長預估、警示等級（2026-10-01；舊後端沒有就是 undefined） */
+  storage?: StorageItem[]
+  diskForecast?: DiskForecastInfo
+  diskAlert?: DiskAlertLevel
   scheduledTasks: HermesScheduledTaskInfo[]
   computedAt: string | null
   stale: boolean
@@ -584,6 +600,10 @@ interface HermesStatusHistoryPoint {
   cpuPercent: number | null
   memPercent: number | null
   worstDiskPercent: number | null
+  diskUsedGb?: number | null
+  diskFreeGb?: number | null
+  diskTotalGb?: number | null
+  storage?: StorageItem[] | null
   containersHealthy: number | null
   containersTotal: number | null
   tasksFailed: number | null
@@ -1731,9 +1751,9 @@ function SubPanel({ title, sub, children }: { title: string; sub: string; childr
 // 署，update.ps1 失敗時整支腳本 exit 1、從來不會寫進 log，所以那個分頁
 // 目前沒有紅點）。
 function CollapsibleSubPanel({
-  title, sub, hasAlert, children,
-}: { title: string; sub: string; hasAlert?: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false)
+  title, sub, hasAlert, defaultOpen = false, children,
+}: { title: string; sub: string; hasAlert?: boolean; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <div style={{
       background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px', padding: '1rem 1.1rem',
@@ -2235,10 +2255,14 @@ function HermesWarRoomSection({
   const [statusError, setStatusError] = useState(false)
   const [activity, setActivity] = useState<HermesActivityEntry[] | null>(null)
   const [activityError, setActivityError] = useState(false)
+  const [diskHistory, setDiskHistory] = useState<DiskHistoryPoint[] | null>(null)
 
   useEffect(() => {
     if (!unlocked || !unlockedPassword) return
     let cancelled = false
+    apiFetchHermesStatusHistory(unlockedPassword, 30)
+      .then(d => { if (!cancelled) setDiskHistory(d.map(h => ({ date: h.date, diskUsedGb: h.diskUsedGb ?? null, diskFreeGb: h.diskFreeGb ?? null, diskTotalGb: h.diskTotalGb ?? null, storage: h.storage ?? null }))) })
+      .catch(() => { /* 歷史讀不到只是少了曲線與分項比較，不擋住其他面板 */ })
     apiFetchHermesStatus(unlockedPassword)
       .then(d => { if (!cancelled) setStatus(d) })
       .catch(() => { if (!cancelled) setStatusError(true) })
@@ -2285,22 +2309,38 @@ function HermesWarRoomSection({
                 <StatCell
                   label={worstDisk ? `磁碟 ${worstDisk.drive}` : '磁碟'}
                   value={worstDisk ? `${Math.round(worstDisk.percentUsed)}%` : '—'}
-                  sub={worstDisk ? `剩餘 ${formatGb(worstDisk.freeGb)}` : undefined}
+                  sub={worstDisk ? `剩餘 ${formatGb(worstDisk.freeGb)}${availableStatus.diskForecast?.daysUntilFull != null ? ` · 約 ${availableStatus.diskForecast.daysUntilFull} 天後滿` : ''}` : undefined}
                   valueColor={worstDisk ? pctTone(worstDisk.percentUsed) : undefined}
                 />
                 <StatCell
                   label="容器健康"
-                  value={`${containersOk} / ${availableStatus.containers.length}`}
-                  sub={availableStatus.containers.length > 0 && containersOk < availableStatus.containers.length ? '有容器異常' : undefined}
-                  valueColor={containersOk < availableStatus.containers.length ? COLOR.warn : COLOR.ok}
+                  value={availableStatus.containers.length === 0 ? '—' : `${containersOk} / ${availableStatus.containers.length}`}
+                  sub={availableStatus.containers.length === 0 ? '尚未取得（需主機端收集）' : containersOk < availableStatus.containers.length ? '有容器異常' : undefined}
+                  valueColor={availableStatus.containers.length === 0 ? COLOR.steelDim : containersOk < availableStatus.containers.length ? COLOR.warn : COLOR.ok}
                 />
               </div>
             )
           })()}
 
+          <div style={{ marginBottom: '0.9rem' }}>
+            <CollapsibleSubPanel
+              title="硬碟容量" sub="VPS 容量有限，知識庫會持續成長 · 用量、分項、預估寫滿時間"
+              hasAlert={availableStatus.diskAlert !== undefined && availableStatus.diskAlert !== 'ok'}
+              defaultOpen
+            >
+              <HermesDiskPanel
+                disk={availableStatus.disks.reduce<HermesDiskInfo | null>((w, d) => (!w || d.percentUsed > w.percentUsed ? d : w), null)}
+                storage={availableStatus.storage ?? []}
+                forecast={availableStatus.diskForecast ?? null}
+                level={availableStatus.diskAlert ?? 'ok'}
+                history={diskHistory}
+              />
+            </CollapsibleSubPanel>
+          </div>
+
           <div className="ip-board-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
             <CollapsibleSubPanel
-              title="排程任務狀態" sub="Windows Task Scheduler · 最近執行"
+              title="排程任務狀態" sub="HERMES cron · 最近執行"
               hasAlert={availableStatus.scheduledTasks.some(isTaskFailed)}
             >
               {availableStatus.scheduledTasks.length === 0

@@ -20,6 +20,7 @@ import { isAuthorized } from "../lib/adminSession";
 import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
 import { deriveAbstractions } from "../lib/hermesAbstractions";
+import { diskAlertLevel, forecastDisk, parseStorage } from "../lib/diskForecast";
 
 const router = Router();
 
@@ -58,6 +59,25 @@ function isContainerFailedRow(c: { status: string; health: string | null }): boo
 // composite — this is operational monitoring, not a happiness dimension, so
 // it's a standalone route like /mind-index/history, not wired into
 // lib/summarySources.ts.
+type DiskRow = NonNullable<HermesStatusSnapshotRow["disks"]>[number];
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function worstDisk(disks: DiskRow[]): DiskRow | null {
+  return disks.reduce<DiskRow | null>((w, d) => (w === null || d.percentUsed > w.percentUsed ? d : w), null);
+}
+
+async function currentDiskForecast(worst: DiskRow | null) {
+  const rows = await db
+    .select({ date: hermesStatusHistoryTable.date, usedGb: hermesStatusHistoryTable.diskUsedGb })
+    .from(hermesStatusHistoryTable)
+    .orderBy(desc(hermesStatusHistoryTable.date))
+    .limit(30);
+  return forecastDisk(rows.reverse(), worst?.freeGb ?? null);
+}
+
 router.post("/admin/hermes-status", async (req: Request, res: Response) => {
   const authorized = isAuthorized(req.headers["x-admin-password"]);
   if (!authorized) {
@@ -75,12 +95,14 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
   const containers = arr("containers") as NonNullable<HermesStatusSnapshotRow["containers"]>;
   const scheduledTasks = arr("scheduledTasks") as NonNullable<HermesStatusSnapshotRow["scheduledTasks"]>;
 
+  const storage = parseStorage(body["storage"]);
   const row = {
     id: "latest",
     cpuPercent: num("cpuPercent"),
     memPercent: num("memPercent"),
     disks,
     containers,
+    storage,
     scheduledTasks,
   };
 
@@ -101,11 +123,16 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
   );
   const failedContainers = containers.filter((c) => isContainerFailedRow(c));
   const failedTasks = scheduledTasks.filter((t) => isTaskFailedRow(t));
+  const worst = worstDisk(disks);
   const historyRow = {
     date: taipeiDateString(new Date()),
     cpuPercent: row.cpuPercent,
     memPercent: row.memPercent,
     worstDiskPercent,
+    diskUsedGb: worst ? round1(worst.totalGb - worst.freeGb) : null,
+    diskFreeGb: worst ? worst.freeGb : null,
+    diskTotalGb: worst ? worst.totalGb : null,
+    storage,
     containersHealthy: containers.length - failedContainers.length,
     containersTotal: containers.length,
     tasksFailed: failedTasks.length,
@@ -133,6 +160,19 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
     "Aiportal: HERMES scheduled tasks",
     `${failedTasks.length} 個排程任務失敗：${failedTasks.map((t) => t.name).join("、")}`,
     "排程任務已恢復正常",
+  );
+
+  // 磁碟警示：使用率／剩餘空間／預估天數任一達標才推（狀態改變才發，見 notify.ts）。
+  // NTFY_TOPIC_URL 沒設就是 no-op；主要的主動通知走 status pusher 的 🔴 輸出（HERMES cron 通道）。
+  const forecast = await currentDiskForecast(worst);
+  const level = diskAlertLevel(worst?.percentUsed ?? null, worst?.freeGb ?? null, forecast.daysUntilFull);
+  notifyOnAlertTransition(
+    "hermes-disk",
+    level !== "ok",
+    "Aiportal: HERMES disk",
+    `VPS 硬碟${level === "crit" ? "快滿了" : "空間偏緊"}：已用 ${worst?.percentUsed ?? "?"}%、剩 ${worst?.freeGb ?? "?"} GB` +
+      (forecast.daysUntilFull !== null ? `，依近況預估約 ${forecast.daysUntilFull} 天後寫滿` : ""),
+    "VPS 硬碟空間已恢復正常",
   );
 
   return res.json({ success: true });
@@ -183,6 +223,8 @@ router.get("/hermes-status", async (req: Request, res: Response) => {
   }
 
   const stale = Date.now() - row.computedAt.getTime() > STALE_THRESHOLD_MS;
+  const worst = worstDisk(row.disks ?? []);
+  const forecast = await currentDiskForecast(worst);
 
   return res.json({
     available: true,
@@ -190,6 +232,9 @@ router.get("/hermes-status", async (req: Request, res: Response) => {
     memPercent: row.memPercent,
     disks: row.disks ?? [],
     containers: row.containers ?? [],
+    storage: row.storage ?? [],
+    diskForecast: forecast,
+    diskAlert: diskAlertLevel(worst?.percentUsed ?? null, worst?.freeGb ?? null, forecast.daysUntilFull),
     scheduledTasks: row.scheduledTasks ?? [],
     computedAt: row.computedAt.toISOString(),
     stale,
@@ -219,6 +264,10 @@ router.get("/hermes-status/history", async (req: Request, res: Response) => {
       cpuPercent: r.cpuPercent,
       memPercent: r.memPercent,
       worstDiskPercent: r.worstDiskPercent,
+      diskUsedGb: r.diskUsedGb,
+      diskFreeGb: r.diskFreeGb,
+      diskTotalGb: r.diskTotalGb,
+      storage: r.storage ?? null,
       containersHealthy: r.containersHealthy,
       containersTotal: r.containersTotal,
       tasksFailed: r.tasksFailed,
