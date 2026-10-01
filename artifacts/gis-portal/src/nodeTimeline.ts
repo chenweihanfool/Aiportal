@@ -39,13 +39,15 @@ const LABEL_RE = /^([^：:，,；;（）()\u0000]{2,14})[：:]\s*(.+)$/s
  *  - 以「。」「；」與換行切句，句內的 [[wikilink]] 先保護起來（連結名稱裡的標點不會被切開）；
  *  - 第一句沒有「標籤：」就當標題；
  *  - 形如「履約期品質管控：……」的句子，標籤獨立出來（標籤不得以數字開頭，避免把「10:30」當標籤）。
- *  純前端的啟發式整理——不改 L5 的輸出；L5 若之後改成固定格式，這裡自然更準。 */
+ *  舊敘事（單行長段）靠啟發式整理；L5 新格式（標題行＋縮排子 bullet，pusher 以換行傳送）逐行對應，不再猜。 */
 export function parseNarrative(text: string): ParsedNarrative {
   const links: string[] = []
   const protectedText = text.replace(/\[\[[^\]]+\]\]/g, m => { links.push(m); return `\u0000${links.length - 1}\u0000` })
   const restore = (s: string) => s.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => links[Number(i)] ?? '')
+  // L5 結構化格式（標題行＋子 bullet，以換行分隔）：一行就是一條，不再依句號切；舊格式（單行長段）才用標點切
+  const structured = protectedText.includes('\n')
   const sentences = protectedText
-    .split(/[。；;]\s*|\n+/)
+    .split(structured ? /\n+/ : /[。；;]\s*|\n+/)
     .map(s => s.trim())
     .filter(Boolean)
   const items: NarrativeItem[] = sentences.map(s => {

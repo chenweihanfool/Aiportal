@@ -54,4 +54,13 @@ describe('parseNarrative', () => {
   it('splits on newlines and 「；」 too', () => {
     expect(parseNarrative('甲事；乙事\n丙事').items.map(i => i.text)).toEqual(['乙事', '丙事'])
   })
+
+  it('L5 結構化格式（換行分隔）：首行為標題，每行一條，行內句號不再切開', () => {
+    const p = parseNarrative('案件進入履約期。品質與請款同步\n履約期品質管控：10/1 抽驗 [[a_b]]。結果合格\n下一步：等第二期請款')
+    expect(p.headline).toBe('案件進入履約期。品質與請款同步')
+    expect(p.items).toEqual([
+      { label: '履約期品質管控', text: '10/1 抽驗 [[a_b]]。結果合格' },
+      { label: '下一步', text: '等第二期請款' },
+    ])
+  })
 })
