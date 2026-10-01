@@ -63,6 +63,8 @@ export interface GraphIndex {
   currentAssessmentByHub: Map<string, { date: string; text: string }>
   /** 敘事文字裡 [[名稱]] wikilink -> 節點 id，解析不到就原樣顯示文字 */
   nodeIdByLabel: Map<string, string>
+  /** 同上，但鍵經過 normalizeLabel（全形／半形、空白、大小寫），給正文 wikilink 的寬鬆比對用 */
+  nodeIdByNormLabel: Map<string, string>
 }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
@@ -194,13 +196,45 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
     if (!nodeIdByLabel.has(reconstructed)) nodeIdByLabel.set(reconstructed, eventId(e.id))
   }
 
+  const nodeIdByNormLabel = new Map<string, string>()
+  for (const [label, id] of nodeIdByLabel) {
+    const key = normalizeLabel(label)
+    if (key && !nodeIdByNormLabel.has(key)) nodeIdByNormLabel.set(key, id)
+  }
+
   return {
     neighbors, labelOf, eventById, personEvents, eventParticipants, eventObjects,
     caseEvents, objectEvents, conceptEvents, methodEvents, eventConcepts, eventMethods, promotedById,
     caseStatus: new Map(graph.cases.map(c => [c.name, c.status])),
     objectType: new Map(graph.objects.map(o => [o.name, o.objectType])),
-    relationDescription, coEvents, narrativesByHub, currentAssessmentByHub, nodeIdByLabel,
+    relationDescription, coEvents, narrativesByHub, currentAssessmentByHub, nodeIdByLabel, nodeIdByNormLabel,
   }
+}
+
+/** 比對用的標籤正規化：NFKC（全形冒號／括號轉半形）、去空白、轉小寫。 */
+export function normalizeLabel(s: string): string {
+  return s.normalize('NFKC').replace(/\s+/g, '').toLowerCase()
+}
+
+// 正文 wikilink 不解析成節點的路徑：日記（預設不開放閱讀）、附件（P3 才有預覽）、人類／AI 兩棵文件樹（相關文件先不納入）。
+const UNRESOLVED_PREFIXES = ['日記/', '附件/', '人類/', 'AI/']
+
+/** 正文裡的 [[目標]] → 圖上的節點 id；對不到回 null（呼叫端維持純文字，不給壞連結）。
+ *  目標可能帶資料夾前綴與 .md（例：`Events/2026-08-11_事件名.md`），先精確比對、再用正規化後的標籤比對。 */
+export function resolveWikilink(index: GraphIndex, target: string): string | null {
+  const t = target.trim()
+  if (!t || UNRESOLVED_PREFIXES.some(p => t.startsWith(p))) return null
+  const noExt = t.replace(/\.md$/i, '')
+  const last = noExt.split('/').filter(Boolean).pop() ?? noExt
+  for (const c of [noExt, last]) {
+    const id = index.nodeIdByLabel.get(c)
+    if (id) return id
+  }
+  for (const c of [noExt, last]) {
+    const id = index.nodeIdByNormLabel.get(normalizeLabel(c))
+    if (id) return id
+  }
+  return null
 }
 
 /** 兩個節點之間的最短路徑（含頭尾），找不到回 null。無權重圖用 BFS 就是
