@@ -59,3 +59,11 @@ describe('pickBaseline', () => {
     expect(pickBaseline([{ date: '2026-10-01' }, { date: '2026-09-30' }], '2026-10-01', 7)).toBeNull()
   })
 })
+
+describe('storageShares notes', () => {
+  it('carries the note (e.g. reclaimable) through to the row', () => {
+    const r = storageShares([{ label: 'docker build cache', bytes: 25.9e9, note: '可回收 17.3 GB' }, { label: 'vault', bytes: 2e9 }], null, null)
+    expect(r[0]).toMatchObject({ label: 'docker build cache', note: '可回收 17.3 GB' })
+    expect(r[1]!.note).toBeUndefined()
+  })
+})

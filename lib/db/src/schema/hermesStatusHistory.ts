@@ -19,7 +19,7 @@ export const hermesStatusHistoryTable = pgTable("hermes_status_history", {
   diskUsedGb: real("disk_used_gb"),
   diskFreeGb: real("disk_free_gb"),
   diskTotalGb: real("disk_total_gb"),
-  storage: jsonb("storage").$type<Array<{ label: string; bytes: number }>>(),
+  storage: jsonb("storage").$type<Array<{ label: string; bytes: number; note?: string }>>(),
   containersHealthy: integer("containers_healthy"),
   containersTotal: integer("containers_total"),
   tasksFailed: integer("tasks_failed"),

@@ -175,7 +175,14 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
     "VPS 硬碟空間已恢復正常",
   );
 
-  return res.json({ success: true });
+  // 回給 status pusher：它用這個等級決定要不要透過 hermes 通知通道提醒使用者（等級改變才提醒，見 kb-pipeline）
+  return res.json({
+    success: true,
+    diskAlert: level,
+    daysUntilFull: forecast.daysUntilFull,
+    percentUsed: worst?.percentUsed ?? null,
+    freeGb: worst?.freeGb ?? null,
+  });
 });
 
 // Single event append — the collector script POSTs one entry per new

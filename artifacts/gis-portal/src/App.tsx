@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { COLOR, FONT } from './theme'
 import { HermesDiskPanel, type DiskHistoryPoint } from './HermesDiskPanel'
+import { shortSchedule, scheduleLine } from './pipelineSchedule'
 import { describeForecast, type DiskAlertLevel, type DiskForecastInfo, type StorageItem } from './diskView'
 import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, type HermesGraphEventNode, type HermesGraphEdge } from './hermesGraphApi'
 import { RelationshipUniverse } from './RelationshipUniverse'
@@ -19,6 +20,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.17.0',
+    date: '2026-10-01',
+    summary: '戰情室資料改由真實來源推導：管線班表、排程任務、容器、近期活動、可回收磁碟空間',
+    changes: [
+      '知識萃取管線面板：各層排程改顯示實際班表（由 jobs.json 隨狀態上報，L3 已是 00:10＋01:10 補跑、L5 是 02:00、L4 是 11:35／17:35），舊 pusher 沒送時退回修正後的靜態說明；L5 說明更新為「圖譜編織」（標題＋條列敘事、樞紐評價、時效警報）；L1 補上附件連結；圖上新增「入口網站」節點，補上「vault → pusher → 資料庫」這一段',
+      '排程任務狀態：只列 jobs.json 中啟用的 job（已停用的「死人開關-家內」等不再出現），每列帶實際班表（每日 10:30、每 10 分鐘…）；副標已是 HERMES cron',
+      '近期活動：宿主機偵測到的容器重建、Aiportal 部署、新資料庫備份會自動寫入（原本只有已不存在的家內 update.log 在寫）；容器清單與容器健康由宿主機的 docker 狀態供應（尚未取得時如實顯示，不再是 0 / 0）',
+      '硬碟容量分項可附註「可回收 X」（例如 docker build cache），讓使用者一眼看出能立刻清掉多少；status 推送回應新增 diskAlert／daysUntilFull，供 pusher 在等級改變時透過 hermes 通知通道提醒',
+    ],
+  },
   {
     version: '2.16.0',
     date: '2026-10-01',
@@ -518,7 +530,7 @@ async function apiFetchSocialIndexHistory(adminPassword: string, days = 30): Pro
 
 interface HermesDiskInfo { drive: string; percentUsed: number; freeGb: number; totalGb: number }
 interface HermesContainerInfo { name: string; project: string | null; status: string; health: string | null }
-interface HermesScheduledTaskInfo { name: string; lastRunTime: string | null; lastTaskResult: number | null }
+interface HermesScheduledTaskInfo { name: string; lastRunTime: string | null; lastTaskResult: number | null; schedule?: string | null }
 
 interface HermesStatusData {
   available: boolean
@@ -575,6 +587,8 @@ interface HermesPipelineLayerData {
   backlog: number | null
   errorSummary: string | null
   durationSeconds: number | null
+  /** 該層實際班表（jobs.json），舊 pusher 沒送就是 undefined */
+  schedule?: string[]
   health: HermesPipelineHealth
 }
 interface HermesPipelineData {
@@ -1837,7 +1851,7 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
 // （health/lastRun/processed 等）是即時抓的；靜態規格改版時要手動更新這
 // 份表，HERMES 那邊沒有 API 可以讓前端自己查規格。
 // ─────────────────────────────────────────────
-type PipelineNodeId = 'diary' | 'raw' | 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'store'
+type PipelineNodeId = 'diary' | 'raw' | 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'store' | 'portal'
 
 interface PipelineNodeMeta {
   id: PipelineNodeId
@@ -1861,11 +1875,11 @@ const PIPELINE_NODES: Record<PipelineNodeId, PipelineNodeMeta> = {
   L1: {
     id: 'L1', label: 'L1 快掃', sub: '10:30 / 16:30 / 20:30', monitored: true,
     script: 'l1-agent-wrapper.py', schedule: '每天 3 班：10:30 / 16:30 / 20:30',
-    description: '讀日記增量（上次「已處理」marker 之後的內容），萃取候選事件；同一班也萃取社交互動寫進 social_interactions.jsonl。',
+    description: '讀日記增量（上次「已處理」marker 之後的內容），萃取候選事件（含概念／方法）；同一班也萃取社交互動寫進 social_interactions.jsonl。日記事件附帶的截圖等附件連結會一併帶進事件來源；另列出近 14 天新增、尚未被事件引用的附件供認領。',
   },
   L4: {
-    id: 'L4', label: 'L4 原始檔', sub: '11:35 / 17:15', monitored: true,
-    script: 'l4-agent-wrapper.py', schedule: '每天 2 班：11:35 / 17:15',
+    id: 'L4', label: 'L4 原始檔', sub: '11:35 / 17:35', monitored: true,
+    script: 'l4-agent-wrapper.py', schedule: '每天 2 班：11:35 / 17:35',
     description: '掃描 RAW_INTAKE 資料夾，OCR 辨識 PDF／名片／掃描件，萃取候選事件，格式跟 L1 輸出一致。',
   },
   L2: {
@@ -1874,18 +1888,23 @@ const PIPELINE_NODES: Record<PipelineNodeId, PipelineNodeMeta> = {
     description: '先同步 Vikunja 任務評論進日記，再做人名消歧＋事件合併判斷，把 L1／L4 的候選事件整理成正規化格式。',
   },
   L3: {
-    id: 'L3', label: 'L3 落地', sub: '22:40', monitored: true,
-    script: 'l3-agent-wrapper.py', schedule: '每天 1 班：22:40',
+    id: 'L3', label: 'L3 落地', sub: '00:10', monitored: true,
+    script: 'l3-agent-wrapper.py', schedule: '每天 00:10（01:10 補跑班）',
     description: '唯一有權寫入 Events/People 正式檔的一層：落地成正式事件檔、同步建立/更新人物檔，並做關聯補鏈（人物骨架、雙向回填、Cases 時序、alias 併檔、人↔人關係）。',
   },
   store: {
     id: 'store', label: 'Events / People / Cases', sub: '正式檔・唯一真相來源', monitored: false,
-    description: 'HERMES 知識庫的正式資料——事人物三實體 + 案件脈絡層。Aiportal 的事人物關係網路圖與各項指標全部從這裡反推，不是另外存一份。',
+    description: 'HERMES 知識庫的正式資料——事人物三實體 + 案件脈絡層（另有概念／方法）。Aiportal 的事人物關係網路圖與各項指標全部從這裡反推，不是另外存一份。vault 是唯一真相來源。',
+  },
+  portal: {
+    id: 'portal', label: '入口網站', sub: '每 10 分鐘推送', monitored: false,
+    description: 'pusher 腳本每 10 分鐘把 vault 衍生的資料（關係圖、事件與概念內容）和管線／主機狀態推進入口網站的資料庫（Postgres），前端只跟資料庫取資料；資料庫可由 vault 重建，不是第二份真相。',
+    script: 'hermes-graph-pusher.py／pipeline-status-pusher.py／hermes-status-pusher.py', schedule: '每 10 分鐘',
   },
   L5: {
-    id: 'L5', label: 'L5 洞察', sub: '00:00', monitored: true,
-    script: 'l5-agent-wrapper.py', schedule: '每天 1 班：00:00',
-    description: '讀取 Events/People/Cases，推導人物脈絡／案件脈絡／跨維度洞察，寫回各檔案的「🧠」區塊——是唯一「回頭寫」正式檔的層，但只動 🧠 區塊，不動其他層已經落地的內容。',
+    id: 'L5', label: 'L5 圖譜編織', sub: '02:00', monitored: true,
+    script: 'l5-agent-wrapper.py', schedule: '每天 02:00',
+    description: '沿著 L3 建好的邊說故事：為人物／案件／物件樞紐在「## 圖譜敘事」增補新的一段（標題＋條列，永不改寫舊段）、更新樞紐觀察評價，並挑出跨維度的時效警報寫進 🧠 區塊。只寫樞紐檔，不碰 L3 維護的連結區塊。',
   },
 }
 
@@ -1898,8 +1917,9 @@ const PIPELINE_NODE_POS: Record<PipelineNodeId, { x: number; y: number; w: numbe
   L3: { x: 544, y: 122, w: 136, h: 56 },
   store: { x: 728, y: 48, w: 146, h: 56 },
   L5: { x: 728, y: 196, w: 146, h: 56 },
+  portal: { x: 912, y: 48, w: 116, h: 56 },
 }
-const PIPELINE_VIEW_W = 880
+const PIPELINE_VIEW_W = 1044
 const PIPELINE_VIEW_H = 270
 
 function pipelineNodeCenter(id: PipelineNodeId) {
@@ -1919,6 +1939,7 @@ const PIPELINE_EDGES: PipelineEdge[] = [
   { path: 'M312,224 L360,150', label: 'candidates', labelAt: { x: 322, y: 204 } },
   { path: 'M496,150 L544,150', label: 'normalized', labelAt: { x: 500, y: 140 } },
   { path: 'M680,150 L728,84', label: '寫入', labelAt: { x: 674, y: 110 } },
+  { path: 'M874,76 L912,76', label: '推送', labelAt: { x: 878, y: 68 } },
   { path: 'M793,104 L793,196', label: '讀取', labelAt: { x: 760, y: 152 } },
   { path: 'M809,196 L809,104', label: '寫回 🧠', labelAt: { x: 812, y: 152 }, feedback: true },
 ]
@@ -1949,7 +1970,7 @@ function PipelineDetailCard({ meta, layer }: { meta: PipelineNodeMeta; layer: He
       <div style={{ fontSize: '0.74rem', color: COLOR.steel, lineHeight: 1.6, marginBottom: meta.monitored ? '0.7rem' : 0 }}>{meta.description}</div>
       {meta.script && (
         <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steelDim, marginBottom: '2px' }}>
-          腳本：<span style={{ color: COLOR.steel }}>{meta.script}</span>　排程：<span style={{ color: COLOR.steel }}>{meta.schedule}</span>
+          腳本：<span style={{ color: COLOR.steel }}>{meta.script}</span>　排程：<span style={{ color: COLOR.steel }}>{scheduleLine(layer?.schedule, meta.schedule)}</span>
         </div>
       )}
       {meta.monitored && (
@@ -2021,7 +2042,7 @@ function HermesPipelineFlowDiagram({ data }: { data: HermesPipelineData | null }
                   stroke={isSelected ? COLOR.amberDim : COLOR.line} strokeWidth={isSelected ? 1.6 : 1}
                 />
                 <text x={pos.x + 10} y={pos.y + 23} fontFamily={FONT.body} fontSize={12} fontWeight={600} fill={COLOR.ink}>{meta.label}</text>
-                <text x={pos.x + 10} y={pos.y + 39} fontFamily={FONT.mono} fontSize={9} fill={COLOR.steelDim}>{meta.sub}</text>
+                <text x={pos.x + 10} y={pos.y + 39} fontFamily={FONT.mono} fontSize={9} fill={COLOR.steelDim}>{meta.monitored ? shortSchedule(layer?.schedule, meta.sub) : meta.sub}</text>
                 {meta.monitored && (
                   <circle cx={pos.x + pos.w - 11} cy={pos.y + 11} r={4.5} fill={pipelineHealthColor(layer?.health)} />
                 )}
@@ -2158,16 +2179,19 @@ function isContainerFailed(c: Pick<HermesContainerInfo, 'status' | 'health'>): b
   return !/up/i.test(c.status) || c.health === 'unhealthy'
 }
 
-function HermesTaskRow({ name, lastRunTime, lastTaskResult }: HermesScheduledTaskInfo) {
+function HermesTaskRow({ name, lastRunTime, lastTaskResult, schedule }: HermesScheduledTaskInfo) {
   const isRunning = lastTaskResult === TASK_RUNNING_RESULT
   const isPending = lastTaskResult === TASK_NOT_YET_RUN_RESULT
-  const isFailed = isTaskFailed({ name, lastRunTime, lastTaskResult })
+  const isFailed = isTaskFailed({ name, lastRunTime, lastTaskResult, schedule })
   const dotClass = isRunning ? 'dot-run' : isFailed ? 'dot-warn' : 'dot-ok'
   const statusSuffix = isRunning ? ' · 執行中' : isPending ? ' · 尚未觸發過' : isFailed ? ` · 失敗 (${lastTaskResult})` : ''
   return (
     <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${COLOR.line}` }}>
       <span className={`dot ${dotClass}`} />
-      <span style={{ color: COLOR.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+      <span style={{ color: COLOR.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {name}
+        {schedule && <span style={{ color: COLOR.steelDim, fontSize: '0.62rem', marginLeft: '8px' }}>{schedule}</span>}
+      </span>
       <span style={{ color: COLOR.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>
         {lastRunTime ? formatMinutesAgo(lastRunTime) : '尚未執行'}{statusSuffix}
       </span>
@@ -2347,7 +2371,7 @@ function HermesWarRoomSection({
                 ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無排程任務資料</div>
                 : availableStatus.scheduledTasks.map(t => <HermesTaskRow key={t.name} {...t} />)}
             </CollapsibleSubPanel>
-            <CollapsibleSubPanel title="近期活動" sub="部署 / 備份紀錄">
+            <CollapsibleSubPanel title="近期活動" sub="部署 / 容器重建 / 備份">
               {activityError
                 ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>活動紀錄讀取失敗</div>
                 : activity === null
@@ -2364,7 +2388,7 @@ function HermesWarRoomSection({
               hasAlert={availableStatus.containers.some(isContainerFailed)}
             >
               {availableStatus.containers.length === 0
-                ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無容器資料</div>
+                ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無容器資料（宿主機的 host-stats 還沒回報，或回報已超過 30 分鐘）</div>
                 : availableStatus.containers.map(c => <HermesContainerRow key={c.name} {...c} />)}
             </CollapsibleSubPanel>
           </div>
