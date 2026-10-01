@@ -18,6 +18,12 @@ services:
       # 而不是 `${VAR}`（未設會展開成空字串）。要改指向其他主機時在 .env 設定即可。
       PF_CWH_SUMMARY_URL: ${PF_CWH_SUMMARY_URL:-https://cwh2023.synology.me/pf/api/public/summary}
       FITNESSFORGE_SUMMARY_URL: ${FITNESSFORGE_SUMMARY_URL:-https://cwh2023.synology.me/fitness/api/public/summary}
+      # 附件預覽（GET /api/hermes-attachment）讀這個資料夾；唯讀掛載，api-server 無法寫入或改動 vault。
+      HERMES_ATTACHMENT_ROOT: /data/attachments
+    volumes:
+      # 在主機 .env 設 ATTACHMENTS_DIR=<vault 的「附件」資料夾>（例如 /srv/obsidian/vault/附件）。
+      # 未設時掛本專案內一個空的 ./attachments（API 回「找不到」，不影響其他功能），不會誤掛到別處。
+      - ${ATTACHMENTS_DIR:-./attachments}:/data/attachments:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
