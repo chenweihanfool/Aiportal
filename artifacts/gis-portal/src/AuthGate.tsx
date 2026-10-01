@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { COLOR, FONT } from './theme'
 import { GOOGLE_SESSION_SENTINEL, interpretMe, loginErrorMessage, type AuthStatus } from './authView'
 
@@ -58,15 +58,25 @@ export function AuthGate({ children }: { children: ReactNode }) {
     window.location.reload()
   }
 
+  return <AuthContext.Provider value={{ status, logout }}>{children}</AuthContext.Provider>
+}
+
+interface AuthContextValue { status: AuthStatus; logout: () => Promise<void> }
+const AuthContext = createContext<AuthContextValue>({ status: { kind: 'optional' }, logout: async () => {} })
+
+/** 網頁標頭上的登入狀態：已登入顯示 email＋登出；尚未用 Google 登入（過渡期仍可密碼解鎖）顯示「Google 登入」入口。 */
+export function AccountBadge() {
+  const { status, logout } = useContext(AuthContext)
+  if (status.kind === 'loading' || status.kind === 'login-required') return null
   return (
-    <>
-      {children}
-      <div style={{ position: 'fixed', left: 8, bottom: 6, zIndex: 20, fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, display: 'flex', gap: '8px', alignItems: 'center' }}>
-        {status.kind === 'in'
-          ? (<><span>👤 {status.email}</span><button onClick={() => { void logout() }} style={linkBtn}>登出</button></>)
-          : (<a href={loginUrl()} style={{ ...linkBtn, textDecoration: 'none' }}>Google 登入</a>)}
-      </div>
-    </>
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'flex-end', maxWidth: '100%', fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steel }}>
+      {status.kind === 'in'
+        ? (<>
+            <span title={status.email} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>👤 {status.email}</span>
+            <button onClick={() => { void logout() }} style={linkBtn}>登出</button>
+          </>)
+        : (<a href={loginUrl()} style={{ ...linkBtn, textDecoration: 'none' }}>🔓 Google 登入</a>)}
+    </div>
   )
 }
 
