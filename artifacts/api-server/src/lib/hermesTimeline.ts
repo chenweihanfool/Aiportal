@@ -203,15 +203,24 @@ function createdMs(e: EventRef): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
-/** 當日事件依建立時間「新→舊」；沒有（或無法解析）建立時間的排在最後，彼此維持原順序（穩定排序）。 */
+/** L1（日記）事件的 id 帶當日流水號 `L1-YYYY-MM-DD-NN`，NN 越大＝當天越晚被萃取；同一班共用同一個建立時間時，用它分先後。 */
+function l1Seq(e: EventRef): number | null {
+  const m = /^L1-\d{4}-\d{2}-\d{2}-(\d+)$/.exec(e.id);
+  return m ? Number(m[1]) : null;
+}
+
+/** 當日事件依建立時間「新→舊」；建立時間相同時，L1 事件再依 id 流水號大者在前（同班內的先後）；
+ *  沒有（或無法解析）建立時間的排在最後，其餘維持原順序（穩定排序）。 */
 export function sortDayEvents(evs: EventRef[]): EventRef[] {
   return evs
-    .map((e, i) => ({ e, i, t: createdMs(e) }))
-    .sort((a, b) => {
-      if (a.t === null && b.t === null) return a.i - b.i;
-      if (a.t === null) return 1;
-      if (b.t === null) return -1;
-      return b.t - a.t || a.i - b.i;
+    .map((e, i) => ({ e, i, t: createdMs(e), q: l1Seq(e) }))
+    .sort((x, y) => {
+      if (x.t === null && y.t === null) return x.i - y.i;
+      if (x.t === null) return 1;
+      if (y.t === null) return -1;
+      if (x.t !== y.t) return y.t - x.t;
+      if (x.q !== null && y.q !== null && x.q !== y.q) return y.q - x.q;
+      return x.i - y.i;
     })
     .map((x) => x.e);
 }

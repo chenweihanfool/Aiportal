@@ -219,6 +219,17 @@ describe("day events: newest-first by creation time", () => {
     expect(input.map((e) => e.id)).toEqual(["x", "y"]);
   })
 
+  it("within the same creation time, L1 events are ordered by their daily sequence number (later first)", () => {
+    const t = "2026-10-01T10:32:56+08:00";
+    const out = sortDayEvents([
+      ev("L1-2026-10-01-02", t), ev("L1-2026-10-01-10", t), ev("L4-abcd-01", t), ev("L1-2026-10-01-01", t),
+      ev("L1-2026-10-01-09", "2026-10-01T09:00:00+08:00"),
+    ]);
+    // 時間較新者在前；同時間的 L1 事件依序號大→小；非 L1 事件不參與序號比較（維持原相對位置）
+    expect(out.map((e) => e.id).filter((i) => i.startsWith("L1")).join(",")).toBe("L1-2026-10-01-10,L1-2026-10-01-02,L1-2026-10-01-01,L1-2026-10-01-09");
+    expect(out[out.length - 1].id).toBe("L1-2026-10-01-09");
+  })
+
   it("toChip carries createdAt and defaults to null for old snapshots", () => {
     expect(toChip(ev("a", "2026-10-01T10:00:00Z"))).toEqual({ id: "a", title: "a", createdAt: "2026-10-01T10:00:00Z" });
     expect(toChip({ id: "b", date: "2026-10-01", title: "b" }).createdAt).toBeNull();
