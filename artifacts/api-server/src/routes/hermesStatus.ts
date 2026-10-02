@@ -18,6 +18,7 @@ import {
 import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { describePostSource, hasArrayField, shouldRejectEmptyGraph } from "../lib/graphGuard";
+import { isNewPersonSince, sanitizePeopleFirstSeen } from "../lib/peopleFirstSeen";
 import { logger } from "../lib/logger";
 import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
@@ -321,6 +322,8 @@ router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
   const hubAssessments = Array.isArray(body["hubAssessments"])
     ? (body["hubAssessments"] as HermesGraphHubAssessment[])
     : [];
+  // 沒帶（舊版 pusher／pusher 取不到 git）→ null：不覆寫，保留上一份
+  const peopleFirstSeen = sanitizePeopleFirstSeen(body["peopleFirstSeen"]);
 
   // 空 events 不得洗掉既有的圖（見 lib/graphGuard.ts）；每次推送都記下來源與筆數，方便追查是哪個寫入端。
   const source = describePostSource(req.headers, req.ip);
@@ -337,10 +340,10 @@ router.post("/admin/hermes-graph", async (req: Request, res: Response) => {
 
   await db
     .insert(hermesGraphSnapshotTable)
-    .values({ id: "latest", events, personRelations, cases, hubNarratives, hubAssessments })
+    .values({ id: "latest", events, personRelations, cases, hubNarratives, hubAssessments, ...(peopleFirstSeen ? { peopleFirstSeen } : {}) })
     .onConflictDoUpdate({
       target: hermesGraphSnapshotTable.id,
-      set: { events, personRelations, cases, hubNarratives, hubAssessments, computedAt: new Date() },
+      set: { events, personRelations, cases, hubNarratives, hubAssessments, ...(peopleFirstSeen ? { peopleFirstSeen } : {}), computedAt: new Date() },
     });
 
   return res.json({ success: true });
@@ -431,7 +434,10 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const newEventsThisWeek = events.filter((ev) => ev.date >= weekAgo).length;
-  const newPeopleThisWeek = Array.from(peopleByName.values()).filter((p) => p.firstDate >= weekAgo).length;
+  const weekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const firstSeenByName = row.peopleFirstSeen ?? {};
+  const newPeopleThisWeek = Array.from(peopleByName.values()).filter((p) =>
+    isNewPersonSince(firstSeenByName[p.name], p.firstDate, weekAgoMs, weekAgo)).length;
 
   const people = Array.from(peopleByName.values()).sort((a, b) => b.eventCount - a.eventCount);
   const mostActiveOthers = people.filter((p) => p.name !== SELF_PERSON_NAME);
@@ -466,7 +472,8 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
       candidateMethodsCount: abstractions.methods.filter((m) => !m.promoted).length,
     },
     graph: {
-      people: people.map((p) => ({ name: p.name, eventCount: p.eventCount })),
+      // firstSeenAt：人物頁首次進入 vault 的時間（沒有就是 null，前端退回事件日期）
+      people: people.map((p) => ({ name: p.name, eventCount: p.eventCount, firstSeenAt: firstSeenByName[p.name] ?? null })),
       events: events.map((ev) => ({
         id: ev.id,
         date: ev.date,

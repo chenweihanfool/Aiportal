@@ -6,7 +6,8 @@
 // dependency (App.tsx renders RelationshipUniverse for the #graph route).
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
-export interface HermesGraphPersonNode { name: string; eventCount: number }
+// firstSeenAt：人物頁首次進入 vault 的時間（ISO）；舊版 API／pusher 沒帶時為 null 或缺漏，「最近新增」退回用關聯事件的最早日期
+export interface HermesGraphPersonNode { name: string; eventCount: number; firstSeenAt?: string | null }
 export interface HermesGraphEventNode { id: string; date: string; title: string; status: string | null; tags: string[]; case: string | null }
 export interface HermesGraphCaseNode { name: string; eventCount: number; status: string | null }
 export interface HermesGraphObjectNode { name: string; objectType: string | null; eventCount: number }

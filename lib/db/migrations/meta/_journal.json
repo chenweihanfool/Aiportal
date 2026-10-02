@@ -120,6 +120,13 @@
       "when": 1790849125158,
       "tag": "0016_lonely_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790981361023,
+      "tag": "0017_omniscient_warlock",
+      "breakpoints": true
     }
   ]
 }

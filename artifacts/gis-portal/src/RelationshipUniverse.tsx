@@ -268,6 +268,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const [pathAnchor, setPathAnchor] = useState<string | null>(null)
   // 「最近新增」面板的 cutoff 日期跟關閉狀態，見下方 effect 的說明。
   const [activitySince, setActivitySince] = useState<string | null>(null)
+  // 同一個 cutoff 的毫秒版：新人物用「人物頁首次進入 vault 的時間」比，不能只比到日
+  const [activitySinceMs, setActivitySinceMs] = useState<number | null>(null)
   const [activityDismissed, setActivityDismissed] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -329,10 +331,11 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   useEffect(() => {
     let raw: string | null = null
     try { raw = localStorage.getItem(LAST_VISIT_STORAGE_KEY) } catch { /* 私密瀏覽/被封鎖時忽略，退回預設窗 */ }
-    const fallback = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const fallbackMs = Date.now() - 7 * 24 * 60 * 60 * 1000
     const parsedMs = raw ? Number(raw) : NaN
-    const since = Number.isFinite(parsedMs) ? new Date(parsedMs).toISOString().slice(0, 10) : fallback
-    setActivitySince(since)
+    const sinceMs = Number.isFinite(parsedMs) ? parsedMs : fallbackMs
+    setActivitySinceMs(sinceMs)
+    setActivitySince(new Date(sinceMs).toISOString().slice(0, 10))
   }, [])
 
   const dismissActivity = useCallback(() => {
@@ -821,8 +824,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   useEffect(() => { pathSetRef.current = pathIds ? new Set(pathIds) : null }, [pathIds])
 
   const activity = useMemo(
-    () => (g && activitySince ? recentActivity(buildIndex(g), g, activitySince) : null),
-    [g, activitySince],
+    () => (g && activitySince ? recentActivity(buildIndex(g), g, activitySince, activitySinceMs ?? undefined) : null),
+    [g, activitySince, activitySinceMs],
   )
   const activityTotal = activity
     ? activity.newPeople.length + activity.newEvents.length + activity.newCases.length

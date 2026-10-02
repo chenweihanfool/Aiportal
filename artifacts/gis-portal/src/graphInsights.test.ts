@@ -356,6 +356,29 @@ describe('recentActivity', () => {
     expect(activity.newEvents.map(e => e.id)).toEqual([eventId('e8'), eventId('e7'), eventId('e6'), eventId('e5')])
   })
 
+  it('with sinceMs, a person is new by firstSeenAt even when all their events are old; those without it keep the event-date rule', () => {
+    const g: Graph = {
+      ...graph,
+      people: graph.people.map(p => {
+        if (p.name === 'Alice') return { ...p, firstSeenAt: '2026-10-03T00:56:59+08:00' } // 事件很舊，但人物剛進 vault
+        if (p.name === 'Ivy') return { ...p, firstSeenAt: '2026-01-01T00:00:00+08:00' } // 事件日期在 cutoff 之後，但人物早就進了 vault
+        return p
+      }),
+    }
+    const since = Date.parse('2026-02-01T00:00:00+08:00')
+    const act = recentActivity(buildIndex(g), g, '2026-03-01', since)
+    expect(act.newPeople.some(p => p.label === 'Alice' && p.date === '2026-10-03')).toBe(true)
+    expect(act.newPeople.some(p => p.label === 'Ivy')).toBe(false)
+    // 沒有 firstSeenAt 的（Henry）仍照事件日期規則
+    expect(act.newPeople.some(p => p.label === 'Henry')).toBe(true)
+  })
+
+  it('without sinceMs, firstSeenAt is ignored (old behaviour)', () => {
+    const g: Graph = { ...graph, people: graph.people.map(p => (p.name === 'Alice' ? { ...p, firstSeenAt: '2026-10-03T00:56:59+08:00' } : p)) }
+    const act = recentActivity(buildIndex(g), g, '2026-03-01')
+    expect(act.newPeople.some(p => p.label === 'Alice')).toBe(false)
+  })
+
   it('excludes narratives and assessments dated before sinceDate', () => {
     const activity = recentActivity(index, graph, '2026-03-01')
     expect(activity.newNarratives).toEqual([])
