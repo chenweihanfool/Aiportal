@@ -621,13 +621,18 @@ export interface RecentActivity {
 }
 
 /** sinceDate（YYYY-MM-DD，含）之後才出現/更新的東西，給「最近新增」面板
- *  用。人/案/物節點本身沒有獨立的建立時間，「首次出現」= 這個節點關聯到
+ *  用。案/物節點本身沒有獨立的建立時間，「首次出現」= 這個節點關聯到
  *  的最早一筆事件日期——跟這個檔案其餘部分同一個原則：一切從 events 反
- *  推，不假設節點有自己的時間戳。 */
+ *  推，不假設節點有自己的時間戳。
+ *
+ *  人物例外：L3 常替**舊事件**補上參與者，事件日期早於上次造訪日，人物就永遠
+ *  不算新。所以傳入 sinceMs（上次造訪的時間點）時，有 firstSeenAt（人物頁首次
+ *  進入 vault 的時間）的人物改用它做毫秒比較；沒有 firstSeenAt 的才退回事件日期。 */
 export function recentActivity(
   index: GraphIndex,
   graph: NonNullable<HermesGraphData['graph']>,
   sinceDate: string,
+  sinceMs?: number,
 ): RecentActivity {
   const firstDateOf = (evIds: Iterable<string>): string | null => {
     let earliest: string | null = null
@@ -640,6 +645,11 @@ export function recentActivity(
 
   const newPeople: RecentActivityItem[] = []
   for (const p of graph.people) {
+    const seenMs = sinceMs !== undefined && p.firstSeenAt ? Date.parse(p.firstSeenAt) : NaN
+    if (Number.isFinite(seenMs)) {
+      if (seenMs >= (sinceMs as number)) newPeople.push({ id: personId(p.name), kind: 'person', label: p.name, date: (p.firstSeenAt as string).slice(0, 10) })
+      continue
+    }
     const first = firstDateOf(index.personEvents.get(p.name) ?? [])
     if (first && first >= sinceDate) newPeople.push({ id: personId(p.name), kind: 'person', label: p.name, date: first })
   }

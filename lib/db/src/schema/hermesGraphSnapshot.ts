@@ -87,6 +87,10 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
       text: string;
     }>
   >(),
+  // 2026-10-03 — 人物「首次進入 vault」時間：{人名: ISO 時間}，kb-pipeline pusher 以 People/<名>.md 在 vault git 歷史中首次被加入的
+  // 作者時間算出。給「最近新增 · 新人物」與 newPeopleThisWeek 用（原本取關聯事件的最早日期，L3 替舊事件補人時永遠不算新）。
+  // 可選欄位：舊版 pusher／git 取不到時不帶，POST 端保留上一份；讀取端對沒有時間的人物退回舊規則。nullable jsonb，無需回填。
+  peopleFirstSeen: jsonb("people_first_seen").$type<Record<string, string>>(),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
