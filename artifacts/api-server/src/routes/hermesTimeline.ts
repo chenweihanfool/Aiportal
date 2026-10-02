@@ -8,6 +8,8 @@ import {
   buildChildren,
   buildList,
   isLevel,
+  sortDayEvents,
+  toChip,
   validateEntries,
   type EventRef,
   type ReportRow,
@@ -43,7 +45,7 @@ async function loadEvents(): Promise<EventRef[]> {
     .from(hermesGraphSnapshotTable)
     .where(eq(hermesGraphSnapshotTable.id, "latest"))
     .limit(1);
-  return (snap?.events ?? []).map((e) => ({ id: e.id, date: e.date, title: e.title }));
+  return (snap?.events ?? []).map((e) => ({ id: e.id, date: e.date, title: e.title, createdAt: e.createdAt ?? null }));
 }
 
 async function loadMindScores(): Promise<Map<string, number | null>> {
@@ -139,7 +141,7 @@ router.get("/hermes-timeline/:level/:periodKey", async (req: Request, res: Respo
         return res.json({
           level, periodKey, startDate: periodKey, endDate: periodKey, title: periodKey, summary: "", bodyMd: "",
           hasReport: false, rangeInferred: false, periodNote: null, generation: null,
-          eventCount: evs.length, events: evs.map((e) => ({ id: e.id, title: e.title })),
+          eventCount: evs.length, events: sortDayEvents(evs).map(toChip),
           mindScore: scores.get(periodKey) ?? null, hhiScore: hhi.get(periodKey) ?? null, children: [],
         });
       }
@@ -155,7 +157,7 @@ router.get("/hermes-timeline/:level/:periodKey", async (req: Request, res: Respo
     level, periodKey, startDate: entry.startDate, endDate: entry.endDate, title: entry.title, summary: entry.summary,
     bodyMd: entry.bodyMd, hasReport: true, rangeInferred: entry.rangeInferred, periodNote: entry.periodNote,
     generation: entry.generation, eventCount: evs.length,
-    events: level === "day" ? evs.map((e) => ({ id: e.id, title: e.title })) : [],
+    events: level === "day" ? sortDayEvents(evs).map(toChip) : [],
     mindScore, hhiScore, children,
   });
 });

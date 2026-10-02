@@ -188,7 +188,42 @@ export interface ReportRow {
   rangeInferred: boolean;
   periodNote: string | null;
 }
-export interface EventRef { id: string; date: string; title: string }
+export interface EventRef { id: string; date: string; title: string; createdAt?: string | null }
+
+/** 當日事件的顯示項：createdAt＝事件檔的建立時間（ISO 8601）；舊 pusher 沒送＝null。 */
+export interface EventChip { id: string; title: string; createdAt: string | null }
+
+export function toChip(e: EventRef): EventChip {
+  return { id: e.id, title: e.title, createdAt: e.createdAt ?? null };
+}
+
+function createdMs(e: EventRef): number | null {
+  if (!e.createdAt) return null;
+  const t = Date.parse(e.createdAt);
+  return Number.isNaN(t) ? null : t;
+}
+
+/** L1（日記）事件的 id 帶當日流水號 `L1-YYYY-MM-DD-NN`，NN 越大＝當天越晚被萃取；同一班共用同一個建立時間時，用它分先後。 */
+function l1Seq(e: EventRef): number | null {
+  const m = /^L1-\d{4}-\d{2}-\d{2}-(\d+)$/.exec(e.id);
+  return m ? Number(m[1]) : null;
+}
+
+/** 當日事件依建立時間「新→舊」；建立時間相同時，L1 事件再依 id 流水號大者在前（同班內的先後）；
+ *  沒有（或無法解析）建立時間的排在最後，其餘維持原順序（穩定排序）。 */
+export function sortDayEvents(evs: EventRef[]): EventRef[] {
+  return evs
+    .map((e, i) => ({ e, i, t: createdMs(e), q: l1Seq(e) }))
+    .sort((x, y) => {
+      if (x.t === null && y.t === null) return x.i - y.i;
+      if (x.t === null) return 1;
+      if (y.t === null) return -1;
+      if (x.t !== y.t) return y.t - x.t;
+      if (x.q !== null && y.q !== null && x.q !== y.q) return y.q - x.q;
+      return x.i - y.i;
+    })
+    .map((x) => x.e);
+}
 
 export interface TimelineListItem {
   level: TimelineLevel;
@@ -202,7 +237,7 @@ export interface TimelineListItem {
   periodNote: string | null;
   generation: number | null;
   eventCount: number;
-  events: Array<{ id: string; title: string }>; // 僅 day 級，最多 EVENT_CHIP_LIMIT 筆
+  events: EventChip[];                          // 僅 day 級；清單最多 EVENT_CHIP_LIMIT 筆，單筆詳情給全部；皆依建立時間新→舊
   mindScore: number | null;                     // 僅 day 級；＝知識庫健康分數（mind_index_history.score，見 docs 說明）
   hhiScore: number | null;                      // 僅 day 級；＝幸福指數當日顯示分數（happiness_index_history.displayed_score）
 }
@@ -261,7 +296,7 @@ export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCu
     const evs = eventsWithin(events, it.startDate, it.endDate, today);
     it.eventCount = evs.length;
     if (level === "day") {
-      it.events = evs.slice(0, EVENT_CHIP_LIMIT).map((e) => ({ id: e.id, title: e.title }));
+      it.events = sortDayEvents(evs).slice(0, EVENT_CHIP_LIMIT).map(toChip);
       it.mindScore = mindScores.get(it.periodKey) ?? null;
       it.hhiScore = hhiScores.get(it.periodKey) ?? null;
     }

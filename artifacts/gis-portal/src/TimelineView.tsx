@@ -3,6 +3,7 @@ import { COLOR, FONT } from './theme'
 import { GraphShell } from './GraphShell'
 import { MarkdownView } from './MarkdownView'
 import { requestGraphFocus } from './graphFocus'
+import { countWithTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
 import {
   apiFetchTimelineDetail, apiFetchTimelineList,
   type TimelineDetail, type TimelineItem, type TimelineLevel,
@@ -275,12 +276,22 @@ function TimelineDialog(props: {
           )}
           {d && d.level === 'day' && d.events.length > 0 && (
             <div style={{ marginTop: '0.9rem' }}>
-              <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginBottom: 6 }}>當日事件 · {d.eventCount}（點擊跳到關係圖）</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginBottom: 6 }}>
+                當日事件 · {d.eventCount}（建立時間 新→舊；點擊跳到關係圖）
+              </div>
+              {countWithTime(d.events) === 0 && (
+                <div style={{ fontSize: '0.7rem', color: COLOR.warn, marginBottom: 6 }}>尚無建立時間資料，以下順序不代表時間先後。</div>
+              )}
+              <div role="list">
                 {d.events.map(ev => (
-                  <button key={ev.id} type="button" onClick={() => onEvent(ev.id)} title={ev.title}
-                    style={{ cursor: 'pointer', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: COLOR.panelRaised,
-                      border: `1px solid ${COLOR.line}`, color: COLOR.ink, borderRadius: 999, padding: '0.15rem 0.7rem', fontSize: '0.74rem', fontFamily: FONT.body }}>{ev.title}</button>
+                  <button key={ev.id} role="listitem" type="button" onClick={() => onEvent(ev.id)} title={eventTimeTitle(ev.createdAt) ? `${ev.title}\n${eventTimeTitle(ev.createdAt)}` : ev.title}
+                    style={{ display: 'flex', gap: '0.8rem', alignItems: 'baseline', width: '100%', textAlign: 'left', cursor: 'pointer', background: 'none', border: 'none',
+                      borderBottom: `1px solid ${COLOR.line}`, padding: '0.4rem 0.1rem', color: COLOR.ink, fontFamily: FONT.body }}>
+                    <span style={{ flex: '0 0 4.6rem', fontFamily: FONT.mono, fontSize: '0.7rem', color: ev.createdAt ? COLOR.steel : COLOR.steelDim, whiteSpace: 'nowrap' }}>
+                      {eventTimeLabel(ev.createdAt, d.periodKey)}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '0.8rem', lineHeight: 1.5, wordBreak: 'break-word' }}>{ev.title}</span>
+                  </button>
                 ))}
               </div>
             </div>
