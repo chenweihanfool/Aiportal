@@ -135,3 +135,93 @@ describe('positionAt', () => {
     expect(pPeriod[2]).toBeCloseTo(p0[2], 4)
   })
 })
+
+describe('galaxyLayout hub mode (case / object as core)', () => {
+  // 3 個案件：A 案 4 事件、B 案 3 事件（事件都有人）、C 案只有 1 個沒有人的事件（衛星只有 1 顆）。另有 2 個沒有案件的事件（只跟人有關）。
+  function cases() {
+    const nodes: LayoutNode[] = []
+    const neighbors = new Map<string, Set<string>>()
+    const link = (a: string, b: string) => {
+      if (!neighbors.has(a)) neighbors.set(a, new Set())
+      if (!neighbors.has(b)) neighbors.set(b, new Set())
+      neighbors.get(a)!.add(b); neighbors.get(b)!.add(a)
+    }
+    const add = (id: string, kind: string) => { if (!nodes.some(n => n.id === id)) nodes.push({ id, kind }) }
+    const mk = (c: string, n: number, people: string[]) => {
+      add(`c:${c}`, 'case')
+      for (let i = 0; i < n; i++) {
+        const e = `e:${c}${i}`
+        add(e, 'event'); link(e, `c:${c}`)
+        for (const p of people) { add(`p:${p}`, 'person'); link(e, `p:${p}`) }
+      }
+    }
+    mk('A', 4, ['甲', '乙'])
+    mk('B', 3, ['丙'])
+    mk('C', 1, [])
+    for (const id of ['e:x1', 'e:x2']) { add(id, 'event'); add('p:戊', 'person'); link(id, 'p:戊') }
+    return { nodes, neighbors }
+  }
+
+  it('makes each case with enough satellites the centre of its own galaxy', () => {
+    const { nodes, neighbors } = cases()
+    const lay = galaxyLayout(nodes, neighbors, 'case', { mode: 'hub' })
+    expect(lay).not.toBeNull()
+    expect(lay!.galaxies.map(g => g.hub).sort()).toEqual(['c:A', 'c:B'])
+    const a = lay!.motions.get('c:A')!, b = lay!.motions.get('c:B')!
+    expect(a.type === 'disk' && a.r).toBe(0) // 星系中心
+    expect(b.type === 'disk' && b.r).toBe(0)
+  })
+
+  it('puts the case’s events on inner orbits and their people further out, around that case', () => {
+    const { nodes, neighbors } = cases()
+    const m = galaxyLayout(nodes, neighbors, 'case', { mode: 'hub' })!.motions
+    const ev = m.get('e:A0')!, person = m.get('p:甲')!
+    expect(ev.type === 'orbit' && ev.anchor).toBe('c:A')
+    expect(person.type === 'orbit' && person.anchor).toBe('c:A')
+    if (ev.type === 'orbit' && person.type === 'orbit') expect(person.r).toBeGreaterThan(ev.r)
+  })
+
+  it('sends a case too small to be a galaxy, and nodes unrelated to any case, to the faint background', () => {
+    const { nodes, neighbors } = cases()
+    const lay = galaxyLayout(nodes, neighbors, 'case', { mode: 'hub' })!
+    expect(lay.faint.has('c:C')).toBe(true)   // 只有 1 顆衛星，不成星系
+    expect(lay.faint.has('e:C0')).toBe(true)  // 它的衛星也是背景
+    expect(lay.faint.has('e:x1')).toBe(true)  // 與任何案件都無關（不只隔兩層）
+    expect(lay.faint.has('e:A0')).toBe(false)
+    expect(lay.faint.has('p:甲')).toBe(false)
+  })
+
+  it('returns null when fewer than two cores qualify, so the caller falls back', () => {
+    const { nodes, neighbors } = cases()
+    const onlyA = nodes.filter(n => n.kind !== 'case' || n.id === 'c:A')
+    expect(galaxyLayout(onlyA, neighbors, 'case', { mode: 'hub' })).toBeNull()
+  })
+
+  it('lets a single core be a galaxy when minGalaxies is 1 (concept / method: only a handful exist)', () => {
+    const { nodes, neighbors } = cases()
+    const onlyA = nodes.filter(n => n.kind !== 'case' || n.id === 'c:A')
+    const lay = galaxyLayout(onlyA, neighbors, 'case', { mode: 'hub', minGalaxies: 1 })
+    expect(lay).not.toBeNull()
+    expect(lay!.galaxies.map(g => g.hub)).toEqual(['c:A'])
+    const ev = lay!.motions.get('e:A0')!
+    expect(ev.type === 'orbit' && ev.anchor).toBe('c:A')
+    expect(lay!.faint.has('e:B0')).toBe(true) // 跟這個核心無關的都是背景
+    expect(lay!.faint.has('p:甲')).toBe(false)
+  })
+
+  it('still returns null with minGalaxies 1 when the single core has too few satellites', () => {
+    const { nodes, neighbors } = cases()
+    const onlyC = nodes.filter(n => n.kind !== 'case' || n.id === 'c:C')
+    expect(galaxyLayout(onlyC, neighbors, 'case', { mode: 'hub', minGalaxies: 1 })).toBeNull()
+  })
+
+  it('places two hub galaxies symmetrically about the origin, and pushes the background far outside the frame', () => {
+    const { nodes, neighbors } = cases()
+    const lay = galaxyLayout(nodes, neighbors, 'case', { mode: 'hub' })!
+    const [g0, g1] = lay.galaxies
+    for (let i = 0; i < 3; i++) expect(g0.center[i] + g1.center[i]).toBeCloseTo(0, 6)
+    const bg = lay.motions.get('e:x1')!
+    expect(bg.type).toBe('fixed')
+    if (bg.type === 'fixed') expect(Math.hypot(...bg.p)).toBeGreaterThanOrEqual(lay.worldRadius * 4.5)
+  })
+})
