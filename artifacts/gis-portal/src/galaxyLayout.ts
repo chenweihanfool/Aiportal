@@ -77,6 +77,8 @@ export type Motion =
 export interface GalaxyLayout {
   galaxies: Galaxy[]
   motions: Map<string, Motion>
+  /** 背景節點（畫得淡、小，不算進鏡頭框）：與任何核心都無關的節點；hub 模式下另含未成星系的核心與它們的衛星 */
+  faint: Set<string>
   /** 宇宙最外緣的半徑（鏡頭自動框住用） */
   worldRadius: number
 }
@@ -96,6 +98,9 @@ const MIN_GALAXY_COVERAGE = 0.6
 const MAX_LARGEST_SHARE = 0.85
 const LPA_ROUNDS = 24
 const MAX_ANCHOR_LEVEL = 5
+const HUB_MAX_ANCHOR_LEVEL = 2
+const MAX_HUB_GALAXIES = 30      // hub 模式最多幾個星系（物件可能上百個，只讓衛星最多的幾十個自成星系，其餘當野星）
+const MIN_HUB_MASS = 3           // 至少要有 2 顆衛星才自成星系，否則只是一顆孤星
 
 // 星雲色相：只用冷色（藍、靛、紫、青、藍綠），刻意避開琥珀——琥珀在這張圖上專門代表「目前的核心」
 const HUES = [222, 252, 282, 198, 172, 236, 300, 208]
@@ -106,14 +111,24 @@ const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
  * 算出星系佈局。核心是事件（上千個、彼此沒有「共同衛星」的語意）或核心太少時回 null，
  * 由呼叫端退回原本的球面佈局。
  */
+export interface GalaxyLayoutOptions {
+  /** 'cluster'（預設）：核心依共同衛星分群，一群一個星系（人為核心用）。
+   *  'hub'：每個核心各自是一個星系的中心，它的衛星圍繞著它（案件／物件為核心用：一個事件通常只屬於
+   *  一個案件，案件之間分不出群，但「每個案件自成一個星系、相關事件與人物繞著它」正是要看的東西）。 */
+  mode?: 'cluster' | 'hub'
+}
+
 export function galaxyLayout(
   nodes: LayoutNode[],
   neighbors: Map<string, Set<string>>,
   coreKind: string,
+  options: GalaxyLayoutOptions = {},
 ): GalaxyLayout | null {
+  const hubMode = options.mode === 'hub'
   if (coreKind === 'event') return null
   const cores = nodes.filter(n => n.kind === coreKind).map(n => n.id).sort(byId)
-  if (cores.length < 6) return null
+  // 分群模式要夠多核心才分得出群；hub 模式每個核心自成星系，兩個就有意義
+  if (cores.length < (hubMode ? MIN_GALAXY_COUNT : 6)) return null
   const isCore = new Set(cores)
 
   // ── 1. 衛星與錨點 ─────────────────────────────────────────────
@@ -143,7 +158,10 @@ export function galaxyLayout(
   // 例如物件為核心時：事件（直接）→ 人物（第 2 層）→ 沒有物件的事件（第 3 層）。每層一次定案，結果與走訪順序無關。
   const levelOf = new Map<string, number>()
   for (const sid of directOf) levelOf.set(sid, 1)
-  for (let level = 2; level <= MAX_ANCHOR_LEVEL; level++) {
+  // hub 模式只收兩層：直接衛星（例：案件的事件）與第 2 層（那些事件的人物、物件）。再往外傳會把
+  // 毫不相干、只是剛好有共同人物的事件也掛到案件旁邊，星系就失去「這個案件的相關事物」的意義。
+  const maxLevel = hubMode ? HUB_MAX_ANCHOR_LEVEL : MAX_ANCHOR_LEVEL
+  for (let level = 2; level <= maxLevel; level++) {
     const assign: Array<[string, string]> = []
     for (const n of nodes) {
       if (isCore.has(n.id) || anchorOf.has(n.id)) continue
@@ -178,15 +196,20 @@ export function galaxyLayout(
   // ── 2＋3. 核心之間的關聯 → 分群。先只用直接共現；分不出結構才加上隔一層的共現再試一次 ──
   // （人為核心時隔一層會把各圈子經由共用物件全部連成一團，反而分不出來；案件／物件為核心時則幾乎
   // 只有隔一層的共現：一個事件通常只屬於一個案件。）
-  const clustering = clusterCores(nodes, neighbors, cores, isCore, directCoreNbrs, degOf, massOf, false)
-    ?? clusterCores(nodes, neighbors, cores, isCore, directCoreNbrs, degOf, massOf, true)
+  const clustering = hubMode
+    ? hubGalaxies(cores, massOf)
+    : clusterCores(nodes, neighbors, cores, isCore, directCoreNbrs, degOf, massOf, false)
+      ?? clusterCores(nodes, neighbors, cores, isCore, directCoreNbrs, degOf, massOf, true)
   if (!clustering) return null
   const { galaxyGroups, fieldStars } = clustering
 
   // ── 4. 星系幾何 ───────────────────────────────────────────────
   const motions = new Map<string, Motion>()
   const galaxies: Galaxy[] = []
-  const radii = galaxyGroups.map(g => GALAXY_SCALE * Math.sqrt(g.mass))
+  // hub 模式的星系只有一顆恆星，大小＝它最外圈衛星的軌道（星雲光與星系間距都跟著它）
+  const radii = galaxyGroups.map(g => (hubMode
+    ? (ORBIT_BASE + ORBIT_STEP * Math.sqrt(g.mass)) * INDIRECT_ORBIT_FACTOR * 1.4
+    : GALAXY_SCALE * Math.sqrt(g.mass)))
   const r0 = radii[0] ?? 0
   const rOther = radii.length > 1 ? Math.max(...radii.slice(1)) : r0
   const k = galaxyGroups.length
@@ -228,9 +251,11 @@ export function galaxyLayout(
 
   // 野星：散在星系網外圍（不屬於任何星系、但自己可能帶著衛星）
   const fieldR = Math.max(webR, r0) * 1.3 + 60
+  // hub 模式的野星（衛星太少、未自成星系的案件／物件，物件可能上百個）放到更外面當背景，不跟星系搶畫面
+  const fieldDist = hubMode ? fieldR * 2.2 : fieldR
   fieldStars.forEach((id, i) => {
     const d = fibDir(i, fieldStars.length)
-    const dist = fieldR * (0.9 + hash01(`${id}f`) * 0.25)
+    const dist = fieldDist * (0.9 + hash01(`${id}f`) * 0.25)
     motions.set(id, { type: 'fixed', p: [d[0] * dist, d[1] * dist, d[2] * dist] })
   })
 
@@ -248,7 +273,7 @@ export function galaxyLayout(
       // 軌道面：在星系盤面附近小幅傾斜（像行星系）；野星的衛星用各自的隨機平面
       let u: Vec3, v: Vec3
       if (base) {
-        const tilt = (hash01(`${sid}i`) - 0.5) * 0.7
+        const tilt = (hash01(`${sid}i`) - 0.5) * (hubMode ? 0.35 : 0.7)
         const c = Math.cos(tilt), s = Math.sin(tilt)
         u = base.u
         v = [base.v[0] * c + base.n[0] * s, base.v[1] * c + base.n[1] * s, base.v[2] * c + base.n[2] * s]
@@ -278,14 +303,36 @@ export function galaxyLayout(
   const pos = new Map<string, Vec3>()
   for (const [id, m] of motions) if (m.type !== 'orbit') { positionAt(m, 0, galaxies, () => undefined, tmp); pos.set(id, [tmp[0], tmp[1], tmp[2]]) }
   const dists: number[] = []
+  const faint = new Set(loose)
+  if (hubMode) {
+    const fieldSet = new Set(fieldStars)
+    for (const id of fieldStars) faint.add(id)
+    for (const [sid, a] of anchorOf) if (fieldSet.has(a)) faint.add(sid)
+  }
   for (const [id, m] of motions) {
+    if (faint.has(id)) continue // 背景節點不算進鏡頭框（hub 模式下常有上百個與任何星系都無關的節點）
     if (m.type === 'orbit') positionAt(m, 0, galaxies, a => pos.get(a), tmp)
     else { const p = pos.get(id) as Vec3; tmp[0] = p[0]; tmp[1] = p[1]; tmp[2] = p[2] }
     dists.push(Math.hypot(tmp[0], tmp[1], tmp[2]))
   }
   dists.sort((a, b) => a - b)
   const p92 = dists.length > 0 ? dists[Math.min(dists.length - 1, Math.floor(dists.length * 0.92))] : 0
-  return { galaxies, motions, worldRadius: Math.max(p92 * 1.08, 120) }
+  return { galaxies, motions, faint, worldRadius: Math.max(p92 * 1.08, 120) }
+}
+
+/** hub 模式：每個衛星夠多的核心各自成為一個星系（成員只有它自己），依衛星數排序、最多 MAX_HUB_GALAXIES 個；
+ *  其餘核心當外圍野星。少於兩個星系就回 null（交給呼叫端退回）。 */
+function hubGalaxies(cores: string[], massOf: (id: string) => number): Clustering | null {
+  const ranked = cores
+    .filter(id => massOf(id) >= MIN_HUB_MASS)
+    .sort((a, b) => massOf(b) - massOf(a) || byId(a, b))
+    .slice(0, MAX_HUB_GALAXIES)
+  if (ranked.length < MIN_GALAXY_COUNT) return null
+  const inGalaxy = new Set(ranked)
+  return {
+    galaxyGroups: ranked.map(id => ({ members: [id], mass: massOf(id) })),
+    fieldStars: cores.filter(id => !inGalaxy.has(id)),
+  }
 }
 
 interface Clustering { galaxyGroups: Array<{ members: string[]; mass: number }>; fieldStars: string[] }

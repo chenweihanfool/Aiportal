@@ -90,6 +90,11 @@ const YAW_FRICTION = 0.95
 const PITCH_FRICTION = 0.9
 // 選取節點時，宇宙的時間（公轉、自轉）在約一秒內慢慢停下，看細節時畫面是靜止的
 const TIME_EASE = 0.05
+// 背景節點（見 GalaxyLayout.faint）的大小與不透明度倍率
+const FAINT_SIZE = 0.55
+const FAINT_OPACITY = 0.3
+// 不是目前核心的人／案／物（圓內不標數字）畫小一點：它們繞在核心旁邊，太大會比中心的核心還搶眼
+const NONCORE_INDEX_SIZE = 0.6
 const PIVOT_EASE = 0.12
 // 衛星散開的球冠半角。不能是固定值：一個核心節點可能掛 2 個衛星，也可能
 // 掛 100 個，固定角度在後者會擠成一坨。球冠面積大致 ∝ θ²，所以 θ ∝ √m，
@@ -277,8 +282,13 @@ function computeLayout(allNodes: UNode[], neighbors: Map<string, Set<string>>, c
  *  「哪一類被打亮、放大、標名字」，整個宇宙不會重排，同一個人、同一件事永遠在同一個位置。
  *  人分不出群時才改用目前核心類型自己分群，再不行才退回球面。 */
 const STRUCTURE_KIND: CoreKind = 'person'
+// 案件／物件為核心時（2026-10-03 使用者要求）：每個案件／物件各自是一個星系的中心，它的事件繞內圈、那些事件的
+// 人物與物件繞外圈——「以案件為核心看相關的人事物」。這兩類不用人的骨架（否則案件只是掛在某個人旁邊的小衛星）。
+// 衛星不足兩個以上星系時才退回人的骨架。
+const HUB_KINDS: ReadonlySet<CoreKind> = new Set<CoreKind>(['case', 'object'])
 function layoutFor(nodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): { layout: GalaxyLayout | null; worldR: number } {
-  const layout = galaxyLayout(nodes, neighbors, STRUCTURE_KIND)
+  const layout = (HUB_KINDS.has(coreKind) ? galaxyLayout(nodes, neighbors, coreKind, { mode: 'hub' }) : null)
+    ?? galaxyLayout(nodes, neighbors, STRUCTURE_KIND)
     ?? (coreKind !== STRUCTURE_KIND ? galaxyLayout(nodes, neighbors, coreKind) : null)
   if (layout) {
     applyMotionTargets(nodes, layout, 0)
@@ -613,6 +623,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const coreNow = coreKindRef.current
       // 世界原點處的投影比例 × 上限＝近端節點的最大放大倍率
       const nearCap = (FOCAL_LENGTH / cameraDist) * NEAR_SCALE_CAP
+      const faintSet = layoutRef.current?.faint ?? null
 
       for (const n of nodes) {
         // 先減掉 pivot 再旋轉＝把旋轉軸心換成 pivot（見 pivotRef 說明）
@@ -628,13 +639,15 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         n.sy = cy + ry * scale
         // 近端節點不無限放大（見 NEAR_SCALE_CAP）：位置照透視走，只有「圓點本身的大小」被夾住
         const sizeScale = Math.min(scale, nearCap)
-        n.screenRadius = n.baseRadius * sizeScale * (n.kind === coreNow ? 1.55 : 1)
+        // 背景節點（星系佈局判定與任何星系都無關者）畫小、畫淡，像遠方的星，不跟星系搶畫面
+        const isFaint = !!faintSet && faintSet.has(n.id)
+        n.screenRadius = n.baseRadius * sizeScale * (n.kind === coreNow ? 1.55 : n.kind === 'event' ? 1 : NONCORE_INDEX_SIZE) * (isFaint ? FAINT_SIZE : 1)
         n.depth = perspectiveZ
         // 深度直接換算不透明度：最前面 1、最後面 DEPTH_MIN_OPACITY。用 rz
         // 而不是 scale，映射是線性且跟鏡頭距離無關，縮放時不會整張圖一起
         // 變淡。
         const frontness = Math.max(0, Math.min(1, (worldR - rz) / (2 * worldR)))
-        n.opacity = (DEPTH_MIN_OPACITY + (1 - DEPTH_MIN_OPACITY) * frontness) * nearFade(scale, nearCap)
+        n.opacity = (DEPTH_MIN_OPACITY + (1 - DEPTH_MIN_OPACITY) * frontness) * nearFade(scale, nearCap) * (isFaint ? FAINT_OPACITY : 1)
       }
 
       // 星系中心也做同樣的投影，給星雲光用
