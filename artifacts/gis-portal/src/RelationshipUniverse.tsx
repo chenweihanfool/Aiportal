@@ -269,9 +269,17 @@ function computeLayout(allNodes: UNode[], neighbors: Map<string, Set<string>>, c
   return abstractR * 1.18
 }
 
-/** 佈局入口：能分出星系就用星系佈局（回傳 layout 給每幀算位置），否則退回球面佈局（目標座標一次寫好）。 */
+/** 佈局入口：能分出星系就用星系佈局（回傳 layout 給每幀算位置），否則退回球面佈局（目標座標一次寫好）。
+ *
+ *  宇宙的骨架一律先用「人」分群（STRUCTURE_KIND），不管目前選哪一類當核心：事件、案件、概念、方法單靠自己
+ *  幾乎分不出群（概念只有個位數、一個事件通常只屬於一個案件、事件之間沒有共同衛星），以前各自分群的結果是
+ *  只有人／物為核心時才有星系，其他全退回舊的球面（使用者 10-03 回報）。改成同一個骨架後，切換核心只改
+ *  「哪一類被打亮、放大、標名字」，整個宇宙不會重排，同一個人、同一件事永遠在同一個位置。
+ *  人分不出群時才改用目前核心類型自己分群，再不行才退回球面。 */
+const STRUCTURE_KIND: CoreKind = 'person'
 function layoutFor(nodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): { layout: GalaxyLayout | null; worldR: number } {
-  const layout = galaxyLayout(nodes, neighbors, coreKind)
+  const layout = galaxyLayout(nodes, neighbors, STRUCTURE_KIND)
+    ?? (coreKind !== STRUCTURE_KIND ? galaxyLayout(nodes, neighbors, coreKind) : null)
   if (layout) {
     applyMotionTargets(nodes, layout, 0)
     return { layout, worldR: layout.worldRadius }
