@@ -18,6 +18,12 @@
 // 殼。每幀只做「往目標座標補間 → 投影 → 畫」，所以畫面永遠不會抖、不會
 // 亂竄，幾百個節點也穩；切換核心時看到的是一次乾淨的重新排列動畫，而不
 // 是一團持續蠕動的東西。
+//
+// 2026-10-03 第三版（星系）：確定性仍保留，但「平均撒在球面上」＝沒有結構，正式資料
+// （152 人／1016 事件）看起來是一顆均勻毛球。改成星系佈局（見 galaxyLayout.ts）：核心
+// 依共同衛星分群成星系、事件繞著恆星公轉、星系緩慢自轉、群與群之間留白；分不出結構
+// （例如事件為核心）時退回上面的球面佈局。每個節點的目標位置是時間的函式，畫面端用阻尼
+// 彈簧追目標（有慣性、會小幅回彈，但永遠收斂）；選取節點時宇宙時間漸停，拖曳鬆手有慣性。
 // ─────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { COLOR, FONT } from './theme'
@@ -35,6 +41,7 @@ import { GraphShell } from './GraphShell'
 import { coreHeatColor, makeHeatScale, outerHeatColor, CORE_RAMP } from './graphHeat'
 import { consumeGraphFocus } from './graphFocus'
 import { EDGE_LEVELS, NEAR_SCALE_CAP, edgeLevel, hubDamp, idleEdgeAlpha, nearFade } from './universeStyle'
+import { GOLDEN_ANGLE, fibDir, galaxyLayout, hash01, orthoBasis, positionAt, type GalaxyLayout, type Vec3 } from './galaxyLayout'
 
 // 六種節點都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
 // 立的一種節點；概念／方法是 2026-10 加的抽象層（見 isAbstraction）。
@@ -59,6 +66,8 @@ interface UNode {
   // 目前座標往目標座標補間；目標座標由 computeLayout 一次算好，不是每幀
   // 被力學推著跑。
   x: number; y: number; z: number
+  // 彈簧速度：位置用阻尼彈簧追目標（有一點慣性與回彈，但永遠收斂），見 SPRING_K／SPRING_DAMP
+  vx: number; vy: number; vz: number
   tx: number; ty: number; tz: number
   // 投影後的螢幕座標／視覺屬性，每幀重算；畫圖跟點擊命中測試都讀這裡。
   sx: number; sy: number; screenRadius: number; opacity: number; depth: number
@@ -72,9 +81,16 @@ const FOCAL_LENGTH = 620
 const ZOOM_MIN_FACTOR = 0.25
 const ZOOM_MAX_FACTOR = 8
 const IDLE_ROTATE_SPEED = 0.0007
-const POSITION_EASE = 0.09
+// 位置用阻尼彈簧追目標：v = (v + K·(目標−位置))·D。K 小、D 接近 1 → 有慣性、會稍微衝過頭再回來（物理感），
+// 但 D<1 保證能量一直衰減，不會像第一版力學模擬那樣亂竄。
+const SPRING_K = 0.07
+const SPRING_DAMP = 0.8
+// 拖曳鬆手後視角的慣性：每幀保留的比例（越接近 1 滑得越久）
+const YAW_FRICTION = 0.95
+const PITCH_FRICTION = 0.9
+// 選取節點時，宇宙的時間（公轉、自轉）在約一秒內慢慢停下，看細節時畫面是靜止的
+const TIME_EASE = 0.05
 const PIVOT_EASE = 0.12
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 // 衛星散開的球冠半角。不能是固定值：一個核心節點可能掛 2 個衛星，也可能
 // 掛 100 個，固定角度在後者會擠成一坨。球冠面積大致 ∝ θ²，所以 θ ∝ √m，
 // 再夾在一個看得出分群、又不會糊掉的範圍內。
@@ -142,38 +158,8 @@ function baseRadiusFor(kind: NodeKind): number {
   return 9 // person、concept、method
 }
 
-/** 黃金角螺旋撒點：n 個方向盡量均勻分佈在單位球面上，沒有極點擠成一團的
- *  問題，而且完全確定性（同樣的 i/n 永遠得到同一個方向）。 */
-function fibDir(i: number, n: number): [number, number, number] {
-  const y = n <= 1 ? 0 : 1 - (2 * i) / (n - 1)
-  const r = Math.sqrt(Math.max(0, 1 - y * y))
-  const theta = GOLDEN_ANGLE * i
-  return [Math.cos(theta) * r, y, Math.sin(theta) * r]
-}
 
-/** 給定單位向量 u，回傳與它正交的兩個單位向量（u、a、b 構成右手座標
- *  系），用來在「以 u 為中心的球冠」裡擺衛星節點。 */
-function orthoBasis(ux: number, uy: number, uz: number): [number, number, number, number, number, number] {
-  // 挑一個跟 u 不平行的輔助軸，否則外積會退化成零向量
-  const hx = Math.abs(uy) < 0.9 ? 0 : 1
-  const hy = Math.abs(uy) < 0.9 ? 1 : 0
-  let ax = uy * 0 - uz * hy, ay = uz * hx - ux * 0, az = ux * hy - uy * hx
-  const al = Math.hypot(ax, ay, az) || 1
-  ax /= al; ay /= al; az /= al
-  const bx = uy * az - uz * ay, by = uz * ax - ux * az, bz = ux * ay - uy * ax
-  return [ax, ay, az, bx, by, bz]
-}
 
-/** 由 id 算出的穩定亂數（0~1），給半徑加一點抖動讓球殼不要像機械格點，
- *  但同一個節點每次重算都拿到同一個值，不會因此閃動。 */
-function hash01(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return ((h >>> 0) % 10000) / 10000
-}
 
 /** 算出每個節點的目標座標。核心類型在內層球面、其衛星在外一層的球冠
  *  裡、沒有核心鄰居的在最外層球殼。回傳最外層半徑給深度淡出當基準。 */
@@ -283,6 +269,36 @@ function computeLayout(allNodes: UNode[], neighbors: Map<string, Set<string>>, c
   return abstractR * 1.18
 }
 
+/** 佈局入口：能分出星系就用星系佈局（回傳 layout 給每幀算位置），否則退回球面佈局（目標座標一次寫好）。 */
+function layoutFor(nodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): { layout: GalaxyLayout | null; worldR: number } {
+  const layout = galaxyLayout(nodes, neighbors, coreKind)
+  if (layout) {
+    applyMotionTargets(nodes, layout, 0)
+    return { layout, worldR: layout.worldRadius }
+  }
+  return { layout: null, worldR: computeLayout(nodes, neighbors, coreKind) }
+}
+
+const tmpPos: Vec3 = [0, 0, 0]
+/** 把星系佈局在時間 t 的位置寫進每個節點的目標座標。先寫非軌道節點（恆星），再寫軌道節點（讀錨點剛寫好的目標）。 */
+function applyMotionTargets(nodes: UNode[], layout: GalaxyLayout, t: number) {
+  const anchors = new Map<string, Vec3>()
+  for (const n of nodes) {
+    const m = layout.motions.get(n.id)
+    if (!m || m.type === 'orbit') continue
+    positionAt(m, t, layout.galaxies, () => undefined, tmpPos)
+    n.tx = tmpPos[0]; n.ty = tmpPos[1]; n.tz = tmpPos[2]
+    anchors.set(n.id, [n.tx, n.ty, n.tz])
+  }
+  const anchorPos = (id: string) => anchors.get(id)
+  for (const n of nodes) {
+    const m = layout.motions.get(n.id)
+    if (!m || m.type !== 'orbit') continue
+    positionAt(m, t, layout.galaxies, anchorPos, tmpPos)
+    n.tx = tmpPos[0]; n.ty = tmpPos[1]; n.tz = tmpPos[2]
+  }
+}
+
 export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPassword: string | null; onBack: () => void }) {
   const [data, setData] = useState<HermesGraphData | null>(null)
   const [error, setError] = useState(false)
@@ -327,6 +343,17 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const pitchRef = useRef(-0.22)
   const cameraDistRef = useRef(900)
   const draggingRef = useRef(false)
+  // 星系佈局（null＝退回球面佈局）、宇宙時間（秒）、時間流速（選取時漸停）、上一幀時間戳
+  const layoutRef = useRef<GalaxyLayout | null>(null)
+  const simTimeRef = useRef(0)
+  const timeScaleRef = useRef(1)
+  const lastFrameRef = useRef(0)
+  // 拖曳鬆手後的視角慣性（每幀的角速度）
+  const yawVelRef = useRef(0)
+  const pitchVelRef = useRef(0)
+  // 每幀投影後的星系中心（畫星雲光用）
+  const galaxyScreenRef = useRef<Array<{ sx: number; sy: number; r: number; op: number; hue: number }>>([])
+  const reducedMotionRef = useRef(false)
   const pointerDownRef = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const sizeRef = useRef({ width: 800, height: 600 })
 
@@ -348,6 +375,15 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   }, [])
 
   useEffect(() => { coreKindRef.current = coreKind }, [coreKind])
+  // 使用者在系統設定了「減少動態」：公轉、自轉一律停住（仍可拖曳、縮放、點選）
+  useEffect(() => {
+    const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
+    if (!mq) return
+    const sync = () => { reducedMotionRef.current = mq.matches }
+    sync()
+    mq.addEventListener?.('change', sync)
+    return () => mq.removeEventListener?.('change', sync)
+  }, [])
   useEffect(() => { hoveredIdRef.current = hoveredId }, [hoveredId])
   useEffect(() => { selectionRef.current = selection }, [selection])
 
@@ -431,7 +467,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     const mk = (id: string, kind: NodeKind, label: string, eventCount: number, candidate = false): UNode => ({
       id, kind, label, eventCount, candidate, baseRadius: baseRadiusFor(kind),
       heat: 0, colorCore: COLOR.amber, colorOuter: NON_CORE_COLOR[kind],
-      x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0,
+      x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, tx: 0, ty: 0, tz: 0,
       sx: 0, sy: 0, screenRadius: 0, opacity: 1, depth: 0,
     })
 
@@ -482,11 +518,13 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     nodeByIdRef.current = byId
     neighborsRef.current = neighbors
 
-    worldRadiusRef.current = computeLayout(nodes, neighbors, coreKindRef.current)
+    const lay = layoutFor(nodes, neighbors, coreKindRef.current)
+    layoutRef.current = lay.layout
+    worldRadiusRef.current = lay.worldR
     fitCameraTo(worldRadiusRef.current)
-    // 初次出現時從中心往外展開，是開場動畫也順便避免所有節點同一幀瞬間
-    // 出現在最終位置那種生硬感。
-    for (const n of nodes) { n.x = n.tx * 0.25; n.y = n.ty * 0.25; n.z = n.tz * 0.25 }
+    // 初次出現時從中心往外展開（彈簧會帶一點衝過頭再收回，像一次小小的大霹靂），
+    // 也避免所有節點同一幀瞬間出現在最終位置那種生硬感。
+    for (const n of nodes) { n.x = n.tx * 0.15; n.y = n.ty * 0.15; n.z = n.tz * 0.15; n.vx = 0; n.vy = 0; n.vz = 0 }
     setSelection(null)
   }, [data, showIsolatedEvents, eventTouchedIds, visibleAbstractions, fitCameraTo])
 
@@ -502,7 +540,9 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   // 切換核心類型：只重算目標座標，節點自己補間過去。
   useEffect(() => {
     if (nodesRef.current.length === 0) return
-    worldRadiusRef.current = computeLayout(nodesRef.current, neighborsRef.current, coreKind)
+    const lay = layoutFor(nodesRef.current, neighborsRef.current, coreKind)
+    layoutRef.current = lay.layout
+    worldRadiusRef.current = lay.worldR
     fitCameraTo(worldRadiusRef.current)
   }, [coreKind, fitCameraTo])
 
@@ -516,14 +556,25 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
     function project() {
       const nodes = nodesRef.current
-      for (const n of nodes) {
-        n.x += (n.tx - n.x) * POSITION_EASE
-        n.y += (n.ty - n.y) * POSITION_EASE
-        n.z += (n.tz - n.z) * POSITION_EASE
-      }
-
       const sel = selectionRef.current
       const focus = sel ? nodeByIdRef.current.get(sel.id) : null
+
+      // 宇宙時間：選取時（或使用者偏好減少動態）流速漸漸降到 0，公轉與自轉一起停下；取消選取再慢慢恢復。
+      const now = performance.now()
+      const dt = lastFrameRef.current ? Math.min(0.05, (now - lastFrameRef.current) / 1000) : 0
+      lastFrameRef.current = now
+      const wantScale = focus || reducedMotionRef.current ? 0 : 1
+      timeScaleRef.current += (wantScale - timeScaleRef.current) * TIME_EASE
+      simTimeRef.current += dt * timeScaleRef.current
+      const layout = layoutRef.current
+      if (layout) applyMotionTargets(nodes, layout, simTimeRef.current)
+
+      for (const n of nodes) {
+        n.vx = (n.vx + (n.tx - n.x) * SPRING_K) * SPRING_DAMP
+        n.vy = (n.vy + (n.ty - n.y) * SPRING_K) * SPRING_DAMP
+        n.vz = (n.vz + (n.tz - n.z) * SPRING_K) * SPRING_DAMP
+        n.x += n.vx; n.y += n.vy; n.z += n.vz
+      }
       const pivot = pivotRef.current
       const targetX = focus ? focus.x : 0
       const targetY = focus ? focus.y : 0
@@ -534,7 +585,15 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
       // 選取狀態下停掉自轉：使用者要的是「點到的節點置中不動」，整個場景
       // 同時凍住，看細節時最清楚；取消選取後才恢復自轉。
-      if (!draggingRef.current && !focus) yawRef.current += IDLE_ROTATE_SPEED
+      // 系統設定「減少動態」時連鏡頭自轉也停（只在使用者自己拖曳時才轉）
+      if (!draggingRef.current && !focus && !reducedMotionRef.current) yawRef.current += IDLE_ROTATE_SPEED
+      // 拖曳鬆手後的慣性：視角繼續轉一小段再停（摩擦力逐幀衰減）
+      if (!draggingRef.current) {
+        yawRef.current += yawVelRef.current
+        pitchRef.current = Math.max(-1.4, Math.min(1.4, pitchRef.current + pitchVelRef.current))
+        yawVelRef.current *= YAW_FRICTION
+        pitchVelRef.current *= PITCH_FRICTION
+      }
 
       const yaw = yawRef.current, pitch = pitchRef.current
       const cosY = Math.cos(yaw), sinY = Math.sin(yaw)
@@ -569,6 +628,24 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         const frontness = Math.max(0, Math.min(1, (worldR - rz) / (2 * worldR)))
         n.opacity = (DEPTH_MIN_OPACITY + (1 - DEPTH_MIN_OPACITY) * frontness) * nearFade(scale, nearCap)
       }
+
+      // 星系中心也做同樣的投影，給星雲光用
+      const gs = galaxyScreenRef.current
+      gs.length = 0
+      if (layout) {
+        for (const g of layout.galaxies) {
+          const lx = g.center[0] - pivot.x, ly = g.center[1] - pivot.y, lz = g.center[2] - pivot.z
+          const rx = lx * cosY - lz * sinY
+          const rz1 = lx * sinY + lz * cosY
+          const ry = ly * cosP - rz1 * sinP
+          const rz = ly * sinP + rz1 * cosP
+          const pz = rz + cameraDist
+          if (pz <= 1) continue
+          const sc = FOCAL_LENGTH / pz
+          const frontness = Math.max(0, Math.min(1, (worldR - rz) / (2 * worldR)))
+          gs.push({ sx: cx + rx * sc, sy: cy + ry * sc, r: g.radius * 1.7 * Math.min(sc, nearCap), op: DEPTH_MIN_OPACITY + (1 - DEPTH_MIN_OPACITY) * frontness, hue: g.hue })
+        }
+      }
     }
 
     function draw() {
@@ -586,6 +663,18 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         const off = ((yawRef.current * 18) % width + width) % width
         ctx.drawImage(bgc, off, 0)
         ctx.drawImage(bgc, off - width, 0)
+      }
+      // 每個星系一團淡淡的星雲光（冷色系，色相由星系決定）：群聚在畫面上直接「看得出是一群」，群與群之間是暗的
+      for (const g of galaxyScreenRef.current) {
+        if (g.r < 2) continue
+        const grad = ctx.createRadialGradient(g.sx, g.sy, 0, g.sx, g.sy, g.r)
+        grad.addColorStop(0, `hsla(${g.hue},70%,62%,${(0.24 * g.op).toFixed(3)})`)
+        grad.addColorStop(0.45, `hsla(${g.hue},65%,50%,${(0.1 * g.op).toFixed(3)})`)
+        grad.addColorStop(1, `hsla(${g.hue},60%,40%,0)`)
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.arc(g.sx, g.sy, g.r, 0, Math.PI * 2)
+        ctx.fill()
       }
 
       const nodes = nodesRef.current
@@ -818,6 +907,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     (e.target as Element).setPointerCapture(e.pointerId)
     pointerDownRef.current = { x: e.clientX, y: e.clientY, moved: false }
     draggingRef.current = true
+    yawVelRef.current = 0
+    pitchVelRef.current = 0
   }, [])
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -829,8 +920,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     const dx = e.clientX - down.x, dy = e.clientY - down.y
     if (!down.moved && Math.hypot(dx, dy) > 4) down.moved = true
     if (down.moved) {
-      yawRef.current += (e.clientX - down.x) * 0.006
-      pitchRef.current = Math.max(-1.4, Math.min(1.4, pitchRef.current + (e.clientY - down.y) * 0.006))
+      const dyaw = (e.clientX - down.x) * 0.006, dpitch = (e.clientY - down.y) * 0.006
+      yawRef.current += dyaw
+      pitchRef.current = Math.max(-1.4, Math.min(1.4, pitchRef.current + dpitch))
+      // 記下最後一次拖曳的角速度，鬆手後當慣性（上限避免一甩就轉好幾圈）
+      yawVelRef.current = Math.max(-0.08, Math.min(0.08, dyaw))
+      pitchVelRef.current = Math.max(-0.05, Math.min(0.05, dpitch))
       pointerDownRef.current = { x: e.clientX, y: e.clientY, moved: true }
     }
   }, [hitTest])
