@@ -101,6 +101,9 @@ const MAX_ANCHOR_LEVEL = 5
 const HUB_MAX_ANCHOR_LEVEL = 2
 const MAX_HUB_GALAXIES = 30      // hub 模式最多幾個星系（物件可能上百個，只讓衛星最多的幾十個自成星系，其餘當野星）
 const MIN_HUB_MASS = 3           // 至少要有 2 顆衛星才自成星系，否則只是一顆孤星
+// hub 模式的背景（與任何星系無關的節點，常有上千個）至少放在世界半徑的這麼多倍外：鏡頭距離約是世界半徑的
+// 1.6 倍（寬螢幕）到 3.8 倍（手機直式），背景若落在鏡頭附近會被畫成一片大圓點（10-03 方法為核心只有一個小星系時實測）
+const HUB_BACKDROP_FACTOR = 5
 
 // 星雲色相：只用冷色（藍、靛、紫、青、藍綠），刻意避開琥珀——琥珀在這張圖上專門代表「目前的核心」
 const HUES = [222, 252, 282, 198, 172, 236, 300, 208]
@@ -116,6 +119,9 @@ export interface GalaxyLayoutOptions {
    *  'hub'：每個核心各自是一個星系的中心，它的衛星圍繞著它（案件／物件為核心用：一個事件通常只屬於
    *  一個案件，案件之間分不出群，但「每個案件自成一個星系、相關事件與人物繞著它」正是要看的東西）。 */
   mode?: 'cluster' | 'hub'
+  /** hub 模式至少要幾個星系才成立（預設 2）。概念／方法目前只有個位數（10-03：概念 2、方法 1），
+   *  單一個也值得自成星系——「這個方法用在哪些事、牽涉哪些人」就是要看的東西。 */
+  minGalaxies?: number
 }
 
 export function galaxyLayout(
@@ -125,10 +131,11 @@ export function galaxyLayout(
   options: GalaxyLayoutOptions = {},
 ): GalaxyLayout | null {
   const hubMode = options.mode === 'hub'
+  const minGalaxies = hubMode ? Math.max(1, options.minGalaxies ?? MIN_GALAXY_COUNT) : MIN_GALAXY_COUNT
   if (coreKind === 'event') return null
   const cores = nodes.filter(n => n.kind === coreKind).map(n => n.id).sort(byId)
   // 分群模式要夠多核心才分得出群；hub 模式每個核心自成星系，兩個就有意義
-  if (cores.length < (hubMode ? MIN_GALAXY_COUNT : 6)) return null
+  if (cores.length < (hubMode ? minGalaxies : 6)) return null
   const isCore = new Set(cores)
 
   // ── 1. 衛星與錨點 ─────────────────────────────────────────────
@@ -197,7 +204,7 @@ export function galaxyLayout(
   // （人為核心時隔一層會把各圈子經由共用物件全部連成一團，反而分不出來；案件／物件為核心時則幾乎
   // 只有隔一層的共現：一個事件通常只屬於一個案件。）
   const clustering = hubMode
-    ? hubGalaxies(cores, massOf)
+    ? hubGalaxies(cores, massOf, minGalaxies)
     : clusterCores(nodes, neighbors, cores, isCore, directCoreNbrs, degOf, massOf, false)
       ?? clusterCores(nodes, neighbors, cores, isCore, directCoreNbrs, degOf, massOf, true)
   if (!clustering) return null
@@ -248,6 +255,13 @@ export function galaxyLayout(
       motions.set(id, { type: 'disk', g: gi, r, theta, h })
     })
   })
+
+  // hub 模式只有兩個星系時，兩者對稱放在原點兩側：否則鏡頭以其中一個為中心、另一個在邊上，兩個都被縮小
+  if (hubMode && k === 2) {
+    const c = galaxies[1].center
+    const half: Vec3 = [c[0] / 2, c[1] / 2, c[2] / 2]
+    for (const g of galaxies) g.center = [g.center[0] - half[0], g.center[1] - half[1], g.center[2] - half[2]]
+  }
 
   // 野星：散在星系網外圍（不屬於任何星系、但自己可能帶著衛星）
   const fieldR = Math.max(webR, r0) * 1.3 + 60
@@ -317,17 +331,31 @@ export function galaxyLayout(
   }
   dists.sort((a, b) => a - b)
   const p92 = dists.length > 0 ? dists[Math.min(dists.length - 1, Math.floor(dists.length * 0.92))] : 0
-  return { galaxies, motions, faint, worldRadius: Math.max(p92 * 1.08, 120) }
+  // 下限避免節點很少時鏡頭貼太近；hub 模式只有一兩個小星系時（概念／方法）用較低的下限，星系才不會縮成中央一小團
+  const worldRadius = Math.max(p92 * 1.08, hubMode ? 80 : 120)
+  if (hubMode) {
+    // 背景推到鏡頭外圍（見 HUB_BACKDROP_FACTOR）；繞著背景野星轉的衛星跟著它們的錨點一起移出去
+    const minBg = worldRadius * HUB_BACKDROP_FACTOR
+    for (const id of faint) {
+      const m = motions.get(id)
+      if (!m || m.type !== 'fixed') continue
+      const d = Math.hypot(m.p[0], m.p[1], m.p[2])
+      if (d <= 0 || d >= minBg) continue
+      const f = (minBg * (0.94 + hash01(`${id}b`) * 0.3)) / d
+      m.p = [m.p[0] * f, m.p[1] * f, m.p[2] * f]
+    }
+  }
+  return { galaxies, motions, faint, worldRadius }
 }
 
 /** hub 模式：每個衛星夠多的核心各自成為一個星系（成員只有它自己），依衛星數排序、最多 MAX_HUB_GALAXIES 個；
- *  其餘核心當外圍野星。少於兩個星系就回 null（交給呼叫端退回）。 */
-function hubGalaxies(cores: string[], massOf: (id: string) => number): Clustering | null {
+ *  其餘核心當外圍野星。少於 minGalaxies 個星系就回 null（交給呼叫端退回）。 */
+function hubGalaxies(cores: string[], massOf: (id: string) => number, minGalaxies: number): Clustering | null {
   const ranked = cores
     .filter(id => massOf(id) >= MIN_HUB_MASS)
     .sort((a, b) => massOf(b) - massOf(a) || byId(a, b))
     .slice(0, MAX_HUB_GALAXIES)
-  if (ranked.length < MIN_GALAXY_COUNT) return null
+  if (ranked.length < minGalaxies) return null
   const inGalaxy = new Set(ranked)
   return {
     galaxyGroups: ranked.map(id => ({ members: [id], mass: massOf(id) })),

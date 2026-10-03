@@ -196,4 +196,32 @@ describe('galaxyLayout hub mode (case / object as core)', () => {
     const onlyA = nodes.filter(n => n.kind !== 'case' || n.id === 'c:A')
     expect(galaxyLayout(onlyA, neighbors, 'case', { mode: 'hub' })).toBeNull()
   })
+
+  it('lets a single core be a galaxy when minGalaxies is 1 (concept / method: only a handful exist)', () => {
+    const { nodes, neighbors } = cases()
+    const onlyA = nodes.filter(n => n.kind !== 'case' || n.id === 'c:A')
+    const lay = galaxyLayout(onlyA, neighbors, 'case', { mode: 'hub', minGalaxies: 1 })
+    expect(lay).not.toBeNull()
+    expect(lay!.galaxies.map(g => g.hub)).toEqual(['c:A'])
+    const ev = lay!.motions.get('e:A0')!
+    expect(ev.type === 'orbit' && ev.anchor).toBe('c:A')
+    expect(lay!.faint.has('e:B0')).toBe(true) // 跟這個核心無關的都是背景
+    expect(lay!.faint.has('p:甲')).toBe(false)
+  })
+
+  it('still returns null with minGalaxies 1 when the single core has too few satellites', () => {
+    const { nodes, neighbors } = cases()
+    const onlyC = nodes.filter(n => n.kind !== 'case' || n.id === 'c:C')
+    expect(galaxyLayout(onlyC, neighbors, 'case', { mode: 'hub', minGalaxies: 1 })).toBeNull()
+  })
+
+  it('places two hub galaxies symmetrically about the origin, and pushes the background far outside the frame', () => {
+    const { nodes, neighbors } = cases()
+    const lay = galaxyLayout(nodes, neighbors, 'case', { mode: 'hub' })!
+    const [g0, g1] = lay.galaxies
+    for (let i = 0; i < 3; i++) expect(g0.center[i] + g1.center[i]).toBeCloseTo(0, 6)
+    const bg = lay.motions.get('e:x1')!
+    expect(bg.type).toBe('fixed')
+    if (bg.type === 'fixed') expect(Math.hypot(...bg.p)).toBeGreaterThanOrEqual(lay.worldRadius * 4.5)
+  })
 })

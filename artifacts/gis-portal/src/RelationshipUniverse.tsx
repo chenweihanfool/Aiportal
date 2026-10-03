@@ -282,12 +282,18 @@ function computeLayout(allNodes: UNode[], neighbors: Map<string, Set<string>>, c
  *  「哪一類被打亮、放大、標名字」，整個宇宙不會重排，同一個人、同一件事永遠在同一個位置。
  *  人分不出群時才改用目前核心類型自己分群，再不行才退回球面。 */
 const STRUCTURE_KIND: CoreKind = 'person'
-// 案件／物件為核心時（2026-10-03 使用者要求）：每個案件／物件各自是一個星系的中心，它的事件繞內圈、那些事件的
-// 人物與物件繞外圈——「以案件為核心看相關的人事物」。這兩類不用人的骨架（否則案件只是掛在某個人旁邊的小衛星）。
-// 衛星不足兩個以上星系時才退回人的骨架。
-const HUB_KINDS: ReadonlySet<CoreKind> = new Set<CoreKind>(['case', 'object'])
+// 案件／物件／概念／方法為核心時（2026-10-03 使用者要求）：每個核心各自是一個星系的中心，它的事件繞內圈、
+// 那些事件的人物與物件繞外圈——「以這個案件／概念為核心看相關的人事物」。這幾類不用人的骨架（否則它們只是
+// 掛在某個人旁邊的小衛星）。衛星不夠成星系時才退回人的骨架。
+// 概念／方法目前只有個位數（候選預設隱藏），單一個也自成星系；案件／物件數量多，至少兩個星系才算有結構。
+// 事件不在這裡：上千個事件各自只帶幾顆衛星（它的人、案件、物件），做成 hub 只能挑幾十個當星系、其餘全變背景，
+// 反而看不到事件；事件為核心沿用人的骨架（事件繞著人轉、被打亮放大），每個事件都看得到。
+const HUB_MIN_GALAXIES: ReadonlyMap<CoreKind, number> = new Map<CoreKind, number>([
+  ['case', 2], ['object', 2], ['concept', 1], ['method', 1],
+])
 function layoutFor(nodes: UNode[], neighbors: Map<string, Set<string>>, coreKind: CoreKind): { layout: GalaxyLayout | null; worldR: number } {
-  const layout = (HUB_KINDS.has(coreKind) ? galaxyLayout(nodes, neighbors, coreKind, { mode: 'hub' }) : null)
+  const hubMin = HUB_MIN_GALAXIES.get(coreKind)
+  const layout = (hubMin !== undefined ? galaxyLayout(nodes, neighbors, coreKind, { mode: 'hub', minGalaxies: hubMin }) : null)
     ?? galaxyLayout(nodes, neighbors, STRUCTURE_KIND)
     ?? (coreKind !== STRUCTURE_KIND ? galaxyLayout(nodes, neighbors, coreKind) : null)
   if (layout) {
