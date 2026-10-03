@@ -34,6 +34,7 @@ import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPan
 import { GraphShell } from './GraphShell'
 import { coreHeatColor, makeHeatScale, outerHeatColor, CORE_RAMP } from './graphHeat'
 import { consumeGraphFocus } from './graphFocus'
+import { EDGE_LEVELS, NEAR_SCALE_CAP, edgeLevel, hubDamp, idleEdgeAlpha, nearFade } from './universeStyle'
 
 // 六種節點都能當核心：人/事/物是最早提的三個，案件（脈絡層）同樣是圖上獨
 // 立的一種節點；概念／方法是 2026-10 加的抽象層（見 isAbstraction）。
@@ -81,6 +82,36 @@ const satelliteCapFor = (m: number) => Math.max(0.3, Math.min(1.05, 0.16 * Math.
 // 最遠端節點的不透明度下限。第一版是 0.05（幾乎透明），整張圖因此灰濛濛；
 // 0.32 仍然看得出前後深度，但不會讓任何節點糊掉。
 const DEPTH_MIN_OPACITY = 0.32
+const edgeSegs: number[][] = Array.from({ length: EDGE_LEVELS + 1 }, () => [])
+const STAR_COUNT = 260
+// 背景星點：由索引算出的固定位置（不用 Math.random，重繪不閃），螢幕空間、不隨節點縮放；轉動時只做很小的視差位移。
+const STARS: ReadonlyArray<{ x: number; y: number; r: number; a: number; p: number }> = Array.from({ length: STAR_COUNT }, (_, i) => ({
+  x: hash01(`sx${i}`), y: hash01(`sy${i}`), r: 0.4 + hash01(`sr${i}`) * 1.1, a: 0.12 + hash01(`sa${i}`) * 0.38, p: 0.2 + hash01(`sp${i}`) * 0.8,
+}))
+/** 背景（星雲＋星點）的離屏快取：尺寸變了才重畫。回傳 null 表示環境不支援離屏畫布（測試／極舊瀏覽器），呼叫端直接略過背景。 */
+function ensureBackdrop(ref: { current: HTMLCanvasElement | null }, width: number, height: number): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null
+  let c = ref.current
+  if (!c) { c = document.createElement('canvas'); ref.current = c }
+  if (c.width === Math.floor(width) && c.height === Math.floor(height) && c.dataset.ready === '1') return c
+  c.width = Math.max(1, Math.floor(width)); c.height = Math.max(1, Math.floor(height))
+  const g = c.getContext('2d')
+  if (!g) return null
+  const minDim = Math.min(c.width, c.height)
+  const neb = g.createRadialGradient(c.width / 2, c.height / 2, 0, c.width / 2, c.height / 2, minDim * 0.62)
+  neb.addColorStop(0, 'rgba(70,84,160,0.16)')
+  neb.addColorStop(0.55, 'rgba(50,56,120,0.06)')
+  neb.addColorStop(1, 'rgba(20,24,60,0)')
+  g.fillStyle = neb
+  g.fillRect(0, 0, c.width, c.height)
+  g.fillStyle = '#cdd8f0'
+  for (const st of STARS) {
+    g.globalAlpha = st.a
+    g.fillRect(st.x * c.width, st.y * c.height, st.r, st.r)
+  }
+  c.dataset.ready = '1'
+  return c
+}
 // 「最近新增」面板的上次造訪時間戳，見下方 effect 的說明。
 const LAST_VISIT_STORAGE_KEY = 'relationshipUniverse.lastVisitAt'
 
@@ -158,9 +189,11 @@ function computeLayout(allNodes: UNode[], neighbors: Map<string, Set<string>>, c
   // 偏移（+180/+130），核心節點超過約 194 個之後就只會越擠越密——上千個
   // 節點時整張圖必然糊掉。外兩層改成比例而非固定值，宇宙才會整體等比放
   // 大；鏡頭會在重算佈局後自動拉到剛好框住（見 fitCameraTo）。
-  const coreR = Math.max(115, 70 + Math.sqrt(coreNodes.length) * 14)
-  const shellR = coreR * 1.9 + 60
-  const outerR = shellR * 1.35
+  // 2026-10-03：核心球原本只佔整個宇宙半徑的約 1/3，正式資料（152 人）的核心人物擠在畫面中央一小團，外面一大圈
+  // 卻是稀疏的衛星。核心球放大、外層收近，讓人物之間有呼吸的空間（鏡頭會自動重新框住，整體不會變大變小）。
+  const coreR = Math.max(140, 90 + Math.sqrt(coreNodes.length) * 21)
+  const shellR = coreR * 1.55 + 50
+  const outerR = shellR * 1.3
 
   const dirOf = new Map<string, [number, number, number]>()
   coreNodes.forEach((n, i) => {
@@ -273,6 +306,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const [activityDismissed, setActivityDismissed] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const bgRef = useRef<HTMLCanvasElement | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const nodesRef = useRef<UNode[]>([])
@@ -510,6 +544,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const cx = width / 2, cy = height / 2
       const worldR = worldRadiusRef.current
       const coreNow = coreKindRef.current
+      // 世界原點處的投影比例 × 上限＝近端節點的最大放大倍率
+      const nearCap = (FOCAL_LENGTH / cameraDist) * NEAR_SCALE_CAP
 
       for (const n of nodes) {
         // 先減掉 pivot 再旋轉＝把旋轉軸心換成 pivot（見 pivotRef 說明）
@@ -523,13 +559,15 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         const scale = perspectiveZ > 1 ? FOCAL_LENGTH / perspectiveZ : 0
         n.sx = cx + rx * scale
         n.sy = cy + ry * scale
-        n.screenRadius = n.baseRadius * scale * (n.kind === coreNow ? 1.55 : 1)
+        // 近端節點不無限放大（見 NEAR_SCALE_CAP）：位置照透視走，只有「圓點本身的大小」被夾住
+        const sizeScale = Math.min(scale, nearCap)
+        n.screenRadius = n.baseRadius * sizeScale * (n.kind === coreNow ? 1.55 : 1)
         n.depth = perspectiveZ
         // 深度直接換算不透明度：最前面 1、最後面 DEPTH_MIN_OPACITY。用 rz
         // 而不是 scale，映射是線性且跟鏡頭距離無關，縮放時不會整張圖一起
         // 變淡。
         const frontness = Math.max(0, Math.min(1, (worldR - rz) / (2 * worldR)))
-        n.opacity = DEPTH_MIN_OPACITY + (1 - DEPTH_MIN_OPACITY) * frontness
+        n.opacity = (DEPTH_MIN_OPACITY + (1 - DEPTH_MIN_OPACITY) * frontness) * nearFade(scale, nearCap)
       }
     }
 
@@ -541,6 +579,15 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const { width, height } = sizeRef.current
       ctx.clearRect(0, 0, width, height)
 
+      // 背景：中心一抹很淡的藍紫星雲光＋固定星點。靜態內容畫一次進離屏畫布，之後每幀只 drawImage 一次（轉動時小幅橫移做視差）。
+      // 只畫在畫布上，不影響命中測試。
+      const bgc = ensureBackdrop(bgRef, width, height)
+      if (bgc) {
+        const off = ((yawRef.current * 18) % width + width) % width
+        ctx.drawImage(bgc, off, 0)
+        ctx.drawImage(bgc, off - width, 0)
+      }
+
       const nodes = nodesRef.current
       const byId = nodeByIdRef.current
       const coreNow = coreKindRef.current
@@ -551,25 +598,52 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       const pathSet = pathSetRef.current
       const isLit = (id: string) => (pathSet ? pathSet.has(id) : !focusSet || id === focusId || focusSet.has(id))
 
-      for (const link of linksRef.current) {
-        const a = byId.get(link.aId), b = byId.get(link.bId)
-        if (!a || !b) continue
-        // 路徑模式：只有「路徑上相鄰的兩點之間」那幾條邊被打亮成琥珀色，
-        // 其餘全部壓到幾乎看不見——這樣「這兩個東西怎麼扯上關係」是直接
-        // 在圖上看出來的，不是只有文字列出來而已。
-        const onPath = !!pathSet && pathSet.has(a.id) && pathSet.has(b.id)
-        const lit = isLit(a.id) && isLit(b.id)
-        ctx.lineWidth = onPath ? 2 : 1
-        if (onPath) {
-          ctx.strokeStyle = `rgba(245,166,35,${(Math.min(a.opacity, b.opacity) * 0.95).toFixed(3)})`
-        } else {
-          const op = Math.min(a.opacity, b.opacity) * (lit ? 0.3 : 0.04)
-          ctx.strokeStyle = `rgba(150,161,180,${op.toFixed(3)})`
+      // 沒有選取／hover／路徑時＝「總覽」：邊壓淡（見 idleEdgeAlpha）；有焦點時回到原本的打亮／壓暗。
+      const overview = !focusSet && !pathSet
+      if (overview) {
+        // 總覽有幾千條邊，逐條 beginPath／stroke 太慢（實測幀時間是舊版的兩倍以上）：把透明度量化成 8 級，
+        // 同一級的線段合併成一條路徑、一次 stroke。
+        const idleAlpha = idleEdgeAlpha(linksRef.current.length)
+        const step = idleAlpha / EDGE_LEVELS
+        for (let i = 0; i <= EDGE_LEVELS; i++) edgeSegs[i].length = 0
+        const nbrs = neighborsRef.current
+        for (const link of linksRef.current) {
+          const a = byId.get(link.aId), b = byId.get(link.bId)
+          if (!a || !b) continue
+          const damp = hubDamp(Math.max(nbrs.get(a.id)?.size ?? 1, nbrs.get(b.id)?.size ?? 1))
+          const level = edgeLevel(Math.min(a.opacity, b.opacity), idleAlpha, damp)
+          if (level > 0) edgeSegs[level].push(a.sx, a.sy, b.sx, b.sy)
         }
-        ctx.beginPath()
-        ctx.moveTo(a.sx, a.sy)
-        ctx.lineTo(b.sx, b.sy)
-        ctx.stroke()
+        ctx.lineWidth = 1
+        for (let lv = 1; lv <= EDGE_LEVELS; lv++) {
+          const seg = edgeSegs[lv]
+          if (seg.length === 0) continue
+          ctx.strokeStyle = `rgba(140,168,230,${(lv * step).toFixed(4)})`
+          ctx.beginPath()
+          for (let i = 0; i < seg.length; i += 4) { ctx.moveTo(seg[i], seg[i + 1]); ctx.lineTo(seg[i + 2], seg[i + 3]) }
+          ctx.stroke()
+        }
+      } else {
+        for (const link of linksRef.current) {
+          const a = byId.get(link.aId), b = byId.get(link.bId)
+          if (!a || !b) continue
+          // 路徑模式：只有「路徑上相鄰的兩點之間」那幾條邊被打亮成琥珀色，
+          // 其餘全部壓到幾乎看不見——這樣「這兩個東西怎麼扯上關係」是直接
+          // 在圖上看出來的，不是只有文字列出來而已。
+          const onPath = !!pathSet && pathSet.has(a.id) && pathSet.has(b.id)
+          const lit = isLit(a.id) && isLit(b.id)
+          ctx.lineWidth = onPath ? 2 : 1
+          if (onPath) {
+            ctx.strokeStyle = `rgba(245,166,35,${(Math.min(a.opacity, b.opacity) * 0.95).toFixed(3)})`
+          } else {
+            const op = Math.min(a.opacity, b.opacity) * (lit ? 0.3 : 0.04)
+            ctx.strokeStyle = `rgba(150,161,180,${op.toFixed(3)})`
+          }
+          ctx.beginPath()
+          ctx.moveTo(a.sx, a.sy)
+          ctx.lineTo(b.sx, b.sy)
+          ctx.stroke()
+        }
       }
       ctx.lineWidth = 1
 
@@ -656,7 +730,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         // 核心是索引節點（人／案／物／概念／方法）：依關聯數由大到小排優先，實際畫哪些交給下面的碰撞排除；
         // 核心是事件：幾百個標不下，只有 ≤90 個才標。
         const coreNodes = nodes.filter(n => n.kind === coreNow && !n.candidate)
-        if (coreNow !== 'event') labelled.push(...coreNodes.sort((a, b) => b.eventCount - a.eventCount).slice(0, 220))
+        // 只標關聯數最多的前幾十個：名字全標會在核心球上疊成一片（正式資料 152 人），要看別人就 hover／搜尋
+        if (coreNow !== 'event') labelled.push(...coreNodes.sort((a, b) => b.eventCount - a.eventCount).slice(0, 48))
         else if (coreNodes.length <= 90) labelled.push(...coreNodes)
       }
 
@@ -675,7 +750,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         return p.depth - q.depth
       })
       for (const n of priority) {
-        if (n.opacity < 0.45 && n.id !== selectedId) continue // 太後面的節點不標，減少雜訊
+        if (n.opacity < 0.6 && n.id !== selectedId) continue // 太後面的節點不標，減少雜訊
         const text = n.label.length > 14 ? `${n.label.slice(0, 13)}…` : n.label
         const w = ctx.measureText(text).width
         const x = n.sx, y = n.sy + Math.max(4, n.screenRadius) + 12
