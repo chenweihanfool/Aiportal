@@ -104,6 +104,30 @@ const satelliteCapFor = (m: number) => Math.max(0.3, Math.min(1.05, 0.16 * Math.
 // 0.32 仍然看得出前後深度，但不會讓任何節點糊掉。
 const DEPTH_MIN_OPACITY = 0.32
 const edgeSegs: number[][] = Array.from({ length: EDGE_LEVELS + 1 }, () => [])
+// 星雲光的離屏貼圖（每個色相一張，op=1 的徑向漸層）：每幀對每個星系 createRadialGradient 太貴
+// （案件／物件為核心有 30 個星系，實測佔幀時間約 8～10 ms），改成畫一次、之後 drawImage 縮放＋globalAlpha。
+const NEBULA_SPRITE_SIZE = 128
+const nebulaSprites = new Map<number, HTMLCanvasElement | null>()
+function nebulaSprite(hue: number): HTMLCanvasElement | null {
+  if (nebulaSprites.has(hue)) return nebulaSprites.get(hue) ?? null
+  let c: HTMLCanvasElement | null = null
+  if (typeof document !== 'undefined') {
+    c = document.createElement('canvas')
+    c.width = c.height = NEBULA_SPRITE_SIZE
+    const g = c.getContext('2d')
+    if (g) {
+      const h = NEBULA_SPRITE_SIZE / 2
+      const grad = g.createRadialGradient(h, h, 0, h, h, h)
+      grad.addColorStop(0, `hsla(${hue},70%,62%,0.24)`)
+      grad.addColorStop(0.45, `hsla(${hue},65%,50%,0.1)`)
+      grad.addColorStop(1, `hsla(${hue},60%,40%,0)`)
+      g.fillStyle = grad
+      g.fillRect(0, 0, NEBULA_SPRITE_SIZE, NEBULA_SPRITE_SIZE)
+    } else c = null
+  }
+  nebulaSprites.set(hue, c)
+  return c
+}
 const STAR_COUNT = 260
 // 背景星點：由索引算出的固定位置（不用 Math.random，重繪不閃），螢幕空間、不隨節點縮放；轉動時只做很小的視差位移。
 const STARS: ReadonlyArray<{ x: number; y: number; r: number; a: number; p: number }> = Array.from({ length: STAR_COUNT }, (_, i) => ({
@@ -693,16 +717,13 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
       }
       // 每個星系一團淡淡的星雲光（冷色系，色相由星系決定）：群聚在畫面上直接「看得出是一群」，群與群之間是暗的
       for (const g of galaxyScreenRef.current) {
-        if (g.r < 2) continue
-        const grad = ctx.createRadialGradient(g.sx, g.sy, 0, g.sx, g.sy, g.r)
-        grad.addColorStop(0, `hsla(${g.hue},70%,62%,${(0.24 * g.op).toFixed(3)})`)
-        grad.addColorStop(0.45, `hsla(${g.hue},65%,50%,${(0.1 * g.op).toFixed(3)})`)
-        grad.addColorStop(1, `hsla(${g.hue},60%,40%,0)`)
-        ctx.fillStyle = grad
-        ctx.beginPath()
-        ctx.arc(g.sx, g.sy, g.r, 0, Math.PI * 2)
-        ctx.fill()
+        if (g.r < 2 || g.op <= 0) continue
+        const sprite = nebulaSprite(g.hue)
+        if (!sprite) continue
+        ctx.globalAlpha = Math.min(1, g.op)
+        ctx.drawImage(sprite, g.sx - g.r, g.sy - g.r, g.r * 2, g.r * 2)
       }
+      ctx.globalAlpha = 1
 
       const nodes = nodesRef.current
       const byId = nodeByIdRef.current
@@ -723,9 +744,13 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         const step = idleAlpha / EDGE_LEVELS
         for (let i = 0; i <= EDGE_LEVELS; i++) edgeSegs[i].length = 0
         const nbrs = neighborsRef.current
+        const faint = layoutRef.current?.faint
         for (const link of linksRef.current) {
           const a = byId.get(link.aId), b = byId.get(link.bId)
           if (!a || !b) continue
+          // 背景節點的邊總覽時不畫：hub 模式背景常有上千個節點、散在鏡頭四周，它們的邊會變成橫跨整個畫面的長線
+          // （還有落在鏡頭後方、被投影到畫面中心的放射線），光柵化成本讓概念／方法／案件為核心的幀時間變成人為核心的 2～3 倍（10-03 使用者回報切換卡頓）
+          if (faint && (faint.has(a.id) || faint.has(b.id))) continue
           const damp = hubDamp(Math.max(nbrs.get(a.id)?.size ?? 1, nbrs.get(b.id)?.size ?? 1))
           const level = edgeLevel(Math.min(a.opacity, b.opacity), idleAlpha, damp)
           if (level > 0) edgeSegs[level].push(a.sx, a.sy, b.sx, b.sy)
@@ -740,9 +765,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           ctx.stroke()
         }
       } else {
+        const faint = layoutRef.current?.faint
         for (const link of linksRef.current) {
           const a = byId.get(link.aId), b = byId.get(link.bId)
           if (!a || !b) continue
+          // 有焦點時，背景節點的邊只畫跟焦點／路徑有關的那些（理由同上）
+          if (faint && (faint.has(a.id) || faint.has(b.id)) && !(isLit(a.id) && isLit(b.id))) continue
           // 路徑模式：只有「路徑上相鄰的兩點之間」那幾條邊被打亮成琥珀色，
           // 其餘全部壓到幾乎看不見——這樣「這兩個東西怎麼扯上關係」是直接
           // 在圖上看出來的，不是只有文字列出來而已。
@@ -765,6 +793,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
       // 由遠到近畫，近端節點蓋住遠端節點，這是立體感的關鍵
       const sorted = [...nodes].sort((p, q) => q.depth - p.depth)
+      const faintNodes = layoutRef.current?.faint
+      let numFont = '' // 圓內數字的字型：只在字級變了才重設（ctx.font 每次設定都要重新解析字串，物件為核心時四百多次／幀）
       for (const n of sorted) {
         const lit = isLit(n.id)
         const selected = n.id === selectedId
@@ -814,10 +844,12 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         }
         // 核心索引節點（目前核心類型的人／案／物／概念／方法）：圓內標關聯事件數。外圍節點不標（使用者要求），
         // 半徑太小（遠端或縮得很小）時也不標，不然糊成一團。
-        if (n.kind === coreNow && n.kind !== 'event' && r >= 5.2) {
+        // 背景（星系佈局判定與任何星系都無關）的核心不標：本來就畫小畫淡，數字看不清，且物件為核心時有四百多個
+        if (n.kind === coreNow && n.kind !== 'event' && r >= 5.2 && !(faintNodes && faintNodes.has(n.id))) {
           const digits = String(n.eventCount)
           ctx.globalAlpha = nodeAlpha
-          ctx.font = `600 ${Math.max(7, Math.min(15, r * (digits.length > 2 ? 0.8 : 1)))}px ${FONT.mono}`
+          const font = `600 ${Math.round(Math.max(7, Math.min(15, r * (digits.length > 2 ? 0.8 : 1))))}px ${FONT.mono}`
+          if (font !== numFont) { ctx.font = font; numFont = font }
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
           ctx.fillStyle = isAbstraction(n.kind) ? color : '#14161c'
