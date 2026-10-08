@@ -127,6 +127,13 @@
       "when": 1790981361023,
       "tag": "0017_omniscient_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791449519708,
+      "tag": "0018_bitter_zemo",
+      "breakpoints": true
     }
   ]
 }
