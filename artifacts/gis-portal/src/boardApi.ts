@@ -1,4 +1,6 @@
 // 桌面首頁儀表板自己用的 API 讀寫（型別只列這裡用到的欄位，不依賴 App.tsx，避免 App ↔ DesktopBoard 循環匯入）。
+import type { DiskAlertLevel, DiskForecastInfo, StorageItem } from './diskView'
+
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 const authHeaders = (pw: string) => ({ 'x-admin-password': pw })
@@ -58,7 +60,9 @@ export interface BoardStatus {
   memPercent: number | null
   disks: Array<{ drive: string; percentUsed: number; freeGb: number; totalGb: number }>
   containers: Array<{ name: string; status: string; health: string | null }>
-  diskForecast?: { daysUntilFull: number | null }
+  diskForecast?: DiskForecastInfo
+  diskAlert?: DiskAlertLevel
+  storage?: StorageItem[]
   stale: boolean
   computedAt: string | null
 }
@@ -76,4 +80,14 @@ export async function apiFetchBoardPipeline(pw: string): Promise<BoardPipeline> 
   const r = await fetch(`${API_BASE}api/hermes-pipeline`, { headers: authHeaders(pw) })
   if (!r.ok) throw new Error('Failed to fetch pipeline')
   return r.json() as Promise<BoardPipeline>
+}
+
+export interface BoardDiskPoint { date: string; diskUsedGb: number | null }
+
+/** 每日快照的「已用 GB」，硬碟曲線用；讀不到就回空陣列，不擋住卡片。 */
+export async function apiFetchBoardDiskHistory(pw: string, days = 30): Promise<BoardDiskPoint[]> {
+  const r = await fetch(`${API_BASE}api/hermes-status/history?days=${days}`, { headers: authHeaders(pw) })
+  if (!r.ok) return []
+  const d = (await r.json()) as { history?: Array<{ date: string; diskUsedGb?: number | null }> }
+  return (d.history ?? []).map(h => ({ date: h.date, diskUsedGb: h.diskUsedGb ?? null }))
 }

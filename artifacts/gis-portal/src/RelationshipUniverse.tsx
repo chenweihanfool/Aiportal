@@ -1128,6 +1128,13 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         <div style={{ flex: 1 }} />
         {ready && m && (
           <>
+            {activity && activityTotal > 0 && (
+              <button type="button" onClick={() => setActivityDismissed(v => !v)} title="再次顯示／收起「最近新增」面板" style={{
+                padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
+                background: !activityDismissed ? 'rgba(245,166,35,0.1)' : 'transparent',
+                border: `1px solid ${!activityDismissed ? COLOR.amberDim : COLOR.line}`, color: !activityDismissed ? COLOR.amber : COLOR.steelDim,
+              }}>最近新增 · {activityTotal}</button>
+            )}
             <button type="button" onClick={() => setShowIsolatedEvents(v => !v)} style={{
               padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
               background: showIsolatedEvents ? 'rgba(245,166,35,0.1)' : 'transparent',
@@ -1287,7 +1294,8 @@ function RecentActivityPanel({
   return (
     <div style={{
       position: 'absolute', right: '1.2rem', top: '1rem', width: 'min(340px, calc(100% - 2.4rem))',
-      maxHeight: 'calc(100% - 2.4rem)', overflowY: 'auto',
+      // 下方留給右下角的 ＋／－ 縮放鈕（兩顆 44px ＋間距＋離底 3.2rem），面板不蓋到它們
+      maxHeight: 'calc(100% - 12rem)', display: 'flex', flexDirection: 'column',
       padding: '0.7rem 0.85rem', background: 'rgba(18,19,25,0.97)', border: `1px solid ${COLOR.amberDim}`, borderRadius: '6px',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
@@ -1295,6 +1303,7 @@ function RecentActivityPanel({
         <span onClick={onDismiss} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.75rem' }}>✕</span>
       </div>
 
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       {itemSections.filter(s => s.items.length > 0).map(s => (
         <div key={s.kind} style={{ marginTop: '0.5rem' }}>
           <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim, marginBottom: '4px' }}>{RECENT_KIND_LABEL[s.kind]} · {s.items.length}</div>
@@ -1350,13 +1359,15 @@ function RecentActivityPanel({
         </div>
       )}
 
+      </div>
+
       <div
         onClick={onDismiss}
         style={{
-          marginTop: '0.65rem', textAlign: 'center', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.6rem',
+          flexShrink: 0, marginTop: '0.65rem', textAlign: 'center', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.6rem',
           color: COLOR.amberDim, padding: '0.32rem', border: `1px solid ${COLOR.amberDim}`, borderRadius: '999px',
         }}
-      >知道了</div>
+      >知道了（可由上方「最近新增」再叫出）</div>
     </div>
   )
 }
