@@ -17,8 +17,8 @@ const TONE: Record<'ok' | 'warn' | 'concern', string> = { ok: COLOR.ok, warn: CO
 const HHI_TONE: Record<'great' | 'ok' | 'warn' | 'concern' | 'crit', string> = {
   great: COLOR.amber, ok: COLOR.ok, warn: COLOR.warn, concern: COLOR.concern, crit: COLOR.crit,
 }
-const BADGE_STYLE = { fontFamily: FONT.mono, fontSize: '0.66rem', borderRadius: 4, padding: '0 0.3rem', whiteSpace: 'nowrap' } as const
-const MOBILE_BADGE = { fontSize: '0.6rem', padding: '0 0.2rem' } as const   // 手機寬度不夠，徽章縮小以保留摘要的可讀寬度
+const BADGE_STYLE = { fontFamily: FONT.mono, fontSize: '0.82rem', borderRadius: 4, padding: '0 0.35rem', whiteSpace: 'nowrap' } as const
+const MOBILE_BADGE = { fontSize: '0.7rem', padding: '0 0.2rem' } as const   // 手機寬度不夠，徽章縮小以保留摘要的可讀寬度
 
 function readLevel(): TimelineLevel {
   try {
@@ -148,7 +148,7 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
           <div role="tablist" aria-label="時間軸級別" style={{ display: 'flex', gap: '0.4rem', padding: '0.6rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
             {LEVELS.map(l => (
               <button key={l.level} type="button" role="tab" aria-selected={level === l.level} onClick={() => setLevel(l.level)}
-                style={{ cursor: 'pointer', fontFamily: FONT.body, fontSize: '0.8rem', padding: '0.25rem 0.8rem', borderRadius: 999,
+                style={{ cursor: 'pointer', fontFamily: FONT.body, fontSize: '0.98rem', padding: '0.3rem 1rem', borderRadius: 999,
                   border: `1px solid ${level === l.level ? COLOR.amber : COLOR.line}`, background: level === l.level ? COLOR.panelRaised : 'transparent',
                   color: level === l.level ? COLOR.amber : COLOR.steel }}>{l.label}</button>
             ))}
@@ -162,7 +162,7 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
               <section key={g.header + g.items[0].periodKey}>
                 {g.header && (
                   <div style={{ position: 'sticky', top: 0, zIndex: 1, background: COLOR.panelDeep, padding: '0.55rem 0 0.3rem', color: COLOR.amberDim,
-                    fontFamily: FONT.mono, fontSize: '0.7rem', letterSpacing: '0.06em', borderBottom: `1px solid ${COLOR.line}` }}>{g.header}</div>
+                    fontFamily: FONT.mono, fontSize: '0.88rem', letterSpacing: '0.06em', borderBottom: `1px solid ${COLOR.line}` }}>{g.header}</div>
                 )}
                 {g.items.map(it => {
                   const badge = scoreBadge(it.mindScore)
@@ -171,25 +171,25 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
                   return (
                     <button key={itemKey(it)} type="button" data-testid="timeline-row" onClick={e => openItem(it, e.currentTarget)}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', width: '100%', textAlign: 'left', cursor: 'pointer',
-                        background: 'none', border: 'none', borderBottom: `1px ${dim ? 'dashed' : 'solid'} ${COLOR.line}`, padding: '0.55rem 0.2rem',
+                        background: 'none', border: 'none', borderBottom: `1px ${dim ? 'dashed' : 'solid'} ${COLOR.line}`, padding: '0.7rem 0.2rem',
                         color: dim ? COLOR.steelDim : COLOR.ink, fontFamily: FONT.body }}>
-                      <span style={{ flex: '0 0 auto', minWidth: level === 'day' ? '5.4rem' : '6.2rem', fontFamily: FONT.mono, fontSize: '0.72rem', color: dim ? COLOR.steelDim : COLOR.steel }}>
+                      <span style={{ flex: '0 0 auto', minWidth: level === 'day' ? '6.6rem' : '7.6rem', fontFamily: FONT.mono, fontSize: '0.92rem', color: dim ? COLOR.steelDim : COLOR.steel }}>
                         {rowDateLabel(it)}{it.rangeInferred ? <span title="涵蓋區間為推算" style={{ color: COLOR.warn }}> ~</span> : null}
                       </span>
                       {level === 'day' && (
                         <span style={{ flex: '0 0 auto', display: 'flex', gap: isMobile ? '0.15rem' : '0.3rem', alignItems: 'center' }}>
-                          <span style={{ width: isMobile ? '3.1rem' : '3.5rem', display: 'flex', justifyContent: 'center' }}>
+                          <span style={{ width: isMobile ? '3.6rem' : '4.4rem', display: 'flex', justifyContent: 'center' }}>
                             {badge && <span data-testid="badge-kb" title="知識庫健康（HERMES 知識庫管線的運作分數）" style={{ ...BADGE_STYLE, ...(isMobile ? MOBILE_BADGE : {}), color: TONE[badge.tone], border: `1px solid ${TONE[badge.tone]}` }}>知 {badge.text}</span>}
                           </span>
-                          <span style={{ width: isMobile ? '2.2rem' : '2.6rem', display: 'flex', justifyContent: 'center' }}>
+                          <span style={{ width: isMobile ? '2.6rem' : '3.2rem', display: 'flex', justifyContent: 'center' }}>
                             {hhi && <span data-testid="badge-hhi" title="幸福指數（當日顯示分數，與自己近 90 天比較）" style={{ ...BADGE_STYLE, ...(isMobile ? MOBILE_BADGE : {}), color: HHI_TONE[hhi.tone], border: `1px solid ${HHI_TONE[hhi.tone]}` }}>幸 {hhi.text}</span>}
                           </span>
                         </span>
                       )}
-                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.84rem' }}>
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '1.08rem' }}>
                         {it.periodNote && <span title={it.periodNote} style={{ color: COLOR.warn }}>⚠ </span>}{oneLine(it)}
                       </span>
-                      {it.eventCount > 0 && <span style={{ flex: '0 0 auto', fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim }}>{it.eventCount} 事件</span>}
+                      {it.eventCount > 0 && <span style={{ flex: '0 0 auto', fontFamily: FONT.mono, fontSize: '0.84rem', color: COLOR.steelDim }}>{it.eventCount} 事件</span>}
                     </button>
                   )
                 })}
@@ -237,8 +237,8 @@ function TimelineDialog(props: {
 
   const title = d ? `${LEVEL_LABEL[d.level]}　${d.level === 'week' || d.level === 'day' ? rowDateLabel(d) : d.periodKey}` : `${LEVEL_LABEL[ref_.level]}　${ref_.periodKey}`
   const btn = (disabled: boolean) => ({
-    cursor: disabled ? 'default' : 'pointer', background: 'none', border: `1px solid ${COLOR.line}`, borderRadius: 4, padding: '0.25rem 0.7rem',
-    fontSize: '0.75rem', color: disabled ? COLOR.steelDim : COLOR.steel, opacity: disabled ? 0.5 : 1, fontFamily: FONT.body,
+    cursor: disabled ? 'default' : 'pointer', background: 'none', border: `1px solid ${COLOR.line}`, borderRadius: 4, padding: '0.35rem 0.9rem',
+    fontSize: '0.92rem', color: disabled ? COLOR.steelDim : COLOR.steel, opacity: disabled ? 0.5 : 1, fontFamily: FONT.body,
   } as const)
 
   return (
@@ -246,14 +246,14 @@ function TimelineDialog(props: {
       style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(8,9,12,0.72)', display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'center' }}>
       <div ref={boxRef} role="dialog" aria-modal="true" aria-labelledby="timeline-dialog-title" onKeyDown={onKeyDown}
         style={{ background: COLOR.panel, border: isMobile ? 'none' : `1px solid ${COLOR.lineBright}`, borderRadius: isMobile ? 0 : 8,
-          width: isMobile ? '100%' : 'min(760px, 92vw)', maxHeight: isMobile ? '100%' : '86vh', height: isMobile ? '100%' : undefined,
+          width: isMobile ? '100%' : 'min(1180px, 95vw)', maxHeight: isMobile ? '100%' : '92vh', height: isMobile ? '100%' : '92vh',
           display: 'flex', flexDirection: 'column', boxShadow: '0 12px 48px rgba(0,0,0,0.5)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.7rem 1rem', borderBottom: `1px solid ${COLOR.line}` }}>
           {canBack && <button type="button" onClick={onBack} style={btn(false)}>‹ 返回</button>}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div id="timeline-dialog-title" style={{ fontSize: '0.95rem', fontWeight: 600, color: COLOR.ink }}>{title}</div>
+            <div id="timeline-dialog-title" style={{ fontSize: '1.3rem', fontWeight: 600, color: COLOR.ink }}>{title}</div>
             {d && (
-              <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginTop: 2 }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.84rem', color: COLOR.steelDim, marginTop: 3 }}>
                 {d.startDate === d.endDate ? d.startDate : `${d.startDate} ~ ${d.endDate}`}
                 {d.rangeInferred && <span style={{ color: COLOR.warn }}>　（涵蓋區間為推算）</span>}
                 {!d.hasReport && <span style={{ color: COLOR.warn }}>　（無報告，以下為降級內容）</span>}
@@ -267,30 +267,30 @@ function TimelineDialog(props: {
         <div style={{ flex: 1, overflowY: 'auto', padding: '0.4rem 1.1rem 1rem' }}>
           {detailError && <div style={{ color: COLOR.crit, fontSize: '0.8rem', padding: '0.8rem 0' }}>載入失敗。</div>}
           {!d && !detailError && <div style={{ color: COLOR.steelDim, fontSize: '0.8rem', padding: '0.8rem 0' }}>載入中…</div>}
-          {d?.periodNote && <div style={{ margin: '0.6rem 0', padding: '0.4rem 0.7rem', borderLeft: `3px solid ${COLOR.warn}`, color: COLOR.warn, fontSize: '0.78rem' }}>⚠ {d.periodNote}</div>}
-          {d && d.hasReport && <MarkdownView text={d.bodyMd} />}
+          {d?.periodNote && <div style={{ margin: '0.6rem 0', padding: '0.4rem 0.7rem', borderLeft: `3px solid ${COLOR.warn}`, color: COLOR.warn, fontSize: '0.95rem' }}>⚠ {d.periodNote}</div>}
+          {d && d.hasReport && <MarkdownView text={d.bodyMd} fontSize="1.1rem" />}
           {d && !d.hasReport && (
-            <div style={{ color: COLOR.steelDim, fontSize: '0.82rem', padding: '0.8rem 0' }}>
+            <div style={{ color: COLOR.steelDim, fontSize: '1rem', padding: '0.8rem 0' }}>
               {d.level === 'day' ? '這一天沒有日報。' : '這一期沒有報告。'}{d.eventCount > 0 ? '當日事件如下：' : ''}
             </div>
           )}
           {d && d.level === 'day' && d.events.length > 0 && (
             <div style={{ marginTop: '0.9rem' }}>
-              <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginBottom: 6 }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.84rem', color: COLOR.steelDim, marginBottom: 6 }}>
                 當日事件 · {d.eventCount}（建立時間 新→舊；點擊跳到關係圖）
               </div>
               {countWithTime(d.events) === 0 && (
-                <div style={{ fontSize: '0.7rem', color: COLOR.warn, marginBottom: 6 }}>尚無建立時間資料，以下順序不代表時間先後。</div>
+                <div style={{ fontSize: '0.86rem', color: COLOR.warn, marginBottom: 6 }}>尚無建立時間資料，以下順序不代表時間先後。</div>
               )}
               <div role="list">
                 {d.events.map(ev => (
                   <button key={ev.id} role="listitem" type="button" onClick={() => onEvent(ev.id)} title={eventTimeTitle(ev.createdAt) ? `${ev.title}\n${eventTimeTitle(ev.createdAt)}` : ev.title}
                     style={{ display: 'flex', gap: '0.8rem', alignItems: 'baseline', width: '100%', textAlign: 'left', cursor: 'pointer', background: 'none', border: 'none',
                       borderBottom: `1px solid ${COLOR.line}`, padding: '0.4rem 0.1rem', color: COLOR.ink, fontFamily: FONT.body }}>
-                    <span style={{ flex: '0 0 4.6rem', fontFamily: FONT.mono, fontSize: '0.7rem', color: ev.createdAt ? COLOR.steel : COLOR.steelDim, whiteSpace: 'nowrap' }}>
+                    <span style={{ flex: '0 0 5.8rem', fontFamily: FONT.mono, fontSize: '0.88rem', color: ev.createdAt ? COLOR.steel : COLOR.steelDim, whiteSpace: 'nowrap' }}>
                       {eventTimeLabel(ev.createdAt, d.periodKey)}
                     </span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: '0.8rem', lineHeight: 1.5, wordBreak: 'break-word' }}>{ev.title}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '1.02rem', lineHeight: 1.55, wordBreak: 'break-word' }}>{ev.title}</span>
                   </button>
                 ))}
               </div>
@@ -298,13 +298,13 @@ function TimelineDialog(props: {
           )}
           {d && d.children.length > 0 && (
             <div style={{ marginTop: '1.1rem' }}>
-              <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, marginBottom: 6 }}>涵蓋的{LEVEL_LABEL[d.children[0].level]} · {d.children.length}</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.84rem', color: COLOR.steelDim, marginBottom: 6 }}>涵蓋的{LEVEL_LABEL[d.children[0].level]} · {d.children.length}</div>
               {d.children.map(c => (
                 <button key={`${c.level}/${c.periodKey}`} type="button" onClick={() => onDrill({ level: c.level, periodKey: c.periodKey })}
                   style={{ display: 'flex', gap: '0.7rem', width: '100%', textAlign: 'left', cursor: 'pointer', background: 'none', border: 'none', borderBottom: `1px solid ${COLOR.line}`,
                     padding: '0.4rem 0.1rem', color: COLOR.ink, fontFamily: FONT.body }}>
-                  <span style={{ flex: '0 0 auto', fontFamily: FONT.mono, fontSize: '0.7rem', color: COLOR.steel }}>{c.level === 'day' ? c.periodKey.slice(5) : c.periodKey}</span>
-                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>{c.summary || '（無摘要）'}</span>
+                  <span style={{ flex: '0 0 auto', fontFamily: FONT.mono, fontSize: '0.88rem', color: COLOR.steel }}>{c.level === 'day' ? c.periodKey.slice(5) : c.periodKey}</span>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '1.02rem' }}>{c.summary || '（無摘要）'}</span>
                 </button>
               ))}
             </div>

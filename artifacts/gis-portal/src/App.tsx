@@ -23,6 +23,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.24.1',
+    date: '2026-10-08',
+    summary: '首頁改版修正：幸福指數當主體、不再重複顯示舊面板、硬碟併入主機卡；關係宇宙與時間軸好讀好點',
+    changes: [
+      '電腦版首頁：幸福指數放左邊當主體（較寬、字放大），Ollama 用量移到右邊；「今日值」改成亮色，原本是黑色看不清楚。',
+      '電腦版有儀表板時，下面舊的重複面板不再顯示（幸福指數大卡、戰情室的關係網路圖／管線／CPU 記憶體數字條／硬碟容量）；硬碟容量（百分比、預估寫滿時間、已用空間曲線、佔用分項）併進儀表板的「主機健康與硬碟容量」卡。排程、近期活動、容器清單、趨勢仍在下面可展開。手機與窄／矮視窗不變。',
+      '關係宇宙時間軸：列表與日期、摘要、徽章字體全部放大，點開的對話框改成更寬更高（最寬 1180px、92% 視窗高）、內文與事件列也放大。',
+      '關係宇宙「最近新增」面板：按「知道了」後不再消失，上方工具列多一顆「最近新增 · N」可隨時叫出／收起；面板改成底部固定「知道了」，並避開右下角的 ＋／－ 縮放鈕，不再重疊。',
+    ],
+  },
+  {
     version: '2.24.0',
     date: '2026-10-08',
     summary: '桌面首頁改版：一個畫面放得下的儀表板（Ollama 用量與預估、幸福指數怎麼來）',
@@ -2405,10 +2416,12 @@ function HermesWarRoomSection({
 
   return (
     <div>
-      <HermesEventGraphPanel unlockedPassword={unlockedPassword} />
+      <div className="ip-war-dup">
+        <HermesEventGraphPanel unlockedPassword={unlockedPassword} />
 
-      <div style={{ marginTop: '0.9rem' }}>
-        <HermesPipelinePanel unlockedPassword={unlockedPassword} />
+        <div style={{ marginTop: '0.9rem' }}>
+          <HermesPipelinePanel unlockedPassword={unlockedPassword} />
+        </div>
       </div>
 
       <div style={{ marginTop: '0.9rem' }}>
@@ -2424,7 +2437,7 @@ function HermesWarRoomSection({
             )
             const containersOk = availableStatus.containers.filter(c => !isContainerFailed(c)).length
             return (
-              <div className="ip-stat-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
+              <div className="ip-stat-strip ip-war-dup" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
                 <StatCell label="CPU 負載" value={availableStatus.cpuPercent !== null ? `${Math.round(availableStatus.cpuPercent)}%` : '—'} valueColor={pctTone(availableStatus.cpuPercent)} />
                 <StatCell label="記憶體" value={availableStatus.memPercent !== null ? `${Math.round(availableStatus.memPercent)}%` : '—'} valueColor={pctTone(availableStatus.memPercent)} />
                 <StatCell
@@ -2443,7 +2456,7 @@ function HermesWarRoomSection({
             )
           })()}
 
-          <div style={{ marginBottom: '0.9rem' }}>
+          <div className="ip-war-dup" style={{ marginBottom: '0.9rem' }}>
             <CollapsibleSubPanel
               title="硬碟容量" sub="VPS 容量有限，知識庫會持續成長 · 用量、分項、預估寫滿時間"
               hasAlert={availableStatus.diskAlert !== undefined && availableStatus.diskAlert !== 'ok'}

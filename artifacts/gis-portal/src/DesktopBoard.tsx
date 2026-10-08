@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type Rea
 import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
-  apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchUsage, apiPostBalance,
-  type BoardPipeline, type BoardStatus, type UsageData,
+  apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchUsage, apiPostBalance,
+  type BoardDiskPoint, type BoardPipeline, type BoardStatus, type UsageData,
 } from './boardApi'
+import { UsedChart } from './HermesDiskPanel'
+import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
 
 // 桌面首頁（≥1100px）的「一個畫面放得下」儀表板。資料都沿用既有端點；完整細節（關係網路圖、硬碟、排程、容器…）
@@ -253,7 +255,7 @@ function HhiCard({ data, toneOf }: { data: Record<string, unknown> | undefined; 
     <Card title="翰翰仔幸福指數：這個分數怎麼來" area="bd-hhi" tag={!b.isFinal ? <Chip color={COLOR.warn}>今日暫定</Chip> : b.stale ? <Chip color={COLOR.warn}>部分為最近可用值</Chip> : undefined}>
       <div className="bd-hhi-body">
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <svg viewBox="0 0 120 120" width={132} height={132} role="img" aria-label={`幸福指數 ${b.displayed}`}>
+          <svg viewBox="0 0 120 120" width={172} height={172} role="img" aria-label={`幸福指數 ${b.displayed}`}>
             <circle cx={60} cy={60} r={48} fill="none" stroke={COLOR.panelRaised} strokeWidth={10} />
             <circle cx={60} cy={60} r={48} fill="none" stroke={tone.color} strokeWidth={10} strokeLinecap="round" strokeDasharray={`${(C * Math.min(100, Math.max(0, b.displayed))) / 100} ${C}`} transform="rotate(-90 60 60)" />
             <text x={60} y={60} textAnchor="middle" fontFamily={FONT.mono} fontWeight={600} fontSize={28} fill={COLOR.ink}>{b.displayed}</text>
@@ -262,7 +264,7 @@ function HhiCard({ data, toneOf }: { data: Record<string, unknown> | undefined; 
           <div style={{ fontSize: '0.78rem', fontWeight: 600, color: tone.color }}>{tone.label}</div>
         </div>
         <div style={{ minWidth: 0 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', color: COLOR.ink }}>
             <thead>
               <tr style={{ fontFamily: FONT.mono, fontSize: '0.54rem', letterSpacing: '0.1em', color: COLOR.steelDim, textAlign: 'right' }}>
                 <th style={{ textAlign: 'left', fontWeight: 500, paddingBottom: 3 }}>維度</th><th style={{ fontWeight: 500 }}>今日值</th><th style={{ fontWeight: 500 }}>權重</th><th style={{ fontWeight: 500 }}>貢獻分</th>
@@ -271,8 +273,8 @@ function HhiCard({ data, toneOf }: { data: Record<string, unknown> | undefined; 
             <tbody>
               {b.rows.map(r => (
                 <tr key={r.key} style={{ borderTop: `1px solid ${COLOR.line}`, fontFamily: FONT.mono, textAlign: 'right' }}>
-                  <td style={{ textAlign: 'left', fontFamily: FONT.body, padding: '4px 0', color: drag?.key === r.key ? COLOR.warn : COLOR.steel }}>{r.label}</td>
-                  <td>{r.value !== null ? r.value : '—'}</td>
+                  <td style={{ textAlign: 'left', fontFamily: FONT.body, padding: '6px 0', color: drag?.key === r.key ? COLOR.warn : COLOR.steel }}>{r.label}</td>
+                  <td style={{ color: COLOR.ink }}>{r.value !== null ? r.value : '—'}</td>
                   <td style={{ color: COLOR.steelDim }}>{r.weightPct}%</td>
                   <td style={{ color: COLOR.ink }}>{r.points !== null ? r.points.toFixed(1) : '—'}</td>
                 </tr>
@@ -282,12 +284,12 @@ function HhiCard({ data, toneOf }: { data: Record<string, unknown> | undefined; 
               </tr>
             </tbody>
           </table>
-          <div style={{ marginTop: 8, display: 'grid', gap: 3, fontSize: '0.72rem', color: COLOR.steelDim }}>
+          <div style={{ marginTop: 10, display: 'grid', gap: 4, fontSize: '0.82rem', color: COLOR.steelDim }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>基礎分（加權平均）</span><b style={{ fontFamily: FONT.mono, color: COLOR.steel, fontWeight: 500 }}>{b.base !== null ? b.base.toFixed(2) : '—'}</b></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>最弱項{b.weakestLabel ? `（${b.weakestLabel}）` : ''}</span><b style={{ fontFamily: FONT.mono, color: COLOR.steel, fontWeight: 500 }}>{b.weakestScore !== null ? b.weakestScore.toFixed(2) : '—'}</b></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>短板修正後 → 平滑後（顯示值）</span><b style={{ fontFamily: FONT.mono, color: COLOR.steel, fontWeight: 500 }}>{b.afterPenalty !== null ? b.afterPenalty : '—'} → {b.displayed}</b></div>
           </div>
-          {drag && <div style={{ marginTop: 8, fontSize: '0.72rem', color: COLOR.steel }}>拉低總分最多：<b style={{ color: COLOR.warn }}>{drag.label}</b>（離滿分差 {100 - (drag.value ?? 0)} × 權重 {drag.weightPct}% ＝ 少 {(((100 - (drag.value ?? 0)) * drag.weightPct) / 100).toFixed(1)} 分）</div>}
+          {drag && <div style={{ marginTop: 10, fontSize: '0.84rem', color: COLOR.steel }}>拉低總分最多：<b style={{ color: COLOR.warn }}>{drag.label}</b>（離滿分差 {100 - (drag.value ?? 0)} × 權重 {drag.weightPct}% ＝ 少 {(((100 - (drag.value ?? 0)) * drag.weightPct) / 100).toFixed(1)} 分）</div>}
         </div>
       </div>
     </Card>
@@ -358,29 +360,66 @@ function PipelineCard({ pw }: { pw: string }) {
   )
 }
 
-// ── 主機健康 ──────────────────────────────────────
+// ── 主機健康（含硬碟容量）─────────────────────────
+function DiskBlock({ pw, status }: { pw: string; status: BoardStatus }) {
+  const hist = useLoad<BoardDiskPoint[]>(pw, p => apiFetchBoardDiskHistory(p, 30))
+  const worst = status.disks.reduce<BoardStatus['disks'][number] | null>((w, d) => (!w || d.percentUsed > w.percentUsed ? d : w), null)
+  if (!worst) return null
+  const usedGb = worst.totalGb - worst.freeGb
+  const f = describeForecast(status.diskForecast ?? null)
+  const tone = { ok: COLOR.ok, warn: COLOR.warn, crit: COLOR.crit, dim: COLOR.steelDim }[f.tone]
+  const points = (hist.data ?? []).filter((h): h is BoardDiskPoint & { diskUsedGb: number } => h.diskUsedGb !== null).map(h => ({ date: h.date, value: h.diskUsedGb }))
+  const shares = storageShares(status.storage ?? [], usedGb * 1e9, null).slice(0, 3)
+  return (
+    <div className="bd-disk" style={{ background: COLOR.panelRaised, borderRadius: 6, padding: '0.5rem 0.7rem', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem 0.8rem', flexWrap: 'wrap' }}>
+        <Label>硬碟容量 {worst.drive}</Label>
+        <span style={{ fontFamily: FONT.mono, fontSize: '1.15rem', fontWeight: 600, color: pctColor(worst.percentUsed) }}>{Math.round(worst.percentUsed)}%</span>
+        <span style={{ fontFamily: FONT.mono, fontSize: '0.7rem', color: COLOR.steel }}>已用 {usedGb.toFixed(1)} / {worst.totalGb.toFixed(1)} GB · 剩 {worst.freeGb.toFixed(1)} GB</span>
+      </div>
+      <div style={{ fontSize: '0.7rem', color: tone, lineHeight: 1.45 }}>{f.text}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: '0.8rem', minHeight: 0 }}>
+        <div style={{ minWidth: 0 }}><UsedChart points={points} /></div>
+        <div style={{ minWidth: 0, display: 'grid', gap: 5, alignContent: 'start' }}>
+          {shares.length === 0 ? <Muted>尚無分項資料</Muted> : shares.map(sh => (
+            <div key={sh.label}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontFamily: FONT.mono, fontSize: '0.64rem' }}>
+                <span style={{ color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sh.label}</span>
+                <span style={{ color: COLOR.steel, flexShrink: 0 }}>{formatBytes(sh.bytes)}</span>
+              </div>
+              <div style={{ height: 4, background: COLOR.line, borderRadius: 2, marginTop: 2 }}>
+                <div style={{ width: `${Math.min(100, Math.max(1, sh.share * 100))}%`, height: '100%', background: sh.label.startsWith('其他') ? COLOR.steelDim : COLOR.amber, borderRadius: 2 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SystemCard({ pw }: { pw: string }) {
   const { data, error } = useLoad<BoardStatus>(pw, apiFetchBoardStatus)
   const ok = data && data.available ? data : null
-  const worst = ok?.disks.reduce<BoardStatus['disks'][number] | null>((w, d) => (!w || d.percentUsed > w.percentUsed ? d : w), null) ?? null
   const cOk = ok ? ok.containers.filter(c => !/exit|dead|unhealthy/i.test(`${c.status} ${c.health ?? ''}`)).length : 0
-  const cells: Array<[string, string, string, string?]> = ok ? [
+  const cells: Array<[string, string, string]> = ok ? [
     ['CPU', ok.cpuPercent !== null ? `${Math.round(ok.cpuPercent)}%` : '—', pctColor(ok.cpuPercent)],
     ['記憶體', ok.memPercent !== null ? `${Math.round(ok.memPercent)}%` : '—', pctColor(ok.memPercent)],
-    [worst ? `磁碟 ${worst.drive}` : '磁碟', worst ? `${Math.round(worst.percentUsed)}%` : '—', pctColor(worst?.percentUsed ?? null), worst ? `剩 ${worst.freeGb.toFixed(1)} GB${ok.diskForecast?.daysUntilFull != null ? ` · 約 ${ok.diskForecast.daysUntilFull} 天滿` : ''}` : undefined],
     ['容器健康', ok.containers.length ? `${cOk} / ${ok.containers.length}` : '—', ok.containers.length === 0 ? COLOR.steelDim : cOk < ok.containers.length ? COLOR.warn : COLOR.ok],
   ] : []
   return (
-    <Card title="主機健康" area="bd-sys" tag={ok?.stale ? <Chip color={COLOR.warn}>資料已過期</Chip> : undefined}>
+    <Card title="主機健康與硬碟容量" area="bd-sys" tag={ok?.stale ? <Chip color={COLOR.warn}>資料已過期</Chip> : undefined}>
       {error ? <Muted>暫時無法取得資料</Muted> : data === null ? <Muted>載入中…</Muted> : !ok ? <Muted>尚無主機資料</Muted> : (
-        <div className="bd-sys-grid" style={{ opacity: ok.stale ? 0.55 : 1 }}>
-          {cells.map(([k, v, c, s]) => (
-            <div key={k} className="bd-tile" style={{ background: COLOR.panelRaised, borderRadius: 6 }}>
-              <Label>{k}</Label>
-              <div className="bd-big" style={{ color: c }}>{v}</div>
-              {s && <div style={{ fontSize: '0.62rem', color: COLOR.steelDim }}>{s}</div>}
-            </div>
-          ))}
+        <div className="bd-sys-wrap" style={{ opacity: ok.stale ? 0.55 : 1 }}>
+          <div className="bd-sys-grid">
+            {cells.map(([k, v, c]) => (
+              <div key={k} className="bd-tile" style={{ background: COLOR.panelRaised, borderRadius: 6 }}>
+                <Label>{k}</Label>
+                <div className="bd-big" style={{ color: c }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <DiskBlock pw={pw} status={ok} />
         </div>
       )}
     </Card>
@@ -403,8 +442,8 @@ export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRe
   }
   return (
     <div className="ip-board">
-      <OllamaCard pw={unlockedPassword} />
       <HhiCard data={hhiData} toneOf={toneOf} />
+      <OllamaCard pw={unlockedPassword} />
       <NetworkCard pw={unlockedPassword} />
       <PipelineCard pw={unlockedPassword} />
       <SystemCard pw={unlockedPassword} />

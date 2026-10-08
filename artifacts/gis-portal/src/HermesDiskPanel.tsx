@@ -22,7 +22,7 @@ function levelTone(level: DiskAlertLevel): string {
   return level === 'crit' ? COLOR.crit : level === 'warn' ? COLOR.warn : COLOR.ok
 }
 
-function UsedChart({ points }: { points: Array<{ date: string; value: number }> }) {
+export function UsedChart({ points }: { points: Array<{ date: string; value: number }> }) {
   if (points.length < 2) {
     return <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.4rem 0' }}>每天累積一筆，至少兩天後這裡會出現「已用空間」曲線</div>
   }
