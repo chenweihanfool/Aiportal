@@ -182,3 +182,70 @@ body,
     transition: none !important;
   }
 }
+
+/* ─── 桌面首頁儀表板（DesktopBoard）───
+   ≥1100px 寬且 ≥640px 高才顯示；其餘（手機、矮視窗）完全維持原樣。
+   高度與左側工具連結側欄同一把尺（100vh − 8.5rem），所以一進首頁兩者上下對齊、右側不必捲動就看得到全部卡片；
+   完整細節接在下面，要看再捲。 */
+.ip-board-wrap { display: none; }
+@media (min-width: 1100px) and (min-height: 640px) {
+  .ip-board-wrap {
+    display: block;
+    grid-column: 1 / -1;
+    height: calc(100vh - 8.5rem);
+    min-height: 520px;
+  }
+  .ip-board {
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 0.8rem;
+  }
+  .bd-card {
+    min-width: 0;
+    min-height: 0;
+    padding: 0.7rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow: hidden;
+  }
+  .bd-oll { grid-column: span 7; }
+  .bd-hhi { grid-column: span 5; }
+  .bd-net { grid-column: span 5; }
+  .bd-pipe { grid-column: span 4; }
+  .bd-sys { grid-column: span 3; }
+  .bd-oll-body {
+    display: grid;
+    grid-template-columns: minmax(190px, 0.85fr) minmax(0, 2fr);
+    gap: 0.9rem;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .bd-hhi-body {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: start;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .bd-kv { display: grid; gap: 3px; }
+  .bd-kv > div { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; color: #5b6270; }
+  .bd-kv b { font-size: 0.8rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: #ece9e2; }
+  .bd-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 8px; flex: 1; min-height: 0; }
+  .bd-sys-grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px; flex: 1; min-height: 0; }
+  .bd-tile { padding: 0.5rem 0.7rem; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .bd-big { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; line-height: 1.15; margin-top: 4px; font-size: clamp(1.3rem, 3vh, 2.3rem); white-space: nowrap; }
+  .bd-pipe-list { display: grid; grid-auto-rows: 1fr; gap: 6px; flex: 1; min-height: 0; }
+  .bd-hhi-body { flex: 1; align-items: center; }
+}
+/* 視窗只有 1100–1239px 寬：Ollama 卡片左右兩欄太擠，改上下排的話會爆高，所以改成管線卡讓位、各佔一半寬 */
+@media (min-width: 1100px) and (max-width: 1239px) and (min-height: 640px) {
+  .bd-oll { grid-column: span 12; }
+  .bd-hhi { grid-column: span 12; }
+  .ip-board { grid-template-rows: none; grid-auto-rows: minmax(260px, auto); }
+  .ip-board-wrap { height: auto; }
+}

@@ -7,6 +7,7 @@ import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, 
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { TimelineView } from './TimelineView'
 import { AccountBadge } from './AuthGate'
+import { DesktopBoard } from './DesktopBoard'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -21,6 +22,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.24.0',
+    date: '2026-10-08',
+    summary: '桌面首頁改版：一個畫面放得下的儀表板（Ollama 用量與預估、幸福指數怎麼來）',
+    changes: [
+      '電腦版（視窗寬 ≥1100px、高 ≥640px）首頁最上方新增一塊不用捲動就看得完的儀表板，與左側工具連結等高對齊：Ollama 用量與預估、幸福指數怎麼來、事人物關係網路、L1–L5 管線、主機健康。原本的完整戰情室與六維度照舊接在下面，手機與窄／矮視窗完全不變。',
+      'Ollama 用量與預估：顯示餘額、HERMES 近 7 日每天請求數、預估每天花費、預估用完日，並畫出餘額走勢與「照目前速度」的預測線，補點日前會用完時直接寫出缺多少。ollama.com 沒有可自動讀取的額度，所以餘額由你手動輸入（卡片上的「更新餘額」）；輸入兩筆以上就改用餘額實際的下降速度，只有一筆時用請求數×單價粗估並標明「粗估」。請求數只含 HERMES 這台主機，Ollama 帳號的其他用量以你輸入的餘額為準。（資料需要後端新端點與 HERMES 的推送腳本，兩者上線前卡片顯示「尚無資料」。）',
+      '幸福指數「這個分數怎麼來」：把原本寫死的公式說明換成當下實際數值——六個維度各自的今日值、權重、貢獻分與加總，再接基礎分、最弱項、短板修正後與平滑後的顯示值，並點出拉低總分最多的那一項與少了幾分。',
+    ],
+  },
   {
     version: '2.23.1',
     date: '2026-10-03',
@@ -3072,6 +3083,13 @@ function InstrumentPanelView({
 
           </aside>
           <div className="ip-main">
+        {/* 桌面版（≥1100px 且視窗高 ≥640px）一個畫面放得下的儀表板：Ollama 用量與預估、幸福指數怎麼來、
+            關係網路、管線、主機。完整細節（關係網路圖、硬碟、排程、容器…）照舊在下面。窄／矮視窗由 CSS 隱藏。 */}
+        {desktop && (
+          <div className="ip-board-wrap">
+            <DesktopBoard unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} />
+          </div>
+        )}
         {/* HERMES 戰情室搬到幸福指數上方、預設展開——人-事網路圖現在是這裡
             的主要內容，不再是可有可無的維運監控附加區塊，見 2026-09-06 改版
             說明。折疊開關還留著，方便手機上想先跳過看下面內容的人收起來。 */}

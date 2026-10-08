@@ -1,0 +1,79 @@
+// 桌面首頁儀表板自己用的 API 讀寫（型別只列這裡用到的欄位，不依賴 App.tsx，避免 App ↔ DesktopBoard 循環匯入）。
+const API_BASE = import.meta.env.BASE_URL ?? '/'
+
+const authHeaders = (pw: string) => ({ 'x-admin-password': pw })
+
+export interface UsageForecast {
+  callsPerDay: number | null
+  callsBasedOnDays: number
+  usdPerDay: number | null
+  source: 'observed' | 'estimated' | 'none'
+  usdPerCall: number
+  balanceUsd: number | null
+  daysUntilEmpty: number | null
+  emptyDate: string | null
+  daysToRefill: number | null
+  shortfallUsd: number | null
+  level: 'ok' | 'warn' | 'crit'
+}
+
+export interface UsageData {
+  available: boolean
+  today: string
+  days: Array<{ date: string; calls: number }>
+  last7Days: Record<string, number>
+  balance: { enteredAt: string; balanceUsd: number; capUsd: number; refillAt: string | null; monthUsedUsd: number | null; note: string | null } | null
+  entries: Array<{ enteredAt: string; balanceUsd: number }>
+  forecast: UsageForecast
+  scope: string
+}
+
+export async function apiFetchUsage(pw: string): Promise<UsageData> {
+  const r = await fetch(`${API_BASE}api/hermes-usage`, { headers: authHeaders(pw) })
+  if (!r.ok) throw new Error('Failed to fetch usage')
+  return r.json() as Promise<UsageData>
+}
+
+export interface BalanceInput { balanceUsd: number; capUsd?: number; refillAt?: string; monthUsedUsd?: number }
+
+/** 成功回 null；失敗回人話錯誤訊息（後端驗證訊息原樣帶出）。 */
+export async function apiPostBalance(pw: string, body: BalanceInput): Promise<string | null> {
+  try {
+    const r = await fetch(`${API_BASE}api/admin/ollama-balance`, {
+      method: 'POST',
+      headers: { ...authHeaders(pw), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (r.ok) return null
+    const j = (await r.json().catch(() => null)) as { message?: string } | null
+    return j?.message ?? `儲存失敗（${r.status}）`
+  } catch {
+    return '連不上伺服器，稍後再試'
+  }
+}
+
+export interface BoardStatus {
+  available: boolean
+  cpuPercent: number | null
+  memPercent: number | null
+  disks: Array<{ drive: string; percentUsed: number; freeGb: number; totalGb: number }>
+  containers: Array<{ name: string; status: string; health: string | null }>
+  diskForecast?: { daysUntilFull: number | null }
+  stale: boolean
+  computedAt: string | null
+}
+
+export async function apiFetchBoardStatus(pw: string): Promise<BoardStatus> {
+  const r = await fetch(`${API_BASE}api/hermes-status`, { headers: authHeaders(pw) })
+  if (!r.ok) throw new Error('Failed to fetch status')
+  return r.json() as Promise<BoardStatus>
+}
+
+export interface BoardPipelineLayer { status: string | null; lastRunTs: number | null; schedule?: string[]; health: 'ok' | 'crit' | 'unknown'; errorSummary: string | null }
+export interface BoardPipeline { available: boolean; layers: Record<'L1' | 'L2' | 'L3' | 'L4' | 'L5', BoardPipelineLayer> }
+
+export async function apiFetchBoardPipeline(pw: string): Promise<BoardPipeline> {
+  const r = await fetch(`${API_BASE}api/hermes-pipeline`, { headers: authHeaders(pw) })
+  if (!r.ok) throw new Error('Failed to fetch pipeline')
+  return r.json() as Promise<BoardPipeline>
+}
