@@ -230,8 +230,16 @@ describe("day events: newest-first by creation time", () => {
     expect(out[out.length - 1].id).toBe("L1-2026-10-01-09");
   })
 
+  it("sorts by diary time (writtenAt) first, falling back to createdAt", () => {
+    const a: EventRef = { id: "L1-2026-10-08-01", date: "2026-10-08", title: "a", createdAt: "2026-10-08T16:30:00+08:00", writtenAt: "2026-10-08T09:12:00+08:00" };
+    const b: EventRef = { id: "L1-2026-10-08-02", date: "2026-10-08", title: "b", createdAt: "2026-10-08T16:30:00+08:00", writtenAt: "2026-10-08T14:05:00+08:00" };
+    const c: EventRef = { id: "L4-x", date: "2026-10-08", title: "c", createdAt: "2026-10-08T11:40:00+08:00" };
+    expect(sortDayEvents([a, c, b]).map((e) => e.title)).toEqual(["b", "c", "a"]);
+  });
+
   it("toChip carries createdAt and defaults to null for old snapshots", () => {
-    expect(toChip(ev("a", "2026-10-01T10:00:00Z"))).toEqual({ id: "a", title: "a", createdAt: "2026-10-01T10:00:00Z" });
+    expect(toChip(ev("a", "2026-10-01T10:00:00Z"))).toEqual({ id: "a", title: "a", createdAt: "2026-10-01T10:00:00Z", writtenAt: null });
+    expect(toChip({ id: "w", date: "2026-10-01", title: "w", createdAt: "2026-10-01T16:30:00+08:00", writtenAt: "2026-10-01T09:12:00+08:00" }).writtenAt).toBe("2026-10-01T09:12:00+08:00");
     expect(toChip({ id: "b", date: "2026-10-01", title: "b" }).createdAt).toBeNull();
   })
 

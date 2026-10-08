@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 export type TimelineLevel = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
-export interface TimelineEventChip { id: string; title: string; createdAt: string | null }   // createdAt＝事件檔建立時間（ISO）；舊資料為 null
+export interface TimelineEventChip { id: string; title: string; createdAt: string | null; writtenAt?: string | null }   // createdAt＝事件檔建立時間（ISO）；舊資料為 null
 
 export interface TimelineItem {
   level: TimelineLevel

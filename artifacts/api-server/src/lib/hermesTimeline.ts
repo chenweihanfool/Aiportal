@@ -188,19 +188,23 @@ export interface ReportRow {
   rangeInferred: boolean;
   periodNote: string | null;
 }
-export interface EventRef { id: string; date: string; title: string; createdAt?: string | null }
+export interface EventRef { id: string; date: string; title: string; createdAt?: string | null; writtenAt?: string | null }
 
-/** 當日事件的顯示項：createdAt＝事件檔的建立時間（ISO 8601）；舊 pusher 沒送＝null。 */
-export interface EventChip { id: string; title: string; createdAt: string | null }
+/** 當日事件的顯示項：createdAt＝首次被萃取的時刻、writtenAt＝寫進日記那一行的時間（ISO 8601）；舊 pusher 沒送＝null。 */
+export interface EventChip { id: string; title: string; createdAt: string | null; writtenAt: string | null }
 
 export function toChip(e: EventRef): EventChip {
-  return { id: e.id, title: e.title, createdAt: e.createdAt ?? null };
+  return { id: e.id, title: e.title, createdAt: e.createdAt ?? null, writtenAt: e.writtenAt ?? null };
 }
 
+/** 排序用時間：有日記時戳（writtenAt）用它，沒有退回萃取時刻（createdAt）。 */
 function createdMs(e: EventRef): number | null {
-  if (!e.createdAt) return null;
-  const t = Date.parse(e.createdAt);
-  return Number.isNaN(t) ? null : t;
+  for (const v of [e.writtenAt, e.createdAt]) {
+    if (!v) continue;
+    const t = Date.parse(v);
+    if (!Number.isNaN(t)) return t;
+  }
+  return null;
 }
 
 /** L1（日記）事件的 id 帶當日流水號 `L1-YYYY-MM-DD-NN`，NN 越大＝當天越晚被萃取；同一班共用同一個建立時間時，用它分先後。 */
@@ -209,7 +213,7 @@ function l1Seq(e: EventRef): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/** 當日事件依建立時間「新→舊」；建立時間相同時，L1 事件再依 id 流水號大者在前（同班內的先後）；
+/** 當日事件依時間（日記時戳優先，否則萃取時刻）「新→舊」；建立時間相同時，L1 事件再依 id 流水號大者在前（同班內的先後）；
  *  沒有（或無法解析）建立時間的排在最後，其餘維持原順序（穩定排序）。 */
 export function sortDayEvents(evs: EventRef[]): EventRef[] {
   return evs

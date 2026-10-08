@@ -3,7 +3,7 @@ import { COLOR, FONT } from './theme'
 import { GraphShell } from './GraphShell'
 import { MarkdownView } from './MarkdownView'
 import { requestGraphFocus } from './graphFocus'
-import { countWithTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
+import { countWithTime, eventDisplayTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
 import {
   apiFetchTimelineDetail, apiFetchTimelineList,
   type TimelineDetail, type TimelineItem, type TimelineLevel,
@@ -277,22 +277,22 @@ function TimelineDialog(props: {
           {d && d.level === 'day' && d.events.length > 0 && (
             <div style={{ marginTop: '0.9rem' }}>
               <div style={{ fontFamily: FONT.mono, fontSize: '0.84rem', color: COLOR.steelDim, marginBottom: 6 }}>
-                當日事件 · {d.eventCount}（建立時間 新→舊；點擊跳到關係圖）
+                當日事件 · {d.eventCount}（寫進日記的時間 新→舊；灰色 ~＝日記那行沒有時戳，改用萃取時間；點擊跳到關係圖）
               </div>
               {countWithTime(d.events) === 0 && (
-                <div style={{ fontSize: '0.86rem', color: COLOR.warn, marginBottom: 6 }}>尚無建立時間資料，以下順序不代表時間先後。</div>
+                <div style={{ fontSize: '0.86rem', color: COLOR.warn, marginBottom: 6 }}>尚無時間資料，以下順序不代表時間先後。</div>
               )}
               <div role="list">
-                {d.events.map(ev => (
-                  <button key={ev.id} role="listitem" type="button" onClick={() => onEvent(ev.id)} title={eventTimeTitle(ev.createdAt) ? `${ev.title}\n${eventTimeTitle(ev.createdAt)}` : ev.title}
+                {d.events.map(ev => { const tm = eventDisplayTime(ev); const tt = eventTimeTitle(tm.iso, tm.source); return (
+                  <button key={ev.id} role="listitem" type="button" onClick={() => onEvent(ev.id)} title={tt ? `${ev.title}\n${tt}` : ev.title}
                     style={{ display: 'flex', gap: '0.8rem', alignItems: 'baseline', width: '100%', textAlign: 'left', cursor: 'pointer', background: 'none', border: 'none',
                       borderBottom: `1px solid ${COLOR.line}`, padding: '0.4rem 0.1rem', color: COLOR.ink, fontFamily: FONT.body }}>
-                    <span style={{ flex: '0 0 5.8rem', fontFamily: FONT.mono, fontSize: '0.88rem', color: ev.createdAt ? COLOR.steel : COLOR.steelDim, whiteSpace: 'nowrap' }}>
-                      {eventTimeLabel(ev.createdAt, d.periodKey)}
+                    <span style={{ flex: '0 0 5.8rem', fontFamily: FONT.mono, fontSize: '0.88rem', color: tm.source === 'diary' ? COLOR.steel : COLOR.steelDim, whiteSpace: 'nowrap' }}>
+                      {tm.source === 'extracted' ? '~' : ''}{eventTimeLabel(tm.iso, d.periodKey)}
                     </span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: '1.02rem', lineHeight: 1.55, wordBreak: 'break-word' }}>{ev.title}</span>
                   </button>
-                ))}
+                ) })}
               </div>
             </div>
           )}

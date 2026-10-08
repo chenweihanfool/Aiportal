@@ -45,7 +45,7 @@ async function loadEvents(): Promise<EventRef[]> {
     .from(hermesGraphSnapshotTable)
     .where(eq(hermesGraphSnapshotTable.id, "latest"))
     .limit(1);
-  return (snap?.events ?? []).map((e) => ({ id: e.id, date: e.date, title: e.title, createdAt: e.createdAt ?? null }));
+  return (snap?.events ?? []).map((e) => ({ id: e.id, date: e.date, title: e.title, createdAt: e.createdAt ?? null, writtenAt: e.writtenAt ?? null }));
 }
 
 async function loadMindScores(): Promise<Map<string, number | null>> {
