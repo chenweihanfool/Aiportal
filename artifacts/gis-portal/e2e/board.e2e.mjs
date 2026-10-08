@@ -59,7 +59,7 @@ const usage = () => {
 const graph = { available: true, computedAt: new Date().toISOString(), metrics: { peopleCount: 186, eventsCount: 1156, casesCount: 52, objectsCount: 626, avgParticipantsPerEvent: 0.9, orphanEventRatioPct: 51, trueOrphanEventRatioPct: 20, newEventsThisWeek: 5, newPeopleThisWeek: 1, mostActivePerson: { name: '呂佳泰', eventCount: 48 }, activeCasesCount: 52, personRelationsCount: 0 }, graph: { people: [], events: [], cases: [], objects: [], edges: [], caseEdges: [], objectEdges: [], personRelations: [], hubNarratives: [], hubAssessments: [] } }
 const layer = (h = 'ok') => ({ status: 'success', lastRun: '', lastRunTs: Date.now() - 5 * 3600e3, processed: 1, committed: 1, failed: 0, backlog: 0, errorSummary: null, durationSeconds: 60, health: h })
 const pipeline = { available: true, computedAt: new Date().toISOString(), layers: { L1: { ...layer(), schedule: ['10:30', '16:30', '20:30'] }, L2: layer(), L3: layer(), L4: layer(), L5: layer() } }
-const status = { available: true, diskAlert: 'ok', storage: [{ label: 'vault', bytes: 12e9 }, { label: 'docker', bytes: 8e9 }, { label: '其他', bytes: 5e9 }], cpuPercent: 0, memPercent: 32, disks: [{ drive: '/opt/data', percentUsed: 38, freeGb: 64, totalGb: 102.9 }], containers: Array.from({ length: 12 }, (_, i) => ({ name: 'c' + i, project: null, status: 'running', health: 'healthy' })), scheduledTasks: [], computedAt: new Date().toISOString(), stale: false, diskForecast: { basedOnDays: 7, insufficient: false, growthGbPerDay: 0.5, daysUntilFull: 80 } }
+const status = { available: true, stale: false, computedAt: new Date().toISOString(), scheduledTasks: [{ name: 'L1 日記快掃', lastRunTime: new Date().toISOString(), lastTaskResult: 0, schedule: '10:30 16:30 20:30' }],  diskAlert: 'ok', storage: [{ label: 'vault', bytes: 12e9 }, { label: 'docker', bytes: 8e9 }, { label: '其他', bytes: 5e9 }], cpuPercent: 0, memPercent: 32, disks: [{ drive: '/opt/data', percentUsed: 38, freeGb: 64, totalGb: 102.9 }], containers: Array.from({ length: 12 }, (_, i) => ({ name: 'c' + i, project: null, status: 'running', health: 'healthy' })), scheduledTasks: [], computedAt: new Date().toISOString(), stale: false, diskForecast: { basedOnDays: 7, insufficient: false, growthGbPerDay: 0.5, daysUntilFull: 80 } }
 
 const posted = []
 const server = http.createServer((req, res) => {
@@ -75,6 +75,8 @@ const server = http.createServer((req, res) => {
     if (u.pathname === '/api/hermes-graph') return json(graph)
     if (u.pathname === '/api/hermes-pipeline') return json(pipeline)
     if (u.pathname === '/api/hermes-status') return json(status)
+    if (u.pathname === '/api/happiness/history') return json({ history: Array.from({ length: 30 }, (_, i) => ({ date: dayAt(29 - i), finalScore: 60 + (i % 7), displayedScore: 60 + Math.round(i / 3), weakestComponent: '旅遊生活' })) })
+    if (u.pathname === '/api/hermes-activity') return json({ activity: [] })
     if (u.pathname === '/api/hermes-status/history') return json({ history: Array.from({ length: 14 }, (_, i) => ({ date: dayAt(13 - i), diskUsedGb: 30 + i * 0.6 })) })
     if (u.pathname === '/api/admin/ollama-balance' && req.method === 'POST') {
       let b = ''
@@ -114,7 +116,7 @@ async function newPage(viewport) {
 // 每張卡的內容有沒有被 overflow:hidden 裁掉：scrollHeight 比 clientHeight 大＝內容被截
 const clipped = (page) => page.evaluate(() => [...document.querySelectorAll('.bd-card')].map((c) => ({ cls: c.className, over: c.scrollHeight - c.clientHeight, w: c.scrollWidth - c.clientWidth })).filter((c) => c.over > 2 || c.w > 2))
 
-for (const [w, h] of [[1920, 1080], [1440, 900]]) {
+for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366, 768], [1600, 700]]) {
   entries = []
   const { ctx, page, errors } = await newPage({ width: w, height: h })
   await page.goto(base + '/')
@@ -129,19 +131,48 @@ for (const [w, h] of [[1920, 1080], [1440, 900]]) {
   check(`${w}×${h}：沒有卡片內容被裁切`, cl.length === 0, JSON.stringify(cl))
   check(`${w}×${h}：頁面本身不橫向捲動`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   const txt = await page.locator('.ip-board').innerText()
-  check(`${w}×${h}：幸福指數顯示「今日值 × 權重 ＝ 貢獻分」與基礎分`, /人生自由/.test(txt) && /27%/.test(txt) && /18\.4/.test(txt) && /基礎分/.test(txt) && /74\.50/.test(txt))
+  check(`${w}×${h}：幸福指數顯示「今日值 × 權重 ＝ 貢獻分」與計算鏈`, /人生自由/.test(txt) && /27%/.test(txt) && /18\.4/.test(txt) && /加權平均/.test(txt) && /74\.5/.test(txt) && /短板修正/.test(txt))
   const order = await page.evaluate(() => { const h = document.querySelector('.bd-hhi')?.getBoundingClientRect(); const o = document.querySelector('.bd-oll')?.getBoundingClientRect(); return h && o ? { hhiLeft: h.left, ollLeft: o.left, hhiW: h.width, ollW: o.width } : null })
   check(`${w}×${h}：幸福指數在左、比 Ollama 寬（主體）`, !!order && order.hhiLeft < order.ollLeft && order.hhiW > order.ollW, JSON.stringify(order))
-  const cellColor = await page.evaluate(() => { const td = document.querySelector('.bd-hhi tbody tr td:nth-child(2)'); return td ? getComputedStyle(td).color : null })
+  const cellColor = await page.evaluate(() => { const td = document.querySelector('.bd-hhi .bd-hval'); return td ? getComputedStyle(td).color : null })
   const lum = cellColor ? cellColor.match(/\d+/g).slice(0, 3).map(Number).reduce((x, y) => x + y, 0) / 3 : 0
-  check(`${w}×${h}：幸福指數「今日值」不是黑色（${cellColor}）`, lum > 150)
-  check(`${w}×${h}：舊的重複面板在有儀表板時隱藏（幸福指數大卡、戰情室圖／管線／數字條／硬碟）`, (await page.locator('.ip-hhi:visible, .ip-war-dup:visible').count()) === 0, await page.evaluate(() => [...document.querySelectorAll('.ip-hhi, .ip-war-dup')].map((e) => e.className + ':' + getComputedStyle(e).display).join(',')))
-  check(`${w}×${h}：硬碟容量融入主機卡（百分比、預估、分項）`, /硬碟容量/.test(txt) && /個月後寫滿/.test(txt) && /vault/.test(txt))
+  check(`${w}×${h}：幸福指數「今日值」不是黑色（${cellColor}）`, lum > 100)
+  const trunc = await page.evaluate(() => [...document.querySelectorAll('.bd-hhi .bd-hlabel, .bd-hhi .bd-hval, .bd-hhi .bd-hpts, .bd-hhi .bd-hw, .bd-hhi .bd-chain span, .bd-hhi .bd-hhead span')].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent))
+  check(`${w}×${h}：幸福指數卡沒有被截斷的字`, trunc.length === 0, JSON.stringify(trunc))
+  const rowH = await page.evaluate(() => Math.min(...[...document.querySelectorAll('.bd-hhi button.bd-hrow')].map((e) => e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).fontSize))))
+  check(`${w}×${h}：六維度每列至少 1.3 行高（${rowH.toFixed(2)}）`, rowH >= 1.3)
+  check(`${w}×${h}：電腦版首頁沒有舊面板（戰情室／幸福指數大卡／六維度不渲染）`, (await page.locator('.ip-war, .ip-hhi, .ip-dims').count()) === 0)
+  const sc = await page.evaluate(() => { const e = document.querySelector('.ip-scroll'); return e ? { sh: e.scrollHeight, ch: e.clientHeight } : null })
+  check(`${w}×${h}：首頁不必縱向捲動（${sc?.sh} ≤ ${sc?.ch}+2）`, !!sc && sc.sh <= sc.ch + 2)
+  check(`${w}×${h}：硬碟容量融入主機卡（百分比、預估${h >= 800 ? '、分項' : '；矮視窗分項收進抽屜'}）`, /硬碟容量/.test(txt) && /個月後寫滿/.test(txt) && (h < 800 || /vault/.test(txt)))
   check(`${w}×${h}：關係網路用真實數字（186／1156）`, /186/.test(txt) && /1156/.test(txt))
   check(`${w}×${h}：Ollama 尚無餘額時顯示輸入提示與「粗估」`, /輸入目前餘額/.test(txt) && /粗估/.test(txt))
   await page.screenshot({ path: path.join(SHOTS, `board-${w}x${h}-empty.png`) })
 
-  if (w === 1920) {
+  if (w === 1920 && h === 1080) {
+    // 抽屜：舊面板的功能都在這裡
+    await page.locator('.bd-hhi .bd-more').click()
+    await page.waitForSelector('.bd-drawer', { timeout: 5000 })
+    await page.waitForTimeout(600)
+    const d1 = await page.locator('.bd-drawer').innerText()
+    check('幸福指數抽屜：有趨勢入口、計算明細與六維度子系統', /六維度子系統/.test(d1) && /歷史趨勢圖|近 30 天/.test(d1) && /平滑後/.test(d1), d1.slice(0, 160))
+    await page.screenshot({ path: path.join(SHOTS, 'drawer-hhi.png') })
+    await page.keyboard.press('Escape')
+    check('ESC 關閉抽屜', (await page.locator('.bd-drawer').count()) === 0)
+    await page.locator('.bd-hhi button.bd-hrow').first().click()
+    check('點六維度任一列也會打開幸福指數抽屜', (await page.locator('.bd-drawer').count()) === 1)
+    await page.mouse.click(20, 500)
+    check('點抽屜外側關閉', (await page.locator('.bd-drawer').count()) === 0)
+    await page.locator('.bd-sys .bd-more').click()
+    await page.waitForSelector('.bd-drawer')
+    await page.waitForTimeout(800)
+    const d2 = await page.locator('.bd-drawer').innerText()
+    check('戰情室抽屜：排程任務、近期活動、容器清單、近期趨勢、硬碟容量都在', ['排程任務狀態', '近期活動', '容器清單', '近期趨勢', '硬碟容量'].every((k) => d2.includes(k)), d2.slice(0, 200))
+    await page.screenshot({ path: path.join(SHOTS, 'drawer-ops.png') })
+    await page.keyboard.press('Escape')
+  }
+
+  if (w === 1920 && h === 1080) {
     // 手動輸入餘額
     await page.getByRole('button', { name: '輸入目前餘額' }).click()
     await page.fill('#bd-bal', '29.31'); await page.fill('#bd-used', '50.69'); await page.fill('#bd-refill', '2026-10-29')
@@ -168,7 +199,7 @@ for (const [w, h] of [[1920, 1080], [1440, 900]]) {
   const { ctx, page, errors } = await newPage({ width: 390, height: 844 })
   await page.goto(base + '/')
   await page.waitForTimeout(1500)
-  check('手機寬度舊面板照舊顯示（硬碟容量面板在）', (await page.locator('.ip-war-dup').count()) > 0 && (await page.locator('.ip-war-dup').first().isVisible()))
+  check('手機寬度舊面板照舊顯示（戰情室、幸福指數、六維度）', (await page.locator('.ip-war').count()) === 1 && (await page.locator('.ip-hhi').count()) === 1 && (await page.locator('.ip-dims').count()) === 1)
   check('手機寬度不顯示桌面儀表板', (await page.locator('.bd-card:visible').count()) === 0)
   check('手機寬度頁面不橫向捲動', await page.evaluate(() => { const s = document.querySelector('.ip-scroll'); return !s || s.scrollWidth <= s.clientWidth + 1 }))
   check('手機寬度沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))

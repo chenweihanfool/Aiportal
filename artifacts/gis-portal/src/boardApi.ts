@@ -91,3 +91,13 @@ export async function apiFetchBoardDiskHistory(pw: string, days = 30): Promise<B
   const d = (await r.json()) as { history?: Array<{ date: string; diskUsedGb?: number | null }> }
   return (d.history ?? []).map(h => ({ date: h.date, diskUsedGb: h.diskUsedGb ?? null }))
 }
+
+export interface HhiHistoryPoint { date: string; displayedScore: number }
+
+/** 幸福指數近 N 天每日顯示值（儀表板卡片的小趨勢線用）；讀不到回空陣列。 */
+export async function apiFetchHhiHistory(pw: string, days = 30): Promise<HhiHistoryPoint[]> {
+  const r = await fetch(`${API_BASE}api/happiness/history?days=${days}`, { headers: authHeaders(pw) })
+  if (!r.ok) return []
+  const d = (await r.json()) as { history?: Array<{ date: string; displayedScore: number }> }
+  return (d.history ?? []).filter(h => typeof h.displayedScore === 'number').map(h => ({ date: h.date, displayedScore: h.displayedScore }))
+}
