@@ -23,6 +23,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.25.0',
+    date: '2026-10-08',
+    summary: '電腦版首頁一個畫面看完：舊面板全部收進「詳細」抽屜，幸福指數主卡重新設計',
+    changes: [
+      '電腦版（視窗寬 ≥1100px、高 ≥640px）首頁就只有儀表板，不必捲動。原本接在下面的舊面板不再顯示，功能一個都沒少，改從卡片右上的「詳細」打開右側抽屜：幸福指數卡 →「雷達・30 天洞察・六維度」（雷達圖、近 30 天洞察、歷史趨勢圖、計算明細、六維度子系統卡與前往連結）；關係網路／管線／主機卡 → HERMES 戰情室（關係網路圖、管線歷史、硬碟分項、排程任務、近期活動、容器清單、近期趨勢）。ESC 或點抽屜外側關閉。手機與窄／矮視窗照舊。',
+      '幸福指數主卡重新設計：發光環形分數（開場由 0 跑到今日分數）、六維度改成彩色橫條（今日值 × 權重 ＝ 貢獻分，點任一列打開詳情）、「加權平均 → 短板修正 → 顯示」計算鏈、近 30 天小趨勢線與漲跌。字級跟著視窗高度縮放，修正之前字被截斷的問題。',
+      '整體質感：卡片依序浮現、滑過時邊框微亮、標題前加指示燈；管線列與主機卡在矮視窗自動縮排，矮視窗時硬碟曲線與分項收進抽屜，主畫面不裁字。設定「減少動態」時不播放動畫。',
+    ],
+  },
+  {
     version: '2.24.1',
     date: '2026-10-08',
     summary: '首頁改版修正：幸福指數當主體、不再重複顯示舊面板、硬碟併入主機卡；關係宇宙與時間軸好讀好點',
@@ -2416,12 +2426,10 @@ function HermesWarRoomSection({
 
   return (
     <div>
-      <div className="ip-war-dup">
-        <HermesEventGraphPanel unlockedPassword={unlockedPassword} />
+      <HermesEventGraphPanel unlockedPassword={unlockedPassword} />
 
-        <div style={{ marginTop: '0.9rem' }}>
-          <HermesPipelinePanel unlockedPassword={unlockedPassword} />
-        </div>
+      <div style={{ marginTop: '0.9rem' }}>
+        <HermesPipelinePanel unlockedPassword={unlockedPassword} />
       </div>
 
       <div style={{ marginTop: '0.9rem' }}>
@@ -2437,7 +2445,7 @@ function HermesWarRoomSection({
             )
             const containersOk = availableStatus.containers.filter(c => !isContainerFailed(c)).length
             return (
-              <div className="ip-stat-strip ip-war-dup" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
+              <div className="ip-stat-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
                 <StatCell label="CPU 負載" value={availableStatus.cpuPercent !== null ? `${Math.round(availableStatus.cpuPercent)}%` : '—'} valueColor={pctTone(availableStatus.cpuPercent)} />
                 <StatCell label="記憶體" value={availableStatus.memPercent !== null ? `${Math.round(availableStatus.memPercent)}%` : '—'} valueColor={pctTone(availableStatus.memPercent)} />
                 <StatCell
@@ -2456,7 +2464,7 @@ function HermesWarRoomSection({
             )
           })()}
 
-          <div className="ip-war-dup" style={{ marginBottom: '0.9rem' }}>
+          <div style={{ marginBottom: '0.9rem' }}>
             <CollapsibleSubPanel
               title="硬碟容量" sub="VPS 容量有限，知識庫會持續成長 · 用量、分項、預估寫滿時間"
               hasAlert={availableStatus.diskAlert !== undefined && availableStatus.diskAlert !== 'ok'}
@@ -2527,15 +2535,21 @@ function HermesWarRoomSection({
 // 桌面版（寬螢幕）版面：≥1100px 時工具連結改放左側常駐側欄、預設展開。
 // 只用來決定「要不要展開／要不要多顯示副標題」；版面排列本身由 portal.css 的 media query 決定。
 const DESKTOP_QUERY = '(min-width: 1100px)'
-function useIsDesktop(): boolean {
-  const [d, setD] = useState(() => typeof window !== 'undefined' && window.matchMedia(DESKTOP_QUERY).matches)
+// 首頁儀表板（DesktopBoard）出現的尺寸：要跟 portal.css 的 .ip-board-wrap media query 同一組條件
+const BOARD_QUERY = '(min-width: 1100px) and (min-height: 640px)'
+function useMedia(query: string): boolean {
+  const [d, setD] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
   useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_QUERY)
+    const mq = window.matchMedia(query)
     const on = () => setD(mq.matches)
+    on()
     mq.addEventListener('change', on)
     return () => mq.removeEventListener('change', on)
-  }, [])
+  }, [query])
   return d
+}
+function useIsDesktop(): boolean {
+  return useMedia(DESKTOP_QUERY)
 }
 
 function SwitchTile({ site, unlocked, onSelect, showSubtitle = false }: { site: SiteData; unlocked: boolean; onSelect: (site: SiteData) => void; showSubtitle?: boolean }) {
@@ -3065,6 +3079,30 @@ function InstrumentPanelView({
   // 的維運監控資訊了，藏起來反而失去意義；見 2026-09-06 改版說明。
   const [hermesOpen, setHermesOpen] = useState(true)
   const desktop = useIsDesktop()
+  // 有儀表板時，下面的舊面板（戰情室、幸福指數大卡、六維度）不渲染——它們的內容全部改從儀表板卡片的「詳細」抽屜打開，
+  // 首頁電腦版就只有一個畫面、不必捲動。窄／矮視窗沒有儀表板，照舊顯示。
+  const boardOn = useMedia(BOARD_QUERY)
+
+  const dimsGrid = (
+    <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
+      {richSites.map(s => {
+        const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
+        return <DimensionGauge key={s.id} site={s} summary={summary} hhiSummary={hhiSummary} unlocked={unlocked} onSelect={onSiteSelect} />
+      })}
+      <MindIndexCard
+        summary={dashboard.find(d => d.subsystemId === 'mind-index')}
+        hhiSummary={hhiSummary}
+        unlocked={unlocked}
+        onSelect={onRequestUnlock}
+      />
+      <SocialIndexCard
+        summary={dashboard.find(d => d.subsystemId === 'social-index')}
+        hhiSummary={hhiSummary}
+        unlocked={unlocked}
+        onSelect={onRequestUnlock}
+      />
+    </div>
+  )
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
@@ -3096,16 +3134,29 @@ function InstrumentPanelView({
 
           </aside>
           <div className="ip-main">
-        {/* 桌面版（≥1100px 且視窗高 ≥640px）一個畫面放得下的儀表板：Ollama 用量與預估、幸福指數怎麼來、
-            關係網路、管線、主機。完整細節（關係網路圖、硬碟、排程、容器…）照舊在下面。窄／矮視窗由 CSS 隱藏。 */}
-        {desktop && (
+        {/* 桌面版（≥1100px 且視窗高 ≥640px）一個畫面放得下的儀表板。下面的舊面板（戰情室、幸福指數大卡、六維度）
+            在這個尺寸由 CSS 隱藏，內容改由儀表板卡片的「詳細」抽屜打開；窄／矮視窗沒有儀表板，照舊顯示下面的面板。 */}
+        {boardOn && (
           <div className="ip-board-wrap">
-            <DesktopBoard unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} />
+            <DesktopBoard
+              unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
+              hhiDetail={
+                <>
+                  <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
+                  <div style={{ marginTop: '1.4rem' }}>
+                    <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
+                    {dimsGrid}
+                  </div>
+                </>
+              }
+              opsDetail={<HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />}
+            />
           </div>
         )}
         {/* HERMES 戰情室搬到幸福指數上方、預設展開——人-事網路圖現在是這裡
             的主要內容，不再是可有可無的維運監控附加區塊，見 2026-09-06 改版
             說明。折疊開關還留著，方便手機上想先跳過看下面內容的人收起來。 */}
+        {!boardOn && <>
         <div className="ip-war">
         <div
           onClick={() => setHermesOpen(o => !o)}
@@ -3141,33 +3192,19 @@ function InstrumentPanelView({
         </Unit>
 
         <Unit code="03" title="六維度子系統 · Subsystem Readouts" className="ip-dims">
-          <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
-            {richSites.map(s => {
-              const summary = dashboard.find(d => d.subsystemId === s.subsystemId)!
-              return <DimensionGauge key={s.id} site={s} summary={summary} hhiSummary={hhiSummary} unlocked={unlocked} onSelect={onSiteSelect} />
-            })}
-            <MindIndexCard
-              summary={dashboard.find(d => d.subsystemId === 'mind-index')}
-              hhiSummary={hhiSummary}
-              unlocked={unlocked}
-              onSelect={onRequestUnlock}
-            />
-            <SocialIndexCard
-              summary={dashboard.find(d => d.subsystemId === 'social-index')}
-              hhiSummary={hhiSummary}
-              unlocked={unlocked}
-              onSelect={onRequestUnlock}
-            />
-          </div>
+          {dimsGrid}
         </Unit>
+        </>}
 
           </div>
         </div>
 
+        {!boardOn && (
         <div style={{ marginTop: '1.4rem', paddingTop: '1rem', borderTop: `1px solid ${COLOR.line}`, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, letterSpacing: '0.06em' }}>
-          <span>AIPORTAL · INSTRUMENT PANEL</span>
-          <span>🔐 PRIVATE REQUIRES PASSWORD</span>
-        </div>
+            <span>AIPORTAL · INSTRUMENT PANEL</span>
+            <span>🔐 PRIVATE REQUIRES PASSWORD</span>
+          </div>
+        )}
       </div>
     </div>
   )

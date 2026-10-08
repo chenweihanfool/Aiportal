@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
-  apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchUsage, apiPostBalance,
-  type BoardDiskPoint, type BoardPipeline, type BoardStatus, type UsageData,
+  apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchUsage, apiPostBalance,
+  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type UsageData,
 } from './boardApi'
 import { UsedChart } from './HermesDiskPanel'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
 
-// 桌面首頁（≥1100px）的「一個畫面放得下」儀表板。資料都沿用既有端點；完整細節（關係網路圖、硬碟、排程、容器…）
-// 仍在這塊下面照舊，這裡只放「進來第一眼要看」的：Ollama 用量與預估、幸福指數怎麼來、關係網路、管線、主機。
+// 桌面首頁（≥1100px 寬、≥640px 高）的「一個畫面放得下」儀表板，首頁電腦版就只有這一塊，不必捲動。
+// 舊版下方的完整面板（幸福指數雷達／30 天洞察／趨勢、六維度子系統、HERMES 戰情室的關係網路圖／管線歷史／排程／活動／容器／趨勢）
+// 不再接在下面，而是收進卡片右上「詳細」打開的側邊抽屜（Drawer），功能一個都沒少，主畫面不用捲。
+// 抽屜內容由 App.tsx 傳進來（那些元件都在 App.tsx，這裡不 import 它，避免循環匯入）。
 
 const levelColor = (l: 'ok' | 'warn' | 'crit') => (l === 'crit' ? COLOR.crit : l === 'warn' ? COLOR.warn : COLOR.ok)
 const pctColor = (p: number | null) => (p === null ? COLOR.steelDim : p >= 90 ? COLOR.crit : p >= 75 ? COLOR.warn : COLOR.ok)
@@ -24,16 +26,79 @@ function minutesAgo(ts: number | null): string {
   return `${Math.round(m / 1440)} 天前`
 }
 
-function Card({ title, tag, area, children }: { title: string; tag?: ReactNode; area: string; children: ReactNode }) {
+function Card({ title, tag, area, action, style, children }: { title: string; tag?: ReactNode; area: string; action?: ReactNode; style?: CSSProperties; children: ReactNode }) {
   return (
-    <section className={`bd-card ${area}`} style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 8 }}>
-      <h2 style={{ margin: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, fontFamily: FONT.display, fontWeight: 700, fontSize: '0.8rem', color: COLOR.ink }}>
-        <span>{title}</span>
+    <section className={`bd-card ${area}`} style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 10, ...style }}>
+      <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT.display, fontWeight: 700, fontSize: '0.84rem', color: COLOR.ink, letterSpacing: '0.02em' }}>
+        <span className="bd-dot" aria-hidden />
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
         {tag}
+        {action}
       </h2>
       {children}
     </section>
   )
+}
+
+/** 卡片右上的「詳細 ›」：打開側邊抽屜 */
+const MoreBtn = ({ onClick, children = '詳細' }: { onClick: () => void; children?: ReactNode }) => (
+  <button type="button" className="bd-more" onClick={onClick}>{children} ›</button>
+)
+
+type DrawerKey = 'hhi' | 'ops'
+const DrawerCtx = createContext<(k: DrawerKey) => void>(() => {})
+
+/** 抽屜內容（App.tsx 的舊面板）若有元件出錯，只在抽屜裡顯示訊息，不拖垮整個首頁 */
+class DrawerBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() {
+    return this.state.failed
+      ? <div style={{ color: COLOR.steelDim, fontSize: '0.85rem', padding: '1rem 0' }}>這一區暫時無法顯示（資料格式不完整），關掉抽屜不影響首頁其他卡片。</div>
+      : this.props.children
+  }
+}
+
+function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null
+    closeRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey); prev?.focus?.() }
+  }, [onClose])
+  return (
+    <div className="bd-drawer-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <aside className="bd-drawer" role="dialog" aria-modal="true" aria-label={title}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
+          <span className="bd-dot" aria-hidden />
+          <h2 style={{ margin: 0, flex: 1, fontFamily: FONT.display, fontSize: '1.05rem', color: COLOR.ink }}>{title}</h2>
+          <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>ESC 關閉</span>
+          <button ref={closeRef} type="button" className="bd-more" onClick={onClose} aria-label="關閉">✕</button>
+        </header>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.1rem 1.3rem 2rem' }}><DrawerBoundary>{children}</DrawerBoundary></div>
+      </aside>
+    </div>
+  )
+}
+
+/** 數字從 0 跑到目標值（使用者設定「減少動態」時直接顯示） */
+function useCountUp(target: number, ms = 900): number {
+  const [v, setV] = useState(target)
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setV(target); return }
+    let raf = 0
+    const t0 = performance.now()
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms)
+      setV(Math.round(target * (1 - Math.pow(1 - k, 3))))
+      if (k < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, ms])
+  return v
 }
 
 const Label = ({ children }: { children: ReactNode }) => (
@@ -47,18 +112,18 @@ const Chip = ({ children, color = COLOR.steelDim }: { children: ReactNode; color
 const Muted = ({ children }: { children: ReactNode }) => <div style={{ fontSize: '0.72rem', color: COLOR.steelDim }}>{children}</div>
 
 /** 量元素實際像素大小，圖表用它算座標（不用 preserveAspectRatio="none" 拉伸，字才不會變形）。 */
-function useBox(): [(el: HTMLDivElement | null) => void, { w: number; h: number }] {
+function useBox(minW = 240, minH = 90): [(el: HTMLDivElement | null) => void, { w: number; h: number }] {
   const [el, setEl] = useState<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ w: 600, h: 150 })
   useEffect(() => {
     if (!el) return
     const ro = new ResizeObserver(entries => {
       const r = entries[0]?.contentRect
-      if (r) setSize({ w: Math.max(240, Math.round(r.width)), h: Math.max(90, Math.round(r.height)) })
+      if (r) setSize({ w: Math.max(minW, Math.round(r.width)), h: Math.max(minH, Math.round(r.height)) })
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [el])
+  }, [el, minW, minH])
   return [setEl, size]
 }
 
@@ -242,54 +307,122 @@ const btn: CSSProperties = { fontFamily: FONT.mono, fontSize: '0.68rem', padding
 const fld: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2, fontSize: '0.62rem', color: COLOR.steelDim, fontFamily: FONT.mono }
 const inp: CSSProperties = { width: '100%', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: 4, color: COLOR.ink, padding: '4px 6px', fontFamily: FONT.mono, fontSize: '0.72rem' }
 
-// ── 幸福指數：這個分數怎麼來 ───────────────────────
-function HhiCard({ data, toneOf }: { data: Record<string, unknown> | undefined; toneOf: (s: number) => { color: string; label: string } }) {
+// ── 幸福指數：這個分數怎麼來（首頁主體）──────────────
+function Ring({ value, color }: { value: number; color: string }) {
+  const shown = useCountUp(value)
+  const R = 50
+  const C = 2 * Math.PI * R
+  const frac = Math.min(100, Math.max(0, shown)) / 100
+  const ticks = Array.from({ length: 40 }, (_, i) => i)
+  return (
+    <svg className="bd-ring" viewBox="0 0 140 140" role="img" aria-label={`幸福指數 ${value}`}>
+      <defs>
+        <linearGradient id="bdRingGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.55} />
+          <stop offset="100%" stopColor={color} />
+        </linearGradient>
+        <filter id="bdRingGlow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.2" /></filter>
+      </defs>
+      {ticks.map(i => {
+        const a = (i / 40) * 2 * Math.PI - Math.PI / 2
+        const on = i / 40 <= frac
+        return <line key={i} x1={70 + 62 * Math.cos(a)} y1={70 + 62 * Math.sin(a)} x2={70 + 66 * Math.cos(a)} y2={70 + 66 * Math.sin(a)} stroke={on ? color : COLOR.line} strokeWidth={1.4} opacity={on ? 0.9 : 0.6} />
+      })}
+      <circle cx={70} cy={70} r={R} fill="none" stroke={COLOR.panelRaised} strokeWidth={11} />
+      <circle cx={70} cy={70} r={R} fill="none" stroke={color} strokeWidth={11} strokeLinecap="round" strokeDasharray={`${C * frac} ${C}`} transform="rotate(-90 70 70)" filter="url(#bdRingGlow)" opacity={0.55} />
+      <circle cx={70} cy={70} r={R} fill="none" stroke="url(#bdRingGrad)" strokeWidth={11} strokeLinecap="round" strokeDasharray={`${C * frac} ${C}`} transform="rotate(-90 70 70)" />
+      <text x={70} y={78} textAnchor="middle" fontFamily={FONT.mono} fontWeight={600} fontSize={36} fill={COLOR.ink}>{shown}</text>
+      <text x={70} y={97} textAnchor="middle" fontFamily={FONT.mono} fontSize={9} fill={COLOR.steelDim} letterSpacing={2}>/ 100</text>
+    </svg>
+  )
+}
+
+function Spark({ points, color }: { points: HhiHistoryPoint[]; color: string }) {
+  const [ref, box] = useBox(60, 16)
+  if (points.length < 2) return <div ref={ref} className="bd-spark"><Muted>近 30 天趨勢：資料累積中</Muted></div>
+  const vals = points.map(p => p.displayedScore)
+  const lo = Math.min(...vals) - 2
+  const hi = Math.max(...vals) + 2
+  const w = box.w
+  const h = Math.min(box.h, 70)
+  const xy = points.map((p, i) => [(i / (points.length - 1)) * (w - 6) + 3, 4 + (h - 8) * (1 - (p.displayedScore - lo) / (hi - lo || 1))] as const)
+  const d = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const last = xy[xy.length - 1]!
+  const first = points[0]!.displayedScore
+  const lastV = points[points.length - 1]!.displayedScore
+  const diff = lastV - first
+  return (
+    <div className="bd-spark">
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim }}>
+        <span>近 {points.length} 天</span>
+        <span style={{ color: diff > 0 ? COLOR.ok : diff < 0 ? COLOR.warn : COLOR.steelDim }}>{diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} {Math.abs(diff)}</span>
+      </div>
+      <div ref={ref} style={{ flex: 1, minHeight: 16, position: 'relative', overflow: 'hidden' }}>
+        <svg width={w} height={h} style={{ position: 'absolute', inset: 0 }} role="img" aria-label="幸福指數近 30 天趨勢">
+          <path d={`${d} L${last[0].toFixed(1)},${h} L3,${h} Z`} fill={color} opacity={0.12} />
+          <path d={d} fill="none" stroke={color} strokeWidth={1.6} />
+          <circle cx={last[0]} cy={last[1]} r={2.6} fill={color} />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+function HhiCard({ pw, data, toneOf }: { pw: string; data: Record<string, unknown> | undefined; toneOf: (s: number) => { color: string; label: string } }) {
+  const open = useContext(DrawerCtx)
   const b = useMemo(() => buildHhiBreakdown(data), [data])
-  const C = 2 * Math.PI * 48
+  const hist = useLoad<HhiHistoryPoint[]>(pw, apiFetchHhiHistory)
+  const more = <MoreBtn onClick={() => open('hhi')}>雷達・30 天洞察・六維度</MoreBtn>
   if (!b) {
-    return <Card title="翰翰仔幸福指數：這個分數怎麼來" area="bd-hhi"><Muted>資料準備中…</Muted></Card>
+    return <Card title="翰翰仔幸福指數：這個分數怎麼來" area="bd-hhi" action={more}><Muted>資料準備中…</Muted></Card>
   }
   const tone = toneOf(b.displayed)
   const drag = biggestDrag(b.rows)
+  const barColor = (v: number) => toneOf(v).color
   return (
-    <Card title="翰翰仔幸福指數：這個分數怎麼來" area="bd-hhi" tag={!b.isFinal ? <Chip color={COLOR.warn}>今日暫定</Chip> : b.stale ? <Chip color={COLOR.warn}>部分為最近可用值</Chip> : undefined}>
+    <Card
+      title="翰翰仔幸福指數：這個分數怎麼來" area="bd-hhi" action={more}
+      tag={!b.isFinal ? <Chip color={COLOR.warn}>今日暫定</Chip> : b.stale ? <Chip color={COLOR.warn}>部分為最近可用值</Chip> : undefined}
+      style={{ background: `radial-gradient(ellipse 55% 75% at 14% 45%, ${tone.color}1f, transparent 70%), ${COLOR.panel}` }}
+    >
       <div className="bd-hhi-body">
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <svg viewBox="0 0 120 120" width={172} height={172} role="img" aria-label={`幸福指數 ${b.displayed}`}>
-            <circle cx={60} cy={60} r={48} fill="none" stroke={COLOR.panelRaised} strokeWidth={10} />
-            <circle cx={60} cy={60} r={48} fill="none" stroke={tone.color} strokeWidth={10} strokeLinecap="round" strokeDasharray={`${(C * Math.min(100, Math.max(0, b.displayed))) / 100} ${C}`} transform="rotate(-90 60 60)" />
-            <text x={60} y={60} textAnchor="middle" fontFamily={FONT.mono} fontWeight={600} fontSize={28} fill={COLOR.ink}>{b.displayed}</text>
-            <text x={60} y={78} textAnchor="middle" fontFamily={FONT.mono} fontSize={9} fill={COLOR.steelDim} letterSpacing={1.5}>/ 100</text>
-          </svg>
-          <div style={{ fontSize: '0.78rem', fontWeight: 600, color: tone.color }}>{tone.label}</div>
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', color: COLOR.ink }}>
-            <thead>
-              <tr style={{ fontFamily: FONT.mono, fontSize: '0.54rem', letterSpacing: '0.1em', color: COLOR.steelDim, textAlign: 'right' }}>
-                <th style={{ textAlign: 'left', fontWeight: 500, paddingBottom: 3 }}>維度</th><th style={{ fontWeight: 500 }}>今日值</th><th style={{ fontWeight: 500 }}>權重</th><th style={{ fontWeight: 500 }}>貢獻分</th>
-              </tr>
-            </thead>
-            <tbody>
-              {b.rows.map(r => (
-                <tr key={r.key} style={{ borderTop: `1px solid ${COLOR.line}`, fontFamily: FONT.mono, textAlign: 'right' }}>
-                  <td style={{ textAlign: 'left', fontFamily: FONT.body, padding: '6px 0', color: drag?.key === r.key ? COLOR.warn : COLOR.steel }}>{r.label}</td>
-                  <td style={{ color: COLOR.ink }}>{r.value !== null ? r.value : '—'}</td>
-                  <td style={{ color: COLOR.steelDim }}>{r.weightPct}%</td>
-                  <td style={{ color: COLOR.ink }}>{r.points !== null ? r.points.toFixed(1) : '—'}</td>
-                </tr>
-              ))}
-              <tr style={{ borderTop: `1px solid ${COLOR.lineBright}`, fontFamily: FONT.mono, textAlign: 'right', color: COLOR.ink }}>
-                <td style={{ textAlign: 'left', fontFamily: FONT.body }}>加總</td><td /><td style={{ color: COLOR.steelDim }}>100%</td><td>{b.pointsSum.toFixed(1)}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div style={{ marginTop: 10, display: 'grid', gap: 4, fontSize: '0.82rem', color: COLOR.steelDim }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>基礎分（加權平均）</span><b style={{ fontFamily: FONT.mono, color: COLOR.steel, fontWeight: 500 }}>{b.base !== null ? b.base.toFixed(2) : '—'}</b></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>最弱項{b.weakestLabel ? `（${b.weakestLabel}）` : ''}</span><b style={{ fontFamily: FONT.mono, color: COLOR.steel, fontWeight: 500 }}>{b.weakestScore !== null ? b.weakestScore.toFixed(2) : '—'}</b></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>短板修正後 → 平滑後（顯示值）</span><b style={{ fontFamily: FONT.mono, color: COLOR.steel, fontWeight: 500 }}>{b.afterPenalty !== null ? b.afterPenalty : '—'} → {b.displayed}</b></div>
+        <div className="bd-hhi-left">
+          <Ring value={b.displayed} color={tone.color} />
+          <div style={{ fontSize: '0.92rem', fontWeight: 700, color: tone.color, letterSpacing: '0.04em' }}>{tone.label}</div>
+          <div className="bd-chain">
+            <span title="六個維度 今日值×權重 的加總">加權平均 <b>{b.base !== null ? b.base.toFixed(1) : '—'}</b></span>
+            <i>→</i>
+            <span title={`最弱項${b.weakestLabel ? `（${b.weakestLabel}）` : ''} ${b.weakestScore ?? '—'} 分拉低後`}>短板修正 <b>{b.afterPenalty ?? '—'}</b></span>
+            <i>→</i>
+            <span title="與前幾天平滑後的顯示值">顯示 <b style={{ color: tone.color }}>{b.displayed}</b></span>
           </div>
-          {drag && <div style={{ marginTop: 10, fontSize: '0.84rem', color: COLOR.steel }}>拉低總分最多：<b style={{ color: COLOR.warn }}>{drag.label}</b>（離滿分差 {100 - (drag.value ?? 0)} × 權重 {drag.weightPct}% ＝ 少 {(((100 - (drag.value ?? 0)) * drag.weightPct) / 100).toFixed(1)} 分）</div>}
+          <Spark points={hist.data ?? []} color={tone.color} />
+        </div>
+
+        <div className="bd-hhi-rows" role="table" aria-label="六維度：今日值 × 權重 ＝ 貢獻分">
+          <div className="bd-hrow bd-hhead" role="row">
+            <span role="columnheader">維度</span><span role="columnheader">今日值</span><span role="columnheader" /><span role="columnheader">權重</span><span role="columnheader">貢獻分</span>
+          </div>
+          {b.rows.map(r => {
+            const isDrag = drag?.key === r.key
+            return (
+              <button key={r.key} type="button" className={`bd-hrow${isDrag ? ' is-drag' : ''}`} role="row" onClick={() => open('hhi')} title={`${r.label}：${r.value ?? '—'} × ${r.weightPct}% ＝ ${r.points !== null ? r.points.toFixed(1) : '—'} 分（點開看六維度詳情）`}>
+                <span className="bd-hlabel" style={{ color: isDrag ? COLOR.warn : COLOR.ink }}>{r.label}</span>
+                <span className="bd-hval" style={{ color: r.value !== null ? barColor(r.value) : COLOR.steelDim }}>{r.value !== null ? r.value : '—'}</span>
+                <span className="bd-htrack"><i style={{ width: `${r.value !== null ? Math.max(2, r.value) : 0}%`, background: r.value !== null ? barColor(r.value) : COLOR.line }} /></span>
+                <span className="bd-hw">×{r.weightPct}%</span>
+                <span className="bd-hpts">{r.points !== null ? r.points.toFixed(1) : '—'}</span>
+              </button>
+            )
+          })}
+          <div className="bd-hrow bd-htotal" role="row">
+            <span>加總</span><span /><span /><span className="bd-hw">100%</span><span className="bd-hpts">{b.pointsSum.toFixed(1)}</span>
+          </div>
+          {drag && (
+            <div className="bd-hdrag">
+              拉低總分最多：<b style={{ color: COLOR.warn }}>{drag.label}</b>　離滿分差 {100 - (drag.value ?? 0)} × 權重 {drag.weightPct}% ＝ 少 <b style={{ color: COLOR.warn }}>{(((100 - (drag.value ?? 0)) * drag.weightPct) / 100).toFixed(1)}</b> 分
+            </div>
+          )}
         </div>
       </div>
     </Card>
@@ -298,6 +431,7 @@ function HhiCard({ data, toneOf }: { data: Record<string, unknown> | undefined; 
 
 // ── 事人物關係網路 ────────────────────────────────
 function NetworkCard({ pw }: { pw: string }) {
+  const open = useContext(DrawerCtx)
   const { data, error } = useLoad<HermesGraphData>(pw, apiFetchHermesGraph)
   const m = data?.metrics
   const tiles: Array<[string, string, string?]> = m ? [
@@ -305,7 +439,7 @@ function NetworkCard({ pw }: { pw: string }) {
     ['物件', String(m.objectsCount)], ['平均關聯人數', m.avgParticipantsPerEvent.toFixed(1), '每事件'], ['真孤兒事件率', `${m.trueOrphanEventRatioPct}%`, '無人物且無案件'],
   ] : []
   return (
-    <Card title="事人物關係網路" area="bd-net">
+    <Card title="事人物關係網路" area="bd-net" action={<MoreBtn onClick={() => open('ops')}>戰情室</MoreBtn>}>
       {error ? <Muted>暫時無法取得資料</Muted> : data === null ? <Muted>載入中…</Muted> : !m ? <Muted>資料準備中</Muted> : (
         <>
           <div className="bd-tiles">
@@ -333,10 +467,11 @@ const PIPE_STATIC: Record<'L1' | 'L2' | 'L3' | 'L4' | 'L5', [string, string]> = 
   L4: ['RAW 文件消化', '11:35 · 17:35'], L5: ['圖譜編織', '02:00（隔日一班）'],
 }
 function PipelineCard({ pw }: { pw: string }) {
+  const open = useContext(DrawerCtx)
   const { data, error } = useLoad<BoardPipeline>(pw, apiFetchBoardPipeline)
   const layers = (['L1', 'L2', 'L3', 'L4', 'L5'] as const)
   return (
-    <Card title="知識萃取管線 L1–L5" area="bd-pipe">
+    <Card title="知識萃取管線 L1–L5" area="bd-pipe" action={<MoreBtn onClick={() => open('ops')}>排程・歷史</MoreBtn>}>
       {error ? <Muted>暫時無法取得資料</Muted> : data === null ? <Muted>載入中…</Muted> : !data.available ? <Muted>尚無管線資料</Muted> : (
         <div className="bd-pipe-list">
           {layers.map(k => {
@@ -344,11 +479,11 @@ function PipelineCard({ pw }: { pw: string }) {
             const sched = l.schedule && l.schedule.length ? l.schedule.join(' · ') : PIPE_STATIC[k][1]
             const color = l.health === 'ok' ? COLOR.ok : l.health === 'crit' ? COLOR.crit : COLOR.steelDim
             return (
-              <div key={k} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 8, alignItems: 'center', background: COLOR.panelRaised, borderRadius: 6, padding: '5px 8px' }}>
-                <b style={{ fontFamily: FONT.mono, fontSize: '0.84rem', color: COLOR.amber }}>{k}</b>
+              <div key={k} className="bd-pipe-row" style={{ background: COLOR.panelRaised }}>
+                <b className="bd-pipe-k" style={{ color: COLOR.amber }}>{k}</b>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.76rem', color: COLOR.steel, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{PIPE_STATIC[k][0]} · {sched}</div>
-                  <div style={{ fontSize: '0.64rem', color: l.errorSummary ? COLOR.crit : COLOR.steelDim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.errorSummary ?? `上次 ${minutesAgo(l.lastRunTs !== null ? l.lastRunTs : null)}`}</div>
+                  <div className="bd-pipe-main" style={{ color: COLOR.steel }}>{PIPE_STATIC[k][0]} · {sched}</div>
+                  <div className="bd-pipe-sub" style={{ color: l.errorSummary ? COLOR.crit : COLOR.steelDim }}>{l.errorSummary ?? `上次 ${minutesAgo(l.lastRunTs !== null ? l.lastRunTs : null)}`}</div>
                 </div>
                 <span title={l.health} style={{ width: 9, height: 9, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}` }} />
               </div>
@@ -378,7 +513,7 @@ function DiskBlock({ pw, status }: { pw: string; status: BoardStatus }) {
         <span style={{ fontFamily: FONT.mono, fontSize: '0.7rem', color: COLOR.steel }}>已用 {usedGb.toFixed(1)} / {worst.totalGb.toFixed(1)} GB · 剩 {worst.freeGb.toFixed(1)} GB</span>
       </div>
       <div style={{ fontSize: '0.7rem', color: tone, lineHeight: 1.45 }}>{f.text}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: '0.8rem', minHeight: 0 }}>
+      <div className="bd-disk-detail">
         <div style={{ minWidth: 0 }}><UsedChart points={points} /></div>
         <div style={{ minWidth: 0, display: 'grid', gap: 5, alignContent: 'start' }}>
           {shares.length === 0 ? <Muted>尚無分項資料</Muted> : shares.map(sh => (
@@ -399,6 +534,7 @@ function DiskBlock({ pw, status }: { pw: string; status: BoardStatus }) {
 }
 
 function SystemCard({ pw }: { pw: string }) {
+  const open = useContext(DrawerCtx)
   const { data, error } = useLoad<BoardStatus>(pw, apiFetchBoardStatus)
   const ok = data && data.available ? data : null
   const cOk = ok ? ok.containers.filter(c => !/exit|dead|unhealthy/i.test(`${c.status} ${c.health ?? ''}`)).length : 0
@@ -408,7 +544,7 @@ function SystemCard({ pw }: { pw: string }) {
     ['容器健康', ok.containers.length ? `${cOk} / ${ok.containers.length}` : '—', ok.containers.length === 0 ? COLOR.steelDim : cOk < ok.containers.length ? COLOR.warn : COLOR.ok],
   ] : []
   return (
-    <Card title="主機健康與硬碟容量" area="bd-sys" tag={ok?.stale ? <Chip color={COLOR.warn}>資料已過期</Chip> : undefined}>
+    <Card title="主機健康與硬碟容量" area="bd-sys" tag={ok?.stale ? <Chip color={COLOR.warn}>資料已過期</Chip> : undefined} action={<MoreBtn onClick={() => open('ops')}>容器・趨勢</MoreBtn>}>
       {error ? <Muted>暫時無法取得資料</Muted> : data === null ? <Muted>載入中…</Muted> : !ok ? <Muted>尚無主機資料</Muted> : (
         <div className="bd-sys-wrap" style={{ opacity: ok.stale ? 0.55 : 1 }}>
           <div className="bd-sys-grid">
@@ -426,13 +562,19 @@ function SystemCard({ pw }: { pw: string }) {
   )
 }
 
-export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRequestUnlock }: {
+export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRequestUnlock, hhiDetail, opsDetail }: {
   unlocked: boolean
   unlockedPassword: string | null
   hhiData: Record<string, unknown> | undefined
   toneOf: (s: number) => { color: string; label: string }
   onRequestUnlock: () => void
+  /** 抽屜「幸福指數詳情」：雷達、30 天洞察、歷史趨勢、六維度子系統（App.tsx 組好傳進來） */
+  hhiDetail: ReactNode
+  /** 抽屜「HERMES 戰情室」：關係網路圖、管線歷史、硬碟分項、排程、近期活動、容器、趨勢 */
+  opsDetail: ReactNode
 }) {
+  const [drawer, setDrawer] = useState<DrawerKey | null>(null)
+  const close = useCallback(() => setDrawer(null), [])
   if (!unlocked || !unlockedPassword) {
     return (
       <div className="ip-board" style={{ display: 'grid', placeItems: 'center' }}>
@@ -441,12 +583,16 @@ export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRe
     )
   }
   return (
-    <div className="ip-board">
-      <HhiCard data={hhiData} toneOf={toneOf} />
-      <OllamaCard pw={unlockedPassword} />
-      <NetworkCard pw={unlockedPassword} />
-      <PipelineCard pw={unlockedPassword} />
-      <SystemCard pw={unlockedPassword} />
-    </div>
+    <DrawerCtx.Provider value={setDrawer}>
+      <div className="ip-board">
+        <HhiCard pw={unlockedPassword} data={hhiData} toneOf={toneOf} />
+        <OllamaCard pw={unlockedPassword} />
+        <NetworkCard pw={unlockedPassword} />
+        <PipelineCard pw={unlockedPassword} />
+        <SystemCard pw={unlockedPassword} />
+      </div>
+      {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={close}>{hhiDetail}</Drawer>}
+      {drawer === 'ops' && <Drawer title="HERMES 戰情室：關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={close}>{opsDetail}</Drawer>}
+    </DrawerCtx.Provider>
   )
 }
