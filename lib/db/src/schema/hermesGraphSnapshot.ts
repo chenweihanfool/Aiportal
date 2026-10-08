@@ -44,6 +44,9 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
       // 2026-10 — 事件檔的建立時間（ISO 8601，含時區）。可選欄位：舊版 pusher 沒有，讀取端一律容忍（日報「當日事件」
       // 時間軸才用；沒有就排在最後並明標無時間）。jsonb，不需 DB migration。
       createdAt?: string | null;
+      // 2026-10-09 — 寫進日記那一行的時間（日記行首時戳；kb-pipeline kbcore/diary_time.py）。只有日記來源且對得回才有，
+      // 時間軸優先顯示它；沒有就退回 createdAt（萃取時刻）。jsonb，不需 DB migration。
+      writtenAt?: string | null;
       concepts?: Array<{ name: string; relation?: string }>;
       methods?: Array<{ name: string; relation?: string }>;
     }>

@@ -17,14 +17,24 @@ export function eventTimeLabel(createdAt: string | null | undefined, dayKey: str
   return p.date === dayKey ? p.hm : `${p.date.slice(5)} ${p.hm}`
 }
 
-/** 完整時間（hover 用）：`YYYY-MM-DD HH:mm（台北）`。 */
-export function eventTimeTitle(createdAt: string | null | undefined): string | undefined {
-  if (!createdAt) return undefined
-  const p = parts(Date.parse(createdAt))
-  return p ? `建立於 ${p.date} ${p.hm}（台北）` : undefined
+const valid = (s: string | null | undefined): s is string => !!s && !Number.isNaN(Date.parse(s))
+
+/** 要顯示的時間：寫進日記那一行的時間（writtenAt）優先；日記那行沒有時戳時退回萃取時刻（createdAt）。 */
+export function eventDisplayTime(ev: { createdAt: string | null; writtenAt?: string | null }): { iso: string | null; source: 'diary' | 'extracted' | null } {
+  if (valid(ev.writtenAt)) return { iso: ev.writtenAt, source: 'diary' }
+  if (valid(ev.createdAt)) return { iso: ev.createdAt, source: 'extracted' }
+  return { iso: null, source: null }
 }
 
-/** 這一天的事件裡有幾筆有可用的建立時間（全沒有時，畫面要明標「尚無建立時間資料」）。 */
-export function countWithTime(events: Array<{ createdAt: string | null }>): number {
-  return events.filter(e => e.createdAt && !Number.isNaN(Date.parse(e.createdAt))).length
+/** 完整時間（hover 用）：`寫進日記 YYYY-MM-DD HH:mm（台北）`；退回萃取時刻時註明。 */
+export function eventTimeTitle(iso: string | null | undefined, source: 'diary' | 'extracted' | null = 'extracted'): string | undefined {
+  if (!iso) return undefined
+  const p = parts(Date.parse(iso))
+  if (!p) return undefined
+  return source === 'diary' ? `寫進日記 ${p.date} ${p.hm}（台北）` : `萃取於 ${p.date} ${p.hm}（台北；日記那行沒有時戳或非日記來源）`
+}
+
+/** 這一天的事件裡有幾筆有可用的時間（全沒有時，畫面要明標「尚無時間資料」）。 */
+export function countWithTime(events: Array<{ createdAt: string | null; writtenAt?: string | null }>): number {
+  return events.filter(e => eventDisplayTime(e).iso !== null).length
 }
