@@ -59,7 +59,13 @@ const usage = () => {
 const graph = { available: true, computedAt: new Date().toISOString(), metrics: { peopleCount: 186, eventsCount: 1156, casesCount: 52, objectsCount: 626, avgParticipantsPerEvent: 0.9, orphanEventRatioPct: 51, trueOrphanEventRatioPct: 20, newEventsThisWeek: 5, newPeopleThisWeek: 1, mostActivePerson: { name: '呂佳泰', eventCount: 48 }, activeCasesCount: 52, personRelationsCount: 0 }, graph: { people: [], events: [], cases: [], objects: [], edges: [], caseEdges: [], objectEdges: [], personRelations: [], hubNarratives: [], hubAssessments: [] } }
 const layer = (h = 'ok') => ({ status: 'success', lastRun: '', lastRunTs: Date.now() - 5 * 3600e3, processed: 1, committed: 1, failed: 0, backlog: 0, errorSummary: null, durationSeconds: 60, health: h })
 const pipeline = { available: true, computedAt: new Date().toISOString(), layers: { L1: { ...layer(), schedule: ['10:30', '16:30', '20:30'] }, L2: layer(), L3: layer(), L4: layer(), L5: layer() } }
-const status = { available: true, stale: false, computedAt: new Date().toISOString(), scheduledTasks: [{ name: 'L1 日記快掃', lastRunTime: new Date().toISOString(), lastTaskResult: 0, schedule: '10:30 16:30 20:30' }],  diskAlert: 'ok', storage: [{ label: 'vault', bytes: 12e9 }, { label: 'docker', bytes: 8e9 }, { label: '其他', bytes: 5e9 }], cpuPercent: 0, memPercent: 32, disks: [{ drive: '/opt/data', percentUsed: 38, freeGb: 64, totalGb: 102.9 }], containers: Array.from({ length: 12 }, (_, i) => ({ name: 'c' + i, project: null, status: 'running', health: 'healthy' })), scheduledTasks: [], computedAt: new Date().toISOString(), stale: false, diskForecast: { basedOnDays: 7, insufficient: false, growthGbPerDay: 0.5, daysUntilFull: 80 } }
+const status = { available: true, stale: false, computedAt: new Date().toISOString(), scheduledTasks: [{ name: 'L1 日記快掃', lastRunTime: new Date().toISOString(), lastTaskResult: 0, schedule: '10:30 16:30 20:30' }],  diskAlert: 'ok', storage: [{ label: 'vault', bytes: 12e9 }, { label: 'docker', bytes: 8e9 }, { label: '其他', bytes: 5e9 }], cpuPercent: 0, memPercent: 32, disks: [{ drive: '/opt/data', percentUsed: 38, freeGb: 64, totalGb: 102.9 }], containers: Array.from({ length: 12 }, (_, i) => ({ name: 'c' + i, project: null, status: 'running', health: 'healthy' })), scheduledTasks: [], computedAt: new Date().toISOString(), stale: false,
+  pushers: [
+    { feed: 'hermes-graph', path: '/api/admin/hermes-graph', lastOk: new Date().toISOString(), lastFail: null, lastError: null, ageMin: 3, expectedEveryMin: 10, bytes: 900000, okCount: 40, failCount: 0, level: 'ok' },
+    { feed: 'hermes-usage', path: '/api/admin/hermes-usage', lastOk: null, lastFail: new Date().toISOString(), lastError: 'HTTP 502 /api/admin/hermes-usage', ageMin: null, expectedEveryMin: 720, bytes: null, okCount: 0, failCount: 2, level: 'crit' },
+    { feed: 'hermes-doc', path: null, lastOk: null, lastFail: null, lastError: null, ageMin: null, expectedEveryMin: null, bytes: null, okCount: 0, failCount: 0, level: 'ok' },
+  ],
+  diskForecast: { basedOnDays: 7, insufficient: false, growthGbPerDay: 0.5, daysUntilFull: 80 } }
 
 // 想法庫（數字仿 2026-10-09 回補後的分佈：系統、工作改善最多）。系統類也參加排名（使用者 2026-10-09 裁定）。
 const IDEA_CATS = ['系統', '工作改善', '財務', '學習', '生活', '健身', '旅遊', '系統', '工作改善', '系統', '財務', '工作改善']
@@ -180,6 +186,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   const sc = await page.evaluate(() => { const e = document.querySelector('.ip-scroll'); return e ? { sh: e.scrollHeight, ch: e.clientHeight } : null })
   check(`${w}×${h}：首頁不必縱向捲動（${sc?.sh} ≤ ${sc?.ch}+2）`, !!sc && sc.sh <= sc.ch + 2)
   check(`${w}×${h}：硬碟容量融入主機卡（百分比、預估${h >= 800 ? '、分項' : '；矮視窗分項收進抽屜'}）`, /硬碟容量/.test(txt) && /個月後寫滿/.test(txt) && (h < 800 || /vault/.test(txt)))
+  check(`${w}×${h}：主機卡標題旁提醒推送落後`, /推送 1 項落後/.test(await page.locator('.bd-sys h2').innerText()))
   check(`${w}×${h}：關係網路用真實數字（186／1156）`, /186/.test(txt) && /1156/.test(txt))
   check(`${w}×${h}：Ollama 小卡尚無餘額時顯示輸入提示與「粗估」`, /還沒輸入餘額/.test(txt) && /粗估/.test(txt) && /預估用完/.test(txt) && (await page.locator('.bd-oll .bd-kv').count()) === 1)
   await page.screenshot({ path: path.join(SHOTS, `board-${w}x${h}-empty.png`) })
@@ -202,6 +209,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     await page.waitForSelector('.bd-drawer')
     await page.waitForTimeout(800)
     const d2 = await page.locator('.bd-drawer').innerText()
+    check('戰情室抽屜最上方有入口網推送健康表（3 種資料、失敗那列顯示錯誤）', (await page.locator('.bd-drawer .bd-push-row').count()) === 3 && /入口網推送健康/.test(d2) && /1 項需要注意/.test(d2) && /HTTP 502/.test(d2) && /有變動才送/.test(d2), d2.slice(0, 300))
     check('戰情室抽屜：排程任務、近期活動、容器清單、近期趨勢、硬碟容量都在', ['排程任務狀態', '近期活動', '容器清單', '近期趨勢', '硬碟容量'].every((k) => d2.includes(k)), d2.slice(0, 200))
     await page.screenshot({ path: path.join(SHOTS, 'drawer-ops.png') })
     await page.keyboard.press('Escape')

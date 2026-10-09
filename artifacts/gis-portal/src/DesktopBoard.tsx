@@ -3,7 +3,7 @@ import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
-  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type IdeaItem, type IdeasData, type IdeasMind, type UsageData,
+  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type PusherHealth, type IdeaItem, type IdeasData, type IdeasMind, type UsageData,
 } from './boardApi'
 import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
@@ -788,6 +788,48 @@ function DiskBlock({ pw, status }: { pw: string; status: BoardStatus }) {
   )
 }
 
+// 入口網推送健康：每種資料最後一次推送成功的時間、間隔與錯誤（kb-pipeline 的 kbcore/portal_push）
+const FEED_LABEL: Record<string, string> = {
+  'hermes-graph': '關係圖', 'hermes-doc': '事件內文', 'hermes-status': '主機狀態', 'hermes-activity': '近期活動',
+  'hermes-pipeline': '管線狀態', 'social-index': '社交指標', 'mind-engagement': '心智（日記篇數）',
+  'hermes-timeline': '時間軸', 'hermes-usage': 'Ollama 用量', 'hermes-ideas': '想法庫', 'life-score': '知識庫健康',
+}
+const fmtEvery = (m: number | null) => (m === null ? '有變動才送' : m < 60 ? `每 ${m} 分` : m < 1440 ? `約每 ${Math.round(m / 60)} 小時` : '每天')
+const fmtAge = (m: number | null) => (m === null ? '—' : m < 60 ? `${Math.round(m)} 分鐘前` : m < 2880 ? `${Math.round(m / 60)} 小時前` : `${Math.round(m / 1440)} 天前`)
+
+export function pusherSummary(rows: PusherHealth[] | null | undefined): { bad: number; total: number; level: 'ok' | 'warn' | 'crit' } | null {
+  if (!rows || rows.length === 0) return null
+  const bad = rows.filter(r => r.level !== 'ok').length
+  return { bad, total: rows.length, level: rows.some(r => r.level === 'crit') ? 'crit' : bad ? 'warn' : 'ok' }
+}
+
+function PusherHealthPanel({ pw }: { pw: string }) {
+  const { data } = useLoad<BoardStatus>(pw, apiFetchBoardStatus)
+  const rows = data?.pushers
+  if (!rows || rows.length === 0) return null
+  const sum = pusherSummary(rows)!
+  return (
+    <section style={{ marginBottom: '1.4rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <h3 style={{ margin: 0, fontFamily: FONT.display, fontSize: '0.95rem', color: COLOR.ink }}>入口網推送健康</h3>
+        <Chip color={levelColor(sum.level)}>{sum.bad ? `${sum.bad} 項需要注意` : `${sum.total} 項都正常`}</Chip>
+        <span style={{ fontSize: '0.7rem', color: COLOR.steelDim }}>VPS 推給入口網的每種資料，最後一次成功的時間（主機狀態每 10 分鐘帶上來）</span>
+      </div>
+      <div className="bd-push-table" role="table" aria-label="入口網推送健康">
+        {rows.map(r => (
+          <div key={r.feed} role="row" className="bd-push-row">
+            <span role="cell"><i className="bd-push-dot" style={{ background: levelColor(r.level) }} />{FEED_LABEL[r.feed] ?? r.feed}</span>
+            <span role="cell" style={{ color: COLOR.steelDim }}>{fmtEvery(r.expectedEveryMin)}</span>
+            <span role="cell" style={{ color: r.level === 'ok' ? COLOR.ink : levelColor(r.level) }}>{r.lastOk ? fmtAge(r.ageMin) : '還沒推過'}</span>
+            <span role="cell" style={{ color: COLOR.steelDim }}>成功 {r.okCount}・失敗 {r.failCount}</span>
+            <span role="cell" className="bd-push-err" title={r.lastError ?? ''}>{r.lastError ?? ''}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function SystemCard({ pw }: { pw: string }) {
   const open = useContext(DrawerCtx)
   const { data, error } = useLoad<BoardStatus>(pw, apiFetchBoardStatus)
@@ -799,7 +841,12 @@ function SystemCard({ pw }: { pw: string }) {
     ['容器健康', ok.containers.length ? `${cOk} / ${ok.containers.length}` : '—', ok.containers.length === 0 ? COLOR.steelDim : cOk < ok.containers.length ? COLOR.warn : COLOR.ok],
   ] : []
   return (
-    <Card title="主機健康與硬碟容量" area="bd-sys" tag={ok?.stale ? <Chip color={COLOR.warn}>資料已過期</Chip> : undefined} action={<MoreBtn onClick={() => open('ops')}>容器・趨勢</MoreBtn>}>
+    <Card title="主機健康與硬碟容量" area="bd-sys"
+      tag={ok?.stale ? <Chip color={COLOR.warn}>資料已過期</Chip> : (() => {
+        const ps = pusherSummary(ok?.pushers)
+        return ps && ps.level !== 'ok' ? <Chip color={levelColor(ps.level)}>推送 {ps.bad} 項落後</Chip> : undefined
+      })()}
+      action={<MoreBtn onClick={() => open('ops')}>容器・趨勢</MoreBtn>}>
       {error ? <Muted>暫時無法取得資料</Muted> : data === null ? <Muted>載入中…</Muted> : !ok ? <Muted>尚無主機資料</Muted> : (
         <div className="bd-sys-wrap" style={{ opacity: ok.stale ? 0.55 : 1 }}>
           <div className="bd-sys-grid">
@@ -852,7 +899,7 @@ export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRe
       {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={close}>{hhiDetail}</Drawer>}
       {drawer === 'ideas' && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={close}><IdeasPanel pw={unlockedPassword} /></Drawer>}
       {drawer === 'oll' && <Drawer title="Ollama 雲端用量：餘額走勢・每日請求・更新餘額" onClose={close}><OllamaPanel pw={unlockedPassword} /></Drawer>}
-      {drawer === 'ops' && <Drawer title="HERMES 戰情室：關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={close}>{opsDetail}</Drawer>}
+      {drawer === 'ops' && <Drawer title="HERMES 戰情室：推送健康・關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={close}><PusherHealthPanel pw={unlockedPassword} />{opsDetail}</Drawer>}
     </DrawerCtx.Provider>
   )
 }
