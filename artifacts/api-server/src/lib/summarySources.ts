@@ -1,5 +1,5 @@
 import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
-import { loadIdeasMind } from "./ideasMind";
+import { loadIdeasMind } from "./ideasMindSource";
 import { desc, eq, lt } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,

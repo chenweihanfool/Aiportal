@@ -1,5 +1,4 @@
-import { db, hermesIdeasSnapshotTable, type HermesIdea } from "@workspace/db"
-import { eq } from "drizzle-orm"
+import type { HermesIdea } from "@workspace/db"
 
 // 💡 心智分數（想法版，2026-10-09 第四期）：取代「近 3 天日記篇數」當幸福指數的心智維度。
 // 使用者 2026-10-09：「心智分數要改成跟這個想法卡片掛勾 不要再粗略地數日記篇數了 … 以一星期為單位
@@ -73,12 +72,3 @@ export function computeIdeasMind(ideas: HermesIdea[], today: string): IdeasMind 
   }
 }
 
-/** 讀最新的想法庫快照現算；還沒推過任何想法時回 null（不寫假分數） */
-export async function loadIdeasMind(today: string): Promise<IdeasMind | null> {
-  const [row] = await db
-    .select({ ideas: hermesIdeasSnapshotTable.ideas })
-    .from(hermesIdeasSnapshotTable)
-    .where(eq(hermesIdeasSnapshotTable.id, "latest"))
-    .limit(1)
-  return row && row.ideas.length > 0 ? computeIdeasMind(row.ideas, today) : null
-}
