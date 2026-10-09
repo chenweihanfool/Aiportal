@@ -273,11 +273,16 @@ body,
   .bd-idea-detail { padding: 0 12px 10px calc(5.6em + 22px); font-size: 0.76rem; color: #9aa4b6; line-height: 1.6; }
   .bd-idea-detail p { margin: 2px 0; }
   .bd-idea-detail b { color: #ece9e2; font-weight: 500; }
-  .bd-push-table { display: grid; gap: 2px; font-size: 0.78rem; }
+  .bd-push-table { display: grid; gap: 2px; font-size: 0.8rem; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #9aa4b6; }
   .bd-push-row { display: grid; grid-template-columns: minmax(9em, 1.1fr) 7em 7em 9em minmax(0, 2fr); gap: 10px; align-items: center; padding: 5px 10px; border-radius: 6px; background: #24262e; }
   .bd-push-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bd-push-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 8px; vertical-align: middle; }
-  .bd-push-err { color: #e8b23d; font-size: 0.7rem; }
+  .bd-push-err { color: #e8b23d; font-size: 0.72rem; }
+  /* 字色（2026-10-09 使用者回饋）：名稱亮白、頻率與次數中灰、時間數字用等寬字；原本名稱沒設色而變成暗色、次數用了襯線字 */
+  .bd-push-name { color: #ece9e2; font-weight: 500; }
+  .bd-push-dim { color: #9aa4b6; }
+  .bd-push-dim b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: #ece9e2; }
+  .bd-push-age { color: #ece9e2; font-weight: 600; font-family: "IBM Plex Mono", "Noto Sans TC", ui-monospace, monospace; }
   .bd-idea-copy { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #3a3d47; display: flex; flex-direction: column; gap: 6px; }
   .bd-idea-copytext { margin: 4px 0 0; padding: 6px 8px; background: #121319; border: 1px solid #3a3d47; border-radius: 4px; color: #ece9e2; white-space: pre-wrap; user-select: all; font-size: 0.74rem; }
   .bd-sys-wrap { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
