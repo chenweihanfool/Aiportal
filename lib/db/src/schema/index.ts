@@ -13,3 +13,4 @@ export * from "./hermesPipelineHistory";
 export * from "./hermesTimelineEntry";
 export * from "./hermesDoc";
 export * from "./hermesUsage";
+export * from "./hermesIdeas";

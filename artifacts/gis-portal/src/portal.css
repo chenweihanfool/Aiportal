@@ -230,6 +230,7 @@ body,
   .ip-board > .bd-card:nth-child(3) { animation-delay: 0.12s; }
   .ip-board > .bd-card:nth-child(4) { animation-delay: 0.18s; }
   .ip-board > .bd-card:nth-child(5) { animation-delay: 0.24s; }
+  .ip-board > .bd-card:nth-child(6) { animation-delay: 0.30s; }
   .bd-dot { width: 7px; height: 7px; border-radius: 2px; background: #f5a623; box-shadow: 0 0 8px rgba(245,166,35,0.7); flex-shrink: 0; }
   .bd-more {
     flex-shrink: 0; cursor: pointer; font-family: "Noto Sans TC", sans-serif; font-size: 0.66rem; font-weight: 500;
@@ -238,11 +239,40 @@ body,
   }
   .bd-more:hover, .bd-more:focus-visible { background: rgba(245,166,35,0.16); border-color: #f5a623; outline: none; }
 
-  .bd-hhi { grid-column: span 7; }
-  .bd-oll { grid-column: span 5; }
+  /* 第一列：幸福指數（主體）＋想法庫＋縮小的 Ollama；第二列：關係網路、管線、主機各三分之一 */
+  .bd-hhi { grid-column: span 6; }
+  .bd-idea { grid-column: span 4; }
+  .bd-oll { grid-column: span 2; }
   .bd-net { grid-column: span 4; }
   .bd-pipe { grid-column: span 4; }
   .bd-sys { grid-column: span 4; }
+
+  /* 💡 想法庫卡：上＝前三名（三列平分高度），下＝近 8 週新想法／實行小長條 */
+  .bd-idea-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .bd-idea-top { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(4px, 0.8vh, 8px); }
+  .bd-idea-row {
+    display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 10px; align-items: center;
+    min-height: 0; overflow: hidden; padding: 0 10px; border-radius: 8px; background: #24262e; border: 1px solid transparent;
+    transition: border-color 0.15s ease;
+  }
+  .bd-idea-row:hover { border-color: #3a3d47; }
+  .bd-idea-rank { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 700; font-size: clamp(1.2rem, 3vh, 1.9rem); line-height: 1; text-align: center; }
+  .bd-idea-title { color: #ece9e2; font-weight: 600; font-size: clamp(0.78rem, 1.7vh, 0.98rem); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .bd-idea-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.64rem; color: #5b6270; }
+  .bd-idea-meta b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; color: #9aa4b6; letter-spacing: 0.04em; }
+  .bd-idea-why { font-size: 0.66rem; color: #9aa4b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bd-idea-score { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: clamp(0.9rem, 2vh, 1.2rem); color: #f5a623; }
+  .bd-idea-foot { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 12px; }
+  .bd-cat { display: inline-block; font-size: 0.6rem; line-height: 1.2; padding: 1px 7px; border: 1px solid; border-radius: 999px; white-space: nowrap; font-weight: 500; }
+  .bd-idea-list { display: flex; flex-direction: column; gap: 6px; }
+  .bd-idea-item { background: #24262e; border-radius: 8px; border: 1px solid transparent; }
+  .bd-idea-item[open] { border-color: #3a3d47; }
+  .bd-idea-item summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 5.6em minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; font-size: 0.86rem; }
+  .bd-idea-item summary::-webkit-details-marker { display: none; }
+  .bd-idea-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.68rem; color: #5b6270; }
+  .bd-idea-detail { padding: 0 12px 10px calc(5.6em + 22px); font-size: 0.76rem; color: #9aa4b6; line-height: 1.6; }
+  .bd-idea-detail p { margin: 2px 0; }
+  .bd-idea-detail b { color: #ece9e2; font-weight: 500; }
   .bd-sys-wrap { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
   .bd-oll-body {
     display: grid;
@@ -332,15 +362,18 @@ body,
 /* 視窗矮（< 800px）：主機卡放不下硬碟曲線與分項，只留百分比與預估；完整硬碟面板在「容器・趨勢」抽屜裡 */
 @media (min-width: 1100px) and (min-height: 640px) and (max-height: 799px) {
   .bd-disk-detail { display: none; }
+  /* 想法庫前三名：矮視窗標題只留一行（滑過可看完整「為什麼」，全文在「全部想法」抽屜） */
+  .bd-idea-title { -webkit-line-clamp: 1; }
 }
 @media (min-width: 1100px) and (min-height: 640px) and (prefers-reduced-motion: reduce) {
   .bd-card, .bd-drawer, .bd-drawer-backdrop, .bd-htrack i { animation: none; }
 }
-/* 視窗只有 1100–1239px 寬：Ollama 卡片左右兩欄太擠，改成上下各佔一列；第二列三張各佔一半寬 */
+/* 視窗只有 1100–1239px 寬：第一列兩張太擠，改成上下各佔一列；第二列四張各佔一半寬 */
 @media (min-width: 1100px) and (max-width: 1239px) and (min-height: 640px) {
-  .bd-oll { grid-column: span 12; }
   .bd-hhi { grid-column: span 12; }
-  .bd-net, .bd-pipe, .bd-sys { grid-column: span 6; }
+  .bd-idea { grid-column: span 8; }
+  .bd-oll { grid-column: span 4; }
+  .bd-net, .bd-pipe, .bd-sys { grid-column: span 4; }
   .ip-board { grid-template-rows: none; grid-auto-rows: minmax(300px, auto); }
   .ip-board-wrap { height: auto; }
 }

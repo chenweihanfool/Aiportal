@@ -1,8 +1,8 @@
 // 桌面首頁儀表板（DesktopBoard）真實瀏覽器驗證（手動執行；不在 CI 內，同 timeline.e2e.mjs 的做法）。
 //
-// 做什麼：本機靜態伺服器提供 dist/public，以「假 API」模擬 sites／dashboard／hermes-usage／graph／pipeline／status，
-// 用 Playwright 驅動 Chromium 驗證：1920×1080 與 1440×900 一個畫面放得下（頁面不需捲動就看得到五張卡）、
-// 卡片內容沒有被裁切、手動輸入餘額會 POST 並重畫、手機寬度不顯示儀表板且不橫向捲動。全程不碰任何真實服務。
+// 做什麼：本機靜態伺服器提供 dist/public，以「假 API」模擬 sites／dashboard／hermes-usage／hermes-ideas／graph／pipeline／status，
+// 用 Playwright 驅動 Chromium 驗證：各種桌面尺寸一個畫面放得下（頁面不需捲動就看得到六張卡）、
+// 卡片內容沒有被裁切、想法庫前三名與抽屜篩選、Ollama 小卡＋抽屜輸入餘額會 POST 並重畫、手機寬度不顯示儀表板且不橫向捲動。全程不碰任何真實服務。
 //
 // 執行：
 //   BASE_PATH=/ PORT=5174 pnpm --filter @workspace/gis-portal run build
@@ -61,6 +61,29 @@ const layer = (h = 'ok') => ({ status: 'success', lastRun: '', lastRunTs: Date.n
 const pipeline = { available: true, computedAt: new Date().toISOString(), layers: { L1: { ...layer(), schedule: ['10:30', '16:30', '20:30'] }, L2: layer(), L3: layer(), L4: layer(), L5: layer() } }
 const status = { available: true, stale: false, computedAt: new Date().toISOString(), scheduledTasks: [{ name: 'L1 日記快掃', lastRunTime: new Date().toISOString(), lastTaskResult: 0, schedule: '10:30 16:30 20:30' }],  diskAlert: 'ok', storage: [{ label: 'vault', bytes: 12e9 }, { label: 'docker', bytes: 8e9 }, { label: '其他', bytes: 5e9 }], cpuPercent: 0, memPercent: 32, disks: [{ drive: '/opt/data', percentUsed: 38, freeGb: 64, totalGb: 102.9 }], containers: Array.from({ length: 12 }, (_, i) => ({ name: 'c' + i, project: null, status: 'running', health: 'healthy' })), scheduledTasks: [], computedAt: new Date().toISOString(), stale: false, diskForecast: { basedOnDays: 7, insufficient: false, growthGbPerDay: 0.5, daysUntilFull: 80 } }
 
+// 想法庫（數字仿 2026-10-09 回補後的分佈：系統、工作改善最多）。系統類也參加排名（使用者 2026-10-09 裁定）。
+const IDEA_CATS = ['系統', '工作改善', '財務', '學習', '生活', '健身', '旅遊', '系統', '工作改善', '系統', '財務', '工作改善']
+const ideaItems = IDEA_CATS.map((category, i) => {
+  const status = i === 4 ? 'done' : i === 9 ? 'dropped' : i === 1 ? 'doing' : 'new'
+  const open = ['new', 'evaluating', 'doing'].includes(status)
+  const base = 22 - i * 1.5
+  const weak = category === '旅遊'
+  return {
+    id: `IDEA-${String(i + 1).padStart(4, '0')}`,
+    title: i === 0 ? '把 HERMES 的管線健康度做成每週自動體檢報告並推送到手機，異常時附上建議修法' : `想法 ${i + 1}：${category}方面想試試的一件事`,
+    category, dimension: weak ? '旅遊生活' : null, source: i % 3 === 0 ? '我' : 'HERMES',
+    why: i === 0 ? '每週不用自己翻 log，就知道哪一層快出事；這一句故意寫很長來測試首頁會不會把字截斷或撐破卡片版面' : '一閃而過但值得記下來',
+    value: 1 + (i % 5), effort: 1 + ((i * 2) % 5), status, bornAt: `${dayAt(i * 5)}T10:00:00+08:00`, lastMentioned: `${dayAt(i * 3)}T10:00:00+08:00`,
+    mentions: i === 2 ? 3 : 1, backfill: i > 6, days: [dayAt(i * 5)], history: [{ status: 'new', at: `${dayAt(i * 5)}T10:00:00+08:00` }],
+    score: open ? Math.round(base * (weak ? 1.3 : 1) * 100) / 100 : null,
+    scoreWhy: open ? [`價值 ${1 + (i % 5)} × 可行 ${5 - ((i * 2) % 5)}`, ...(weak ? ['補短板：「旅遊生活」是幸福指數最弱項 ×1.3'] : [])] : [],
+    weakBoost: weak,
+  }
+})
+const ideasTop = ideaItems.filter((i) => i.score !== null).sort((a, b) => b.score - a.score).slice(0, 3).map((i) => i.id)
+const ideas = { available: true, generatedAt: today, receivedAt: new Date().toISOString(), weakest: '旅遊生活', ideas: ideaItems, top: ideasTop,
+  weeks: Array.from({ length: 8 }, (_, i) => ({ weekStart: dayAt(49 - i * 7), born: [2, 0, 5, 3, 1, 4, 6, 2][i], done: [0, 1, 0, 0, 2, 0, 1, 1][i] })) }
+
 const posted = []
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x')
@@ -72,6 +95,7 @@ const server = http.createServer((req, res) => {
     if (u.pathname === '/api/auth/me') return json({ message: 'none' }, 404)
     if (!authed && u.pathname !== '/api/happiness-index/history') return json({ message: 'no' }, 403)
     if (u.pathname === '/api/hermes-usage') return json(usage())
+    if (u.pathname === '/api/hermes-ideas') return json(ideas)
     if (u.pathname === '/api/hermes-graph') return json(graph)
     if (u.pathname === '/api/hermes-pipeline') return json(pipeline)
     if (u.pathname === '/api/hermes-status') return json(status)
@@ -120,20 +144,28 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   entries = []
   const { ctx, page, errors } = await newPage({ width: w, height: h })
   await page.goto(base + '/')
-  await page.waitForSelector('.bd-oll .bd-oll-body', { timeout: 15000 })
+  await page.waitForSelector('.bd-idea .bd-idea-row', { timeout: 15000 })
+  await page.waitForSelector('.bd-oll .bd-kv')
   await page.waitForSelector('.bd-net .bd-tiles')
   await page.waitForSelector('.bd-sys .bd-sys-grid')
   await page.waitForTimeout(1500)
   const cards = await page.evaluate(() => [...document.querySelectorAll('.bd-card')].map((c) => { const r = c.getBoundingClientRect(); return { cls: c.className.replace('bd-card ', ''), top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) } }))
   const maxBottom = Math.max(...cards.map((c) => c.bottom))
-  check(`${w}×${h}：五張卡都在第一個畫面內（最低邊 ${maxBottom} ≤ ${h}）`, cards.length === 5 && maxBottom <= h)
+  check(`${w}×${h}：六張卡都在第一個畫面內（最低邊 ${maxBottom} ≤ ${h}）`, cards.length === 6 && maxBottom <= h)
   const cl = await clipped(page)
   check(`${w}×${h}：沒有卡片內容被裁切`, cl.length === 0, JSON.stringify(cl))
   check(`${w}×${h}：頁面本身不橫向捲動`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   const txt = await page.locator('.ip-board').innerText()
   check(`${w}×${h}：幸福指數顯示「今日值 × 權重 ＝ 貢獻分」與計算鏈`, /人生自由/.test(txt) && /27%/.test(txt) && /18\.4/.test(txt) && /加權平均/.test(txt) && /74\.5/.test(txt) && /短板修正/.test(txt))
-  const order = await page.evaluate(() => { const h = document.querySelector('.bd-hhi')?.getBoundingClientRect(); const o = document.querySelector('.bd-oll')?.getBoundingClientRect(); return h && o ? { hhiLeft: h.left, ollLeft: o.left, hhiW: h.width, ollW: o.width } : null })
-  check(`${w}×${h}：幸福指數在左、比 Ollama 寬（主體）`, !!order && order.hhiLeft < order.ollLeft && order.hhiW > order.ollW, JSON.stringify(order))
+  const order = await page.evaluate(() => { const h = document.querySelector('.bd-hhi')?.getBoundingClientRect(); const o = document.querySelector('.bd-idea')?.getBoundingClientRect(); return h && o ? { hhiLeft: h.left, ideaLeft: o.left, hhiW: h.width, ideaW: o.width, sameRow: Math.abs(h.top - o.top) < 2 } : null })
+  check(`${w}×${h}：幸福指數在左、比想法庫寬（主體），想法庫在第一列`, !!order && order.hhiLeft < order.ideaLeft && order.hhiW > order.ideaW && order.sameRow, JSON.stringify(order))
+  const ideaTxt = await page.locator('.bd-idea').innerText()
+  const ranks = await page.locator('.bd-idea .bd-idea-rank').allInnerTexts()
+  check(`${w}×${h}：想法庫顯示前三名（名次 1–3、系統類也參加排名）`, ranks.join('') === '123' && /系統/.test(ideaTxt) && /把 HERMES 的管線健康度/.test(ideaTxt), ranks.join(','))
+  check(`${w}×${h}：前三名附類別徽章、價值與難度`, (await page.locator('.bd-idea .bd-idea-row .bd-cat').count()) === 3 && /價值/.test(ideaTxt) && /難度/.test(ideaTxt))
+  check(`${w}×${h}：想法庫有本週統計與開放中數量`, /本週 新想法/.test(ideaTxt) && /個開放中/.test(ideaTxt))
+  const rowOver = await page.evaluate(() => [...document.querySelectorAll('.bd-idea-row')].filter((e) => e.scrollHeight > e.clientHeight + 2).length)
+  check(`${w}×${h}：前三名每列沒有被撐破（長標題兩行截斷）`, rowOver === 0, String(rowOver))
   const cellColor = await page.evaluate(() => { const td = document.querySelector('.bd-hhi .bd-hval'); return td ? getComputedStyle(td).color : null })
   const lum = cellColor ? cellColor.match(/\d+/g).slice(0, 3).map(Number).reduce((x, y) => x + y, 0) / 3 : 0
   check(`${w}×${h}：幸福指數「今日值」不是黑色（${cellColor}）`, lum > 100)
@@ -146,7 +178,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   check(`${w}×${h}：首頁不必縱向捲動（${sc?.sh} ≤ ${sc?.ch}+2）`, !!sc && sc.sh <= sc.ch + 2)
   check(`${w}×${h}：硬碟容量融入主機卡（百分比、預估${h >= 800 ? '、分項' : '；矮視窗分項收進抽屜'}）`, /硬碟容量/.test(txt) && /個月後寫滿/.test(txt) && (h < 800 || /vault/.test(txt)))
   check(`${w}×${h}：關係網路用真實數字（186／1156）`, /186/.test(txt) && /1156/.test(txt))
-  check(`${w}×${h}：Ollama 尚無餘額時顯示輸入提示與「粗估」`, /輸入目前餘額/.test(txt) && /粗估/.test(txt))
+  check(`${w}×${h}：Ollama 小卡尚無餘額時顯示輸入提示與「粗估」`, /還沒輸入餘額/.test(txt) && /粗估/.test(txt) && /預估用完/.test(txt) && (await page.locator('.bd-oll .bd-kv').count()) === 1)
   await page.screenshot({ path: path.join(SHOTS, `board-${w}x${h}-empty.png`) })
 
   if (w === 1920 && h === 1080) {
@@ -170,25 +202,47 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     check('戰情室抽屜：排程任務、近期活動、容器清單、近期趨勢、硬碟容量都在', ['排程任務狀態', '近期活動', '容器清單', '近期趨勢', '硬碟容量'].every((k) => d2.includes(k)), d2.slice(0, 200))
     await page.screenshot({ path: path.join(SHOTS, 'drawer-ops.png') })
     await page.keyboard.press('Escape')
+    // 想法庫抽屜：全部清單、狀態與類別篩選、展開看優先分算式
+    await page.locator('.bd-idea .bd-more').click()
+    await page.waitForSelector('.bd-drawer .bd-idea-item')
+    const nOpen = await page.locator('.bd-drawer .bd-idea-item').count()
+    check(`想法庫抽屜預設列出開放中的想法（${nOpen} 筆）`, nOpen === ideaItems.filter((i) => i.score !== null).length)
+    await page.locator('.bd-drawer button', { hasText: /^全部$/ }).click()
+    check('想法庫抽屜「全部」含已實行與放棄', (await page.locator('.bd-drawer .bd-idea-item').count()) === ideaItems.length)
+    await page.locator('.bd-drawer button', { hasText: /^財務 \d+$/ }).click()
+    const fin = await page.locator('.bd-drawer .bd-idea-item').allInnerTexts()
+    check('想法庫抽屜依類別篩選（財務）', fin.length === 2 && fin.every((t) => /財務/.test(t)), String(fin.length))
+    await page.locator('.bd-drawer .bd-idea-item summary').first().click()
+    const det = await page.locator('.bd-drawer .bd-idea-item[open]').innerText()
+    check('展開一筆看得到為什麼、優先分、出處日期、狀態歷程', /為什麼想做/.test(det) && /優先分/.test(det) && /出現在日記/.test(det) && /狀態歷程/.test(det))
+    await page.screenshot({ path: path.join(SHOTS, 'drawer-ideas.png') })
+    await page.keyboard.press('Escape')
   }
 
   if (w === 1920 && h === 1080) {
-    // 手動輸入餘額
+    // 手動輸入餘額：首頁 Ollama 小卡 →「走勢・更新餘額」抽屜（完整面板搬到這裡）
+    await page.locator('.bd-oll .bd-more').click()
+    await page.waitForSelector('.bd-drawer .bd-oll-body')
     await page.getByRole('button', { name: '輸入目前餘額' }).click()
     await page.fill('#bd-bal', '29.31'); await page.fill('#bd-used', '50.69'); await page.fill('#bd-refill', '2026-10-29')
     await page.getByRole('button', { name: '儲存' }).click()
-    await page.waitForFunction(() => /\$29\.31/.test(document.querySelector('.bd-oll')?.textContent ?? ''), null, { timeout: 8000 })
-    check('輸入餘額後 POST 內容正確並重畫（$29.31）', posted.length === 1 && posted[0].balanceUsd === 29.31 && posted[0].monthUsedUsd === 50.69 && posted[0].refillAt === '2026-10-29')
-    const t2 = await page.locator('.bd-oll').innerText()
-    check('有餘額後顯示用完日與補點前缺口警示', /預估用完日/.test(t2) && /補點前用完/.test(t2))
-    check('輸入後卡片仍未被裁切', (await clipped(page)).length === 0, JSON.stringify(await clipped(page)))
-    await page.screenshot({ path: path.join(SHOTS, `board-${w}x${h}-balance.png`) })
+    await page.waitForFunction(() => /\$29\.31/.test(document.querySelector('.bd-drawer')?.textContent ?? ''), null, { timeout: 8000 })
+    check('輸入餘額後 POST 內容正確並在抽屜重畫（$29.31）', posted.length === 1 && posted[0].balanceUsd === 29.31 && posted[0].monthUsedUsd === 50.69 && posted[0].refillAt === '2026-10-29')
+    const t2 = await page.locator('.bd-drawer').innerText()
+    check('抽屜有餘額走勢、每日請求數與補點前缺口警示', /預估用完日/.test(t2) && /補點前用完/.test(t2) && /近 14 天每日請求數/.test(t2))
+    await page.screenshot({ path: path.join(SHOTS, 'drawer-ollama.png') })
     // 輸入錯誤顯示人話訊息、不關表單
-    await page.getByRole('button', { name: '更新餘額' }).click()
+    await page.getByRole('button', { name: '更新餘額', exact: true }).click()
     await page.fill('#bd-bal', '-3')
     await page.getByRole('button', { name: '儲存' }).click()
-    await page.waitForFunction(() => /餘額要是 0 以上/.test(document.querySelector('.bd-oll')?.textContent ?? ''), null, { timeout: 5000 })
+    await page.waitForFunction(() => /餘額要是 0 以上/.test(document.querySelector('.bd-drawer')?.textContent ?? ''), null, { timeout: 5000 })
     check('輸入錯誤時顯示後端的人話訊息並保留表單', (await page.locator('#bd-bal').count()) === 1)
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => /\$29\.31/.test(document.querySelector('.bd-oll')?.textContent ?? ''), null, { timeout: 8000 })
+    const t3 = await page.locator('.bd-oll').innerText()
+    check('關掉抽屜後首頁小卡更新為新餘額與缺口提示', /\$29\.31/.test(t3) && /補點前用完/.test(t3))
+    check('輸入後卡片仍未被裁切', (await clipped(page)).length === 0, JSON.stringify(await clipped(page)))
+    await page.screenshot({ path: path.join(SHOTS, `board-${w}x${h}-balance.png`) })
   }
   check(`${w}×${h}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
   await ctx.close()

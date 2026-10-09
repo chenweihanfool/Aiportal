@@ -101,3 +101,41 @@ export async function apiFetchHhiHistory(pw: string, days = 30): Promise<HhiHist
   const d = (await r.json()) as { history?: Array<{ date: string; displayedScore: number }> }
   return (d.history ?? []).filter(h => typeof h.displayedScore === 'number').map(h => ({ date: h.date, displayedScore: h.displayedScore }))
 }
+
+// 💡 想法庫（kb-pipeline 的 ideas-pusher 推上來，入口網只顯示）
+export type IdeaStatus = 'new' | 'evaluating' | 'doing' | 'done' | 'shelved' | 'dropped'
+export interface IdeaItem {
+  id: string
+  title: string
+  category: string | null
+  dimension: string | null
+  source: string | null
+  why: string | null
+  value: number | null
+  effort: number | null
+  status: IdeaStatus
+  bornAt: string
+  lastMentioned: string
+  mentions: number
+  backfill: boolean
+  days: string[]
+  history: Array<{ status: string; at: string }>
+  score: number | null
+  scoreWhy: string[]
+  weakBoost: boolean
+}
+export interface IdeasData {
+  available: boolean
+  generatedAt: string | null
+  receivedAt: string | null
+  weakest: string | null
+  ideas: IdeaItem[]
+  top: string[]
+  weeks: Array<{ weekStart: string; born: number; done: number }>
+}
+
+export async function apiFetchIdeas(pw: string): Promise<IdeasData> {
+  const r = await fetch(`${API_BASE}api/hermes-ideas`, { headers: authHeaders(pw) })
+  if (!r.ok) throw new Error('Failed to fetch ideas')
+  return r.json() as Promise<IdeasData>
+}
