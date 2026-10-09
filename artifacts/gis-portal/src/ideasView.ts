@@ -70,3 +70,21 @@ export function statusCounts(ideas: IdeaItem[]): { open: number; doing: number; 
 
 /** 1–5 的點數（價值／難度），null 顯示「—」 */
 export const pips = (n: number | null) => (n === null ? '—' : '●'.repeat(n) + '○'.repeat(5 - n))
+
+// 「複製給 HERMES」：入口網不寫入，狀態一律由 HERMES 寫進日記（docs/ideas.md 的 💡✅／🚀… 標記）。
+// 使用者 2026-10-09：用 Telegram 告訴 HERMES 進度，按鈕只負責把要貼的那句話複製好。
+export const STATUS_MARK: Record<Exclude<IdeaStatus, 'new'>, string> = {
+  evaluating: '🔍', doing: '🚀', done: '✅', shelved: '🗄️', dropped: '❌',
+}
+export const STATUS_ACTION: Record<Exclude<IdeaStatus, 'new'>, string> = {
+  evaluating: '評估中', doing: '開始做', done: '已實行', shelved: '擱置', dropped: '放棄',
+}
+/** 這筆想法可以改成哪些狀態（不含目前的、也不回到「新想法」） */
+export function nextStatuses(current: IdeaStatus): Array<Exclude<IdeaStatus, 'new'>> {
+  return (['done', 'doing', 'evaluating', 'shelved', 'dropped'] as const).filter((s) => s !== current)
+}
+/** 貼到 Telegram 給 HERMES 的一句話；第一行就是 HERMES 寫進日記時用的標記 */
+export function statusMessage(idea: Pick<IdeaItem, 'id' | 'title'>, status: Exclude<IdeaStatus, 'new'>, note = ''): string {
+  const line = `💡${STATUS_MARK[status]} ${idea.id}「${idea.title}」${STATUS_ACTION[status]}`
+  return note.trim() ? `${line}\n${note.trim()}` : `${line}\n（請照想法庫格式寫進今天的日記）`
+}

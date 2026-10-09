@@ -273,6 +273,8 @@ body,
   .bd-idea-detail { padding: 0 12px 10px calc(5.6em + 22px); font-size: 0.76rem; color: #9aa4b6; line-height: 1.6; }
   .bd-idea-detail p { margin: 2px 0; }
   .bd-idea-detail b { color: #ece9e2; font-weight: 500; }
+  .bd-idea-copy { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #3a3d47; display: flex; flex-direction: column; gap: 6px; }
+  .bd-idea-copytext { margin: 4px 0 0; padding: 6px 8px; background: #121319; border: 1px solid #3a3d47; border-radius: 4px; color: #ece9e2; white-space: pre-wrap; user-select: all; font-size: 0.74rem; }
   .bd-sys-wrap { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
   .bd-oll-body {
     display: grid;

@@ -215,6 +215,20 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     await page.locator('.bd-drawer .bd-idea-item summary').first().click()
     const det = await page.locator('.bd-drawer .bd-idea-item[open]').innerText()
     check('展開一筆看得到為什麼、優先分、出處日期、狀態歷程', /為什麼想做/.test(det) && /優先分/.test(det) && /出現在日記/.test(det) && /狀態歷程/.test(det))
+    // 複製給 HERMES：入口網不寫入，只複製要貼到 Telegram 的那句話
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base })
+    const reqs = []
+    page.on('request', (r) => { if (r.method() !== 'GET') reqs.push(r.url()) })
+    const open1 = page.locator('.bd-drawer .bd-idea-item[open]')
+    const firstId = (await open1.locator('.bd-idea-id').innerText()).trim()
+    await open1.locator('input[aria-label="補充說明"]').fill('花了三個晚上')
+    await open1.getByRole('button', { name: '✅ 已實行' }).click()
+    await page.waitForSelector('.bd-drawer .bd-idea-copytext')
+    const clip = await page.evaluate(() => navigator.clipboard.readText())
+    check('按「✅ 已實行」複製含編號、標題、標記與補充的一句話', clip.startsWith(`💡✅ ${firstId}「`) && /」已實行\n花了三個晚上$/.test(clip), JSON.stringify(clip))
+    check('複製後畫面顯示已複製的內容', /已複製/.test(await open1.innerText()))
+    check('複製按鈕不送出任何寫入請求（入口網只顯示）', reqs.length === 0, reqs.join(','))
+    check('不提供目前狀態的按鈕（新想法不能再選「新想法」）', (await open1.getByRole('button', { name: /新想法/ }).count()) === 0)
     await page.screenshot({ path: path.join(SHOTS, 'drawer-ideas.png') })
     await page.keyboard.press('Escape')
   }
