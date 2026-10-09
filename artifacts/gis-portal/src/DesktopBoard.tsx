@@ -3,7 +3,7 @@ import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
-  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type IdeaItem, type IdeasData, type UsageData,
+  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type IdeaItem, type IdeasData, type IdeasMind, type UsageData,
 } from './boardApi'
 import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
@@ -401,6 +401,7 @@ function IdeasCard({ pw }: { pw: string }) {
             <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, lineHeight: 1.5 }}>
               本週 新想法 <b style={{ color: COLOR.amber, fontFamily: FONT.mono }}>{thisWeek?.born ?? 0}</b> · 實行 <b style={{ color: COLOR.ok, fontFamily: FONT.mono }}>{thisWeek?.done ?? 0}</b>
               <br />共 {counts!.total} 個 · 進行中 {counts!.doing} · 已實行 {counts!.done}
+              {data.mind && <><br /><span title={`${data.mind.formula}（並行記錄中，尚未計入幸福指數）`}>心智（想法版・並行中）<b style={{ color: COLOR.ink, fontFamily: FONT.mono }}>{data.mind.score.toFixed(1)}</b></span></>}
             </div>
           </div>
         </div>
@@ -455,6 +456,42 @@ function CopyToHermes({ idea }: { idea: IdeaItem }) {
   )
 }
 
+/** 心智分數（想法版）並行期間的說明：算式、兩個分項的原始數字、與現行「日記篇數版」的對照 */
+function IdeasMindSection({ mind, shadow }: { mind: IdeasMind; shadow: IdeasData['mindShadow'] }) {
+  const [ref, box] = useBox(240, 70)
+  const pts = shadow.filter(d => d.ideas !== null || d.diary !== null)
+  const line = (key: 'ideas' | 'diary') => {
+    const xs = pts.map((d, i) => [i, d[key]] as const).filter((p): p is readonly [number, number] => p[1] !== null)
+    if (xs.length < 2) return null
+    const W = box.w - 8, H = box.h - 8
+    return xs.map(([i, v]) => `${4 + (i / Math.max(1, pts.length - 1)) * W},${4 + H - (v / 100) * H}`).join(' ')
+  }
+  const li = line('ideas'), ld = line('diary')
+  return (
+    <section style={{ border: `1px solid ${COLOR.line}`, borderRadius: 8, padding: '10px 12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: COLOR.steel, lineHeight: 1.6 }}>
+        <div style={{ color: COLOR.ink, fontWeight: 600 }}>心智分數（想法版）<span style={{ fontFamily: FONT.mono, color: COLOR.amber, fontSize: '1.2rem', marginLeft: 8 }}>{mind.score.toFixed(1)}</span>
+          <Chip color={COLOR.warn}>並行中・尚未計入幸福指數</Chip></div>
+        <div>產生 {mind.birth.score.toFixed(0)} × 40%：近 7 天新想法 <b style={{ color: COLOR.ink }}>{mind.birth.born7}</b> 個 ÷ 過去 8 週每週中位數 <b style={{ color: COLOR.ink }}>{mind.birth.baseline}</b></div>
+        <div>實行 {mind.action.score.toFixed(0)} × 60%：近 28 天實行 <b style={{ color: COLOR.ink }}>{mind.action.done28}</b> 個 ÷ 有機會實行的 <b style={{ color: COLOR.ink }}>{mind.action.eligible}</b> 個（{(mind.action.rate * 100).toFixed(1)}%，達 {Math.round(mind.action.target * 100)}% 算滿分）</div>
+        <div style={{ color: COLOR.steelDim }}>並行兩週，看數字合理再決定是否取代現在的「近 3 天日記篇數」。</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <Label>近 30 天：想法版 vs 現行日記篇數版（原始分數）</Label>
+        <div ref={ref} style={{ flex: 1, minHeight: 70, position: 'relative' }}>
+          {li || ld ? (
+            <svg width={box.w} height={box.h} style={{ position: 'absolute', inset: 0 }} role="img" aria-label="心智分數兩版對照">
+              {ld && <polyline points={ld} fill="none" stroke={COLOR.steelDim} strokeWidth={1.5} strokeDasharray="4 3" />}
+              {li && <polyline points={li} fill="none" stroke={COLOR.amber} strokeWidth={2} />}
+            </svg>
+          ) : <Muted>每晚 23:55 記一筆，累積兩天以上會畫出線</Muted>}
+        </div>
+        <div style={{ fontSize: '0.62rem', color: COLOR.steelDim }}><span style={{ color: COLOR.amber }}>━</span> 想法版　<span>┅</span> 日記篇數版</div>
+      </div>
+    </section>
+  )
+}
+
 function IdeasPanel({ pw }: { pw: string }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
   const [cat, setCat] = useState<string | null>(null)
@@ -469,6 +506,7 @@ function IdeasPanel({ pw }: { pw: string }) {
   })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {data.mind && <IdeasMindSection mind={data.mind} shadow={data.mindShadow ?? []} />}
       <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
         優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 進行中 1.1。
         入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕複製一句話，貼到 Telegram 給 HERMES，由 HERMES 寫進日記（下一班 L1 後卡片更新）。

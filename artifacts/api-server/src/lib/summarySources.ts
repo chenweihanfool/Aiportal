@@ -1,4 +1,5 @@
 import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
+import { loadIdeasMind } from "./ideasMindSource";
 import { desc, eq, lt } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,
@@ -494,6 +495,9 @@ export async function computeAndPersistDailySnapshot(): Promise<void> {
   // holds the raw (uninverted) busyness score for display purposes.
   const calmRaw = rawComponents.busynessScore === null ? null : clamp(100 - rawComponents.busynessScore, 0, 100);
 
+  // 💡 心智分數（想法版）並行記錄：只存不用，讀失敗也不能擋住當天的幸福指數快照
+  const mindIdeasRaw = await loadIdeasMind(today).then((m) => m?.score ?? null).catch(() => null);
+
   const historyRow = {
     date: today,
     finalScore: result.finalScore,
@@ -509,6 +513,7 @@ export async function computeAndPersistDailySnapshot(): Promise<void> {
     mindRaw: rawComponents.mindScore,
     travelRaw: rawComponents.travelScore,
     socialRaw: rawComponents.socialScore,
+    mindIdeasRaw,
   };
 
   await db

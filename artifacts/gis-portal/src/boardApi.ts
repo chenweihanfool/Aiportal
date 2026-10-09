@@ -132,6 +132,16 @@ export interface IdeasData {
   ideas: IdeaItem[]
   top: string[]
   weeks: Array<{ weekStart: string; born: number; done: number }>
+  /** 心智分數（想法版，第四期並行中）：今天現算 */
+  mind: IdeasMind | null
+  /** 近 30 天每晚存下的想法版（ideas）與現行日記篇數版（diary）原始分數 */
+  mindShadow: Array<{ date: string; ideas: number | null; diary: number | null }>
+}
+export interface IdeasMind {
+  score: number
+  birth: { score: number; born7: number; baseline: number; weekly: number[] }
+  action: { score: number; done28: number; eligible: number; rate: number; target: number }
+  formula: string
 }
 
 export async function apiFetchIdeas(pw: string): Promise<IdeasData> {

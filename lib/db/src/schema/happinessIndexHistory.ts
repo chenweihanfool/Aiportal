@@ -28,6 +28,10 @@ export const happinessIndexHistoryTable = pgTable("happiness_index_history", {
   mindRaw: real("mind_raw"),
   travelRaw: real("travel_raw"),
   socialRaw: real("social_raw"),
+  // 💡 心智分數（想法版，2026-10-09 第四期）：並行記錄期間只寫不讀，不影響上面任何分數。
+  // 23:55 快照時由 hermes_ideas_snapshot 現算（lib/ideasMind.ts）。並行兩週後若切換，
+  // 心智維度的百分位會改用這一欄的歷史，所以從現在起就每天存。
+  mindIdeasRaw: real("mind_ideas_raw"),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
