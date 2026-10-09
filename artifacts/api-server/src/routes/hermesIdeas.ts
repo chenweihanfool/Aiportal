@@ -3,6 +3,8 @@ import { db, happinessIndexHistoryTable, hermesIdeasSnapshotTable } from "@works
 import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { rankIdeas, sanitizeIdeasPayload } from "../lib/hermesIdeas";
+import { computeIdeasMind } from "../lib/ideasMind";
+import { taipeiDateString } from "../lib/summarySources";
 
 const router = Router();
 
@@ -29,7 +31,7 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
   }
   const [row] = await db.select().from(hermesIdeasSnapshotTable).where(eq(hermesIdeasSnapshotTable.id, "latest")).limit(1);
   if (!row) {
-    return res.json({ available: false, ideas: [], top: [], weeks: [], weakest: null, generatedAt: null, receivedAt: null });
+    return res.json({ available: false, ideas: [], top: [], weeks: [], weakest: null, generatedAt: null, receivedAt: null, mind: null, mindShadow: [] });
   }
   // 補短板：幸福指數最近一天的最弱維度（入口網自己算的，HERMES 不知道）
   const [hhi] = await db
@@ -39,6 +41,14 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
     .limit(1);
   const weakest = hhi?.weakest ?? null;
   const { ideas, top } = rankIdeas(row.ideas, weakest);
+  // 💡 心智分數（想法版，第四期並行中）：今天現算＋近 30 天每晚 23:55 存下的值，旁邊附舊版（日記篇數）原始分數對照
+  const mind = computeIdeasMind(row.ideas, taipeiDateString(new Date()));
+  const shadowRows = await db
+    .select({ date: happinessIndexHistoryTable.date, ideas: happinessIndexHistoryTable.mindIdeasRaw, diary: happinessIndexHistoryTable.mindRaw })
+    .from(happinessIndexHistoryTable)
+    .orderBy(desc(happinessIndexHistoryTable.date))
+    .limit(30);
+  const mindShadow = shadowRows.reverse().map((r) => ({ date: r.date, ideas: r.ideas, diary: r.diary }));
   return res.json({
     available: true,
     generatedAt: row.generatedAt,
@@ -47,6 +57,8 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
     ideas,
     top,
     weeks: row.weeks,
+    mind,
+    mindShadow,
   });
 });
 

@@ -1,0 +1,1 @@
+ALTER TABLE "happiness_index_history" ADD COLUMN "mind_ideas_raw" real;

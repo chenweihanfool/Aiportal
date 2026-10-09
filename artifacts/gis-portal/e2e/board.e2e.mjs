@@ -82,7 +82,9 @@ const ideaItems = IDEA_CATS.map((category, i) => {
 })
 const ideasTop = ideaItems.filter((i) => i.score !== null).sort((a, b) => b.score - a.score).slice(0, 3).map((i) => i.id)
 const ideas = { available: true, generatedAt: today, receivedAt: new Date().toISOString(), weakest: '旅遊生活', ideas: ideaItems, top: ideasTop,
-  weeks: Array.from({ length: 8 }, (_, i) => ({ weekStart: dayAt(49 - i * 7), born: [2, 0, 5, 3, 1, 4, 6, 2][i], done: [0, 1, 0, 0, 2, 0, 1, 1][i] })) }
+  weeks: Array.from({ length: 8 }, (_, i) => ({ weekStart: dayAt(49 - i * 7), born: [2, 0, 5, 3, 1, 4, 6, 2][i], done: [0, 1, 0, 0, 2, 0, 1, 1][i] })),
+  mind: { score: 62.4, birth: { score: 100, born7: 3, baseline: 2, weekly: [2, 0, 5, 3, 1, 4, 6, 2] }, action: { score: 37.3, done28: 1, eligible: 9, rate: 0.111, target: 0.2 }, formula: '產生 100 × 40% ＋ 實行 37.3 × 60% ＝ 62.4' },
+  mindShadow: Array.from({ length: 12 }, (_, i) => ({ date: dayAt(11 - i), ideas: i < 2 ? null : 50 + i * 2, diary: 40 + (i % 4) * 8 })) }
 
 const posted = []
 const server = http.createServer((req, res) => {
@@ -164,6 +166,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   check(`${w}×${h}：想法庫顯示前三名（名次 1–3、系統類也參加排名）`, ranks.join('') === '123' && /系統/.test(ideaTxt) && /把 HERMES 的管線健康度/.test(ideaTxt), ranks.join(','))
   check(`${w}×${h}：前三名附類別徽章、價值與難度`, (await page.locator('.bd-idea .bd-idea-row .bd-cat').count()) === 3 && /價值/.test(ideaTxt) && /難度/.test(ideaTxt))
   check(`${w}×${h}：想法庫有本週統計與開放中數量`, /本週 新想法/.test(ideaTxt) && /個開放中/.test(ideaTxt))
+  check(`${w}×${h}：想法庫卡顯示心智分數（想法版・並行中）`, /心智（想法版・並行中）\s*62\.4/.test(ideaTxt))
   const rowOver = await page.evaluate(() => [...document.querySelectorAll('.bd-idea-row')].filter((e) => e.scrollHeight > e.clientHeight + 2).length)
   check(`${w}×${h}：前三名每列沒有被撐破（長標題兩行截斷）`, rowOver === 0, String(rowOver))
   const cellColor = await page.evaluate(() => { const td = document.querySelector('.bd-hhi .bd-hval'); return td ? getComputedStyle(td).color : null })
@@ -205,6 +208,9 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     // 想法庫抽屜：全部清單、狀態與類別篩選、展開看優先分算式
     await page.locator('.bd-idea .bd-more').click()
     await page.waitForSelector('.bd-drawer .bd-idea-item')
+    const mindTxt = await page.locator('.bd-drawer section').first().innerText()
+    check('想法庫抽屜最上方有心智分數（想法版）算式與並行標示', /心智分數（想法版）/.test(mindTxt) && /並行中/.test(mindTxt) && /近 7 天新想法 3 個 ÷ 過去 8 週每週中位數 2/.test(mindTxt) && /近 28 天實行 1 個 ÷ 有機會實行的 9 個/.test(mindTxt), mindTxt.slice(0, 200))
+    check('兩版對照曲線都有畫出來', (await page.locator('.bd-drawer svg[aria-label="心智分數兩版對照"] polyline').count()) === 2)
     const nOpen = await page.locator('.bd-drawer .bd-idea-item').count()
     check(`想法庫抽屜預設列出開放中的想法（${nOpen} 筆）`, nOpen === ideaItems.filter((i) => i.score !== null).length)
     await page.locator('.bd-drawer button', { hasText: /^全部$/ }).click()
