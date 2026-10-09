@@ -818,10 +818,10 @@ function PusherHealthPanel({ pw }: { pw: string }) {
       <div className="bd-push-table" role="table" aria-label="入口網推送健康">
         {rows.map(r => (
           <div key={r.feed} role="row" className="bd-push-row">
-            <span role="cell"><i className="bd-push-dot" style={{ background: levelColor(r.level) }} />{FEED_LABEL[r.feed] ?? r.feed}</span>
-            <span role="cell" style={{ color: COLOR.steelDim }}>{fmtEvery(r.expectedEveryMin)}</span>
-            <span role="cell" style={{ color: r.level === 'ok' ? COLOR.ink : levelColor(r.level) }}>{r.lastOk ? fmtAge(r.ageMin) : '還沒推過'}</span>
-            <span role="cell" style={{ color: COLOR.steelDim }}>成功 {r.okCount}・失敗 {r.failCount}</span>
+            <span role="cell" className="bd-push-name"><i className="bd-push-dot" style={{ background: levelColor(r.level) }} />{FEED_LABEL[r.feed] ?? r.feed}</span>
+            <span role="cell" className="bd-push-dim">{fmtEvery(r.expectedEveryMin)}</span>
+            <span role="cell" className="bd-push-age" style={r.level === 'ok' ? (r.lastOk ? undefined : { color: COLOR.steel, fontWeight: 400 }) : { color: levelColor(r.level) }}>{r.lastOk ? fmtAge(r.ageMin) : '還沒推過'}</span>
+            <span role="cell" className="bd-push-dim">成功 <b>{r.okCount}</b>・失敗 <b style={r.failCount ? { color: COLOR.crit } : undefined}>{r.failCount}</b></span>
             <span role="cell" className="bd-push-err" title={r.lastError ?? ''}>{r.lastError ?? ''}</span>
           </div>
         ))}
