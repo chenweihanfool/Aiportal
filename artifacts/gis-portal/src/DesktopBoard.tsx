@@ -5,7 +5,7 @@ import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
   type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type IdeaItem, type IdeasData, type UsageData,
 } from './boardApi'
-import { STATUS_ICON, STATUS_LABEL, categoryColor, categoryCounts, filterIdeas, pips, sortForList, statusCounts, topIdeas, type StatusFilter } from './ideasView'
+import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
@@ -409,6 +409,52 @@ function IdeasCard({ pw }: { pw: string }) {
   )
 }
 
+/** 複製到剪貼簿；舊瀏覽器或非安全來源沒有 navigator.clipboard 時改用隱藏 textarea */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true }
+  } catch { /* 改用下面的備援 */ }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch { return false }
+}
+
+/** 「複製給 HERMES」：入口網不改狀態，只把要貼到 Telegram 的那句話複製好，HERMES 再寫進日記 */
+function CopyToHermes({ idea }: { idea: IdeaItem }) {
+  const [note, setNote] = useState('')
+  const [copied, setCopied] = useState<{ text: string; ok: boolean } | null>(null)
+  const copy = async (s: Parameters<typeof statusMessage>[1]) => {
+    const text = statusMessage(idea, s, note)
+    setCopied({ text, ok: await copyText(text) })
+  }
+  return (
+    <div className="bd-idea-copy">
+      <div style={{ color: COLOR.ink, fontWeight: 500 }}>要更新進度？按一下複製，貼到 Telegram 給 HERMES：</div>
+      <input value={note} onChange={e => setNote(e.target.value)} placeholder="（選填）想補充的話，例如：花了三個晚上，效果不錯" style={{ ...inp, maxWidth: 520 }} aria-label="補充說明" />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {nextStatuses(idea.status).map(s => (
+          <button key={s} type="button" style={btn} onClick={() => void copy(s)}>{STATUS_MARK[s]} {STATUS_ACTION[s]}</button>
+        ))}
+      </div>
+      {copied && (
+        <div role="status" style={{ fontSize: '0.72rem', color: copied.ok ? COLOR.ok : COLOR.warn }}>
+          {copied.ok ? '已複製，貼到 Telegram 給 HERMES 即可：' : '瀏覽器不允許自動複製，請手動選取下面這段：'}
+          <pre className="bd-idea-copytext">{copied.text}</pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function IdeasPanel({ pw }: { pw: string }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
   const [cat, setCat] = useState<string | null>(null)
@@ -425,7 +471,7 @@ function IdeasPanel({ pw }: { pw: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
         優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 進行中 1.1。
-        狀態請在日記寫 <code>### HH:MM 💡✅ 標題 已實行</code> 這類標記；入口網只顯示。
+        入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕複製一句話，貼到 Telegram 給 HERMES，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
         {data.receivedAt && <> · 最後更新 {minutesAgo(Date.parse(data.receivedAt))}</>}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -464,6 +510,7 @@ function IdeasPanel({ pw }: { pw: string }) {
                 {it.scoreWhy.length > 0 && <p><b>優先分：</b>{it.scoreWhy.join(' × ')}</p>}
                 <p><b>出現在日記：</b>{it.days.join('、') || '—'}</p>
                 <p><b>狀態歷程：</b>{it.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${STATUS_LABEL[h.status as keyof typeof STATUS_LABEL] ?? h.status}`).join(' → ')}</p>
+                <CopyToHermes idea={it} />
               </div>
             </details>
           ))}
