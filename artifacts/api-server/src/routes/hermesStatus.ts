@@ -16,6 +16,7 @@ import {
   type HermesPipelineLayerStatus,
 } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
+import { parsePushers } from "../lib/pusherHealth";
 import { isAuthorized } from "../lib/adminSession";
 import { describePostSource, hasArrayField, shouldRejectEmptyGraph } from "../lib/graphGuard";
 import { isNewPersonSince, sanitizePeopleFirstSeen } from "../lib/peopleFirstSeen";
@@ -103,8 +104,10 @@ router.post("/admin/hermes-status", async (req: Request, res: Response) => {
   const scheduledTasks = arr("scheduledTasks") as NonNullable<HermesStatusSnapshotRow["scheduledTasks"]>;
 
   const storage = parseStorage(body["storage"]);
+  const pushers = parsePushers(body["pushers"]);
   const row = {
     id: "latest",
+    pushers,
     cpuPercent: num("cpuPercent"),
     memPercent: num("memPercent"),
     disks,
@@ -250,6 +253,7 @@ router.get("/hermes-status", async (req: Request, res: Response) => {
     diskForecast: forecast,
     diskAlert: diskAlertLevel(worst?.percentUsed ?? null, worst?.freeGb ?? null, forecast.daysUntilFull),
     scheduledTasks: row.scheduledTasks ?? [],
+    pushers: row.pushers ?? null,
     computedAt: row.computedAt.toISOString(),
     stale,
   });

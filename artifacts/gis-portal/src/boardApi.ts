@@ -63,8 +63,23 @@ export interface BoardStatus {
   diskForecast?: DiskForecastInfo
   diskAlert?: DiskAlertLevel
   storage?: StorageItem[]
+  /** 入口網推送健康（kb-pipeline 的 kbcore/portal_push）；舊 pusher 沒送就是 null */
+  pushers?: PusherHealth[] | null
   stale: boolean
   computedAt: string | null
+}
+export interface PusherHealth {
+  feed: string
+  path: string | null
+  lastOk: string | null
+  lastFail: string | null
+  lastError: string | null
+  ageMin: number | null
+  expectedEveryMin: number | null
+  bytes: number | null
+  okCount: number
+  failCount: number
+  level: 'ok' | 'warn' | 'crit'
 }
 
 export async function apiFetchBoardStatus(pw: string): Promise<BoardStatus> {

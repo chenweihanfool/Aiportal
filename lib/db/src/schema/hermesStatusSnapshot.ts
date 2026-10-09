@@ -6,6 +6,20 @@ import { pgTable, text, real, jsonb, timestamp } from "drizzle-orm/pg-core";
 // reads never need to scan/sort. Unlike mind_index_history / happiness /
 // busyness_index_history (one row per day), this data changes every few
 // minutes and nobody needs to look back at yesterday's CPU load.
+export interface PusherHealth {
+  feed: string;
+  path: string | null;
+  lastOk: string | null;
+  lastFail: string | null;
+  lastError: string | null;
+  ageMin: number | null;
+  expectedEveryMin: number | null;
+  bytes: number | null;
+  okCount: number;
+  failCount: number;
+  level: "ok" | "warn" | "crit";
+}
+
 export const hermesStatusSnapshotTable = pgTable("hermes_status_snapshot", {
   id: text("id").primaryKey().default("latest"),
   cpuPercent: real("cpu_percent"),
@@ -15,6 +29,9 @@ export const hermesStatusSnapshotTable = pgTable("hermes_status_snapshot", {
   // 磁碟佔用分項（2026-10-01）：[{label, bytes}]，由 status pusher 量測 vault／Postgres／docker／logs 等大戶；
   // 沒有就是 null（舊 pusher 不送），讀端照常顯示總量
   storage: jsonb("storage").$type<Array<{ label: string; bytes: number; note?: string }>>(),
+  // 入口網推送健康（2026-10-09）：kb-pipeline 的 kbcore/portal_push 記錄每種資料最後一次推送成功／失敗，
+  // 由 status pusher 一起帶上來；舊 pusher 不送就是 null，戰情室不顯示這區。
+  pushers: jsonb("pushers").$type<PusherHealth[]>(),
   scheduledTasks: jsonb("scheduled_tasks").$type<Array<{ name: string; lastRunTime: string | null; lastTaskResult: number | null; schedule?: string | null }>>(),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });

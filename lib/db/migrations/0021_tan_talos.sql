@@ -1,0 +1,1 @@
+ALTER TABLE "hermes_status_snapshot" ADD COLUMN "pushers" jsonb;
