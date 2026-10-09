@@ -2,9 +2,10 @@ import { Component, createContext, useCallback, useContext, useEffect, useMemo, 
 import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
-  apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchUsage, apiPostBalance,
-  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type UsageData,
+  apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
+  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type IdeaItem, type IdeasData, type UsageData,
 } from './boardApi'
+import { STATUS_ICON, STATUS_LABEL, categoryColor, categoryCounts, filterIdeas, pips, sortForList, statusCounts, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
@@ -45,7 +46,7 @@ const MoreBtn = ({ onClick, children = '詳細' }: { onClick: () => void; childr
   <button type="button" className="bd-more" onClick={onClick}>{children} ›</button>
 )
 
-type DrawerKey = 'hhi' | 'ops'
+type DrawerKey = 'hhi' | 'ops' | 'oll' | 'ideas'
 const DrawerCtx = createContext<(k: DrawerKey) => void>(() => {})
 
 /** 抽屜內容（App.tsx 的舊面板）若有元件出錯，只在抽屜裡顯示訊息，不拖垮整個首頁 */
@@ -127,7 +128,7 @@ function useBox(minW = 240, minH = 90): [(el: HTMLDivElement | null) => void, { 
   return [setEl, size]
 }
 
-function useLoad<T>(pw: string | null, fetcher: (pw: string) => Promise<T>): { data: T | null; error: boolean; reload: () => void } {
+function useLoad<T>(pw: string | null, fetcher: (pw: string) => Promise<T>, refreshKey = 0): { data: T | null; error: boolean; reload: () => void } {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState(false)
   const [tick, setTick] = useState(0)
@@ -136,13 +137,15 @@ function useLoad<T>(pw: string | null, fetcher: (pw: string) => Promise<T>): { d
     let cancelled = false
     fetcher(pw).then(d => { if (!cancelled) { setData(d); setError(false) } }).catch(() => { if (!cancelled) setError(true) })
     return () => { cancelled = true }
-  }, [pw, tick, fetcher])
+  }, [pw, tick, fetcher, refreshKey])
   const reload = useCallback(() => setTick(t => t + 1), [])
   return { data, error, reload }
 }
 
 // ── Ollama 用量與預估 ───────────────────────────────
-function OllamaCard({ pw }: { pw: string }) {
+// 2026-10-09 使用者裁定「縮 Ollama」讓位給想法庫：首頁只留小卡（餘額、每天花費、用完日），
+// 完整的走勢圖、每日請求數、模型分佈與「更新餘額」表單搬進抽屜（OllamaPanel），功能一個都沒少。
+function OllamaPanel({ pw }: { pw: string }) {
   const { data, error, reload } = useLoad<UsageData>(pw, apiFetchUsage)
   const [formOpen, setFormOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -198,7 +201,7 @@ function OllamaCard({ pw }: { pw: string }) {
     : <Chip>尚無預估</Chip>
 
   return (
-    <Card title="Ollama 雲端用量與預估" tag={sourceTag} area="bd-oll">
+    <Card title="Ollama 雲端用量與預估" tag={sourceTag} area="bd-oll-full" style={{ height: 520, display: 'flex', flexDirection: 'column', gap: 8, padding: '0.75rem 0.9rem' }}>
       {error ? <Muted>暫時無法取得用量資料</Muted> : data === null ? <Muted>載入中…</Muted> : (
         <div className="bd-oll-body">
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -300,6 +303,173 @@ function OllamaCard({ pw }: { pw: string }) {
         </div>
       )}
     </Card>
+  )
+}
+
+function OllamaMiniCard({ pw, refreshKey }: { pw: string; refreshKey: number }) {
+  const open = useContext(DrawerCtx)
+  const { data, error } = useLoad<UsageData>(pw, apiFetchUsage, refreshKey)
+  const f = data?.forecast
+  const bal = data?.balance
+  const cap = bal?.capUsd ?? 60
+  const tone = levelColor(f?.level ?? 'ok')
+  return (
+    <Card title="Ollama" area="bd-oll" tag={f?.source === 'estimated' ? <Chip color={COLOR.warn}>粗估</Chip> : undefined} action={<MoreBtn onClick={() => open('oll')}>更新</MoreBtn>}>
+      {error ? <Muted>暫時無法取得用量資料</Muted> : data === null ? <Muted>載入中…</Muted> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0, justifyContent: 'center' }}>
+          {bal ? (
+            <>
+              <div className="bd-big" style={{ color: tone, fontSize: 'clamp(1.4rem, 3.4vh, 2.3rem)' }}>
+                {formatUsd(bal.balanceUsd)}<span style={{ fontSize: '0.45em', color: COLOR.steelDim, fontWeight: 400 }}> / ${cap}</span>
+              </div>
+              <div style={{ height: 6, borderRadius: 3, background: COLOR.panelRaised, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, Math.max(0, (bal.balanceUsd / cap) * 100))}%`, height: '100%', background: tone }} />
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: '0.72rem', color: COLOR.steel, lineHeight: 1.5 }}>還沒輸入餘額。按「更新」輸入一次就能預估哪天用完。</div>
+          )}
+          <div className="bd-kv">
+            <div><span>預估每天</span><b>{f?.usdPerDay != null ? formatUsd(f.usdPerDay) : '—'}</b></div>
+            <div><span>預估用完</span><b>{formatEmptyDay(f?.emptyDate ?? null, f?.daysUntilEmpty ?? null)}</b></div>
+          </div>
+          {f && f.daysUntilEmpty !== null && (
+            <div style={{ fontSize: '0.7rem', lineHeight: 1.45, color: f.shortfallUsd !== null ? tone : COLOR.ok }}>
+              {f.shortfallUsd !== null ? `會在補點前用完（約缺 ${formatUsd(f.shortfallUsd, 0)}）` : '用量安全，撐得過補點日'}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── 💡 想法庫（2026-10-09）─────────────────────────────
+// 日記管線萃取、HERMES 推上來，入口網只顯示。前三名由 kb-pipeline 的公式算（價值×可行×新鮮度×被想起×進行中），
+// api-server 再乘「補短板」；系統／工作改善類也一起排，只用徽章標出類別（使用者 2026-10-09 裁定）。
+const CatBadge = ({ category }: { category: string | null }) => {
+  const c = categoryColor(category)
+  return <span className="bd-cat" style={{ color: c, borderColor: c, background: `${c}1a` }}>{category ?? '未分類'}</span>
+}
+
+function IdeasCard({ pw }: { pw: string }) {
+  const open = useContext(DrawerCtx)
+  const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
+  const counts = data ? statusCounts(data.ideas) : null
+  const top = data ? topIdeas(data.ideas, data.top) : []
+  const weeks = data?.weeks ?? []
+  const thisWeek = weeks[weeks.length - 1]
+  const maxW = Math.max(1, ...weeks.map(w => Math.max(w.born, w.done)))
+  return (
+    <Card title="想法庫：最值得先做的前三名" area="bd-idea"
+      tag={counts ? <Chip color={COLOR.amber}>{counts.open} 個開放中</Chip> : undefined}
+      action={<MoreBtn onClick={() => open('ideas')}>全部想法</MoreBtn>}>
+      {error ? <Muted>暫時無法取得想法庫</Muted> : data === null ? <Muted>載入中…</Muted> : !data.available || data.ideas.length === 0 ? (
+        <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
+          還沒有想法。HERMES 在日記寫下 <code>### HH:MM 💡 標題</code> 後，下一班 L1（10:30／20:30）就會出現在這裡。
+        </div>
+      ) : (
+        <div className="bd-idea-body">
+          <ol className="bd-idea-top">
+            {top.length === 0 && <Muted>目前沒有開放中的想法</Muted>}
+            {top.map((it, i) => (
+              <li key={it.id} className="bd-idea-row" title={it.scoreWhy.join('\n')}>
+                <span className="bd-idea-rank" style={{ color: i === 0 ? COLOR.amber : COLOR.steel }}>{i + 1}</span>
+                <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div className="bd-idea-title">{it.status === 'doing' && <span aria-label="進行中">🚀 </span>}{it.title}</div>
+                  <div className="bd-idea-meta">
+                    <CatBadge category={it.category} />
+                    <span title="價值">價值 <b>{pips(it.value)}</b></span>
+                    <span title="難度">難度 <b>{pips(it.effort)}</b></span>
+                    {it.weakBoost && <Chip color={COLOR.ok}>補短板</Chip>}
+                  </div>
+                  {it.why && <div className="bd-idea-why">{it.why}</div>}
+                </div>
+                <span className="bd-idea-score">{it.score?.toFixed(1) ?? '—'}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="bd-idea-foot">
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 34, flex: '0 0 46%' }} role="img" aria-label="近 8 週新想法與實行數">
+              {weeks.map(w => (
+                <div key={w.weekStart} title={`${w.weekStart} 起一週：新想法 ${w.born}、實行 ${w.done}`} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+                  <i style={{ flex: 1, height: `${Math.max(4, (w.born / maxW) * 100)}%`, background: COLOR.amber, opacity: w.born ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
+                  <i style={{ flex: 1, height: `${Math.max(4, (w.done / maxW) * 100)}%`, background: COLOR.ok, opacity: w.done ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, lineHeight: 1.5 }}>
+              本週 新想法 <b style={{ color: COLOR.amber, fontFamily: FONT.mono }}>{thisWeek?.born ?? 0}</b> · 實行 <b style={{ color: COLOR.ok, fontFamily: FONT.mono }}>{thisWeek?.done ?? 0}</b>
+              <br />共 {counts!.total} 個 · 進行中 {counts!.doing} · 已實行 {counts!.done}
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function IdeasPanel({ pw }: { pw: string }) {
+  const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
+  const [cat, setCat] = useState<string | null>(null)
+  const [st, setSt] = useState<StatusFilter>('open')
+  const cats = useMemo(() => categoryCounts(data?.ideas ?? []), [data])
+  const list = useMemo(() => sortForList(filterIdeas(data?.ideas ?? [], cat, st)), [data, cat, st])
+  const topSet = new Set(data?.top ?? [])
+  if (error) return <Muted>暫時無法取得想法庫</Muted>
+  if (data === null) return <Muted>載入中…</Muted>
+  const pill = (active: boolean, color: string = COLOR.amber): CSSProperties => ({
+    ...btn, color: active ? COLOR.panelDeep : color, background: active ? color : 'transparent', borderColor: color,
+  })
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
+        優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 進行中 1.1。
+        狀態請在日記寫 <code>### HH:MM 💡✅ 標題 已實行</code> 這類標記；入口網只顯示。
+        {data.receivedAt && <> · 最後更新 {minutesAgo(Date.parse(data.receivedAt))}</>}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {([['open', '開放中'], ['done', '已實行'], ['closed', '擱置／放棄'], ['all', '全部']] as Array<[StatusFilter, string]>).map(([k, l]) => (
+          <button key={k} type="button" style={pill(st === k)} onClick={() => setSt(k)}>{l}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <button type="button" style={pill(cat === null, COLOR.steel)} onClick={() => setCat(null)}>全部類別</button>
+        {cats.map(([c, n]) => (
+          <button key={c} type="button" style={pill(cat === c, categoryColor(c === '未分類' ? null : c))} onClick={() => setCat(cat === c ? null : c)}>{c} {n}</button>
+        ))}
+      </div>
+      {list.length === 0 ? <Muted>沒有符合的想法</Muted> : (
+        <div className="bd-idea-list">
+          {list.map((it: IdeaItem) => (
+            <details key={it.id} className="bd-idea-item">
+              <summary>
+                <span className="bd-idea-id">{it.id}</span>
+                <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ color: COLOR.ink, fontWeight: 600 }}>{topSet.has(it.id) && <span style={{ color: COLOR.amber }}>★ </span>}{it.title}</span>
+                  <span className="bd-idea-meta">
+                    <CatBadge category={it.category} />
+                    <span>{STATUS_ICON[it.status]} {STATUS_LABEL[it.status]}</span>
+                    <span>價值 <b>{pips(it.value)}</b></span>
+                    <span>難度 <b>{pips(it.effort)}</b></span>
+                    {it.mentions > 1 && <span>想起 {it.mentions} 次</span>}
+                    {it.source && <span>來源 {it.source}</span>}
+                    {it.backfill && <Chip>舊日記回補</Chip>}
+                  </span>
+                </span>
+                <span className="bd-idea-score">{it.score !== null ? it.score.toFixed(1) : '—'}</span>
+              </summary>
+              <div className="bd-idea-detail">
+                {it.why && <p><b>為什麼想做：</b>{it.why}</p>}
+                {it.scoreWhy.length > 0 && <p><b>優先分：</b>{it.scoreWhy.join(' × ')}</p>}
+                <p><b>出現在日記：</b>{it.days.join('、') || '—'}</p>
+                <p><b>狀態歷程：</b>{it.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${STATUS_LABEL[h.status as keyof typeof STATUS_LABEL] ?? h.status}`).join(' → ')}</p>
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -574,11 +744,13 @@ export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRe
   opsDetail: ReactNode
 }) {
   const [drawer, setDrawer] = useState<DrawerKey | null>(null)
-  const close = useCallback(() => setDrawer(null), [])
+  const [ollKey, setOllKey] = useState(0)
+  // 抽屜裡可能更新過餘額，關掉時讓首頁 Ollama 小卡重抓（只是一個 GET）
+  const close = useCallback(() => { setDrawer(null); setOllKey(k => k + 1) }, [])
   if (!unlocked || !unlockedPassword) {
     return (
       <div className="ip-board" style={{ display: 'grid', placeItems: 'center' }}>
-        <button type="button" onClick={onRequestUnlock} style={{ ...btn, fontSize: '0.8rem', padding: '10px 18px' }}>🔒 解鎖後顯示儀表板（用量、幸福指數、管線、主機）</button>
+        <button type="button" onClick={onRequestUnlock} style={{ ...btn, fontSize: '0.8rem', padding: '10px 18px' }}>🔒 解鎖後顯示儀表板（幸福指數、想法庫、管線、主機、用量）</button>
       </div>
     )
   }
@@ -586,12 +758,15 @@ export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRe
     <DrawerCtx.Provider value={setDrawer}>
       <div className="ip-board">
         <HhiCard pw={unlockedPassword} data={hhiData} toneOf={toneOf} />
-        <OllamaCard pw={unlockedPassword} />
+        <IdeasCard pw={unlockedPassword} />
+        <OllamaMiniCard pw={unlockedPassword} refreshKey={ollKey} />
         <NetworkCard pw={unlockedPassword} />
         <PipelineCard pw={unlockedPassword} />
         <SystemCard pw={unlockedPassword} />
       </div>
       {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={close}>{hhiDetail}</Drawer>}
+      {drawer === 'ideas' && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={close}><IdeasPanel pw={unlockedPassword} /></Drawer>}
+      {drawer === 'oll' && <Drawer title="Ollama 雲端用量：餘額走勢・每日請求・更新餘額" onClose={close}><OllamaPanel pw={unlockedPassword} /></Drawer>}
       {drawer === 'ops' && <Drawer title="HERMES 戰情室：關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={close}>{opsDetail}</Drawer>}
     </DrawerCtx.Provider>
   )

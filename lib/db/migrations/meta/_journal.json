@@ -134,6 +134,13 @@
       "when": 1791449519708,
       "tag": "0018_bitter_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791512279828,
+      "tag": "0019_noisy_silver_fox",
+      "breakpoints": true
     }
   ]
 }
