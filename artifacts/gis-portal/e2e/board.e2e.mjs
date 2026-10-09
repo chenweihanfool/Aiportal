@@ -268,6 +268,42 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   await ctx.close()
 }
 
+// 版本歷程（時間軸）：左版號日期、右標題可折疊、搜尋、類型篩選、ESC 關閉（電腦與手機各一次）
+for (const [vw, vhh] of [[1440, 900], [390, 844]]) {
+  const { ctx, page, errors } = await newPage({ width: vw, height: vhh })
+  await page.goto(base + '/')
+  await page.getByRole('button', { name: /版本歷程/ }).first().click()
+  await page.waitForSelector('.vh-dialog .vh-row')
+  const rows = await page.locator('.vh-row').count()
+  check(`${vw}：版本歷程以時間軸列出所有版本（${rows} 版）`, rows >= 50)
+  const geo = await page.evaluate(() => { const r = document.querySelector('.vh-row'); const l = r.querySelector('.vh-left').getBoundingClientRect(); const t = r.querySelector('.vh-title').getBoundingClientRect(); const n = r.querySelector('.vh-node').getBoundingClientRect(); return { leftRight: l.right, nodeX: n.left, titleLeft: t.left } })
+  check(`${vw}：版號日期在左、節點在中、標題在右`, geo.leftRight <= geo.nodeX && geo.nodeX < geo.titleLeft, JSON.stringify(geo))
+  check(`${vw}：預設只展開最新一版`, (await page.locator('.vh-changes').count()) === 1 && (await page.locator('.vh-row').first().locator('.vh-changes').count()) === 1)
+  const second = page.locator('.vh-row').nth(1).locator('.vh-title')
+  await second.click()
+  check(`${vw}：點標題展開`, (await page.locator('.vh-row').nth(1).locator('.vh-changes').count()) === 1 && (await second.getAttribute('aria-expanded')) === 'true')
+  await second.click()
+  check(`${vw}：再點一次收合`, (await page.locator('.vh-row').nth(1).locator('.vh-changes').count()) === 0)
+  await page.fill('.vh-search', '想法庫')
+  const hits = await page.locator('.vh-row').count()
+  check(`${vw}：搜尋「想法庫」只留相關版本（${hits} 版）`, hits > 0 && hits < rows)
+  await page.fill('.vh-search', '')
+  await page.locator('.vh-seg button', { hasText: '修正' }).click()
+  const patches = await page.locator('.vh-row .vh-badge').allInnerTexts()
+  check(`${vw}：依類型篩選（修正 ${patches.length} 版）`, patches.length > 0 && patches.every((b) => b === '修正'))
+  await page.locator('.vh-seg button', { hasText: '全部' }).click()
+  await page.locator('.vh-all').click()
+  check(`${vw}：全部展開`, (await page.locator('.vh-changes').count()) === rows)
+  const hscroll = await page.evaluate(() => { const b = document.querySelector('.vh-body'); return b.scrollWidth - b.clientWidth })
+  check(`${vw}：時間軸不橫向捲動`, hscroll <= 1, String(hscroll))
+  await page.locator('.vh-all').click()
+  await page.screenshot({ path: path.join(SHOTS, `version-history-${vw}.png`) })
+  await page.keyboard.press('Escape')
+  check(`${vw}：ESC 關閉版本歷程`, (await page.locator('.vh-dialog').count()) === 0)
+  check(`${vw}：版本歷程沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
+  await ctx.close()
+}
+
 // 手機：不顯示儀表板、不橫向捲動
 {
   const { ctx, page, errors } = await newPage({ width: 390, height: 844 })

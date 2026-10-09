@@ -7,6 +7,7 @@ import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, 
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { TimelineView } from './TimelineView'
 import { AccountBadge } from './AuthGate'
+import { VersionHistoryDialog } from './VersionHistoryDialog'
 import { DesktopBoard } from './DesktopBoard'
 import './portal.css'
 
@@ -22,6 +23,15 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.27.1',
+    date: '2026-10-09',
+    summary: '版本歷程改成時間軸：左邊版號日期、右邊標題，點開看內容',
+    changes: [
+      '版本歷程照 pf-cwh 的「更新歷程」重做：左邊是版號與日期，中間一條時間軸、節點顏色代表類型（重大／新功能／修正，依版號判斷），右邊一行標題，點一下展開完整內容、再點收合。',
+      '上方可以搜尋（版號、日期、標題、內容都搜得到）、依類型篩選、一鍵全部展開／收合；預設展開最新一版。按 ESC 或點外面關閉，手機寬度也排得下。',
+    ],
+  },
   {
     version: '2.27.0',
     date: '2026-10-09',
@@ -3040,8 +3050,10 @@ function AdminAuthModal({ onSuccess, onCancel }: { onSuccess: (pw: string) => vo
 // popover (300px wide, 60vh scroll, small type) that was awkward to read.
 // The panel itself is now a proper centered modal, sized for actually
 // reading changelogs rather than squinting at a corner popover.
+// 2026-10-09：內容改成 pf-cwh 那種時間軸（左版號日期、右標題可折疊，見 VersionHistoryDialog.tsx）。
 function VersionHistory() {
   const [expanded, setExpanded] = useState(false)
+  const closeHistory = useCallback(() => setExpanded(false), [])
   const latest = VERSION_HISTORY[0]!
   return (
     <>
@@ -3052,31 +3064,7 @@ function VersionHistory() {
         <span style={{ color: COLOR.amber, fontWeight: 600 }}>v{latest.version}</span>
         <span style={{ color: COLOR.steelDim }}>版本歷程 ▸</span>
       </button>
-      {expanded && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,11,14,0.82)' }}
-          onClick={e => { if (e.target === e.currentTarget) setExpanded(false) }}
-        >
-          <div style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '8px', padding: '1.8rem 2.2rem', width: 'min(760px, calc(100vw - 3rem))', maxHeight: '82vh', overflowY: 'auto', fontFamily: FONT.body }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.3rem', position: 'sticky', top: 0, background: COLOR.panel, paddingBottom: '0.8rem', borderBottom: `1px solid ${COLOR.line}` }}>
-              <span style={{ fontFamily: FONT.mono, fontSize: '0.74rem', color: COLOR.amberDim, letterSpacing: '0.2em', textTransform: 'uppercase' }}>版本歷程 · Version History</span>
-              <button onClick={() => setExpanded(false)} style={{ background: 'transparent', border: 'none', color: COLOR.steelDim, fontSize: '1.4rem', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>✕</button>
-            </div>
-            {VERSION_HISTORY.map((v, vi) => (
-              <div key={v.version} style={{ marginBottom: vi < VERSION_HISTORY.length - 1 ? '26px' : 0, paddingBottom: vi < VERSION_HISTORY.length - 1 ? '22px' : 0, borderBottom: vi < VERSION_HISTORY.length - 1 ? `1px dashed ${COLOR.line}` : undefined }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: FONT.mono, fontSize: '1rem', fontWeight: 600, color: COLOR.amber }}>v{v.version}</span>
-                  <span style={{ fontFamily: FONT.mono, fontSize: '0.72rem', color: COLOR.steelDim }}>{v.date}</span>
-                </div>
-                <div style={{ fontSize: '0.88rem', color: COLOR.ink, lineHeight: 1.7, marginBottom: '10px', fontWeight: 500 }}>{v.summary}</div>
-                <ul style={{ margin: 0, padding: '0 0 0 18px' }}>
-                  {v.changes.map((c, ci) => <li key={ci} style={{ fontSize: '0.8rem', color: COLOR.steel, lineHeight: 1.85, marginBottom: '5px' }}>{c}</li>)}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {expanded && <VersionHistoryDialog entries={VERSION_HISTORY} onClose={closeHistory} />}
     </>
   )
 }
