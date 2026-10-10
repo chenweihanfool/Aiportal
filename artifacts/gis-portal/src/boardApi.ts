@@ -149,8 +149,11 @@ export interface IdeasData {
   weeks: Array<{ weekStart: string; born: number; done: number }>
   /** 心智分數（想法版，第四期並行中）：今天現算 */
   mind: IdeasMind | null
-  /** 近 30 天每晚存下的想法版（ideas）與現行日記篇數版（diary）原始分數 */
-  mindShadow: Array<{ date: string; ideas: number | null; diary: number | null }>
+  /** 近 30 天每晚存下的想法版（ideas）與現行日記篇數版（diary）原始分數；
+   *  report＝當天日報 📊 每日報告分數、combined＝合成版（0.8×想法＋0.2×日報，並行中；舊 API 沒有這兩欄） */
+  mindShadow: Array<{ date: string; ideas: number | null; diary: number | null; report?: number | null; combined?: number | null }>
+  /** 最近一份有 📊 評分段的日報分數與五項明細（沒有＝null；舊 API 沒有這欄） */
+  mindReport?: { date: string; total: number; parts: Array<{ key: string; label: string; value: number; note: string }> } | null
 }
 export interface IdeasMind {
   score: number
