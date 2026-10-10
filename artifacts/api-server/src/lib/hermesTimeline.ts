@@ -2,6 +2,8 @@
 // 全部是純函式（不碰 DB／網路），方便單元測試；routes/hermesTimeline.ts 只負責撈資料與呼叫這裡。
 // 設計：kb-pipeline docs/timeline-design.md。
 
+import type { ReportScore } from "./reportScore";
+
 export const TIMELINE_LEVELS = ["day", "week", "month", "quarter", "year"] as const;
 export type TimelineLevel = (typeof TIMELINE_LEVELS)[number];
 
@@ -187,6 +189,7 @@ export interface ReportRow {
   generation: number;
   rangeInferred: boolean;
   periodNote: string | null;
+  reportScore?: ReportScore | null;             // 僅 day 級；由日報 📊 段解析（見 reportScore.ts）
 }
 export interface EventRef { id: string; date: string; title: string; createdAt?: string | null; writtenAt?: string | null }
 
@@ -242,8 +245,7 @@ export interface TimelineListItem {
   generation: number | null;
   eventCount: number;
   events: EventChip[];                          // 僅 day 級；清單最多 EVENT_CHIP_LIMIT 筆，單筆詳情給全部；皆依建立時間新→舊
-  mindScore: number | null;                     // 僅 day 級；＝知識庫健康分數（mind_index_history.score，見 docs 說明）
-  hhiScore: number | null;                      // 僅 day 級；＝幸福指數當日顯示分數（happiness_index_history.displayed_score）
+  reportScore: ReportScore | null;              // 僅 day 級；＝每日報告分數（日報 📊 段，五項×5，0–100）
 }
 export const EVENT_CHIP_LIMIT = 8;
 
@@ -255,35 +257,30 @@ export interface BuildListArgs {
   level: TimelineLevel;
   rows: ReportRow[];
   events: EventRef[];
-  mindScores: Map<string, number | null>;
-  hhiScores?: Map<string, number>;              // 省略＝沒有幸福指數資料（舊呼叫端相容）
   today: string;
   limit: number;
   cursor: string | null;
 }
 
 export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCursor: string | null } {
-  const { level, rows, events, mindScores, today } = a;
-  const hhiScores = a.hhiScores ?? new Map<string, number>();
+  const { level, rows, events, today } = a;
   const items: TimelineListItem[] = rows
     .filter((r) => r.startDate <= today)
     .map((r) => ({
       level, periodKey: r.periodKey, startDate: r.startDate, endDate: r.endDate, title: r.title,
       summary: r.summary, hasReport: true, rangeInferred: r.rangeInferred, periodNote: r.periodNote,
-      generation: r.generation, eventCount: 0, events: [], mindScore: null, hhiScore: null,
+      generation: r.generation, eventCount: 0, events: [], reportScore: level === "day" ? (r.reportScore ?? null) : null,
     }));
   const have = new Set(rows.map((r) => r.periodKey));
   if (level === "day") {
-    // 沒有日報、但當天有事件或任一分數（知識庫健康／幸福指數）的日子 → 占位列（仍可點開看事件與分數）
+    // 沒有日報、但當天有事件的日子 → 占位列（仍可點開看事件）
     const days = new Set<string>();
     for (const e of events) if (e.date <= today) days.add(e.date);
-    for (const d of mindScores.keys()) if (d <= today) days.add(d);
-    for (const d of hhiScores.keys()) if (d <= today) days.add(d);
     for (const d of days) {
       if (have.has(d)) continue;
       items.push({
         level, periodKey: d, startDate: d, endDate: d, title: d, summary: "", hasReport: false,
-        rangeInferred: false, periodNote: null, generation: null, eventCount: 0, events: [], mindScore: null, hhiScore: null,
+        rangeInferred: false, periodNote: null, generation: null, eventCount: 0, events: [], reportScore: null,
       });
     }
   } else {
@@ -292,7 +289,7 @@ export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCu
       if (p.startDate > today) continue;
       items.push({
         ...p, summary: "", hasReport: false, rangeInferred: true, periodNote: null, generation: null,
-        eventCount: 0, events: [], mindScore: null, hhiScore: null,
+        eventCount: 0, events: [], reportScore: null,
       });
     }
   }
@@ -301,8 +298,6 @@ export function buildList(a: BuildListArgs): { items: TimelineListItem[]; nextCu
     it.eventCount = evs.length;
     if (level === "day") {
       it.events = sortDayEvents(evs).slice(0, EVENT_CHIP_LIMIT).map(toChip);
-      it.mindScore = mindScores.get(it.periodKey) ?? null;
-      it.hhiScore = hhiScores.get(it.periodKey) ?? null;
     }
   }
   items.sort((x, y) => (y.startDate.localeCompare(x.startDate)) || y.periodKey.localeCompare(x.periodKey));
