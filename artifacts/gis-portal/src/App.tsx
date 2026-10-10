@@ -24,6 +24,14 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.31.2',
+    date: '2026-10-10',
+    summary: '修正：網站管理的新增／編輯／刪除一律「儲存失敗」',
+    changes: [
+      '強制 Google 登入後，管理後台的寫入帶的是輸入密碼換來的 session token，登入閘只認 Google 登入與原始密碼，所以每次儲存都被擋成 401。現在只要有有效的 Google 登入，就一律以登入身分通過。',
+    ],
+  },
+  {
     version: '2.31.1',
     date: '2026-10-10',
     summary: '心智指標說明文字更新',
