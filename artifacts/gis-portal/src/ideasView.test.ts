@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
-import { categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas } from './ideasView'
+import { STATUS_ICON, STATUS_LABEL, absorbBadges, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas } from './ideasView'
 
 const idea = (id: string, over: Partial<IdeaItem> = {}): IdeaItem => ({
   id, title: id, category: '系統', dimension: null, source: 'HERMES', why: null, value: 3, effort: 3, status: 'new',
@@ -47,5 +47,23 @@ describe('copy-to-HERMES message', () => {
   it('offers every status except the current one and never back to new', () => {
     expect(nextStatuses('new')).toEqual(['done', 'doing', 'evaluating', 'shelved', 'dropped'])
     expect(nextStatuses('doing')).toEqual(['done', 'evaluating', 'shelved', 'dropped'])
+  })
+})
+
+describe('🔀 absorbed ideas', () => {
+  it('have a label and icon, count as closed, and are never a copy-to-HERMES target', () => {
+    expect([STATUS_ICON.absorbed, STATUS_LABEL.absorbed]).toEqual(['🔀', '併入'])
+    const list = [idea('IDEA-0039', { status: 'absorbed', score: null, mergedInto: 'IDEA-0022' }), idea('IDEA-0022'), idea('IDEA-0005', { status: 'dropped', score: null })]
+    expect(filterIdeas(list, null, 'closed').map((i) => i.id)).toEqual(['IDEA-0039', 'IDEA-0005'])
+    expect(filterIdeas(list, null, 'open').map((i) => i.id)).toEqual(['IDEA-0022'])
+    expect(statusCounts(list)).toMatchObject({ open: 1, total: 3 })
+    expect(nextStatuses('absorbed')).not.toContain('absorbed')
+    expect(nextStatuses('new')).not.toContain('absorbed')
+  })
+  it('badges: merged-into arrow, and absorbed list capped at two plus a count', () => {
+    expect(absorbBadges({ mergedInto: 'IDEA-0022', absorbed: [] })).toEqual({ mergedInto: '🔀 併入 → IDEA-0022', absorbed: null })
+    expect(absorbBadges({ absorbed: ['IDEA-0039'] })).toEqual({ mergedInto: null, absorbed: '吸收：IDEA-0039' })
+    expect(absorbBadges({ absorbed: ['A', 'B', 'C'] }).absorbed).toBe('吸收：A、B 等 3 個')
+    expect(absorbBadges({})).toEqual({ mergedInto: null, absorbed: null })   // 舊 API 沒有新欄位
   })
 })

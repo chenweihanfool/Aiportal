@@ -38,6 +38,13 @@ describe("computeIdeasMind", () => {
     expect(r.formula).toContain("40%")
   })
 
+  it("🔀 absorbed ideas are not in the denominator, whether absorbed before or inside the window", () => {
+    const open = [idea(40), idea(40)]
+    expect(computeIdeasMind(open, TODAY).action.eligible).toBe(2)
+    const withAbsorbed = [...open, idea(40, [["absorbed", 35]]), idea(40, [["absorbed", 5]])]
+    expect(computeIdeasMind(withAbsorbed, TODAY).action.eligible).toBe(2)
+  })
+
   it("an idea reopened inside the window counts again; empty library scores 0", () => {
     const reopened = idea(60, [["shelved", 40], ["doing", 10]])
     expect(computeIdeasMind([reopened], TODAY).action.eligible).toBe(1)

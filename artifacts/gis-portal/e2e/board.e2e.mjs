@@ -86,6 +86,9 @@ const ideaItems = IDEA_CATS.map((category, i) => {
     weakBoost: weak,
   }
 })
+// 🔀 併入：最後一筆併到 IDEA-0002（進行中、會在前三名）
+Object.assign(ideaItems[11], { status: 'absorbed', score: null, scoreWhy: [], mergedInto: 'IDEA-0002', absorbed: [] })
+ideaItems[1].absorbed = ['IDEA-0012']
 const ideasTop = ideaItems.filter((i) => i.score !== null).sort((a, b) => b.score - a.score).slice(0, 3).map((i) => i.id)
 const ideas = { available: true, generatedAt: today, receivedAt: new Date().toISOString(), weakest: '旅遊生活', ideas: ideaItems, top: ideasTop,
   weeks: Array.from({ length: 8 }, (_, i) => ({ weekStart: dayAt(49 - i * 7), born: [2, 0, 5, 3, 1, 4, 6, 2][i], done: [0, 1, 0, 0, 2, 0, 1, 1][i] })),
@@ -229,6 +232,9 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     check(`想法庫抽屜預設列出開放中的想法（${nOpen} 筆）`, nOpen === ideaItems.filter((i) => i.score !== null).length)
     await page.locator('.bd-drawer button', { hasText: /^全部$/ }).click()
     check('想法庫抽屜「全部」含已實行與放棄', (await page.locator('.bd-drawer .bd-idea-item').count()) === ideaItems.length)
+    check('🔀 被併入者顯示「併入 → 承接者」、承接者顯示「吸收：…」',
+      (await page.locator('.bd-drawer [data-testid=idea-merged-into]').allInnerTexts()).join() === '🔀 併入 → IDEA-0002'
+      && (await page.locator('.bd-drawer [data-testid=idea-absorbed]').allInnerTexts()).join() === '吸收：IDEA-0012')
     await page.locator('.bd-drawer button', { hasText: /^財務 \d+$/ }).click()
     const fin = await page.locator('.bd-drawer .bd-idea-item').allInnerTexts()
     check('想法庫抽屜依類別篩選（財務）', fin.length === 2 && fin.every((t) => /財務/.test(t)), String(fin.length))

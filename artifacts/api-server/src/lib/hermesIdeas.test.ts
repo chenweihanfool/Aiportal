@@ -28,6 +28,29 @@ describe("sanitizeIdeasPayload", () => {
   })
 })
 
+describe("sanitizeIdeasPayload — 🔀 併入", () => {
+  it("keeps absorbed ideas (an unknown status would drop the whole row) and carries mergedInto / absorbed", () => {
+    const r = sanitizeIdeasPayload({
+      ideas: [
+        idea("IDEA-0039", { status: "absorbed", baseScore: null, mergedInto: "IDEA-0022" }),
+        idea("IDEA-0022", { absorbed: ["IDEA-0039", "junk", 5] }),
+        idea("IDEA-0001"),                                         // 舊快照沒有新欄位
+        idea("IDEA-0002", { mergedInto: "not-an-id" }),
+      ],
+    })
+    if (typeof r === "string") throw new Error(r)
+    expect(r.ideas.map((i) => i.id)).toEqual(["IDEA-0039", "IDEA-0022", "IDEA-0001", "IDEA-0002"])
+    expect(r.ideas[0]).toMatchObject({ status: "absorbed", mergedInto: "IDEA-0022", absorbed: [] })
+    expect(r.ideas[1]).toMatchObject({ mergedInto: null, absorbed: ["IDEA-0039"] })
+    expect(r.ideas[2]).toMatchObject({ mergedInto: null, absorbed: [] })
+    expect(r.ideas[3]!.mergedInto).toBeNull()
+  })
+  it("absorbed ideas are never ranked", () => {
+    const { top } = rankIdeas([idea("IDEA-0039", { status: "absorbed", baseScore: 99 }), idea("IDEA-0022")] as never, null)
+    expect(top).toEqual(["IDEA-0022"])
+  })
+})
+
 describe("rankIdeas", () => {
   it("ranks open ideas only and applies the weakest-dimension boost", () => {
     const { ideas, top } = rankIdeas(

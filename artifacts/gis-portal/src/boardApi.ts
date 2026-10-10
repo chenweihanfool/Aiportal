@@ -118,7 +118,7 @@ export async function apiFetchHhiHistory(pw: string, days = 30): Promise<HhiHist
 }
 
 // 💡 想法庫（kb-pipeline 的 ideas-pusher 推上來，入口網只顯示）
-export type IdeaStatus = 'new' | 'evaluating' | 'doing' | 'done' | 'shelved' | 'dropped'
+export type IdeaStatus = 'new' | 'evaluating' | 'doing' | 'done' | 'shelved' | 'dropped' | 'absorbed' // absorbed＝🔀 併入別的想法
 export interface IdeaItem {
   id: string
   title: string
@@ -138,6 +138,10 @@ export interface IdeaItem {
   score: number | null
   scoreWhy: string[]
   weakBoost: boolean
+  /** 被併入者：併到哪個想法（舊 API 沒有這欄） */
+  mergedInto?: string | null
+  /** 承接者：吸收了哪些想法（舊 API 沒有這欄） */
+  absorbed?: string[]
 }
 export interface IdeasData {
   available: boolean

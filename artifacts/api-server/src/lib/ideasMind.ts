@@ -15,7 +15,7 @@ export const BIRTH_WEIGHT = 0.4
 export const ACTION_WEIGHT = 0.6
 export const ACTION_TARGET = 0.2 // 28 天內實行「有機會實行的想法」的 20% 就算滿分
 const DAY = 86_400_000
-const CLOSED = new Set(["done", "shelved", "dropped"])
+const CLOSED = new Set(["done", "shelved", "dropped", "absorbed"])
 
 export interface IdeasMind {
   score: number // 0-100，一位小數
@@ -54,6 +54,7 @@ export function computeIdeasMind(ideas: HermesIdea[], today: string): IdeasMind 
   for (const it of ideas) {
     const b = Date.parse(it.bornAt)
     if (!Number.isFinite(b) || b >= end - 7 * DAY) continue // 出生未滿 7 天的不算分母
+    if (it.status === "absorbed") continue // 🔀 被併入的想法由承接者代表，不算分母（不論何時併入）
     const closedBefore = it.history.some((h) => CLOSED.has(h.status) && Date.parse(h.at) < winStart)
       && !it.history.some((h) => !CLOSED.has(h.status) && Date.parse(h.at) >= winStart) // 窗口前結束、之後沒重開
     if (closedBefore) continue
