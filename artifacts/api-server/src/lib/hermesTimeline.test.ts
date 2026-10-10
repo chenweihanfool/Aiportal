@@ -103,36 +103,25 @@ describe("buildList (day)", () => {
     { id: "e3", date: "2026-09-26", title: "丙" },     // 該日沒有日報 → 占位列
     { id: "e4", date: "2026-10-02", title: "未來事件" }, // 未來日：不顯示
   ];
-  const mind = new Map<string, number | null>([["2026-09-28", 98.9], ["2026-09-25", 97.1]]);
-  const base = { level: "day" as const, events, mindScores: mind, today: "2026-09-29", limit: 30, cursor: null };
+  const base = { level: "day" as const, events, today: "2026-09-29", limit: 30, cursor: null };
+  const score = { total: 65, parts: [{ key: "progress", label: "推進", value: 3, note: "x" }] };
 
-  it("merges reports, event-only days and score-only days; hides future events; sorts new→old", () => {
+  it("merges reports and event-only days; hides future events; sorts new→old", () => {
     const { items } = buildList({ ...base, rows: [row("day", "2026-09-28", "2026-09-28")] });
-    expect(items.map((i) => i.periodKey)).toEqual(["2026-09-28", "2026-09-26", "2026-09-25"]);
+    expect(items.map((i) => i.periodKey)).toEqual(["2026-09-28", "2026-09-26"]);
     const d28 = items[0];
-    expect(d28).toMatchObject({ hasReport: true, eventCount: 2, mindScore: 98.9, summary: "摘要 2026-09-28" });
+    expect(d28).toMatchObject({ hasReport: true, eventCount: 2, reportScore: null, summary: "摘要 2026-09-28" });
     expect(d28.events.map((e) => e.id)).toEqual(["e1", "e2"]);
-    expect(items[1]).toMatchObject({ hasReport: false, summary: "", eventCount: 1 });
-    expect(items[2]).toMatchObject({ hasReport: false, eventCount: 0, mindScore: 97.1 });
+    expect(items[1]).toMatchObject({ hasReport: false, summary: "", eventCount: 1, reportScore: null });
     expect(items.some((i) => i.periodKey === "2026-10-02")).toBe(false);
   });
 
-  it("attaches the happiness score per day; hhi-only days become placeholder rows; other levels and future days carry none", () => {
-    const hhi = new Map<string, number>([["2026-09-28", 62], ["2026-09-24", 55], ["2026-10-03", 70]]);
-    const { items } = buildList({ ...base, hhiScores: hhi, rows: [row("day", "2026-09-28", "2026-09-28")] });
-    expect(items.map((i) => i.periodKey)).toEqual(["2026-09-28", "2026-09-26", "2026-09-25", "2026-09-24"]);
-    expect(items[0]).toMatchObject({ mindScore: 98.9, hhiScore: 62 });          // 兩個分數互不覆蓋
-    expect(items[1]).toMatchObject({ mindScore: null, hhiScore: null });        // 只有事件的日子
-    expect(items[2]).toMatchObject({ mindScore: 97.1, hhiScore: null });        // 只有知識庫健康
-    expect(items[3]).toMatchObject({ hasReport: false, mindScore: null, hhiScore: 55 });   // 只有幸福指數 → 占位列
-    expect(items.some((i) => i.periodKey === "2026-10-03")).toBe(false);        // 未來日不顯示
-    const week = buildList({ ...base, level: "week", hhiScores: hhi, rows: [row("week", "2026-第39週", "2026-09-20", "2026-09-26")] });
-    expect(week.items.every((i) => i.hhiScore === null && i.mindScore === null)).toBe(true);
-  });
-
-  it("omitting hhiScores keeps the old behavior (hhiScore null everywhere)", () => {
-    const { items } = buildList({ ...base, rows: [row("day", "2026-09-28", "2026-09-28")] });
-    expect(items.every((i) => i.hhiScore === null)).toBe(true);
+  it("carries the daily report score on day rows only", () => {
+    const { items } = buildList({ ...base, rows: [{ ...row("day", "2026-09-28", "2026-09-28"), reportScore: score }] });
+    expect(items[0].reportScore).toEqual(score);
+    expect(items[1].reportScore).toBeNull();                                  // 占位列沒有分數
+    const week = buildList({ ...base, level: "week", rows: [{ ...row("week", "2026-第39週", "2026-09-20", "2026-09-26"), reportScore: score }] });
+    expect(week.items.every((i) => i.reportScore === null)).toBe(true);
   });
 
   it("caps event chips at 8 but keeps the true count", () => {
@@ -144,7 +133,7 @@ describe("buildList (day)", () => {
 
   it("paginates with a stable cursor and no duplicates or gaps", () => {
     const rows = Array.from({ length: 7 }, (_, i) => row("day", `2026-09-${String(20 + i).padStart(2, "0")}`, `2026-09-${String(20 + i).padStart(2, "0")}`));
-    const noExtras = { ...base, events: [] as EventRef[], mindScores: new Map<string, number | null>(), rows };
+    const noExtras = { ...base, events: [] as EventRef[], rows };
     const p1 = buildList({ ...noExtras, limit: 3 });
     const p2 = buildList({ ...noExtras, limit: 3, cursor: p1.nextCursor });
     const p3 = buildList({ ...noExtras, limit: 3, cursor: p2.nextCursor });
@@ -159,7 +148,7 @@ describe("buildList (week and above)", () => {
   it("adds placeholder rows for missing weeks and counts events inside each range", () => {
     const events: EventRef[] = [{ id: "e", date: "2026-07-01", title: "x" }];
     const { items } = buildList({
-      level: "week", events, mindScores: new Map(), today: "2026-09-29", limit: 30, cursor: null,
+      level: "week", events, today: "2026-09-29", limit: 30, cursor: null,
       rows: [row("week", "2026-第26週", "2026-06-21", "2026-06-27"), row("week", "2026-第28週", "2026-07-05", "2026-07-11")],
     });
     expect(items.map((i) => [i.periodKey, i.hasReport])).toEqual([["2026-第28週", true], ["2026-第27週", false], ["2026-第26週", true]]);
@@ -172,7 +161,7 @@ describe("buildList (week and above)", () => {
       { id: "b", date: "2026-10-02", title: "未來（同一週內）" },
     ];
     const { items } = buildList({
-      level: "week", events, mindScores: new Map(), today: "2026-09-29", limit: 30, cursor: null,
+      level: "week", events, today: "2026-09-29", limit: 30, cursor: null,
       rows: [row("week", "2026-第40週", "2026-09-28", "2026-10-04")],
     });
     expect(items[0].eventCount).toBe(1);
@@ -180,7 +169,7 @@ describe("buildList (week and above)", () => {
 
   it("carries periodNote and never lists periods starting in the future", () => {
     const { items } = buildList({
-      level: "quarter", events: [], mindScores: new Map(), today: "2026-09-29", limit: 30, cursor: null,
+      level: "quarter", events: [], today: "2026-09-29", limit: 30, cursor: null,
       rows: [row("quarter", "2026-Q2", "2026-04-01", "2026-06-30", { periodNote: "涵蓋順延為 5–7 月" }),
              row("quarter", "2026-Q4", "2026-10-01", "2026-12-31")],
     });
@@ -245,7 +234,7 @@ describe("day events: newest-first by creation time", () => {
 
   it("buildList gives the list rows the newest events first (before the 8-chip cut)", () => {
     const many: EventRef[] = Array.from({ length: 12 }, (_, i) => ev(`e${i}`, `2026-10-01T${String(8 + i).padStart(2, "0")}:00:00+08:00`));
-    const { items } = buildList({ level: "day", events: many, rows: [], mindScores: new Map(), today: "2026-10-02", limit: 30, cursor: null });
+    const { items } = buildList({ level: "day", events: many, rows: [], today: "2026-10-02", limit: 30, cursor: null });
     expect(items[0].events.map((e) => e.id)).toEqual(["e11", "e10", "e9", "e8", "e7", "e6", "e5", "e4"]);
   })
 });

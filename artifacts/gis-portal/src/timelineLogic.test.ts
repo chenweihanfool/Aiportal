@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { TimelineItem } from './timelineApi'
-import { groupHeader, groupItems, hhiBadge, itemKey, mergePages, neighbors, oneLine, rowDateLabel, scoreBadge } from './timelineLogic'
+import { groupHeader, groupItems, itemKey, mergePages, neighbors, oneLine, reportBadge, reportScoreLine, rowDateLabel } from './timelineLogic'
 
 const item = (level: TimelineItem['level'], key: string, start: string, end = start, over: Partial<TimelineItem> = {}): TimelineItem => ({
   level, periodKey: key, startDate: start, endDate: end, title: key, summary: `摘要${key}`, hasReport: true,
-  rangeInferred: false, periodNote: null, generation: 3, eventCount: 0, events: [], mindScore: null, hhiScore: null, ...over,
+  rangeInferred: false, periodNote: null, generation: 3, eventCount: 0, events: [], reportScore: null, ...over,
 })
 
 describe('rowDateLabel', () => {
@@ -69,25 +69,21 @@ describe('paging and navigation', () => {
   })
 })
 
-describe('scoreBadge', () => {
-  it.each([[98.8, 'ok'], [90, 'ok'], [89.9, 'warn'], [75, 'warn'], [74.9, 'concern'], [0, 'concern']])('%s → %s', (s, tone) => {
-    expect(scoreBadge(s)?.tone).toBe(tone)
+describe('reportBadge', () => {
+  it.each([[100, 'great'], [80, 'great'], [79, 'ok'], [65, 'ok'], [64, 'warn'], [50, 'warn'], [49, 'concern'], [35, 'concern'], [34, 'crit'], [0, 'crit']])('%s → %s', (t, tone) => {
+    expect(reportBadge({ total: t })?.tone).toBe(tone)
   })
-  it('formats to one decimal and hides null/NaN', () => {
-    expect(scoreBadge(98.84)?.text).toBe('98.8')
-    expect(scoreBadge(null)).toBeNull()
-    expect(scoreBadge(Number.NaN)).toBeNull()
+  it('shows an integer and hides null/NaN', () => {
+    expect(reportBadge({ total: 65 })?.text).toBe('65')
+    expect(reportBadge(null)).toBeNull()
+    expect(reportBadge({ total: Number.NaN })).toBeNull()
   })
 })
 
-describe('hhiBadge', () => {
-  it.each([[95, 'great'], [80, 'great'], [79, 'ok'], [65, 'ok'], [64, 'warn'], [50, 'warn'], [49, 'concern'], [35, 'concern'], [34, 'crit'], [0, 'crit']])('%s → %s', (s, tone) => {
-    expect(hhiBadge(s)?.tone).toBe(tone)
-  })
-  it('shows an integer and hides null/NaN', () => {
-    expect(hhiBadge(62)?.text).toBe('62')
-    expect(hhiBadge(61.6)?.text).toBe('62')
-    expect(hhiBadge(null)).toBeNull()
-    expect(hhiBadge(Number.NaN)).toBeNull()
+describe('reportScoreLine', () => {
+  it('lists every part after the total', () => {
+    const parts = [['推進', 3], ['決策', 2], ['卡點', 3], ['覺察', 2], ['能量', 3]].map(([label, value]) => ({ label: label as string, value: value as number }))
+    expect(reportScoreLine({ total: 65, parts })).toBe('65（推進 3・決策 2・卡點 3・覺察 2・能量 3）')
+    expect(reportScoreLine(null)).toBeNull()
   })
 })

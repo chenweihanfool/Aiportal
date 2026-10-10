@@ -19,8 +19,12 @@ export interface TimelineItem {
   generation: number | null
   eventCount: number
   events: TimelineEventChip[] // 僅 day 級；清單最多 8 個、單筆詳情給全部；依建立時間新→舊
-  mindScore: number | null    // 僅 day 級；＝知識庫健康分數（徽章顯示為「知識庫健康」）
-  hhiScore: number | null     // 僅 day 級；＝幸福指數當日顯示分數（23:55 快照後才有；今天在快照前為 null）
+  reportScore: ReportScore | null   // 僅 day 級；＝每日報告分數（日報 📊 段，五項各 0–4，總分×5＝0–100；舊日報沒有＝null）
+}
+
+export interface ReportScore {
+  total: number
+  parts: Array<{ key: string; label: string; value: number; note: string }>
 }
 
 export interface TimelineChild {

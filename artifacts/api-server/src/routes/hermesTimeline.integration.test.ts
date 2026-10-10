@@ -80,33 +80,26 @@ describe.skipIf(!enabled)("hermes-timeline API（真實 Postgres）", () => {
         { id: "e3", date: "2099-01-01", title: "未來", caseNo: null, case: null, location: null, status: null, tags: [], participants: [], objects: [] },
       ],
     });
-    await db.db.insert(db.mindIndexHistoryTable).values([{ date: "2026-09-28", score: 98.9 }, { date: "2026-09-25", score: 97.1 }]);
     const body = await (await get("/hermes-timeline?level=day")).json() as { items: Array<Record<string, unknown>>; nextCursor: string | null };
-    expect(body.items.map((i) => i["periodKey"])).toEqual(["2026-09-28", "2026-09-27", "2026-09-26", "2026-09-25"]);
+    expect(body.items.map((i) => i["periodKey"])).toEqual(["2026-09-28", "2026-09-27", "2026-09-26"]);
     expect(body.items.every((i) => !("bodyMd" in i))).toBe(true);
-    expect(body.items[0]).toMatchObject({ hasReport: true, eventCount: 1, mindScore: 98.9 });
+    expect(body.items[0]).toMatchObject({ hasReport: true, eventCount: 1, reportScore: null });
     expect(body.items[2]).toMatchObject({ hasReport: false, eventCount: 1 });
     expect(JSON.stringify(body)).not.toContain("未來");
   });
 
-  it("day list and detail carry the happiness displayed score alongside the knowledge-base score", async () => {
-    const hhiRow = (date: string, displayed: number) => ({
-      date, finalScore: displayed + 1, displayedScore: displayed, baseScore: 60, weakestScore: 40, weakestComponent: "fitness",
-      availableComponents: ["fitness"], configVersion: "test",
-    });
-    await post([ent("day", "2026-09-28", "2026-09-28", "2026-09-28")]);
-    await db.db.insert(db.mindIndexHistoryTable).values({ date: "2026-09-28", score: 98.9 });
-    await db.db.insert(db.happinessIndexHistoryTable).values([hhiRow("2026-09-28", 62), hhiRow("2026-09-24", 55)]);
-    const list = await (await get("/hermes-timeline?level=day")).json() as { items: Array<Record<string, unknown>> };
-    expect(list.items.map((i) => i["periodKey"])).toEqual(["2026-09-28", "2026-09-24"]);   // 只有幸福指數的日子 → 占位列
-    expect(list.items[0]).toMatchObject({ mindScore: 98.9, hhiScore: 62 });
-    expect(list.items[1]).toMatchObject({ hasReport: false, mindScore: null, hhiScore: 55 });
-    const d = await (await get("/hermes-timeline/day/2026-09-28")).json() as { mindScore: number; hhiScore: number };
-    expect(d).toMatchObject({ mindScore: 98.9, hhiScore: 62 });
-    const ph = await (await get("/hermes-timeline/day/2026-09-24")).json() as { hasReport: boolean; mindScore: number | null; hhiScore: number };
-    expect(ph).toMatchObject({ hasReport: false, mindScore: null, hhiScore: 55 });          // 只有幸福指數也能開啟降級內容
+  it("day list and detail carry the daily report score parsed from the 📊 section", async () => {
+    const scored = "🌙 每日精煉洞察 2026-09-28\n\n📊 今日評分：65\n- 推進 3：甲\n- 決策 2：乙\n- 卡點 3：丙\n- 覺察 2：丁\n- 能量 3：戊\n";
+    await post([ent("day", "2026-09-28", "2026-09-28", "2026-09-28", { bodyMd: scored }), ent("day", "2026-09-27", "2026-09-27", "2026-09-27")]);
+    await post([ent("week", "2026-第39週", "2026-09-21", "2026-09-27", { bodyMd: scored })]);
+    const list = await (await get("/hermes-timeline?level=day")).json() as { items: Array<{ reportScore: { total: number; parts: Array<{ label: string; value: number }> } | null }> };
+    expect(list.items[0]!.reportScore?.total).toBe(65);
+    expect(list.items[0]!.reportScore?.parts.map((p) => p.value)).toEqual([3, 2, 3, 2, 3]);
+    expect(list.items[1]!.reportScore).toBeNull();                               // 舊日報沒有 📊 段
+    const d = await (await get("/hermes-timeline/day/2026-09-28")).json() as { reportScore: { total: number } };
+    expect(d.reportScore.total).toBe(65);
     const wk = await (await get("/hermes-timeline?level=week")).json() as { items: Array<Record<string, unknown>> };
-    expect(wk.items.every((i) => i["hhiScore"] === null)).toBe(true);
+    expect(wk.items.every((i) => i["reportScore"] === null)).toBe(true);        // 只有日級有分數
   });
 
   it("paginates with cursor across the real table", async () => {
@@ -132,9 +125,11 @@ describe.skipIf(!enabled)("hermes-timeline API（真實 Postgres）", () => {
     const d = await (await get(`/hermes-timeline/week/${encodeURIComponent("2026-第40週")}`)).json() as { bodyMd: string; hasReport: boolean; children: Array<{ periodKey: string }> };
     expect(d).toMatchObject({ bodyMd: "# 週報全文", hasReport: true });
     expect(d.children.map((c) => c.periodKey)).toEqual(["2026-09-23"]);
-    await db.db.insert(db.mindIndexHistoryTable).values({ date: "2026-09-10", score: 90 });
-    const ph = await (await get("/hermes-timeline/day/2026-09-10")).json() as { hasReport: boolean; mindScore: number; bodyMd: string };
-    expect(ph).toMatchObject({ hasReport: false, mindScore: 90, bodyMd: "" });
+    await db.db.insert(db.hermesGraphSnapshotTable).values({
+      id: "latest", events: [{ id: "e1", date: "2026-09-10", title: "甲", caseNo: null, case: null, location: null, status: null, tags: [], participants: [], objects: [] }],
+    });
+    const ph = await (await get("/hermes-timeline/day/2026-09-10")).json() as { hasReport: boolean; reportScore: unknown; bodyMd: string; eventCount: number };
+    expect(ph).toMatchObject({ hasReport: false, reportScore: null, bodyMd: "", eventCount: 1 });
     expect((await get("/hermes-timeline/day/2020-01-01")).status).toBe(404);
     expect((await get("/hermes-timeline/decade/x")).status).toBe(400);
     expect((await get("/hermes-timeline?level=decade")).status).toBe(400);
