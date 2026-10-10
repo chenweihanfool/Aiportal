@@ -13,7 +13,7 @@ export interface HermesIdea {
   why: string | null;
   value: number | null; // 1-5，HERMES 估
   effort: number | null; // 1-5，HERMES 估
-  status: "new" | "evaluating" | "doing" | "done" | "shelved" | "dropped";
+  status: "new" | "evaluating" | "doing" | "done" | "shelved" | "dropped" | "absorbed"; // absorbed＝🔀 併入別的想法（2026-10-10）
   bornAt: string; // ISO（台北時間）
   lastMentioned: string;
   mentions: number;
@@ -22,6 +22,8 @@ export interface HermesIdea {
   history: Array<{ status: string; at: string }>;
   baseScore: number | null; // 已結束的想法為 null
   baseWhy: string[];
+  mergedInto?: string | null; // 被併入者：併到哪個想法（IDEA-xxxx）；舊快照沒有這欄
+  absorbed?: string[]; // 承接者：吸收了哪些想法；舊快照沒有這欄
 }
 
 export interface HermesIdeasWeek {

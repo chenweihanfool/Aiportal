@@ -84,6 +84,17 @@ describe.skipIf(!enabled)("hermes-ideas API／loadCombinedMind（真實 Postgres
     expect((await loadCombinedMind("2026-10-12")).report).toBeNull();     // 只看今天與昨天，不拿兩天前的
   });
 
+  it("GET returns absorbed ideas with mergedInto / absorbed and never ranks them", async () => {
+    const a = { ...idea(39, "2026-09-01T10:00:00+08:00"), status: "absorbed", mergedInto: "IDEA-0022", baseScore: null };
+    const b = { ...idea(22, "2026-09-01T10:00:00+08:00"), absorbed: ["IDEA-0039"] };
+    await db.db.update(db.hermesIdeasSnapshotTable).set({ ideas: [a, b] as never });
+    const body = await (await get()).json() as { ideas: Array<{ id: string; status: string; mergedInto?: string | null; absorbed?: string[]; score: number | null }>; top: string[] };
+    const by = Object.fromEntries(body.ideas.map((i) => [i.id, i]));
+    expect(by["IDEA-0039"]).toMatchObject({ status: "absorbed", mergedInto: "IDEA-0022", score: null });
+    expect(by["IDEA-0022"]).toMatchObject({ absorbed: ["IDEA-0039"] });
+    expect(body.top).not.toContain("IDEA-0039");
+  });
+
   it("loadCombinedMind is null-scored without any ideas", async () => {
     const { loadCombinedMind } = await import("../lib/mindCombinedSource");
     await db.db.insert(db.hermesTimelineEntryTable).values(day("2026-10-10", scored("2026-10-10")));

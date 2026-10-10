@@ -7,7 +7,9 @@ import type { HermesIdea, HermesIdeasWeek } from "@workspace/db"
 
 export const WEAK_BOOST = 1.3
 export const OPEN_STATUSES = ["new", "evaluating", "doing"] as const
-const STATUSES = ["new", "evaluating", "doing", "done", "shelved", "dropped"] as const
+// 不在這裡的狀態，sanitizeIdeasPayload 會整筆丟掉（進不了快照）——寫端新增狀態時這裡要一起加。
+const STATUSES = ["new", "evaluating", "doing", "done", "shelved", "dropped", "absorbed"] as const
+const IDEA_ID = /^IDEA-\d{4,}$/
 
 export interface RankedIdea extends HermesIdea {
   score: number | null
@@ -50,6 +52,8 @@ export function sanitizeIdeasPayload(body: unknown): { ideas: HermesIdea[]; week
       mentions: typeof r["mentions"] === "number" && r["mentions"] >= 1 ? Math.floor(r["mentions"]) : 1,
       backfill: r["backfill"] === true, days: strArr(r["days"], 200), history,
       baseScore: num(r["baseScore"]), baseWhy: strArr(r["baseWhy"], 10),
+      mergedInto: typeof r["mergedInto"] === "string" && IDEA_ID.test(r["mergedInto"]) ? r["mergedInto"] : null,
+      absorbed: strArr(r["absorbed"], 200).filter((x) => IDEA_ID.test(x)),
     })
   }
   const weeks: HermesIdeasWeek[] = Array.isArray(b["weeks"])

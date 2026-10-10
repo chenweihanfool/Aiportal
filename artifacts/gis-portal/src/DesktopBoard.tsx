@@ -5,7 +5,7 @@ import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
   type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type PusherHealth, type IdeaItem, type IdeasData, type IdeasMind, type MindCombined, type UsageData,
 } from './boardApi'
-import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
+import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, absorbBadges, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
@@ -382,6 +382,7 @@ function IdeasCard({ pw }: { pw: string }) {
                     <span title="價值">價值 <b>{pips(it.value)}</b></span>
                     <span title="難度">難度 <b>{pips(it.effort)}</b></span>
                     {it.weakBoost && <Chip color={COLOR.ok}>補短板</Chip>}
+                    {absorbBadges(it).absorbed && <span data-testid="idea-absorbed">{absorbBadges(it).absorbed}</span>}
                   </div>
                   {it.why && <div className="bd-idea-why">{it.why}</div>}
                 </div>
@@ -537,7 +538,10 @@ function IdeasPanel({ pw }: { pw: string }) {
                   <span style={{ color: COLOR.ink, fontWeight: 600 }}>{topSet.has(it.id) && <span style={{ color: COLOR.amber }}>★ </span>}{it.title}</span>
                   <span className="bd-idea-meta">
                     <CatBadge category={it.category} />
-                    <span>{STATUS_ICON[it.status]} {STATUS_LABEL[it.status]}</span>
+                    {it.mergedInto
+                      ? <span data-testid="idea-merged-into">{absorbBadges(it).mergedInto}</span>
+                      : <span>{STATUS_ICON[it.status]} {STATUS_LABEL[it.status]}</span>}
+                    {absorbBadges(it).absorbed && <span data-testid="idea-absorbed">{absorbBadges(it).absorbed}</span>}
                     <span>價值 <b>{pips(it.value)}</b></span>
                     <span>難度 <b>{pips(it.effort)}</b></span>
                     {it.mentions > 1 && <span>想起 {it.mentions} 次</span>}
