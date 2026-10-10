@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { combineMind } from "./mindCombined";
+import { combineMind, pickLatestReport } from "./mindCombined";
 
 describe("combineMind", () => {
   it("weights ideas 80% and the daily report 20%", () => {
@@ -12,5 +12,14 @@ describe("combineMind", () => {
   it("is null without an ideas score (ideas is the main component)", () => {
     expect(combineMind(null, 70)).toBeNull();
     expect(combineMind(Number.NaN, 70)).toBeNull();
+  });
+});
+
+describe("pickLatestReport", () => {
+  const s = (total: number) => ({ total, parts: [] });
+  it("prefers today's report, then yesterday's", () => {
+    expect(pickLatestReport(new Map([["2026-10-10", s(70)], ["2026-10-09", s(50)]]), "2026-10-10", "2026-10-09")).toMatchObject({ date: "2026-10-10", total: 70 });
+    expect(pickLatestReport(new Map([["2026-10-09", s(50)]]), "2026-10-10", "2026-10-09")).toMatchObject({ date: "2026-10-09", total: 50 });
+    expect(pickLatestReport(new Map([["2026-10-08", s(50)]]), "2026-10-10", "2026-10-09")).toBeNull();
   });
 });

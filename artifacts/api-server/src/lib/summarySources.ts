@@ -1,5 +1,6 @@
 import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
-import { loadIdeasMind } from "./ideasMindSource";
+import { loadCombinedMind } from "./mindCombinedSource";
+import { MIND_COMBINED_SINCE, type CombinedMind } from "./mindCombined";
 import { desc, eq, lt } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,
@@ -189,8 +190,8 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
 
   const today = taipeiDateString(new Date());
   const history = await fetchDimensionHistory(today);
-  const { result, busynessScore, usingStaleData } = await extractHappinessResult(results, history);
-  const hhiData = await buildHappinessDisplayData(result, busynessScore, usingStaleData);
+  const { result, busynessScore, usingStaleData, mindCombined } = await extractHappinessResult(results, history, today);
+  const hhiData = await buildHappinessDisplayData(result, busynessScore, usingStaleData, mindCombined);
   const hhiEntry: DashboardSummary = {
     subsystemId: "hhi",
     name: "翰翰仔幸福指數",
@@ -233,6 +234,7 @@ const EMPTY_HISTORY: DimensionHistory = {
 async function fetchDimensionHistory(beforeDate: string): Promise<DimensionHistory> {
   const rows = await db
     .select({
+      date: happinessIndexHistoryTable.date,
       lifeFreedomRaw: happinessIndexHistoryTable.lifeFreedomRaw,
       fitnessHabitRaw: happinessIndexHistoryTable.fitnessHabitRaw,
       calmRaw: happinessIndexHistoryTable.calmRaw,
@@ -245,14 +247,15 @@ async function fetchDimensionHistory(beforeDate: string): Promise<DimensionHisto
     .orderBy(desc(happinessIndexHistoryTable.date))
     .limit(PERCENTILE_WINDOW_DAYS);
 
-  const pick = (key: keyof (typeof rows)[number]): number[] =>
-    rows.map((r) => r[key]).filter((v): v is number => v !== null);
+  const pick = (key: Exclude<keyof (typeof rows)[number], "date">, since = ""): number[] =>
+    rows.filter((r) => String(r.date) >= since).map((r) => r[key]).filter((v): v is number => v !== null);
 
   return {
     lifeFreedom: pick("lifeFreedomRaw"),
     fitness: pick("fitnessHabitRaw"),
     calm: pick("calmRaw"),
-    mind: pick("mindRaw"),
+    // 心智 2026-10-10 起改成合成版（想法 80%＋日報 20%）：之前的 mind_raw 是日記篇數版，不同一把尺，不拿來排百分位
+    mind: pick("mindRaw", MIND_COMBINED_SINCE),
     travel: pick("travelRaw"),
     social: pick("socialRaw"),
   };
@@ -268,38 +271,36 @@ async function fetchDimensionHistory(beforeDate: string): Promise<DimensionHisto
  *  fetchDimensionHistory so both callers share one query shape. */
 async function extractHappinessResult(
   results: Map<string, DashboardSummary>,
-  history: DimensionHistory = EMPTY_HISTORY
+  history: DimensionHistory = EMPTY_HISTORY,
+  today: string = taipeiDateString(new Date())
 ): Promise<{
   result: HappinessResult;
   rawComponents: HappinessInputs;
   busynessScore: number | null;
   usingStaleData: boolean;
+  mindCombined: CombinedMind;
 }> {
   const pf = results.get("pf-cwh");
   const ff = results.get("fitnessforge");
   const vk = results.get("vikunja");
-  const mi = results.get("mind-index");
   const tv = results.get("travel");
   const si = results.get("social-index");
 
   const lifeFreedomRaw = pf?.status === "ok" ? (pf.data)?.lifeFreedomIndex as number | null : null;
   const fitnessHabitRaw = ff?.status === "ok" ? (ff.data)?.habitIndex as number | null : null;
   const busynessScore = vk?.status === "ok" ? (vk.data)?.busyIndex as number | null : null;
-  // 2026-08-20 起改讀 dailyEngagementScore（2026-08-21 起是近 3 天滾動窗口日
-  // 記篇數，見 HHI v2），不再讀知識庫健康分數 score——那組分數還留著給
-  // MindIndexCard 顯示，只是不計入 HHI 了。daily-life-score.py 補這個欄位之
-  // 前，這裡會是 null，跟其他缺資料的維度一樣走重新正規化，不會顯示假分數。
-  const mindRaw = mi?.status === "ok" ? (mi.data)?.dailyEngagementScore as number | null : null;
+  // 2026-10-10 起心智維度＝合成版：0.8 × 想法分數 ＋ 0.2 × 最新一份日報分數（見 lib/mindCombined.ts）。
+  // 取代「近 3 天日記篇數」（dailyEngagementScore）。讀失敗或沒有想法分數＝null，跟其他缺資料的維度一樣走重新正規化。
+  const mindCombined = await loadCombinedMind(today).catch((): CombinedMind => ({ score: null, ideas: null, report: null }));
+  const mindRaw = mindCombined.score;
   const travelRaw = tv?.status === "ok" ? (tv.data)?.travelScore as number | null : null;
   const socialRaw = si?.status === "ok" ? (si.data)?.socialScore as number | null : null;
 
-  // 心智指標／社交指標都是同一種「檔案讀取成功，但值本身可能是舊的」情境
-  // （collect.ps1 停止推送一段時間），跟其他來源的 fetch 失敗（status ===
-  // "error"）是不同概念——兩者都算進 usingStaleData，避免只有心智過期會顯
-  // 示過期警示、社交過期卻默默不顯示的不一致。
-  const mindStale = mi?.status === "ok" ? (mi.data)?.stale === true : false;
+  // 社交指標是「檔案讀取成功，但值本身可能是舊的」情境（collect.ps1 停止推送一段時間），
+  // 跟其他來源的 fetch 失敗（status === "error"）是不同概念，算進 usingStaleData。
+  // （心智 2026-10-10 起改讀合成版，不再來自 mind-index 檔，所以不再有它的 stale 旗標。）
   const socialStale = si?.status === "ok" ? (si.data)?.stale === true : false;
-  const usingStaleData = mindStale || socialStale;
+  const usingStaleData = socialStale;
 
   // calmRaw is busyness inverted to "higher is better" BEFORE percentile
   // ranking (percentileRank always ranks "higher is better" raw values —
@@ -339,7 +340,7 @@ async function extractHappinessResult(
     socialScore: socialRaw,
   };
 
-  return { result, rawComponents, busynessScore, usingStaleData };
+  return { result, rawComponents, busynessScore, usingStaleData, mindCombined };
 }
 
 const HAPPINESS_WEIGHTS = {
@@ -362,7 +363,8 @@ const HAPPINESS_WEIGHTS = {
 async function buildHappinessDisplayData(
   result: HappinessResult,
   busynessScore: number | null,
-  usingStaleData: boolean
+  usingStaleData: boolean,
+  mindCombined: CombinedMind | null = null
 ): Promise<Record<string, unknown>> {
   const configVersion = getHappinessConfigVersion();
 
@@ -386,6 +388,7 @@ async function buildHappinessDisplayData(
       usingStaleData,
       configVersion,
       weights: HAPPINESS_WEIGHTS,
+      mindCombined,
     };
   }
 
@@ -458,6 +461,7 @@ async function buildHappinessDisplayData(
     usingStaleData,
     configVersion,
     weights: HAPPINESS_WEIGHTS,
+    mindCombined,   // 心智維度的原始分數與組成（想法分數、採用的日報分數與日期），給心智卡片顯示
   };
 }
 
@@ -477,7 +481,7 @@ export async function computeAndPersistDailySnapshot(): Promise<void> {
   const results = await fetchRawSummaryResults();
   const today = taipeiDateString(new Date());
   const history = await fetchDimensionHistory(today);
-  const { result, rawComponents } = await extractHappinessResult(results, history);
+  const { result, rawComponents, mindCombined } = await extractHappinessResult(results, history, today);
 
   if (result.finalScore === null) return; // 沒東西可存，維持「資料準備中」
 
@@ -495,8 +499,8 @@ export async function computeAndPersistDailySnapshot(): Promise<void> {
   // holds the raw (uninverted) busyness score for display purposes.
   const calmRaw = rawComponents.busynessScore === null ? null : clamp(100 - rawComponents.busynessScore, 0, 100);
 
-  // 💡 心智分數（想法版）並行記錄：只存不用，讀失敗也不能擋住當天的幸福指數快照
-  const mindIdeasRaw = await loadIdeasMind(today).then((m) => m?.score ?? null).catch(() => null);
+  // 💡 想法分數（合成版的 80%）另外存一份，方便日後檢視兩者差異
+  const mindIdeasRaw = mindCombined.ideas;
 
   const historyRow = {
     date: today,

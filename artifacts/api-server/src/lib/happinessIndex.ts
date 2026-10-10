@@ -63,6 +63,11 @@ export interface HappinessConfig {
 // their raw outputs meant "80" carried a different meaning in every
 // dimension. Weights themselves are unchanged; scoringMode exists purely to
 // force configVersion to change anyway, since none of the numbers below did.
+//
+// 2026-10-10: 心智維度的輸入改成合成版（0.8 × 想法分數 ＋ 0.2 × 最新一份日報 📊 分數，
+// 見 lib/mindCombined.ts），取代近 3 天日記篇數（dailyEngagementScore）。權重不變；
+// scoringMode 加上 mind-combined 讓 configVersion 跟著變，舊列不會被誤當同一把尺。
+// 心智的百分位歷史也只取 2026-10-10 起的列（MIND_COMBINED_SINCE），之前不足 10 天時直接用原始分數。
 export const HAPPINESS_CONFIG: HappinessConfig = {
   lifeFreedomWeight: 0.27,
   fitnessWeight: 0.18,
@@ -73,7 +78,7 @@ export const HAPPINESS_CONFIG: HappinessConfig = {
   weakestLinkWeight: 0.15,
   smoothingTodayWeight: 0.70,
   smoothingYesterdayWeight: 0.30,
-  scoringMode: "percentile-90d-v1",
+  scoringMode: "percentile-90d-v1+mind-combined-v1",
 };
 
 if (
@@ -120,7 +125,7 @@ export interface HappinessInputs {
   lifeFreedomScore: number | null;
   fitnessHabitScore: number | null;
   busynessScore: number | null; // lower is better; converted to calmScore below
-  mindScore: number | null; // dailyEngagementScore（近 3 天滾動窗口日記篇數），0-100，higher is better
+  mindScore: number | null; // 合成版心智分數（0.8×想法＋0.2×日報，2026-10-10 起），0-100，higher is better
   travelScore: number | null; // AdventureLog recency+頻率+期待加分換算，0-100，higher is better
   socialScore: number | null; // 近 7 天廣度/互動強度/連結率換算，0-100，higher is better
 }
