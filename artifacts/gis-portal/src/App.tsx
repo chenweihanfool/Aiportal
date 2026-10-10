@@ -24,6 +24,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.31.0',
+    date: '2026-10-10',
+    summary: '心智指標正式改用合成版（想法 80%＋每日報告 20%），不再數日記篇數',
+    changes: [
+      '幸福指數的心智維度改成 0.8 × 想法分數 ＋ 0.2 × 最新一份日報分數（今天或昨天的 📊 評分；沒有就只用想法分數），取代「近 3 天日記篇數」。',
+      '心智指標卡片的詳細數據改為顯示想法分數、採用的日報分數與日期、五項明細與算式。',
+      '想法庫抽屜的心智區塊改標「計入幸福指數」，曲線改為心智分數與想法分數兩條，拿掉日記篇數版。',
+      '心智的近 90 天百分位只用 10/10 起的合成分數排名；累積滿 10 天前直接用原始分數。',
+    ],
+  },
+  {
     version: '2.30.0',
     date: '2026-10-10',
     summary: '心智分數新增合成版（想法 80%＋每日報告 20%，並行中）',
@@ -1612,10 +1623,15 @@ function DimensionGauge({
 }
 
 // ─────────────────────────────────────────────
-// 心智指標 — dailyEngagementScore (計入 HHI, 純看近 3 天日記篇數滾動總和)。
-// 知識庫健康度（原本這張卡片唯一的內容）已搬到 HERMES 戰情室當獨立面板，
-// 見 HermesKnowledgeHealthPanel。
+// 心智指標（計入 HHI）— 2026-10-10 起＝0.8 × 想法分數 ＋ 0.2 × 最新一份日報 📊 分數
+// （後端 lib/mindCombined.ts；資料在幸福指數摘要的 mindCombined）。取代原本的近 3 天日記篇數。
+// 知識庫健康度另在 HERMES 戰情室當獨立面板，見 HermesKnowledgeHealthPanel。
 // ─────────────────────────────────────────────
+interface MindCombinedData {
+  score: number | null
+  ideas: number | null
+  report: { date: string; total: number; parts: Array<{ label: string; value: number; note: string }> } | null
+}
 function MindIndexCard({
   summary,
   hhiSummary,
@@ -1628,20 +1644,19 @@ function MindIndexCard({
   onSelect: () => void
 }) {
   const isLocked = !unlocked
-  const data = summary?.data
-  const dailyEngagementScore = typeof data?.['dailyEngagementScore'] === 'number' ? data['dailyEngagementScore'] as number : null
-  const diaryEntryCount = typeof data?.['diaryEntryCount'] === 'number' ? data['diaryEntryCount'] as number : null
-  const stale = data?.['stale'] === true
+  const mc = (hhiSummary?.data?.['mindCombined'] ?? null) as MindCombinedData | null
   const [expanded, setExpanded] = useState(false)
   const normalizedScore = typeof hhiSummary?.data?.['mindScore'] === 'number' ? hhiSummary.data['mindScore'] as number : null
   const tone = bandTone(normalizedScore, MIND_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label="心智指標" sub="日記書寫" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label="心智指標" sub="想法＋日報" onRequestUnlock={onSelect} />
   }
 
-  const engagementItems = [
-    { label: '日記篇數（今天）', value: diaryEntryCount !== null ? String(diaryEntryCount) : '—', formula: '今天的日記篇數，計分實際用的是近 3 天滾動總和' },
+  const rep = mc?.report ?? null
+  const items = [
+    { label: '想法分數（80%）', value: mc?.ideas != null ? mc.ideas.toFixed(1) : '—', formula: '產生 40%（近 7 天新想法 ÷ 過去 8 週每週中位數）＋ 實行 60%（近 28 天實行 ÷ 有機會實行的，達 20% 算滿分）；明細見 HERMES 戰情室想法庫' },
+    { label: rep ? `日報分數（20%，${rep.date.slice(5)}）` : '日報分數（20%）', value: rep ? String(rep.total) : '—', formula: '日報最後的 📊 評分段：推進／決策／卡點／覺察／能量 各 0–4，加總 × 5；取今天或昨天最新的一份（今天的日報 22:00 產出、隔天早上才推上來）' },
   ]
 
   return (
@@ -1652,26 +1667,30 @@ function MindIndexCard({
       <Gauge value={normalizedScore} color={tone.color} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>心智指標</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
-        {normalizedScore !== null ? tone.label : (summary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
+        {normalizedScore !== null ? tone.label : (hhiSummary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
       </div>
-      {stale && <div style={{ fontSize: '0.62rem', color: COLOR.warn }}>資料已超過 36 小時未更新</div>}
       <div style={{ width: '100%', marginTop: '0.3rem' }}>
         <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
         {expanded && (
-          <div style={{ marginTop: '0.5rem' }}>
+          <div style={{ marginTop: '0.5rem' }} data-testid="mind-card-detail">
             <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-              原始分數（未正規化）：{dailyEngagementScore ?? '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+              原始分數（未正規化）：{mc?.score != null ? mc.score.toFixed(1) : '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
             </div>
-            <SupportStats items={engagementItems} />
+            <SupportStats items={items} />
+            {rep && (
+              <div style={{ fontSize: '0.64rem', color: COLOR.steelDim, marginTop: '0.5rem', lineHeight: 1.6 }}>
+                {rep.parts.map(p => `${p.label} ${p.value}`).join('・')}
+              </div>
+            )}
             <FormulaPanel rows={[
-              { label: '心智指標（計入幸福指數，HHI v2 滾動 3 天窗口）', formula: 'dailyEngagementScore = round(100 × 近 3 天篇數總和 ÷ (近 3 天篇數總和 + 10))' },
-              ...engagementItems,
+              { label: '心智指標（計入幸福指數）', formula: '想法分數 × 80% ＋ 最新日報分數 × 20%（沒有日報分數就只用想法分數）' },
+              ...items,
             ]} />
           </div>
         )}
       </div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.2rem' }}>
-        {formatMinutesAgo(summary?.fetchedAt ?? null)}
+        {formatMinutesAgo(hhiSummary?.fetchedAt ?? summary?.fetchedAt ?? null)}
       </div>
     </div>
   )

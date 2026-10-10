@@ -4,8 +4,9 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { rankIdeas, sanitizeIdeasPayload } from "../lib/hermesIdeas";
 import { computeIdeasMind } from "../lib/ideasMind";
-import { combineMind } from "../lib/mindCombined";
-import { parseReportScore, type ReportScore } from "../lib/reportScore";
+import { MIND_COMBINED_SINCE } from "../lib/mindCombined";
+import { loadCombinedMind } from "../lib/mindCombinedSource";
+import { parseReportScore } from "../lib/reportScore";
 import { taipeiDateString } from "../lib/summarySources";
 
 const router = Router();
@@ -43,14 +44,17 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
     .limit(1);
   const weakest = hhi?.weakest ?? null;
   const { ideas, top } = rankIdeas(row.ideas, weakest);
-  // 💡 心智分數（想法版，第四期並行中）：今天現算＋近 30 天每晚 23:55 存下的值，旁邊附舊版（日記篇數）原始分數對照
-  const mind = computeIdeasMind(row.ideas, taipeiDateString(new Date()));
+  // 🧮 心智分數（幸福指數的心智維度，2026-10-10 起）＝0.8 × 想法分數 ＋ 0.2 × 最新一份日報分數。
+  // mind＝想法分數的組成（今天現算）；mindCombined＝今天的合成分數（與幸福指數同一個來源）；
+  // mindShadow＝近 30 天每晚 23:55 存下的想法分數與合成分數（合成分數只從 MIND_COMBINED_SINCE 起有），附當天日報分數。
+  const today = taipeiDateString(new Date());
+  const mind = computeIdeasMind(row.ideas, today);
+  const mindCombined = await loadCombinedMind(today).catch(() => null);
   const shadowRows = await db
-    .select({ date: happinessIndexHistoryTable.date, ideas: happinessIndexHistoryTable.mindIdeasRaw, diary: happinessIndexHistoryTable.mindRaw })
+    .select({ date: happinessIndexHistoryTable.date, ideas: happinessIndexHistoryTable.mindIdeasRaw, mindRaw: happinessIndexHistoryTable.mindRaw })
     .from(happinessIndexHistoryTable)
     .orderBy(desc(happinessIndexHistoryTable.date))
     .limit(30);
-  // 🧮 合成版（並行中）：每日報告分數直接從時間軸已存的日報全文解析（日報 22:00 產出、隔天 05:00 才推上來，所以最新一天常常還沒有）
   const dates = shadowRows.map((r) => String(r.date));
   const reportRows = dates.length
     ? await db
@@ -58,17 +62,17 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
         .from(hermesTimelineEntryTable)
         .where(and(eq(hermesTimelineEntryTable.level, "day"), inArray(hermesTimelineEntryTable.periodKey, dates)))
     : [];
-  const reports = new Map<string, ReportScore>();
+  const reports = new Map<string, number>();
   for (const r of reportRows) {
-    const s = parseReportScore(r.bodyMd);
-    if (s) reports.set(r.date, s);
+    const sc = parseReportScore(r.bodyMd);
+    if (sc) reports.set(r.date, sc.total);
   }
-  const mindShadow = shadowRows.reverse().map((r) => {
-    const report = reports.get(String(r.date))?.total ?? null;
-    return { date: r.date, ideas: r.ideas, diary: r.diary, report, combined: combineMind(r.ideas, report) };
-  });
-  const latest = [...mindShadow].reverse().find((d) => d.report !== null);
-  const mindReport = latest ? { date: String(latest.date), ...reports.get(String(latest.date))! } : null;
+  const mindShadow = shadowRows.reverse().map((r) => ({
+    date: r.date,
+    ideas: r.ideas,
+    report: reports.get(String(r.date)) ?? null,
+    combined: String(r.date) >= MIND_COMBINED_SINCE ? r.mindRaw : null,
+  }));
   return res.json({
     available: true,
     generatedAt: row.generatedAt,
@@ -78,8 +82,8 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
     top,
     weeks: row.weeks,
     mind,
+    mindCombined,
     mindShadow,
-    mindReport,
   });
 });
 

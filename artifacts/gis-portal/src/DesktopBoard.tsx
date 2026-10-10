@@ -3,7 +3,7 @@ import { COLOR, FONT } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
-  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type PusherHealth, type IdeaItem, type IdeasData, type IdeasMind, type UsageData,
+  type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type PusherHealth, type IdeaItem, type IdeasData, type IdeasMind, type MindCombined, type UsageData,
 } from './boardApi'
 import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
@@ -401,7 +401,7 @@ function IdeasCard({ pw }: { pw: string }) {
             <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, lineHeight: 1.5 }}>
               本週 新想法 <b style={{ color: COLOR.amber, fontFamily: FONT.mono }}>{thisWeek?.born ?? 0}</b> · 實行 <b style={{ color: COLOR.ok, fontFamily: FONT.mono }}>{thisWeek?.done ?? 0}</b>
               <br />共 {counts!.total} 個 · 進行中 {counts!.doing} · 已實行 {counts!.done}
-              {data.mind && <><br /><span title={`${data.mind.formula}（並行記錄中，尚未計入幸福指數）`}>心智（想法版・並行中）<b style={{ color: COLOR.ink, fontFamily: FONT.mono }}>{data.mind.score.toFixed(1)}</b></span></>}
+              {data.mindCombined?.score != null && <><br /><span data-testid="ideas-card-mind" title="心智分數＝想法分數 × 80% ＋ 最新日報分數 × 20%（計入幸福指數）">心智 <b style={{ color: COLOR.ink, fontFamily: FONT.mono }}>{data.mindCombined.score.toFixed(1)}</b></span></>}
             </div>
           </div>
         </div>
@@ -456,47 +456,41 @@ function CopyToHermes({ idea }: { idea: IdeaItem }) {
   )
 }
 
-/** 心智分數（想法版）並行期間的說明：算式、兩個分項的原始數字、與現行「日記篇數版」的對照 */
-function IdeasMindSection({ mind, shadow, report }: { mind: IdeasMind; shadow: IdeasData['mindShadow']; report: IdeasData['mindReport'] }) {
+/** 心智分數（幸福指數的心智維度）：合成算式、想法分數的組成、採用的日報分數，與近 30 天曲線 */
+function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combined: MindCombined | null; shadow: IdeasData['mindShadow'] }) {
   const [ref, box] = useBox(240, 70)
-  const pts = shadow.filter(d => d.ideas !== null || d.diary !== null)
-  const lastCombined = [...shadow].reverse().find(d => d.combined != null)
-  const line = (key: 'ideas' | 'diary' | 'combined') => {
+  const pts = shadow.filter(d => d.ideas !== null || d.combined != null)
+  const line = (key: 'ideas' | 'combined') => {
     const xs = pts.map((d, i) => [i, d[key] ?? null] as const).filter((p): p is readonly [number, number] => p[1] !== null)
     if (xs.length < 2) return null
     const W = box.w - 8, H = box.h - 8
     return xs.map(([i, v]) => `${4 + (i / Math.max(1, pts.length - 1)) * W},${4 + H - (v / 100) * H}`).join(' ')
   }
-  const li = line('ideas'), ld = line('diary'), lc = line('combined')
+  const li = line('ideas'), lc = line('combined')
+  const rep = combined?.report ?? null
   return (
     <section style={{ border: `1px solid ${COLOR.line}`, borderRadius: 8, padding: '10px 12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: 14 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: COLOR.steel, lineHeight: 1.6 }}>
-        <div style={{ color: COLOR.ink, fontWeight: 600 }}>心智分數（想法版）<span style={{ fontFamily: FONT.mono, color: COLOR.amber, fontSize: '1.2rem', marginLeft: 8 }}>{mind.score.toFixed(1)}</span>
-          <Chip color={COLOR.warn}>並行中・尚未計入幸福指數</Chip></div>
-        <div>產生 {mind.birth.score.toFixed(0)} × 40%：近 7 天新想法 <b style={{ color: COLOR.ink }}>{mind.birth.born7}</b> 個 ÷ 過去 8 週每週中位數 <b style={{ color: COLOR.ink }}>{mind.birth.baseline}</b></div>
-        <div>實行 {mind.action.score.toFixed(0)} × 60%：近 28 天實行 <b style={{ color: COLOR.ink }}>{mind.action.done28}</b> 個 ÷ 有機會實行的 <b style={{ color: COLOR.ink }}>{mind.action.eligible}</b> 個（{(mind.action.rate * 100).toFixed(1)}%，達 {Math.round(mind.action.target * 100)}% 算滿分）</div>
-        {lastCombined && (
-          <div data-testid="mind-combined">🧮 合成版 <b style={{ fontFamily: FONT.mono, color: COLOR.ok }}>{lastCombined.combined!.toFixed(1)}</b>
-            （{lastCombined.date.slice(5)}：想法 {lastCombined.ideas!.toFixed(1)} × 80%{lastCombined.report != null ? ` ＋ 日報 ${lastCombined.report} × 20%` : '，當天沒有日報分數'}）</div>
+        <div data-testid="mind-combined" style={{ color: COLOR.ink, fontWeight: 600 }}>🧮 心智分數<span style={{ fontFamily: FONT.mono, color: COLOR.amber, fontSize: '1.2rem', marginLeft: 8 }}>{combined?.score != null ? combined.score.toFixed(1) : '—'}</span>
+          <Chip color={COLOR.ok}>計入幸福指數</Chip></div>
+        <div>＝ 想法 {mind.score.toFixed(1)} × 80%{rep ? ` ＋ 日報 ${rep.total} × 20%` : '（還沒有日報分數，只用想法分數）'}</div>
+        <div style={{ color: COLOR.steelDim }}>想法：產生 {mind.birth.score.toFixed(0)} × 40%（近 7 天新想法 <b style={{ color: COLOR.ink }}>{mind.birth.born7}</b> 個 ÷ 過去 8 週每週中位數 <b style={{ color: COLOR.ink }}>{mind.birth.baseline}</b>）＋ 實行 {mind.action.score.toFixed(0)} × 60%（近 28 天實行 <b style={{ color: COLOR.ink }}>{mind.action.done28}</b> ÷ 有機會實行的 <b style={{ color: COLOR.ink }}>{mind.action.eligible}</b>，{(mind.action.rate * 100).toFixed(1)}%，達 {Math.round(mind.action.target * 100)}% 算滿分）</div>
+        {rep && (
+          <div data-testid="mind-report" style={{ color: COLOR.steelDim }} title={rep.parts.map(p => `${p.label} ${p.value}：${p.note}`).join('\n')}>
+            📊 日報（{rep.date.slice(5)}）{rep.parts.map(p => `${p.label} ${p.value}`).join('・')}</div>
         )}
-        {report && (
-          <div data-testid="mind-report" title={report.parts.map(p => `${p.label} ${p.value}：${p.note}`).join('\n')}>
-            📊 日報分數 <b style={{ color: COLOR.ink }}>{report.total}</b>（{report.date.slice(5)}；{report.parts.map(p => `${p.label} ${p.value}`).join('・')}）</div>
-        )}
-        <div style={{ color: COLOR.steelDim }}>並行兩週，看數字合理再決定是否取代現在的「近 3 天日記篇數」。</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <Label>近 30 天：想法版／合成版 vs 現行日記篇數版（原始分數）</Label>
+        <Label>近 30 天：心智分數 vs 想法分數</Label>
         <div ref={ref} style={{ flex: 1, minHeight: 70, position: 'relative' }}>
-          {li || ld || lc ? (
-            <svg width={box.w} height={box.h} style={{ position: 'absolute', inset: 0 }} role="img" aria-label="心智分數各版對照">
-              {ld && <polyline points={ld} fill="none" stroke={COLOR.steelDim} strokeWidth={1.5} strokeDasharray="4 3" />}
-              {li && <polyline points={li} fill="none" stroke={COLOR.amber} strokeWidth={2} />}
-              {lc && <polyline points={lc} fill="none" stroke={COLOR.ok} strokeWidth={1.5} />}
+          {li || lc ? (
+            <svg width={box.w} height={box.h} style={{ position: 'absolute', inset: 0 }} role="img" aria-label="心智分數與想法分數">
+              {li && <polyline points={li} fill="none" stroke={COLOR.steelDim} strokeWidth={1.5} strokeDasharray="4 3" />}
+              {lc && <polyline points={lc} fill="none" stroke={COLOR.amber} strokeWidth={2} />}
             </svg>
           ) : <Muted>每晚 23:55 記一筆，累積兩天以上會畫出線</Muted>}
         </div>
-        <div style={{ fontSize: '0.62rem', color: COLOR.steelDim }}><span style={{ color: COLOR.amber }}>━</span> 想法版　<span style={{ color: COLOR.ok }}>━</span> 合成版　<span>┅</span> 日記篇數版</div>
+        <div style={{ fontSize: '0.62rem', color: COLOR.steelDim }}><span style={{ color: COLOR.amber }}>━</span> 心智分數　<span>┅</span> 想法分數</div>
       </div>
     </section>
   )
@@ -516,7 +510,7 @@ function IdeasPanel({ pw }: { pw: string }) {
   })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {data.mind && <IdeasMindSection mind={data.mind} shadow={data.mindShadow ?? []} report={data.mindReport ?? null} />}
+      {data.mind && <IdeasMindSection mind={data.mind} combined={data.mindCombined ?? null} shadow={data.mindShadow ?? []} />}
       <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
         優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 進行中 1.1。
         入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕複製一句話，貼到 Telegram 給 HERMES，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
