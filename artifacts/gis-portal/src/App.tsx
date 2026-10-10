@@ -24,6 +24,14 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.31.1',
+    date: '2026-10-10',
+    summary: '心智指標說明文字更新',
+    changes: [
+      '時間軸併進每 10 分鐘的推送總管後，日報約 22:10 就會推上入口網；心智卡片的說明改成「22:10 以前用的是昨天那份」，不再寫「隔天早上才推上來」。',
+    ],
+  },
+  {
     version: '2.31.0',
     date: '2026-10-10',
     summary: '心智指標正式改用合成版（想法 80%＋每日報告 20%），不再數日記篇數',
@@ -1656,7 +1664,7 @@ function MindIndexCard({
   const rep = mc?.report ?? null
   const items = [
     { label: '想法分數（80%）', value: mc?.ideas != null ? mc.ideas.toFixed(1) : '—', formula: '產生 40%（近 7 天新想法 ÷ 過去 8 週每週中位數）＋ 實行 60%（近 28 天實行 ÷ 有機會實行的，達 20% 算滿分）；明細見 HERMES 戰情室想法庫' },
-    { label: rep ? `日報分數（20%，${rep.date.slice(5)}）` : '日報分數（20%）', value: rep ? String(rep.total) : '—', formula: '日報最後的 📊 評分段：推進／決策／卡點／覺察／能量 各 0–4，加總 × 5；取今天或昨天最新的一份（今天的日報 22:00 產出、隔天早上才推上來）' },
+    { label: rep ? `日報分數（20%，${rep.date.slice(5)}）` : '日報分數（20%）', value: rep ? String(rep.total) : '—', formula: '日報最後的 📊 評分段：推進／決策／卡點／覺察／能量 各 0–4，加總 × 5；取今天或昨天最新的一份（日報每晚 22:00 產出、約 10 分鐘內推上來，所以 22:10 以前用的是昨天那份）' },
   ]
 
   return (
