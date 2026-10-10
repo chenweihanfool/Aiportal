@@ -90,7 +90,12 @@ const ideasTop = ideaItems.filter((i) => i.score !== null).sort((a, b) => b.scor
 const ideas = { available: true, generatedAt: today, receivedAt: new Date().toISOString(), weakest: '旅遊生活', ideas: ideaItems, top: ideasTop,
   weeks: Array.from({ length: 8 }, (_, i) => ({ weekStart: dayAt(49 - i * 7), born: [2, 0, 5, 3, 1, 4, 6, 2][i], done: [0, 1, 0, 0, 2, 0, 1, 1][i] })),
   mind: { score: 62.4, birth: { score: 100, born7: 3, baseline: 2, weekly: [2, 0, 5, 3, 1, 4, 6, 2] }, action: { score: 37.3, done28: 1, eligible: 9, rate: 0.111, target: 0.2 }, formula: '產生 100 × 40% ＋ 實行 37.3 × 60% ＝ 62.4' },
-  mindShadow: Array.from({ length: 12 }, (_, i) => ({ date: dayAt(11 - i), ideas: i < 2 ? null : 50 + i * 2, diary: 40 + (i % 4) * 8 })) }
+  mindShadow: Array.from({ length: 12 }, (_, i) => {
+    const ideas = i < 2 ? null : 50 + i * 2
+    const report = i >= 9 ? 65 : null
+    return { date: dayAt(11 - i), ideas, diary: 40 + (i % 4) * 8, report, combined: ideas === null ? null : Math.round((report === null ? ideas : 0.8 * ideas + 0.2 * report) * 10) / 10 }
+  }),
+  mindReport: { date: dayAt(0), total: 65, parts: [['progress', '推進', 3], ['decision', '決策', 2], ['blocker', '卡點', 3], ['awareness', '覺察', 2], ['energy', '能量', 3]].map(([key, label, value]) => ({ key, label, value, note: '依據' })) } }
 
 const posted = []
 const server = http.createServer((req, res) => {
@@ -218,7 +223,9 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     await page.waitForSelector('.bd-drawer .bd-idea-item')
     const mindTxt = await page.locator('.bd-drawer section').first().innerText()
     check('想法庫抽屜最上方有心智分數（想法版）算式與並行標示', /心智分數（想法版）/.test(mindTxt) && /並行中/.test(mindTxt) && /近 7 天新想法 3 個 ÷ 過去 8 週每週中位數 2/.test(mindTxt) && /近 28 天實行 1 個 ÷ 有機會實行的 9 個/.test(mindTxt), mindTxt.slice(0, 200))
-    check('兩版對照曲線都有畫出來', (await page.locator('.bd-drawer svg[aria-label="心智分數兩版對照"] polyline').count()) === 2)
+    check('三版對照曲線都有畫出來（想法版／合成版／日記篇數版）', (await page.locator('.bd-drawer svg[aria-label="心智分數各版對照"] polyline').count()) === 3)
+    check('合成版：最新一天 0.8×想法＋0.2×日報', /🧮 合成版 70\.6（.*想法 72\.0 × 80% ＋ 日報 65 × 20%）/.test(mindTxt), mindTxt.slice(0, 400))
+    check('日報分數與五項明細', /📊 日報分數 65（.*推進 3・決策 2・卡點 3・覺察 2・能量 3）/.test(mindTxt))
     const nOpen = await page.locator('.bd-drawer .bd-idea-item').count()
     check(`想法庫抽屜預設列出開放中的想法（${nOpen} 筆）`, nOpen === ideaItems.filter((i) => i.score !== null).length)
     await page.locator('.bd-drawer button', { hasText: /^全部$/ }).click()

@@ -1,9 +1,11 @@
 import { Router, type Request, type Response } from "express";
-import { db, happinessIndexHistoryTable, hermesIdeasSnapshotTable } from "@workspace/db";
-import { desc, eq } from "drizzle-orm";
+import { db, happinessIndexHistoryTable, hermesIdeasSnapshotTable, hermesTimelineEntryTable } from "@workspace/db";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { rankIdeas, sanitizeIdeasPayload } from "../lib/hermesIdeas";
 import { computeIdeasMind } from "../lib/ideasMind";
+import { combineMind } from "../lib/mindCombined";
+import { parseReportScore, type ReportScore } from "../lib/reportScore";
 import { taipeiDateString } from "../lib/summarySources";
 
 const router = Router();
@@ -48,7 +50,25 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
     .from(happinessIndexHistoryTable)
     .orderBy(desc(happinessIndexHistoryTable.date))
     .limit(30);
-  const mindShadow = shadowRows.reverse().map((r) => ({ date: r.date, ideas: r.ideas, diary: r.diary }));
+  // 🧮 合成版（並行中）：每日報告分數直接從時間軸已存的日報全文解析（日報 22:00 產出、隔天 05:00 才推上來，所以最新一天常常還沒有）
+  const dates = shadowRows.map((r) => String(r.date));
+  const reportRows = dates.length
+    ? await db
+        .select({ date: hermesTimelineEntryTable.periodKey, bodyMd: hermesTimelineEntryTable.bodyMd })
+        .from(hermesTimelineEntryTable)
+        .where(and(eq(hermesTimelineEntryTable.level, "day"), inArray(hermesTimelineEntryTable.periodKey, dates)))
+    : [];
+  const reports = new Map<string, ReportScore>();
+  for (const r of reportRows) {
+    const s = parseReportScore(r.bodyMd);
+    if (s) reports.set(r.date, s);
+  }
+  const mindShadow = shadowRows.reverse().map((r) => {
+    const report = reports.get(String(r.date))?.total ?? null;
+    return { date: r.date, ideas: r.ideas, diary: r.diary, report, combined: combineMind(r.ideas, report) };
+  });
+  const latest = [...mindShadow].reverse().find((d) => d.report !== null);
+  const mindReport = latest ? { date: String(latest.date), ...reports.get(String(latest.date))! } : null;
   return res.json({
     available: true,
     generatedAt: row.generatedAt,
@@ -59,6 +79,7 @@ router.get("/hermes-ideas", async (req: Request, res: Response) => {
     weeks: row.weeks,
     mind,
     mindShadow,
+    mindReport,
   });
 });
 
