@@ -183,15 +183,172 @@ body,
   }
 }
 
-/* ─── 桌面首頁儀表板（DesktopBoard）───
-   ≥1100px 寬且 ≥640px 高才顯示；首頁電腦版就只有這一塊（舊面板的內容收進「詳細」抽屜），一個畫面看完不必捲動。
+/* ─── 首頁儀表板（DesktopBoard）───
+   電腦版（≥1100px 寬且 ≥640px 高）：首頁就只有這一塊（舊面板的內容收進「詳細」抽屜），一個畫面看完不必捲動。
    高度與左側工具連結側欄同一把尺（100vh − 8.5rem）。字級多用 vh 夾值，視窗矮一點時一起縮，不會被卡片裁掉。
-   手機、窄／矮視窗完全維持原樣（沒有儀表板，照舊顯示下面的面板）。 */
-.ip-board-wrap { display: none; }
+   手機、窄／矮視窗（2026-10-12 起）：同一組卡片改成上下堆疊、高度隨內容，頁面往下捲；抽屜改成全螢幕。
+   下面是卡片內部的共用樣式；兩種版面各自的排法在後面的兩個 media query。 */
+.ip-board-wrap { grid-column: 1 / -1; }
 @keyframes bd-rise { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
 @keyframes bd-slide { from { transform: translateX(32px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes bd-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes bd-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(245,166,35,0.45); } 50% { box-shadow: 0 0 0 4px rgba(245,166,35,0); } }
+.bd-card {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 28px rgba(0,0,0,0.28);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  animation: bd-rise 0.55s cubic-bezier(.2,.7,.2,1) both;
+}
+.bd-card::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(245,166,35,0.55), transparent);
+  opacity: 0.55; pointer-events: none;
+}
+.bd-card:hover { border-color: #565a68 !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.38), 0 0 0 1px rgba(245,166,35,0.10); }
+.ip-board > .bd-card:nth-child(1) { animation-delay: 0s; }
+.ip-board > .bd-card:nth-child(2) { animation-delay: 0.06s; }
+.ip-board > .bd-card:nth-child(3) { animation-delay: 0.12s; }
+.ip-board > .bd-card:nth-child(4) { animation-delay: 0.18s; }
+.ip-board > .bd-card:nth-child(5) { animation-delay: 0.24s; }
+.ip-board > .bd-card:nth-child(6) { animation-delay: 0.30s; }
+.bd-dot { width: 7px; height: 7px; border-radius: 2px; background: #f5a623; box-shadow: 0 0 8px rgba(245,166,35,0.7); flex-shrink: 0; }
+.bd-more {
+  flex-shrink: 0; cursor: pointer; font-family: "Noto Sans TC", sans-serif; font-size: 0.66rem; font-weight: 500;
+  color: #f5a623; background: rgba(245,166,35,0.07); border: 1px solid rgba(245,166,35,0.35); border-radius: 999px;
+  padding: 2px 10px; white-space: nowrap; transition: background 0.15s ease, border-color 0.15s ease;
+}
+.bd-more:hover, .bd-more:focus-visible { background: rgba(245,166,35,0.16); border-color: #f5a623; outline: none; }
+
+/* 第一列：幸福指數（主體）＋想法庫＋縮小的 Ollama；第二列：關係網路、管線、主機各三分之一 */
+
+/* 💡 想法庫卡：上＝前三名（三列平分高度），下＝近 8 週新想法／實行小長條 */
+.bd-idea-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.bd-idea-top { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(4px, 0.8vh, 8px); }
+.bd-idea-row {
+  display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  min-height: 0; overflow: hidden; padding: 0 10px; border-radius: 8px; background: #24262e; border: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.bd-idea-row:hover { border-color: #3a3d47; }
+.bd-idea-rank { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 700; font-size: clamp(1.2rem, 3vh, 1.9rem); line-height: 1; text-align: center; }
+.bd-idea-title { color: #ece9e2; font-weight: 600; font-size: clamp(0.78rem, 1.7vh, 0.98rem); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bd-idea-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.64rem; color: #5b6270; }
+.bd-idea-meta b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; color: #9aa4b6; letter-spacing: 0.04em; }
+.bd-idea-why { font-size: 0.66rem; color: #9aa4b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-idea-score { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: clamp(0.9rem, 2vh, 1.2rem); color: #f5a623; }
+.bd-idea-foot { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 12px; }
+.bd-cat { display: inline-block; font-size: 0.6rem; line-height: 1.2; padding: 1px 7px; border: 1px solid; border-radius: 999px; white-space: nowrap; font-weight: 500; }
+.bd-idea-list { display: flex; flex-direction: column; gap: 6px; }
+.bd-idea-item { background: #24262e; border-radius: 8px; border: 1px solid transparent; }
+.bd-idea-item[open] { border-color: #3a3d47; }
+.bd-idea-item summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 5.6em minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; font-size: 0.86rem; }
+.bd-idea-item summary::-webkit-details-marker { display: none; }
+.bd-idea-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.68rem; color: #5b6270; }
+.bd-idea-detail { padding: 0 12px 10px calc(5.6em + 22px); font-size: 0.76rem; color: #9aa4b6; line-height: 1.6; }
+.bd-idea-detail p { margin: 2px 0; }
+.bd-idea-detail b { color: #ece9e2; font-weight: 500; }
+.bd-push-table { display: grid; gap: 2px; font-size: 0.8rem; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #9aa4b6; }
+.bd-push-row { display: grid; grid-template-columns: minmax(9em, 1.1fr) 7em 7em 9em minmax(0, 2fr); gap: 10px; align-items: center; padding: 5px 10px; border-radius: 6px; background: #24262e; }
+.bd-push-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-push-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 8px; vertical-align: middle; }
+.bd-push-err { color: #e8b23d; font-size: 0.72rem; }
+/* 字色（2026-10-09 使用者回饋）：名稱亮白、頻率與次數中灰、時間數字用等寬字；原本名稱沒設色而變成暗色、次數用了襯線字 */
+.bd-push-name { color: #ece9e2; font-weight: 500; }
+.bd-push-dim { color: #9aa4b6; }
+.bd-push-dim b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: #ece9e2; }
+.bd-push-age { color: #ece9e2; font-weight: 600; font-family: "IBM Plex Mono", "Noto Sans TC", ui-monospace, monospace; }
+.bd-idea-copy { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #3a3d47; display: flex; flex-direction: column; gap: 6px; }
+.bd-idea-copytext { margin: 4px 0 0; padding: 6px 8px; background: #121319; border: 1px solid #3a3d47; border-radius: 4px; color: #ece9e2; white-space: pre-wrap; user-select: all; font-size: 0.74rem; }
+.bd-sys-wrap { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+.bd-oll-body {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.85fr) minmax(0, 2fr);
+  gap: 0.9rem;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 幸福指數（主體）：左＝大環形＋計算鏈＋30 天小趨勢；右＝六維度橫條（今日值 × 權重 ＝ 貢獻分）。
+   右側每列用 1fr 平分高度、字級跟視窗高度走，視窗矮也不會截字。 */
+.bd-hhi-body {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: clamp(150px, 26vh, 250px) minmax(0, 1fr);
+  gap: clamp(0.8rem, 2vh, 1.6rem);
+  overflow: hidden;
+}
+.bd-hhi-left { min-height: 0; display: flex; flex-direction: column; align-items: center; gap: clamp(4px, 0.9vh, 10px); }
+.bd-ring { width: 100%; max-height: 52%; flex: 0 1 auto; filter: drop-shadow(0 4px 18px rgba(0,0,0,0.35)); }
+.bd-chain {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 6px;
+  font-size: clamp(0.62rem, 1.25vh, 0.78rem); color: #9aa4b6; text-align: center; line-height: 1.5;
+}
+.bd-chain b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; color: #ece9e2; }
+.bd-chain i { font-style: normal; color: #5b6270; }
+.bd-spark { width: 100%; flex: 1 1 0; min-height: 40px; display: flex; flex-direction: column; gap: 2px; }
+.bd-hhi-rows {
+  min-width: 0; min-height: 0;
+  display: grid;
+  grid-template-rows: auto repeat(6, minmax(0, 1fr)) auto auto;
+  font-size: clamp(0.74rem, 1.6vh, 1rem);
+}
+.bd-hrow {
+  display: grid;
+  grid-template-columns: 5.4em 2.4em minmax(0, 1fr) 3.6em 3.4em;
+  align-items: center; gap: 0 0.7em;
+  min-height: 0; padding: 0 0.4em; margin: 0;
+  background: none; border: none; border-top: 1px solid #3a3d47; border-radius: 0;
+  font: inherit; color: #ece9e2; text-align: left; cursor: pointer;
+  transition: background 0.15s ease;
+}
+button.bd-hrow:hover, button.bd-hrow:focus-visible { background: rgba(255,255,255,0.035); outline: none; }
+.bd-hrow.is-drag { background: rgba(232,178,61,0.06); }
+.bd-hhead { cursor: default; border-top: none; padding-bottom: 0.3em; }
+.bd-hhead span { white-space: nowrap; letter-spacing: 0.06em; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.64em; color: #5b6270; }
+.bd-hhead span:nth-child(2), .bd-hhead span:nth-child(4), .bd-hhead span:nth-child(5) { text-align: right; }
+.bd-hlabel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-hval, .bd-hw, .bd-hpts { font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: right; white-space: nowrap; }
+.bd-hval { font-weight: 600; }
+.bd-hw { color: #5b6270; font-size: 0.86em; }
+.bd-hpts { color: #ece9e2; font-weight: 600; }
+.bd-htrack { height: 0.5em; border-radius: 999px; background: #24262e; overflow: hidden; }
+.bd-htrack i { display: block; height: 100%; border-radius: 999px; transform-origin: left; animation: bd-grow 0.9s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes bd-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.bd-htotal { cursor: default; border-top: 1px solid #565a68; padding-top: 0.35em; padding-bottom: 0.2em; }
+.bd-htotal span:first-child { font-weight: 600; }
+.bd-hdrag { font-size: 0.8em; color: #9aa4b6; line-height: 1.45; padding: 0.35em 0.4em 0; }
+
+.bd-kv { display: grid; gap: 3px; }
+.bd-kv > div { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; color: #5b6270; }
+.bd-kv b { font-size: 0.8rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: #ece9e2; }
+.bd-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 8px; flex: 1; min-height: 0; }
+.bd-sys-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; flex: 0 0 auto; }
+.bd-tile { padding: 0.5rem 0.7rem; display: flex; flex-direction: column; justify-content: center; min-width: 0; border: 1px solid transparent; transition: border-color 0.15s ease; }
+.bd-tile:hover { border-color: #3a3d47; }
+.bd-big { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; line-height: 1.15; margin-top: 4px; font-size: clamp(1.2rem, 2.6vh, 2rem); white-space: nowrap; }
+.bd-pipe-list { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: clamp(3px, 0.6vh, 6px); flex: 1; min-height: 0; }
+.bd-pipe-row { display: grid; grid-template-columns: 1.8em minmax(0, 1fr) auto; gap: 8px; align-items: center; border-radius: 6px; padding: 0 8px; min-height: 0; overflow: hidden; font-size: clamp(0.68rem, 1.5vh, 0.8rem); }
+.bd-pipe-k { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.08em; }
+.bd-pipe-main, .bd-pipe-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.35; }
+.bd-pipe-sub { font-size: 0.82em; }
+
+.bd-disk-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.8rem; min-height: 0; }
+/* 抽屜：舊面板的完整內容在這裡打開，主畫面不用捲 */
+.bd-drawer-backdrop { position: fixed; inset: 0; z-index: 400; background: rgba(8,9,12,0.62); backdrop-filter: blur(3px); display: flex; justify-content: flex-end; animation: bd-fade 0.18s ease both; }
+.bd-drawer {
+  width: min(1040px, 94vw); height: 100%; display: flex; flex-direction: column;
+  background: #1a1c22; border-left: 1px solid #565a68; box-shadow: -24px 0 60px rgba(0,0,0,0.5);
+  animation: bd-slide 0.26s cubic-bezier(.2,.7,.2,1) both;
+}
+
 @media (min-width: 1100px) and (min-height: 640px) {
   .ip-board-wrap {
     display: block;
@@ -206,170 +363,72 @@ body,
     grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
     gap: 0.85rem;
   }
-  .bd-card {
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    padding: 0.75rem 0.9rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    overflow: hidden;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 28px rgba(0,0,0,0.28);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-    animation: bd-rise 0.55s cubic-bezier(.2,.7,.2,1) both;
-  }
-  .bd-card::before {
-    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(245,166,35,0.55), transparent);
-    opacity: 0.55; pointer-events: none;
-  }
-  .bd-card:hover { border-color: #565a68 !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.38), 0 0 0 1px rgba(245,166,35,0.10); }
-  .ip-board > .bd-card:nth-child(1) { animation-delay: 0s; }
-  .ip-board > .bd-card:nth-child(2) { animation-delay: 0.06s; }
-  .ip-board > .bd-card:nth-child(3) { animation-delay: 0.12s; }
-  .ip-board > .bd-card:nth-child(4) { animation-delay: 0.18s; }
-  .ip-board > .bd-card:nth-child(5) { animation-delay: 0.24s; }
-  .ip-board > .bd-card:nth-child(6) { animation-delay: 0.30s; }
-  .bd-dot { width: 7px; height: 7px; border-radius: 2px; background: #f5a623; box-shadow: 0 0 8px rgba(245,166,35,0.7); flex-shrink: 0; }
-  .bd-more {
-    flex-shrink: 0; cursor: pointer; font-family: "Noto Sans TC", sans-serif; font-size: 0.66rem; font-weight: 500;
-    color: #f5a623; background: rgba(245,166,35,0.07); border: 1px solid rgba(245,166,35,0.35); border-radius: 999px;
-    padding: 2px 10px; white-space: nowrap; transition: background 0.15s ease, border-color 0.15s ease;
-  }
-  .bd-more:hover, .bd-more:focus-visible { background: rgba(245,166,35,0.16); border-color: #f5a623; outline: none; }
-
-  /* 第一列：幸福指數（主體）＋想法庫＋縮小的 Ollama；第二列：關係網路、管線、主機各三分之一 */
   .bd-hhi { grid-column: span 6; }
   .bd-idea { grid-column: span 4; }
   .bd-oll { grid-column: span 2; }
   .bd-net { grid-column: span 4; }
   .bd-pipe { grid-column: span 4; }
   .bd-sys { grid-column: span 4; }
-
-  /* 💡 想法庫卡：上＝前三名（三列平分高度），下＝近 8 週新想法／實行小長條 */
-  .bd-idea-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
-  .bd-idea-top { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(4px, 0.8vh, 8px); }
-  .bd-idea-row {
-    display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 10px; align-items: center;
-    min-height: 0; overflow: hidden; padding: 0 10px; border-radius: 8px; background: #24262e; border: 1px solid transparent;
-    transition: border-color 0.15s ease;
-  }
-  .bd-idea-row:hover { border-color: #3a3d47; }
-  .bd-idea-rank { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 700; font-size: clamp(1.2rem, 3vh, 1.9rem); line-height: 1; text-align: center; }
-  .bd-idea-title { color: #ece9e2; font-weight: 600; font-size: clamp(0.78rem, 1.7vh, 0.98rem); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .bd-idea-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.64rem; color: #5b6270; }
-  .bd-idea-meta b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; color: #9aa4b6; letter-spacing: 0.04em; }
-  .bd-idea-why { font-size: 0.66rem; color: #9aa4b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bd-idea-score { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: clamp(0.9rem, 2vh, 1.2rem); color: #f5a623; }
-  .bd-idea-foot { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 12px; }
-  .bd-cat { display: inline-block; font-size: 0.6rem; line-height: 1.2; padding: 1px 7px; border: 1px solid; border-radius: 999px; white-space: nowrap; font-weight: 500; }
-  .bd-idea-list { display: flex; flex-direction: column; gap: 6px; }
-  .bd-idea-item { background: #24262e; border-radius: 8px; border: 1px solid transparent; }
-  .bd-idea-item[open] { border-color: #3a3d47; }
-  .bd-idea-item summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 5.6em minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; font-size: 0.86rem; }
-  .bd-idea-item summary::-webkit-details-marker { display: none; }
-  .bd-idea-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.68rem; color: #5b6270; }
-  .bd-idea-detail { padding: 0 12px 10px calc(5.6em + 22px); font-size: 0.76rem; color: #9aa4b6; line-height: 1.6; }
-  .bd-idea-detail p { margin: 2px 0; }
-  .bd-idea-detail b { color: #ece9e2; font-weight: 500; }
-  .bd-push-table { display: grid; gap: 2px; font-size: 0.8rem; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #9aa4b6; }
-  .bd-push-row { display: grid; grid-template-columns: minmax(9em, 1.1fr) 7em 7em 9em minmax(0, 2fr); gap: 10px; align-items: center; padding: 5px 10px; border-radius: 6px; background: #24262e; }
-  .bd-push-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bd-push-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 8px; vertical-align: middle; }
-  .bd-push-err { color: #e8b23d; font-size: 0.72rem; }
-  /* 字色（2026-10-09 使用者回饋）：名稱亮白、頻率與次數中灰、時間數字用等寬字；原本名稱沒設色而變成暗色、次數用了襯線字 */
-  .bd-push-name { color: #ece9e2; font-weight: 500; }
-  .bd-push-dim { color: #9aa4b6; }
-  .bd-push-dim b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: #ece9e2; }
-  .bd-push-age { color: #ece9e2; font-weight: 600; font-family: "IBM Plex Mono", "Noto Sans TC", ui-monospace, monospace; }
-  .bd-idea-copy { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #3a3d47; display: flex; flex-direction: column; gap: 6px; }
-  .bd-idea-copytext { margin: 4px 0 0; padding: 6px 8px; background: #121319; border: 1px solid #3a3d47; border-radius: 4px; color: #ece9e2; white-space: pre-wrap; user-select: all; font-size: 0.74rem; }
-  .bd-sys-wrap { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
-  .bd-oll-body {
-    display: grid;
-    grid-template-columns: minmax(190px, 0.85fr) minmax(0, 2fr);
-    gap: 0.9rem;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  /* 幸福指數（主體）：左＝大環形＋計算鏈＋30 天小趨勢；右＝六維度橫條（今日值 × 權重 ＝ 貢獻分）。
-     右側每列用 1fr 平分高度、字級跟視窗高度走，視窗矮也不會截字。 */
-  .bd-hhi-body {
-    flex: 1; min-height: 0;
-    display: grid;
-    grid-template-columns: clamp(150px, 26vh, 250px) minmax(0, 1fr);
-    gap: clamp(0.8rem, 2vh, 1.6rem);
-    overflow: hidden;
-  }
-  .bd-hhi-left { min-height: 0; display: flex; flex-direction: column; align-items: center; gap: clamp(4px, 0.9vh, 10px); }
-  .bd-ring { width: 100%; max-height: 52%; flex: 0 1 auto; filter: drop-shadow(0 4px 18px rgba(0,0,0,0.35)); }
-  .bd-chain {
-    display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 6px;
-    font-size: clamp(0.62rem, 1.25vh, 0.78rem); color: #9aa4b6; text-align: center; line-height: 1.5;
-  }
-  .bd-chain b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; color: #ece9e2; }
-  .bd-chain i { font-style: normal; color: #5b6270; }
-  .bd-spark { width: 100%; flex: 1 1 0; min-height: 40px; display: flex; flex-direction: column; gap: 2px; }
-  .bd-hhi-rows {
-    min-width: 0; min-height: 0;
-    display: grid;
-    grid-template-rows: auto repeat(6, minmax(0, 1fr)) auto auto;
-    font-size: clamp(0.74rem, 1.6vh, 1rem);
-  }
-  .bd-hrow {
-    display: grid;
-    grid-template-columns: 5.4em 2.4em minmax(0, 1fr) 3.6em 3.4em;
-    align-items: center; gap: 0 0.7em;
-    min-height: 0; padding: 0 0.4em; margin: 0;
-    background: none; border: none; border-top: 1px solid #3a3d47; border-radius: 0;
-    font: inherit; color: #ece9e2; text-align: left; cursor: pointer;
-    transition: background 0.15s ease;
-  }
-  button.bd-hrow:hover, button.bd-hrow:focus-visible { background: rgba(255,255,255,0.035); outline: none; }
-  .bd-hrow.is-drag { background: rgba(232,178,61,0.06); }
-  .bd-hhead { cursor: default; border-top: none; padding-bottom: 0.3em; }
-  .bd-hhead span { white-space: nowrap; letter-spacing: 0.06em; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.64em; color: #5b6270; }
-  .bd-hhead span:nth-child(2), .bd-hhead span:nth-child(4), .bd-hhead span:nth-child(5) { text-align: right; }
-  .bd-hlabel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bd-hval, .bd-hw, .bd-hpts { font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: right; white-space: nowrap; }
-  .bd-hval { font-weight: 600; }
-  .bd-hw { color: #5b6270; font-size: 0.86em; }
-  .bd-hpts { color: #ece9e2; font-weight: 600; }
-  .bd-htrack { height: 0.5em; border-radius: 999px; background: #24262e; overflow: hidden; }
-  .bd-htrack i { display: block; height: 100%; border-radius: 999px; transform-origin: left; animation: bd-grow 0.9s cubic-bezier(.2,.7,.2,1) both; }
-  @keyframes bd-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-  .bd-htotal { cursor: default; border-top: 1px solid #565a68; padding-top: 0.35em; padding-bottom: 0.2em; }
-  .bd-htotal span:first-child { font-weight: 600; }
-  .bd-hdrag { font-size: 0.8em; color: #9aa4b6; line-height: 1.45; padding: 0.35em 0.4em 0; }
-
-  .bd-kv { display: grid; gap: 3px; }
-  .bd-kv > div { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; color: #5b6270; }
-  .bd-kv b { font-size: 0.8rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: #ece9e2; }
-  .bd-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 8px; flex: 1; min-height: 0; }
-  .bd-sys-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; flex: 0 0 auto; }
-  .bd-tile { padding: 0.5rem 0.7rem; display: flex; flex-direction: column; justify-content: center; min-width: 0; border: 1px solid transparent; transition: border-color 0.15s ease; }
-  .bd-tile:hover { border-color: #3a3d47; }
-  .bd-big { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; line-height: 1.15; margin-top: 4px; font-size: clamp(1.2rem, 2.6vh, 2rem); white-space: nowrap; }
-  .bd-pipe-list { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: clamp(3px, 0.6vh, 6px); flex: 1; min-height: 0; }
-  .bd-pipe-row { display: grid; grid-template-columns: 1.8em minmax(0, 1fr) auto; gap: 8px; align-items: center; border-radius: 6px; padding: 0 8px; min-height: 0; overflow: hidden; font-size: clamp(0.68rem, 1.5vh, 0.8rem); }
-  .bd-pipe-k { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.08em; }
-  .bd-pipe-main, .bd-pipe-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.35; }
-  .bd-pipe-sub { font-size: 0.82em; }
   /* 不必捲動：主畫面（含上下留白）剛好等於視窗高 */
   .ip-scroll { padding-bottom: 0.6rem !important; }
   .ip-aside { max-height: calc(100vh - 9.4rem) !important; }
+}
+/* 手機、窄／矮視窗：卡片上下堆疊、高度隨內容（電腦版那組「平分高度」的 grid 列在這裡全部改回 auto），頁面往下捲 */
+@media (max-width: 1099px), (max-height: 639px) {
+  .ip-board-wrap { margin-bottom: 1.2rem; }
+  .ip-board { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.8rem; }
+  .ip-board-locked { min-height: 140px; }
+  .bd-card { padding: 0.8rem 0.85rem 0.9rem; gap: 0.6rem; }
+  .bd-card:hover { transform: none; }
+  /* 標題手機上放不下一行：換行而不是截成「這個…」 */
+  .bd-card > h2 { flex-wrap: wrap; row-gap: 6px; }
+  .bd-title { white-space: normal !important; flex-basis: 12em !important; line-height: 1.35; }
 
-  .bd-disk-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.8rem; min-height: 0; }
-  /* 抽屜：舊面板的完整內容在這裡打開，主畫面不用捲 */
-  .bd-drawer-backdrop { position: fixed; inset: 0; z-index: 400; background: rgba(8,9,12,0.62); backdrop-filter: blur(3px); display: flex; justify-content: flex-end; animation: bd-fade 0.18s ease both; }
-  .bd-drawer {
-    width: min(1040px, 94vw); height: 100%; display: flex; flex-direction: column;
-    background: #1a1c22; border-left: 1px solid #565a68; box-shadow: -24px 0 60px rgba(0,0,0,0.5);
-    animation: bd-slide 0.26s cubic-bezier(.2,.7,.2,1) both;
-  }
+  .bd-hhi-body { grid-template-columns: minmax(0, 1fr); gap: 0.9rem; overflow: visible; }
+  .bd-ring { width: min(190px, 56vw); max-height: none; }
+  .bd-chain { font-size: 0.74rem; }
+  .bd-spark { flex: 0 0 auto; height: 64px; }
+  .bd-hhi-rows { grid-template-rows: none; font-size: 0.86rem; }
+  .bd-hrow { grid-template-columns: 4.8em 2.2em minmax(0, 1fr) 3.2em 3em; gap: 0 0.55em; padding: 0.55em 0.3em; }
+  .bd-hhead { padding-bottom: 0.3em; }
+
+  .bd-idea-top { grid-template-rows: none; }
+  .bd-idea-row { padding: 8px 10px; }
+  .bd-idea-rank { font-size: 1.4rem; }
+  .bd-idea-title { font-size: 0.9rem; }
+  .bd-idea-score { font-size: 1.05rem; }
+  .bd-idea-item summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .bd-idea-id { display: none; }
+  .bd-idea-detail { padding: 0 12px 10px; }
+  .bd-mind { grid-template-columns: minmax(0, 1fr) !important; }
+
+  .bd-tiles { grid-auto-rows: auto; }
+  .bd-big { font-size: clamp(1.15rem, 5.4vw, 1.45rem); }
+  .bd-pipe-list { grid-template-rows: none; }
+  .bd-pipe-row { padding: 7px 9px; font-size: 0.8rem; }
+  .bd-disk-detail { grid-template-columns: minmax(0, 1fr); }
+
+  .bd-oll-full { height: auto !important; }
+  .bd-oll-body { grid-template-columns: minmax(0, 1fr); overflow: visible; }
+  .bd-oll-chart { flex: 0 0 auto !important; height: 170px; }
+  .bd-oll-bars { height: 56px !important; }
+
+  .bd-push-row { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 7px 10px; }
+  .bd-push-name { flex: 1 1 100%; }
+  .bd-push-err { flex: 1 1 100%; white-space: normal !important; }
+  .bd-push-err:empty { display: none; }
+
+  /* 抽屜：手機改成全螢幕 */
+  .bd-drawer { width: 100vw; border-left: none; }
+  .bd-drawer-title { font-size: 0.92rem !important; line-height: 1.4; }
+  .bd-drawer-esc { display: none; }
+  .bd-drawer-body { padding: 0.9rem 0.9rem 2.5rem !important; }
+}
+/* 平板寬（700–1099px）或寬而矮的視窗：兩欄，幸福指數與想法庫各佔一整列 */
+@media (min-width: 700px) and (max-width: 1099px), (min-width: 700px) and (max-height: 639px) {
+  .ip-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bd-hhi, .bd-idea { grid-column: 1 / -1; }
+  .bd-hhi-body { grid-template-columns: 200px minmax(0, 1fr); }
 }
 /* 視窗矮（< 800px）：主機卡放不下硬碟曲線與分項，只留百分比與預估；完整硬碟面板在「容器・趨勢」抽屜裡 */
 @media (min-width: 1100px) and (min-height: 640px) and (max-height: 799px) {

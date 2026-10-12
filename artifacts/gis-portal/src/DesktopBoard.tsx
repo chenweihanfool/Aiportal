@@ -11,6 +11,7 @@ import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
 
 // 桌面首頁（≥1100px 寬、≥640px 高）的「一個畫面放得下」儀表板，首頁電腦版就只有這一塊，不必捲動。
+// 手機、窄／矮視窗也用同一組卡片（2026-10-12 起），由 portal.css 改成上下堆疊、高度隨內容、抽屜全螢幕。
 // 舊版下方的完整面板（幸福指數雷達／30 天洞察／趨勢、六維度子系統、HERMES 戰情室的關係網路圖／管線歷史／排程／活動／容器／趨勢）
 // 不再接在下面，而是收進卡片右上「詳細」打開的側邊抽屜（Drawer），功能一個都沒少，主畫面不用捲。
 // 抽屜內容由 App.tsx 傳進來（那些元件都在 App.tsx，這裡不 import 它，避免循環匯入）。
@@ -32,7 +33,7 @@ function Card({ title, tag, area, action, style, children }: { title: string; ta
     <section className={`bd-card ${area}`} style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 10, ...style }}>
       <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT.display, fontWeight: 700, fontSize: '0.84rem', color: COLOR.ink, letterSpacing: '0.02em' }}>
         <span className="bd-dot" aria-hidden />
-        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+        <span className="bd-title" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
         {tag}
         {action}
       </h2>
@@ -74,11 +75,11 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
       <aside className="bd-drawer" role="dialog" aria-modal="true" aria-label={title}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
           <span className="bd-dot" aria-hidden />
-          <h2 style={{ margin: 0, flex: 1, fontFamily: FONT.display, fontSize: '1.05rem', color: COLOR.ink }}>{title}</h2>
-          <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>ESC 關閉</span>
+          <h2 className="bd-drawer-title" style={{ margin: 0, flex: 1, fontFamily: FONT.display, fontSize: '1.05rem', color: COLOR.ink }}>{title}</h2>
+          <span className="bd-drawer-esc" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>ESC 關閉</span>
           <button ref={closeRef} type="button" className="bd-more" onClick={onClose} aria-label="關閉">✕</button>
         </header>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.1rem 1.3rem 2rem' }}><DrawerBoundary>{children}</DrawerBoundary></div>
+        <div className="bd-drawer-body" style={{ flex: 1, overflowY: 'auto', padding: '1.1rem 1.3rem 2rem' }}><DrawerBoundary>{children}</DrawerBoundary></div>
       </aside>
     </div>
   )
@@ -253,7 +254,7 @@ function OllamaPanel({ pw }: { pw: string }) {
 
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <Label>餘額走勢與預測（虛線＝照目前速度）</Label>
-            <div ref={chartRef} style={{ flex: '1 1 0', minHeight: 90, position: 'relative' }}>
+            <div ref={chartRef} className="bd-oll-chart" style={{ flex: '1 1 0', minHeight: 90, position: 'relative' }}>
               {geo ? (
                 <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} role="img" aria-label="餘額走勢與預測" style={{ position: 'absolute', inset: 0, display: 'block' }}>
                   {geo.yTicks.map(t => (
@@ -283,7 +284,7 @@ function OllamaPanel({ pw }: { pw: string }) {
             </div>
 
             <Label>HERMES 近 14 天每日請求數</Label>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: '16%', minHeight: 40 }} role="img" aria-label="近 14 天每日請求數">
+            <div className="bd-oll-bars" style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: '16%', minHeight: 40 }} role="img" aria-label="近 14 天每日請求數">
               {bars.length === 0 ? <Muted>尚無資料（pusher 還沒推）</Muted> : bars.map(b => (
                 <div key={b.date} title={`${b.date}：${b.calls} 次`} style={{ flex: 1, height: `${Math.max(4, b.ratio * 100)}%`, background: b.date === data.today ? COLOR.amber : COLOR.steelDim, borderRadius: '2px 2px 0 0', opacity: b.date === data.today ? 1 : 0.8 }} />
               ))}
@@ -470,7 +471,7 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
   const li = line('ideas'), lc = line('combined')
   const rep = combined?.report ?? null
   return (
-    <section style={{ border: `1px solid ${COLOR.line}`, borderRadius: 8, padding: '10px 12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: 14 }}>
+    <section className="bd-mind" style={{ border: `1px solid ${COLOR.line}`, borderRadius: 8, padding: '10px 12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: 14 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: COLOR.steel, lineHeight: 1.6 }}>
         <div data-testid="mind-combined" style={{ color: COLOR.ink, fontWeight: 600 }}>🧮 心智分數<span style={{ fontFamily: FONT.mono, color: COLOR.amber, fontSize: '1.2rem', marginLeft: 8 }}>{combined?.score != null ? combined.score.toFixed(1) : '—'}</span>
           <Chip color={COLOR.ok}>計入幸福指數</Chip></div>
@@ -889,7 +890,7 @@ export function DesktopBoard({ unlocked, unlockedPassword, hhiData, toneOf, onRe
   const close = useCallback(() => { setDrawer(null); setOllKey(k => k + 1) }, [])
   if (!unlocked || !unlockedPassword) {
     return (
-      <div className="ip-board" style={{ display: 'grid', placeItems: 'center' }}>
+      <div className="ip-board ip-board-locked" style={{ display: 'grid', placeItems: 'center' }}>
         <button type="button" onClick={onRequestUnlock} style={{ ...btn, fontSize: '0.8rem', padding: '10px 18px' }}>🔒 解鎖後顯示儀表板（幸福指數、想法庫、管線、主機、用量）</button>
       </div>
     )

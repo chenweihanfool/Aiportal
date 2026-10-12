@@ -2,7 +2,7 @@
 //
 // 做什麼：本機靜態伺服器提供 dist/public，以「假 API」模擬 sites／dashboard／hermes-usage／hermes-ideas／graph／pipeline／status，
 // 用 Playwright 驅動 Chromium 驗證：各種桌面尺寸一個畫面放得下（頁面不需捲動就看得到六張卡）、
-// 卡片內容沒有被裁切、想法庫前三名與抽屜篩選、Ollama 小卡＋抽屜輸入餘額會 POST 並重畫、手機寬度不顯示儀表板且不橫向捲動。全程不碰任何真實服務。
+// 卡片內容沒有被裁切、想法庫前三名與抽屜篩選、Ollama 小卡＋抽屜輸入餘額會 POST 並重畫、手機／平板／寬而矮的視窗卡片上下堆疊、不裁切、不橫向捲動、私領域連結齊全。全程不碰任何真實服務。
 //
 // 執行：
 //   BASE_PATH=/ PORT=5174 pnpm --filter @workspace/gis-portal run build
@@ -324,16 +324,42 @@ for (const [vw, vhh] of [[1440, 900], [390, 844]]) {
   await ctx.close()
 }
 
-// 手機：不顯示儀表板、不橫向捲動
-{
-  const { ctx, page, errors } = await newPage({ width: 390, height: 844 })
+// 手機、平板、寬而矮的視窗：同一組儀表板卡片上下堆疊（2026-10-12 起，原本手機照舊顯示舊面板）
+for (const [w, h, tag] of [[390, 844, 'mobile'], [360, 740, 'mobile-small'], [820, 1180, 'tablet'], [1280, 600, 'wide-short']]) {
+  const { ctx, page, errors } = await newPage({ width: w, height: h })
   await page.goto(base + '/')
+  await page.waitForSelector('.bd-idea .bd-idea-row', { timeout: 15000 })
+  await page.waitForSelector('.bd-net .bd-tiles')
+  await page.waitForSelector('.bd-sys .bd-sys-grid')
   await page.waitForTimeout(1500)
-  check('手機寬度舊面板照舊顯示（戰情室、幸福指數、六維度）', (await page.locator('.ip-war').count()) === 1 && (await page.locator('.ip-hhi').count()) === 1 && (await page.locator('.ip-dims').count()) === 1)
-  check('手機寬度不顯示桌面儀表板', (await page.locator('.bd-card:visible').count()) === 0)
-  check('手機寬度頁面不橫向捲動', await page.evaluate(() => { const s = document.querySelector('.ip-scroll'); return !s || s.scrollWidth <= s.clientWidth + 1 }))
-  check('手機寬度沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))
-  await page.screenshot({ path: path.join(SHOTS, 'board-mobile.png') })
+  check(`${tag} ${w}×${h}：顯示六張儀表板卡`, (await page.locator('.bd-card:visible').count()) === 6)
+  check(`${tag} ${w}×${h}：舊面板不再顯示`, (await page.locator('.ip-war, .ip-hhi, .ip-dims').count()) === 0)
+  const cl = await clipped(page)
+  check(`${tag} ${w}×${h}：沒有卡片內容被裁切`, cl.length === 0, JSON.stringify(cl))
+  check(`${tag} ${w}×${h}：頁面不橫向捲動`, await page.evaluate(() => { const s = document.querySelector('.ip-scroll'); return document.documentElement.scrollWidth <= window.innerWidth && (!s || s.scrollWidth <= s.clientWidth + 1) }))
+  await page.screenshot({ path: path.join(SHOTS, `board-${tag}.png`), fullPage: false })
+  // 整頁長截圖：把捲動容器撐開
+  await page.evaluate(() => { const s = document.querySelector('.ip-scroll'); s.scrollTop = s.scrollHeight })
+  const tools = page.locator('.ip-tools')
+  if (await tools.getByText('展開連結列表').count()) await tools.getByText('展開連結列表').click()
+  const toolsTxt = await tools.innerText()
+  check(`${tag} ${w}×${h}：工具連結列出全部私領域（含有摘要的子系統）`, /私領域/.test(toolsTxt) && ['人生進度管理系統', '健身追蹤', '任務追蹤系統', '旅遊生活'].every((n) => toolsTxt.includes(n)))
+  await page.screenshot({ path: path.join(SHOTS, `board-${tag}-tools.png`) })
+  await page.evaluate(() => { document.querySelector('.ip-scroll').scrollTop = 0 })
+  await page.locator('.bd-hhi .bd-more').click()
+  await page.waitForSelector('.bd-drawer')
+  const dw = await page.evaluate(() => document.querySelector('.bd-drawer').getBoundingClientRect().width)
+  check(`${tag} ${w}×${h}：幸福指數詳細抽屜打開${w < 1100 ? '且全寬' : ''}`, w < 1100 ? Math.abs(dw - w) <= 1 : dw > 0, String(dw))
+  await page.waitForTimeout(600)
+  await page.screenshot({ path: path.join(SHOTS, `board-${tag}-drawer.png`) })
+  await page.keyboard.press('Escape')
+  await page.locator('.bd-oll .bd-more').click()
+  await page.waitForSelector('.bd-drawer .bd-oll-chart')
+  const og = await page.evaluate(() => { const d = document.querySelector('.bd-drawer'); const c = d.querySelector('.bd-oll-chart').getBoundingClientRect(); const bars = d.querySelector('.bd-oll-bars').getBoundingClientRect(); return { chartH: c.height, barsH: bars.height, hs: d.scrollWidth - d.clientWidth } })
+  check(`${tag} ${w}×${h}：Ollama 抽屜走勢圖與每日長條都有高度`, og.chartH >= 80 && og.barsH >= 30 && og.hs <= 1, JSON.stringify(og))
+  await page.screenshot({ path: path.join(SHOTS, `board-${tag}-oll.png`) })
+  await page.keyboard.press('Escape')
+  check(`${tag} ${w}×${h}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
   await ctx.close()
 }
 
