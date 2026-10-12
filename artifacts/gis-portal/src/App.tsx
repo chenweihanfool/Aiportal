@@ -24,6 +24,16 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.32.0',
+    date: '2026-10-12',
+    summary: '手機版首頁改用新儀表板；修正手機上私領域連結不見',
+    changes: [
+      '手機、平板與寬而矮的視窗也改用電腦版的儀表板卡片（幸福指數、想法庫、Ollama、事人物關係網路、管線、主機），卡片上下堆疊、頁面往下捲；平板寬度兩欄。舊的戰情室／幸福指數大卡／六維度面板不再顯示，內容一樣從卡片的「詳細」打開。',
+      '「詳細」抽屜在手機上改成全螢幕，Ollama 走勢圖、推送健康表、想法庫清單改成適合窄螢幕的排法。',
+      '修正：手機版工具連結原本把有摘要的四個子系統（人生進度管理系統、健身追蹤等）從「私領域」拿掉、只留在六維度卡上；現在不論尺寸，私領域都列出全部連結。',
+    ],
+  },
+  {
     version: '2.31.2',
     date: '2026-10-10',
     summary: '修正：網站管理的新增／編輯／刪除一律「儲存失敗」',
@@ -3162,23 +3172,16 @@ function InstrumentPanelView({
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
 
-  const richSites: SiteData[] = []
-  const plainSites: SiteData[] = []
-  privateSites.forEach(s => {
+  // 有摘要的四個子系統（pf-cwh 等）在「六維度」卡上顯示儀表，連結本身仍列在工具連結的「私領域」裡——
+  // 原本手機版把它們從工具連結拿掉、只留在六維度卡上，改用儀表板後六維度收進抽屜，私領域連結就整串不見了。
+  const richSites = privateSites.filter(s => {
     const summary = s.subsystemId ? dashboard.find(d => d.subsystemId === s.subsystemId) : undefined
-    if (summary && SUMMARY_BODIES[summary.subsystemId]) richSites.push(s)
-    else plainSites.push(s)
+    return !!(summary && SUMMARY_BODIES[summary.subsystemId])
   })
   const HHI_SITE_PRIORITY: Record<string, number> = { 'pf-cwh': 0, fitnessforge: 1, vikunja: 2, travel: 3 }
   richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
   const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
-
-  // 預設展開（原本預設收合）——人-事網路圖是這裡現在的主要內容，不是輔助
-  // 的維運監控資訊了，藏起來反而失去意義；見 2026-09-06 改版說明。
-  const [hermesOpen, setHermesOpen] = useState(true)
-  const desktop = useIsDesktop()
-  // 有儀表板時，下面的舊面板（戰情室、幸福指數大卡、六維度）不渲染——它們的內容全部改從儀表板卡片的「詳細」抽屜打開，
-  // 首頁電腦版就只有一個畫面、不必捲動。窄／矮視窗沒有儀表板，照舊顯示。
+  // 電腦版儀表板要一個畫面放得下，頁尾只在手機、窄／矮視窗（頁面本來就要捲動）顯示
   const boardOn = useMedia(BOARD_QUERY)
 
   const dimsGrid = (
@@ -3228,13 +3231,12 @@ function InstrumentPanelView({
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
         <div className="ip-layout">
           <aside className="ip-aside">
-        <ToolLinksZone privateSites={desktop ? privateSites : plainSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
+        <ToolLinksZone privateSites={privateSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
 
           </aside>
           <div className="ip-main">
-        {/* 桌面版（≥1100px 且視窗高 ≥640px）一個畫面放得下的儀表板。下面的舊面板（戰情室、幸福指數大卡、六維度）
-            在這個尺寸由 CSS 隱藏，內容改由儀表板卡片的「詳細」抽屜打開；窄／矮視窗沒有儀表板，照舊顯示下面的面板。 */}
-        {boardOn && (
+        {/* 首頁儀表板：電腦版一個畫面放得下；手機、窄／矮視窗同一組卡片改成上下堆疊（portal.css）。
+            舊面板（戰情室、幸福指數大卡、六維度）的內容都在卡片「詳細」打開的抽屜裡。 */}
           <div className="ip-board-wrap">
             <DesktopBoard
               unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
@@ -3250,49 +3252,6 @@ function InstrumentPanelView({
               opsDetail={<HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />}
             />
           </div>
-        )}
-        {/* HERMES 戰情室搬到幸福指數上方、預設展開——人-事網路圖現在是這裡
-            的主要內容，不再是可有可無的維運監控附加區塊，見 2026-09-06 改版
-            說明。折疊開關還留著，方便手機上想先跳過看下面內容的人收起來。 */}
-        {!boardOn && <>
-        <div className="ip-war">
-        <div
-          onClick={() => setHermesOpen(o => !o)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: hermesOpen ? '0' : '1.1rem' }}
-        >
-          <span style={{ fontFamily: FONT.mono, fontSize: '0.66rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: COLOR.steelDim, display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
-            <span style={{ color: COLOR.amberDim }}>01</span>
-            <span style={{ fontFamily: FONT.body, fontSize: '0.72rem', letterSpacing: '0.08em', color: COLOR.steel, textTransform: 'none' }}>
-              HERMES 戰情室 · 人-事網路圖{!unlocked ? '（🔒）' : ''}
-            </span>
-            <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: hermesOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-            <span style={{ flex: 1, height: '1px', background: COLOR.line }} />
-          </span>
-        </div>
-        {hermesOpen && (
-          <Unit code="01" title="HERMES 戰情室 · 人-事網路圖">
-            <HermesWarRoomSection
-              unlocked={unlocked}
-              unlockedPassword={unlockedPassword}
-              onRequestUnlock={onRequestUnlock}
-            />
-          </Unit>
-        )}
-        </div>
-
-        <Unit code="02" title="翰翰仔幸福指數 · Hanhan Happiness Index" className="ip-hhi">
-          <HappinessHeroCard
-            summary={hhiSummary}
-            unlocked={unlocked}
-            unlockedPassword={unlockedPassword}
-            onRequestUnlock={onRequestUnlock}
-          />
-        </Unit>
-
-        <Unit code="03" title="六維度子系統 · Subsystem Readouts" className="ip-dims">
-          {dimsGrid}
-        </Unit>
-        </>}
 
           </div>
         </div>
