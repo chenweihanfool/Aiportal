@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkTripMedia } from "./mediaFile";
+import { checkPlaceMedia, checkTripMedia } from "./mediaFile";
 
 describe("checkTripMedia", () => {
   it("accepts a trip id with CJK and a webp name (incl. thumb suffix)", () => {
@@ -15,5 +15,14 @@ describe("checkTripMedia", () => {
     expect(checkTripMedia(undefined, "a.webp").ok).toBe(false);
     expect(checkTripMedia("t", ["a.webp"]).ok).toBe(false);
     expect(checkTripMedia("t", "x".repeat(250) + ".webp").ok).toBe(false);
+  });
+});
+
+describe("checkPlaceMedia", () => {
+  it("對應 places/<id>/<檔名>.webp，規則與遊記相片相同", () => {
+    expect(checkPlaceMedia("FOOD-0001", "IMG_1-t.webp")).toEqual({ ok: true, rel: "places/FOOD-0001/IMG_1-t.webp" });
+    for (const [p, f] of [["..", "a.webp"], ["p/x", "a.webp"], [".h", "a.webp"], ["p", "a.jpg"], ["p", "../a.webp"], ["", "a.webp"]]) {
+      expect(checkPlaceMedia(p, f).ok, `${p} | ${f}`).toBe(false);
+    }
   });
 });

@@ -3,6 +3,7 @@
 // 威脅模型：呼叫端（已通過 admin 閘）可以送任意字串；只准讀 trips/<單層資料夾>/<單一檔名>.webp。
 
 export const MEDIA_TRIPS_DIR = "trips";
+export const MEDIA_PLACES_DIR = "places"; // 地點相片（2026-10-16，方案 1）：<media>/places/<地點 id>/<檔名>.webp
 export const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
 const MAX_SEGMENT = 200;
 
@@ -15,9 +16,18 @@ function safeSegment(s: unknown): s is string {
   return true;
 }
 
+function checkMedia(dir: string, id: unknown, file: unknown): MediaCheck {
+  if (!safeSegment(id) || !safeSegment(file)) return { ok: false, message: "path 不合法" };
+  if (!file.toLowerCase().endsWith(".webp")) return { ok: false, message: "path 不合法" };
+  return { ok: true, rel: `${dir}/${id}/${file}` };
+}
+
 /** 驗證 /api/media/trips/:tripId/:file。回傳相對於媒體根的路徑 `trips/<tripId>/<file>`。 */
 export function checkTripMedia(tripId: unknown, file: unknown): MediaCheck {
-  if (!safeSegment(tripId) || !safeSegment(file)) return { ok: false, message: "path 不合法" };
-  if (!file.toLowerCase().endsWith(".webp")) return { ok: false, message: "path 不合法" };
-  return { ok: true, rel: `${MEDIA_TRIPS_DIR}/${tripId}/${file}` };
+  return checkMedia(MEDIA_TRIPS_DIR, tripId, file);
+}
+
+/** 驗證 /api/media/places/:placeId/:file。回傳 `places/<placeId>/<file>`。規則與遊記相片相同。 */
+export function checkPlaceMedia(placeId: unknown, file: unknown): MediaCheck {
+  return checkMedia(MEDIA_PLACES_DIR, placeId, file);
 }
