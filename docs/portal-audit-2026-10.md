@@ -518,6 +518,24 @@
 4. 底圖是第三方圖磚：地圖載入時，瀏覽器會向圖磚服務請求目前檢視範圍的圖磚，等於讓對方知道你在看哪一區（不含精確座標，但開附近模式時地圖會縮放到你所在位置附近）。若在意，改用自架 PMTiles 可避免（§4.6 方案 A）。
 5. 驗證：用 Chromium 模擬定位驗證了排序、半徑、移動後更新、藍點與手機版版面；**沒有在真實手機上實測 GPS**，也沒驗證「使用者拒絕定位」的實際提示（無頭瀏覽器不會彈出權限視窗）。
 
+### 4.10 後端實作狀態（2026-10-15）
+
+**已做**（分支 `claude/portal-redesign-audit-ndaerw`，尚未部署、尚未合併）
+- 資料表 `hermes_places_snapshot`（單列 `latest`，整份覆寫；遷移 `lib/db/migrations/0022_wooden_steve_rogers.sql`，**未套用到任何資料庫**）。
+- 驗證 `sanitizePlacesPayload`（規則與前端 `parseFoodPlace` 一致）：沒有合法座標的地點整筆略過並計入 `skipped`；相片只收 `https://` 與站內路徑；每包最多 2000 筆、每張地點最多 24 張相片。
+- 路由 `POST /api/admin/hermes-places`（推送，管理員密碼）與 `GET /api/hermes-places`（解鎖後讀取）。
+- 前端：`foodApi.ts` 讀取；`#food` 解鎖後顯示真資料（標題旁顯示資料時間），沒有資料或讀取失敗退回示範資料並標示；載入中不閃示範資料。既有 `data`／`now` props 行為不變。
+- 測試：純函式 12 項、前端 `foodApi` 4 項、路由整合 4 項（需 `TEST_DATABASE_URL`）。
+- 欄位與推送格式見 `docs/places-api.md`。
+
+**尚未做**
+1. 相片檔案的儲存與提供：縮圖／檢視圖產生（WebP）、media volume、登入後才提供的路由。現在相片 `url` 只能指向既有的 https 或站內路徑（前端示範用佔位圖）。
+2. HERMES 端的萃取與推送腳本：從日記 `### HH:MM 🍜 店名` 與口袋名單產生 `places.json`，再 POST 到 `/api/admin/hermes-places`。
+3. AdventureLog 17 筆地點與座標已審過的店家匯入（§4.7 的遷移；唯讀匯出由 HERMES 做）。
+4. 46 家店名的地理編碼（需先決定用哪個服務，屬第三方請求，見 §4.8）。
+5. 資料表遷移：需由 HERMES 以 `db-migrate` 在 VPS 上執行；Claude 不執行。
+6. 部署：由 HERMES 執行，Claude 不部署。部署後要驗證 GET 的 403／`available:false`，以及 POST 的 200／400 回應。
+
 ## 5. 分階段路線圖
 
 ### P0（現在，低風險、不動資料源與部署設定）
