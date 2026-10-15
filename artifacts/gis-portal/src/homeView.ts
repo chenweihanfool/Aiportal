@@ -191,62 +191,89 @@ export function knowledgeStats(m: HermesGraphMetrics | undefined | null): Knowle
   }
 }
 
-// ── ③ 里程碑（只列現有資料能確定性判斷的）──────
+// ── ③ 里程碑（2026-10-15 重做：八組門檻，每組一顆「已達成的最高門檻」膠囊＋一條「下一個」進度；全是確定性計算）──
 export interface Milestone {
   id: string
   icon: string
+  /** 膠囊文字，例如「事件突破 1,000」 */
   title: string
+  /** 提示文字，例如「目前 1,156 個事件」 */
   detail: string
-  /** 下一個目標與還差多少；已是最高級就是 null */
-  next: string | null
 }
+export interface NextMilestone {
+  id: string
+  icon: string
+  /** 例如「下一個：事件 2,000（目前 1,156，還差 844）」 */
+  text: string
+  current: number
+  target: number
+  remaining: number
+  /** current ÷ target（0–1），也是進度條的寬度 */
+  ratio: number
+}
+export interface MilestoneSummary { badges: Milestone[]; next: NextMilestone | null }
+/** 每個值 null＝資料來源不可得（失敗／未解鎖／還沒載入），整組略過，不當成 0 */
 export interface MilestoneInput {
   events: number | null
   people: number | null
+  concepts: number | null
+  methods: number | null
   ideasDone: number | null
+  /** 去過的地點（/api/hermes-places 狀態 visited／favorite 的筆數） */
   placesBeen: number | null
-  /** 幸福指數：今天的值與歷史（用來判斷「創新高」） */
-  hhi?: { score: number | null; history: HhiHistoryPoint[]; todayIso: string } | null
+  /** 遊記趟數（/api/hermes-trips，不含還沒出發的計畫中） */
+  trips: number | null
+  /** 幸福指數有紀錄的天數（history 的不重複日期數） */
+  hhiDays: number | null
 }
-const LADDERS = {
-  events: [100, 250, 500, 1000, 2000, 5000],
-  people: [50, 100, 200, 500],
-  ideasDone: [1, 5, 10, 25, 50],
-  placesBeen: [10, 25, 50, 100],
-} as const
+interface MilestoneGroup {
+  id: keyof MilestoneInput
+  icon: string
+  ladder: readonly number[]
+  badge: (n: number) => string
+  /** 「下一個」用的名稱與單位 */
+  next: (n: number) => string
+  unit: string
+}
 const fmtInt = (n: number) => n.toLocaleString('en-US')
+/** 分組順序＝膠囊顯示順序（無法判斷哪個最近達成，就依這個順序取前 6 顆） */
+export const MILESTONE_GROUPS: readonly MilestoneGroup[] = [
+  { id: 'events', icon: '📅', ladder: [100, 500, 1000, 2000, 5000], badge: (n) => `事件突破 ${fmtInt(n)}`, next: (n) => `事件 ${fmtInt(n)}`, unit: '個事件' },
+  { id: 'people', icon: '👥', ladder: [50, 100, 200, 500], badge: (n) => `人物突破 ${fmtInt(n)}`, next: (n) => `人物 ${fmtInt(n)}`, unit: '位人物' },
+  { id: 'concepts', icon: '🧩', ladder: [50, 100, 200, 500], badge: (n) => `概念突破 ${fmtInt(n)}`, next: (n) => `概念 ${fmtInt(n)}`, unit: '個概念' },
+  { id: 'methods', icon: '🛠️', ladder: [25, 50, 100, 200], badge: (n) => `方法突破 ${fmtInt(n)}`, next: (n) => `方法 ${fmtInt(n)}`, unit: '個方法' },
+  { id: 'ideasDone', icon: '💡', ladder: [1, 5, 10, 25], badge: (n) => `已實行 ${n} 個想法`, next: (n) => `已實行想法 ${n}`, unit: '個已實行' },
+  { id: 'placesBeen', icon: '📍', ladder: [10, 25, 50, 100], badge: (n) => `去過 ${n} 個地點`, next: (n) => `去過地點 ${n}`, unit: '個地點' },
+  { id: 'trips', icon: '🧳', ladder: [1, 5, 10, 25], badge: (n) => `遊記 ${n} 趟`, next: (n) => `遊記 ${n} 趟`, unit: '趟遊記' },
+  { id: 'hhiDays', icon: '📈', ladder: [30, 100, 365], badge: (n) => `幸福指數紀錄 ${n} 天`, next: (n) => `幸福指數紀錄 ${n} 天`, unit: '天紀錄' },
+]
+export const MILESTONE_MAX_BADGES = 6
 
-function rung(value: number | null, ladder: readonly number[]): { reached: number; next: number | null } | null {
-  if (value === null) return null
-  let reached: number | null = null
-  for (const r of ladder) if (value >= r) reached = r
-  if (reached === null) return null
-  return { reached, next: ladder.find((r) => r > value) ?? null }
+/** 幸福指數有紀錄的天數（不重複日期；分數不是有限數字的不算） */
+export function hhiRecordedDays(history: HhiHistoryPoint[]): number {
+  return new Set(history.filter((p) => typeof p.date === 'string' && Number.isFinite(p.displayedScore)).map((p) => p.date)).size
 }
 
-/** 每條階梯只列「已達成的最高一級」；資料算不出來（null）的整條不列 */
-export function milestones(i: MilestoneInput): Milestone[] {
-  const out: Milestone[] = []
-  const add = (id: string, icon: string, title: (n: number) => string, value: number | null, ladder: readonly number[], unit: string) => {
-    const r = rung(value, ladder)
-    if (!r || value === null) return
-    out.push({ id, icon, title: title(r.reached), detail: `目前 ${fmtInt(value)} ${unit}`, next: r.next === null ? null : `下一個 ${fmtInt(r.next)}（還差 ${fmtInt(r.next - value)}）` })
-  }
-  add('events', '📅', (n) => `事件突破 ${fmtInt(n)}`, i.events, LADDERS.events, '個事件')
-  add('people', '👥', (n) => `人物突破 ${fmtInt(n)}`, i.people, LADDERS.people, '位人物')
-  add('ideasDone', '💡', (n) => `已實行 ${n} 個想法`, i.ideasDone, LADDERS.ideasDone, '個已實行')
-  add('placesBeen', '📍', (n) => `去過 ${n} 個地點`, i.placesBeen, LADDERS.placesBeen, '個地點')
-  const h = i.hhi
-  if (h && h.score !== null) {
-    const prev = h.history.filter((p) => p.date < h.todayIso && Number.isFinite(p.displayedScore))
-    // 至少累積 30 天才談「新高」，且必須嚴格高於之前每一天
-    if (prev.length >= 30 && prev.every((p) => h.score! > p.displayedScore)) {
-      const first = prev.reduce((m, p) => (p.date < m ? p.date : m), prev[0]!.date)
-      const span = dayDiff(first, h.todayIso) + 1
-      out.push({ id: 'hhiRecord', icon: '🏆', title: `幸福指數創 ${span} 天新高`, detail: `今天 ${h.score} 分`, next: null })
+/** 每組「已達成的最高門檻」成一顆膠囊（最多 6 顆）＋所有組裡「比例最高」的下一個門檻；資料算不出來的組整組略過 */
+export function milestones(i: MilestoneInput): MilestoneSummary {
+  const badges: Milestone[] = []
+  let next: NextMilestone | null = null
+  for (const g of MILESTONE_GROUPS) {
+    const raw = i[g.id]
+    if (raw === null || raw === undefined || !Number.isFinite(raw) || raw < 0) continue
+    const value = Math.floor(raw)
+    let reached: number | null = null
+    for (const r of g.ladder) if (value >= r) reached = r
+    if (reached !== null) badges.push({ id: g.id, icon: g.icon, title: g.badge(reached), detail: `目前 ${fmtInt(value)} ${g.unit}` })
+    const target = g.ladder.find((r) => r > value)
+    if (target === undefined) continue
+    const ratio = value / target
+    // 嚴格大於才換：比例相同時留下排在前面的組
+    if (next === null || ratio > next.ratio) {
+      next = { id: g.id, icon: g.icon, text: `下一個：${g.next(target)}（目前 ${fmtInt(value)}，還差 ${fmtInt(target - value)}）`, current: value, target, remaining: target - value, ratio }
     }
   }
-  return out
+  return { badges: badges.slice(0, MILESTONE_MAX_BADGES), next }
 }
 
 // ── ④ 好玩的 ──────────────────────────────────

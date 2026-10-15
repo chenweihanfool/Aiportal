@@ -10,7 +10,7 @@ import { fetchHhiHistoryStrict } from './homeApi'
 import { useAsync, useNow } from './homeHooks'
 import { DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
 import {
-  EXPECTED_EVERY_MIN, badFeedNames, blockState, buildHeatmap, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
+  EXPECTED_EVERY_MIN, badFeedNames, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
   oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus,
 } from './homeView'
 
@@ -104,13 +104,15 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     : null
   const sentence = todaySentence({ trend, rows: breakdown?.rows ?? [], trendKnown: trendNote === null })
 
-  // ── 里程碑（只列算得出來的）──
+  // ── 里程碑（八組門檻；資料來源不可得的整組略過）──
   const miles = useMemo(() => milestones({
-    events: kb.events, people: kb.people,
+    events: kb.events, people: kb.people, concepts: kb.concepts, methods: kb.methods,
     ideasDone: ideasList ? statusCounts(ideasList.ideas).done : null,
     placesBeen: food.data ? placesBeenCount(places) : null,
-    hhi: history.data ? { score: breakdown?.displayed ?? null, history: history.data, todayIso } : null,
-  }), [kb, ideasList, food.data, places, history.data, breakdown, todayIso])
+    // 還沒出發的計畫中不算「遊記」
+    trips: trips.data ? trips.data.trips.filter((t) => t.status !== 'planned').length : null,
+    hhiDays: history.data ? hhiRecordedDays(history.data) : null,
+  }), [kb, ideasList, food.data, places, trips.data, history.data])
 
   // ── ⑤ 一顆燈 ──
   const pusher = pusherSummary(status.data?.pushers)

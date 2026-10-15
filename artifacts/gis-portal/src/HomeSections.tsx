@@ -9,7 +9,7 @@ import { DIMENSION_FALLBACK_COLOR, dimensionOf } from './homeDimensions'
 import { useCountUp } from './homeHooks'
 import { Skeleton, StateFrame } from './StateFrame'
 import {
-  dimensionLine, type BlockStatus, type DayPart, type Heatmap, type HhiTrend, type KnowledgeStats, type LatestTrip, type Milestone,
+  dimensionLine, type BlockStatus, type DayPart, type Heatmap, type HhiTrend, type KnowledgeStats, type LatestTrip, type MilestoneSummary,
   type SystemLight, type YearProgress,
 } from './homeView'
 import { biggestDrag } from './boardView'
@@ -152,7 +152,7 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
   heatPending: string
   kbSt: BlockStatus
   kb: KnowledgeStats
-  milestones: Milestone[]
+  milestones: MilestoneSummary
   toneOf: Tone
   onRequestUnlock: () => void
   onRetryHistory: () => void
@@ -185,12 +185,20 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
           <div className="hm-growth-miles">
             <div className="hm-sub">里程碑</div>
             <ul className="hm-miles" aria-label="里程碑">
-              {milestones.length === 0
-                ? <li className="hm-muted">資料累積到門檻才會出現（只列算得出來的）</li>
-                : milestones.map((m) => (
-                  <li key={m.id} className="hm-mile" title={[m.detail, m.next].filter(Boolean).join('・')}><span aria-hidden>{m.icon}</span>{m.title}</li>
+              {milestones.badges.length === 0
+                ? <li className="hm-muted">{milestones.next ? '還沒有達成的里程碑' : '資料累積到門檻才會出現（只列算得出來的）'}</li>
+                : milestones.badges.map((m) => (
+                  <li key={m.id} className="hm-mile" title={m.detail}><span aria-hidden>{m.icon}</span>{m.title}</li>
                 ))}
             </ul>
+            {milestones.next && (
+              <div className="hm-next" title={`${milestones.next.text}（${Math.round(milestones.next.ratio * 100)}%）`}>
+                <span className="hm-next-text"><span aria-hidden>{milestones.next.icon}</span>{milestones.next.text}</span>
+                <span className="hm-next-bar" role="progressbar" aria-label="離下一個里程碑的進度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(milestones.next.ratio * 100)}>
+                  <i style={{ width: `${Math.min(100, Math.max(2, milestones.next.ratio * 100))}%` }} />
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

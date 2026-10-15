@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addDays, ageText, badFeedNames, blockState, buildHeatmap, dimensionLine, formatAge, formatDuration, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats,
-  latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
+  hhiRecordedDays, latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
   type BlockInput, type SystemLightInput,
 } from './homeView'
 import { buildHhiBreakdown, type HhiRow } from './boardView'
@@ -269,53 +269,78 @@ describe('knowledgeStats', () => {
 })
 
 describe('milestones', () => {
-  const base = { events: null, people: null, ideasDone: null, placesBeen: null }
-  it('lists nothing when nothing is computable', () => {
-    expect(milestones(base)).toEqual([])
+  const none = { events: null, people: null, concepts: null, methods: null, ideasDone: null, placesBeen: null, trips: null, hhiDays: null }
+  it('lists nothing when no source is available', () => {
+    expect(milestones(none)).toEqual({ badges: [], next: null })
   })
-  it('crossing 1000 events lists the highest reached rung only, with the next target', () => {
-    const m = milestones({ ...base, events: 1156 })
-    expect(m).toHaveLength(1)
-    expect(m[0]).toMatchObject({ id: 'events', title: '事件突破 1,000', detail: '目前 1,156 個事件', next: '下一個 2,000（還差 844）' })
+  it('crossing 1000 events: one badge for the highest rung, next target 2,000', () => {
+    const m = milestones({ ...none, events: 1156 })
+    expect(m.badges).toEqual([{ id: 'events', icon: '📅', title: '事件突破 1,000', detail: '目前 1,156 個事件' }])
+    expect(m.next).toMatchObject({ text: '下一個：事件 2,000（目前 1,156，還差 844）', current: 1156, target: 2000, remaining: 844 })
+    expect(m.next!.ratio).toBeCloseTo(0.578, 3)
   })
-  it('999 events has not crossed 1000', () => {
-    expect(milestones({ ...base, events: 999 })[0]!.title).toBe('事件突破 500')
-    expect(milestones({ ...base, events: 1000 })[0]!.title).toBe('事件突破 1,000')
+  it('rung boundaries are inclusive (999 → 500, 1000 → 1,000)', () => {
+    expect(milestones({ ...none, events: 999 }).badges[0]!.title).toBe('事件突破 500')
+    expect(milestones({ ...none, events: 1000 }).badges[0]!.title).toBe('事件突破 1,000')
+    expect(milestones({ ...none, events: 100 }).badges[0]!.title).toBe('事件突破 100')
   })
-  it('below the first rung → not listed; zero is not listed', () => {
-    expect(milestones({ ...base, events: 99, people: 0, ideasDone: 0, placesBeen: 9 })).toEqual([])
+  it('below the first rung: no badge, but still a next target (a real zero is not hidden)', () => {
+    const m = milestones({ ...none, events: 99, ideasDone: 0 })
+    expect(m.badges).toEqual([])
+    // 99/100 比 0/1 高
+    expect(m.next).toMatchObject({ id: 'events', text: '下一個：事件 100（目前 99，還差 1）' })
   })
-  it('top of the ladder has no next target', () => {
-    expect(milestones({ ...base, events: 6000 })[0]!.next).toBeNull()
+  it('top of a ladder has a badge but no next from that group', () => {
+    const m = milestones({ ...none, events: 6000 })
+    expect(m.badges[0]!.title).toBe('事件突破 5,000')
+    expect(m.next).toBeNull()
   })
-  it('ideas done ≥ 10 and places been', () => {
-    const m = milestones({ ...base, ideasDone: 12, placesBeen: 26 })
-    expect(m.map((x) => x.title)).toEqual(['已實行 10 個想法', '去過 25 個地點'])
+  it('every group has the specified rungs', () => {
+    const m = milestones({ events: 5000, people: 500, concepts: 500, methods: 200, ideasDone: 25, placesBeen: 100, trips: 25, hhiDays: 365 })
+    expect(m.badges.map((b) => b.title)).toEqual(['事件突破 5,000', '人物突破 500', '概念突破 500', '方法突破 200', '已實行 25 個想法', '去過 100 個地點'])
+    expect(m.next).toBeNull()
+    expect(milestones({ ...none, concepts: 50 }).badges[0]!.title).toBe('概念突破 50')
+    expect(milestones({ ...none, methods: 25 }).badges[0]!.title).toBe('方法突破 25')
+    expect(milestones({ ...none, ideasDone: 1 }).badges[0]!.title).toBe('已實行 1 個想法')
+    expect(milestones({ ...none, placesBeen: 10 }).badges[0]!.title).toBe('去過 10 個地點')
+    expect(milestones({ ...none, trips: 5 }).badges[0]!.title).toBe('遊記 5 趟')
+    expect(milestones({ ...none, hhiDays: 100 }).badges[0]!.title).toBe('幸福指數紀錄 100 天')
   })
-  it('order is stable: events, people, ideas, places', () => {
-    const m = milestones({ events: 1156, people: 186, ideasDone: 12, placesBeen: 26 })
-    expect(m.map((x) => x.id)).toEqual(['events', 'people', 'ideasDone', 'placesBeen'])
+  it('shows at most 6 badges, in group order', () => {
+    const m = milestones({ events: 200, people: 60, concepts: 60, methods: 30, ideasDone: 2, placesBeen: 11, trips: 2, hhiDays: 40 })
+    expect(m.badges).toHaveLength(6)
+    expect(m.badges.map((b) => b.id)).toEqual(['events', 'people', 'concepts', 'methods', 'ideasDone', 'placesBeen'])
   })
-  describe('hhi record high', () => {
-    const todayIso = '2026-10-15'
-    it('needs 30 days of earlier history', () => {
-      const history = series('2026-10-01', Array.from({ length: 14 }, () => 60))
-      expect(milestones({ ...base, hhi: { score: 99, history, todayIso } })).toEqual([])
-    })
-    it('strictly higher than every earlier day', () => {
-      const history = series('2026-09-01', Array.from({ length: 44 }, (_, i) => 60 + (i % 5))) // 9/1..10/14
-      const m = milestones({ ...base, hhi: { score: 70, history, todayIso } })
-      expect(m).toHaveLength(1)
-      expect(m[0]).toMatchObject({ id: 'hhiRecord', title: '幸福指數創 45 天新高', detail: '今天 70 分' })
-    })
-    it('a tie is not a record', () => {
-      const history = series('2026-09-01', Array.from({ length: 44 }, () => 70))
-      expect(milestones({ ...base, hhi: { score: 70, history, todayIso } })).toEqual([])
-    })
-    it('no score today: no record', () => {
-      const history = series('2026-09-01', Array.from({ length: 44 }, () => 60))
-      expect(milestones({ ...base, hhi: { score: null, history, todayIso } })).toEqual([])
-    })
+  it('skips unavailable groups entirely instead of showing 0', () => {
+    const m = milestones({ ...none, events: 1156, people: null, trips: 3 })
+    expect(m.badges.map((b) => b.id)).toEqual(['events', 'trips'])
+    expect(milestones({ ...none, people: Number.NaN, events: -5 })).toEqual({ badges: [], next: null })
+  })
+  it('next = the group closest to its next rung by ratio', () => {
+    // events 1156/2000 = 0.578；people 186/200 = 0.93；concepts 74/100 = 0.74；methods 31/50 = 0.62
+    const m = milestones({ ...none, events: 1156, people: 186, concepts: 74, methods: 31 })
+    expect(m.next).toMatchObject({ id: 'people', text: '下一個：人物 200（目前 186，還差 14）' })
+    expect(m.next!.ratio).toBeCloseTo(0.93, 2)
+  })
+  it('ties keep the earlier group', () => {
+    const m = milestones({ ...none, events: 50, people: 25 }) // 都是 0.5
+    expect(m.next!.id).toBe('events')
+  })
+  it('fractional input is floored', () => {
+    expect(milestones({ ...none, events: 99.9 }).next).toMatchObject({ current: 99, remaining: 1 })
+  })
+  it('per-group next text', () => {
+    expect(milestones({ ...none, ideasDone: 1 }).next!.text).toBe('下一個：已實行想法 5（目前 1，還差 4）')
+    expect(milestones({ ...none, trips: 0 }).next!.text).toBe('下一個：遊記 1 趟（目前 0，還差 1）')
+    expect(milestones({ ...none, hhiDays: 80 }).next!.text).toBe('下一個：幸福指數紀錄 100 天（目前 80，還差 20）')
+  })
+})
+
+describe('hhiRecordedDays', () => {
+  it('counts distinct dates with a finite score', () => {
+    expect(hhiRecordedDays([])).toBe(0)
+    expect(hhiRecordedDays([pt('2026-10-01', 60), pt('2026-10-01', 61), pt('2026-10-02', 62)])).toBe(2)
+    expect(hhiRecordedDays([pt('2026-10-01', Number.NaN), pt('2026-10-02', 62)])).toBe(1)
   })
 })
 

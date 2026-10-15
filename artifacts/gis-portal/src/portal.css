@@ -775,3 +775,10 @@ button.hm-lock:hover { border-color: #e8b23d; }
 @media (min-width: 1300px) and (min-height: 640px) {
   .hm-wrap .hm-sys { padding-right: 4.2rem; }
 }
+
+/* ③ 里程碑（2.36.0 重做）：膠囊最多 6 顆＋一條「下一個」進度 */
+.hm-next { display: flex; flex-direction: column; gap: 3px; margin-top: 0.15rem; min-width: 0; }
+.hm-next-text { display: flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; color: #9aa4b6; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-next-bar { display: block; height: 5px; border-radius: 3px; background: #24262e; overflow: hidden; }
+.hm-next-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #8a5f18, #f5a623); }
+@media (max-width: 1299px), (max-height: 639px) { .hm-next-text { white-space: normal; } }
