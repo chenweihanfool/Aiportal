@@ -16,6 +16,7 @@ export function parsePushers(raw: unknown): PusherHealth[] | null {
     return [{
       feed, level, path: s(o["path"], 80), lastOk: s(o["lastOk"], 40), lastFail: s(o["lastFail"], 40),
       lastError: s(o["lastError"], 200), ageMin: n(o["ageMin"]), expectedEveryMin: n(o["expectedEveryMin"]),
+      ...("dataEveryMin" in o ? { dataEveryMin: n(o["dataEveryMin"]) } : {}), // 沒帶（舊 pusher）≠ 帶 null（有變動才送）
       bytes: n(o["bytes"]), okCount: n(o["okCount"]) ?? 0, failCount: n(o["failCount"]) ?? 0,
     }]
   })
