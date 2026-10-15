@@ -2,6 +2,13 @@
 // 接上知識庫（/api/hermes-food）後就不再使用；畫面上會標「示範資料」。
 import { parseFoodPayload, type FoodData } from './foodMap'
 
+// 示範相片：用內嵌 SVG 當佔位圖（不打網路）。正式資料會是 vault 附件的縮圖網址。
+function demoPhoto(label: string, hue: number, takenAt: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},60%,55%)"/><stop offset="1" stop-color="hsl(${(hue + 50) % 360},55%,28%)"/></linearGradient></defs><rect width="640" height="480" fill="url(#g)"/><text x="320" y="250" font-size="40" text-anchor="middle" fill="rgba(255,255,255,.85)" font-family="sans-serif">${label}</text></svg>`
+  const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+  return { url, takenAt, caption: `${label}（示範相片）` }
+}
+
 const RAW = {
   receivedAt: '2026-10-15T08:00:00+08:00',
   places: [
@@ -20,6 +27,19 @@ const RAW = {
   ],
 }
 
+// 示範相片在驗證之後才掛上去：safeImageUrl 不收 data: 網址，正式 payload 不該有這種東西。
+const DEMO_PHOTOS: Record<string, Array<ReturnType<typeof demoPhoto>>> = {
+  'FOOD-0002': [demoPhoto('班尼迪克蛋', 28, '2026-09-21'), demoPhoto('河岸窗景', 200, '2026-09-21'), demoPhoto('拿鐵', 20, '2026-09-21')],
+  'FOOD-0003': [demoPhoto('肉圓', 12, '2026-10-03'), demoPhoto('貢丸湯', 40, '2026-10-03')],
+  'FOOD-0006': [demoPhoto('鹽烤魚', 190, '2026-04-19'), demoPhoto('港邊夕陽', 20, '2026-04-19'), demoPhoto('大圓桌', 330, '2026-04-19'), demoPhoto('生魚片', 350, '2026-04-19')],
+  'FOOD-0008': [demoPhoto('排隊人龍', 270, '2026-02-15')],
+}
+
 export function sampleFoodData(): FoodData {
-  return { ...parseFoodPayload(RAW), sample: true }
+  const data = parseFoodPayload(RAW)
+  const places = data.places.map(p => {
+    const ph = DEMO_PHOTOS[p.id]
+    return ph ? { ...p, photos: ph.map(x => ({ ...x, thumb: null, w: 640, h: 480 })) } : p
+  })
+  return { ...data, places, sample: true }
 }

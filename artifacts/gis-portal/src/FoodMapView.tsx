@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { COLOR, FONT } from './theme'
 import {
-  FOOD_STATUS_ICON, FOOD_STATUS_LABEL, areaCounts, daysBetween, filterPlaces, foodStats, foodStatusMessage, isBeen, nextFoodStatuses,
+  FOOD_STATUS_ICON, FOOD_STATUS_LABEL, areaCounts, coverPhoto, daysBetween, filterPlaces, foodStats, foodStatusMessage, isBeen, nextFoodStatuses,
   priceLabel, projectPlaces, sortPlaces, stars, tagCounts,
   type FoodData, type FoodFilter, type FoodPlace, type FoodSort, type FoodStatus, type FoodStatusFilter,
 } from './foodMap'
 import { sampleFoodData } from './foodSample'
+import { FoodMapGL } from './FoodMapGL'
 
 // ─────────────────────────────────────────────
 // 🍜 美食地圖（#food，2026-10-15 原型）
 // 地圖＋清單＋標籤／狀態（想吃 → 去過 → 愛店／不再去）。
-// 原型只顯示 foodSample.ts 的示範資料，不打任何 API、不載外部地圖底圖（不必改 nginx／CSP）。
-// 正式資料接法、底圖選擇（Leaflet＋OSM 或 MapLibre）與 AdventureLog 的關係見 docs/portal-audit-2026-10.md。
+// 底圖：MapLibre GL（FoodMapGL.tsx，預設 OpenFreeMap 公開圖磚，使用者 2026-10-15 決定要底圖）；
+// WebGL 不能用或載入失敗時退回無底圖的 SVG 示意圖。標記與清單以相片為主。
+// 目前只顯示 foodSample.ts 的示範資料；正式資料接法與 AdventureLog 的關係見 docs/portal-audit-2026-10.md。
 // 入口網只顯示：要改狀態，按鈕會把一句話複製到剪貼簿，貼到 Telegram 給 HERMES 寫進日記（跟想法庫同一套）。
 // ─────────────────────────────────────────────
 
@@ -104,8 +106,45 @@ function FoodMapCanvas({ places, selected, onSelect }: { places: FoodPlace[]; se
         ))}
         {unmapped > 0 && <span style={{ color: COLOR.warn }}>· {unmapped} 家還沒有座標（只在清單）</span>}
       </div>
-      <div style={{ position: 'absolute', right: 10, top: 8, fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim }}>原型：無底圖，只示意相對位置</div>
+      <div style={{ position: 'absolute', right: 10, top: 8, fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim }}>底圖載入失敗或瀏覽器不支援 WebGL：只示意相對位置</div>
     </div>
+  )
+}
+
+function Gallery({ p }: { p: FoodPlace }) {
+  const [open, setOpen] = useState<number | null>(null)
+  useEffect(() => { setOpen(null) }, [p.id])
+  useEffect(() => {
+    if (open === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopImmediatePropagation(); setOpen(null) }
+      else if (e.key === 'ArrowRight') setOpen(i => (i === null ? i : (i + 1) % p.photos.length))
+      else if (e.key === 'ArrowLeft') setOpen(i => (i === null ? i : (i - 1 + p.photos.length) % p.photos.length))
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [open, p.photos.length])
+  if (p.photos.length === 0) return null
+  const cur = open !== null ? p.photos[open] : null
+  return (
+    <>
+      <div className="fm-gallery" aria-label={`${p.name} 的相片`}>
+        {p.photos.map((ph, i) => (
+          <button key={ph.url} type="button" className="fm-thumb" onClick={() => setOpen(i)} aria-label={`放大第 ${i + 1} 張相片`}>
+            <img src={ph.thumb ?? ph.url} alt={ph.caption ?? `${p.name} 相片 ${i + 1}`} loading="lazy" decoding="async" />
+          </button>
+        ))}
+      </div>
+      {cur && (
+        <div className="fm-lightbox" role="dialog" aria-modal="true" aria-label="相片檢視" onClick={() => setOpen(null)}>
+          <img src={cur.url} alt={cur.caption ?? p.name} onClick={e => e.stopPropagation()} />
+          <div className="fm-lightbox-cap" onClick={e => e.stopPropagation()}>
+            {cur.caption ?? p.name}{cur.takenAt ? ` · ${cur.takenAt}` : ''} · {open! + 1}/{p.photos.length}
+            <button type="button" onClick={() => setOpen(null)} style={{ marginLeft: 12, ...pill(false, COLOR.steel) }}>關閉</button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -130,6 +169,7 @@ function PlaceDetail({ p, now }: { p: FoodPlace; now: Date }) {
         {[p.area, p.cuisine, priceLabel(p.priceLevel)].filter(Boolean).join(' · ')}
         {p.status === 'want' ? ` · 想吃 ${wantDays} 天了` : p.visitedAt ? ` · ${p.visitedAt} 去過 · ${stars(p.rating)}` : ''}
       </div>
+      <Gallery p={p} />
       {p.why && <div style={{ fontSize: '0.76rem', color: COLOR.ink, lineHeight: 1.6 }}>💭 {p.why}{p.source ? <span style={{ color: COLOR.steelDim }}>（{p.source}）</span> : null}</div>}
       {p.mustTry.length > 0 && <div style={{ fontSize: '0.74rem', color: COLOR.steel }}>👉 必點：{p.mustTry.join('、')}</div>}
       <div style={{ fontSize: '0.68rem', color: COLOR.steelDim }}>出現在日記：{p.days.join('、') || '—'}{p.mapUrl && <> · <a href={p.mapUrl} target="_blank" rel="noopener noreferrer" style={{ color: COLOR.amberDim }}>地圖連結 ↗</a></>}</div>
@@ -166,6 +206,7 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
   const [filter, setFilter] = useState<FoodFilter>({ status: 'all', tag: null, area: null, query: '' })
   const [sort, setSort] = useState<FoodSort>('oldestWant')
   const [selected, setSelected] = useState<string | null>(null)
+  const [glFailed, setGlFailed] = useState(false)
   const listRef = useRef<HTMLOListElement>(null)
 
   const stats = useMemo(() => foodStats(data.places, now), [data, now])
@@ -232,7 +273,9 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
         </div>
 
         <div className="fm-split">
-          <FoodMapCanvas places={list} selected={selected} onSelect={pick} />
+          {glFailed
+            ? <FoodMapCanvas places={list} selected={selected} onSelect={pick} />
+            : <FoodMapGL places={list} selected={selected} onSelect={pick} onFail={() => setGlFailed(true)} />}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, minHeight: 0 }}>
             {sel && <PlaceDetail p={sel} now={now} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.66rem', color: COLOR.steelDim }}>
@@ -249,7 +292,9 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
                   <li key={p.id} data-id={p.id}>
                     <button type="button" className={`fm-row${p.id === selected ? ' is-on' : ''}`} onClick={() => setSelected(p.id === selected ? null : p.id)}
                       style={{ borderLeftColor: STATUS_COLOR[p.status] }}>
-                      <span style={{ fontSize: '1rem' }} aria-hidden>{FOOD_STATUS_ICON[p.status]}</span>
+                      {coverPhoto(p)
+                        ? <img className="fm-row-photo" src={coverPhoto(p)!} alt="" loading="lazy" decoding="async" style={{ borderColor: STATUS_COLOR[p.status] }} />
+                        : <span style={{ fontSize: '1rem', textAlign: 'center' }} aria-hidden>{FOOD_STATUS_ICON[p.status]}</span>}
                       <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
                         <span style={{ color: COLOR.ink, fontWeight: 600, fontSize: '0.82rem' }}>{p.name}</span>
                         <span style={{ color: COLOR.steelDim, fontSize: '0.66rem' }}>

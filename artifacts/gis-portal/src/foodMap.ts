@@ -26,6 +26,21 @@ export const FOOD_STATUS_MARK: Record<FoodStatus, string> = {
   want: '🍜🔖', visited: '🍜✅', favorite: '🍜❤️', skip: '🍜🚫',
 }
 
+/** 地點種類：美食與旅遊共用同一張地圖（使用者 2026-10-15 決定旅遊資料一起遷移） */
+export type PlaceKind = 'food' | 'sight' | 'stay' | 'other'
+export const PLACE_KINDS: PlaceKind[] = ['food', 'sight', 'stay', 'other']
+
+/** 一張相片。url 只收 https:// 或站內 `/` 開頭的路徑（擋掉 javascript:、data: 等），thumb 是縮圖 */
+export interface FoodPhoto {
+  url: string
+  thumb: string | null
+  w: number | null
+  h: number | null
+  /** 拍攝時間 YYYY-MM-DD */
+  takenAt: string | null
+  caption: string | null
+}
+
 export interface FoodPlace {
   /** FOOD-0001，由萃取器配發，跨重跑穩定 */
   id: string
@@ -55,6 +70,9 @@ export interface FoodPlace {
   /** 出現在哪幾天的日記（回溯原始紀錄用） */
   days: string[]
   mapUrl: string | null
+  kind: PlaceKind
+  /** 相片（封面是第一張）；沒有相片時是空陣列 */
+  photos: FoodPhoto[]
 }
 
 export interface FoodData {
@@ -73,6 +91,46 @@ const strList = (v: unknown): string[] => (Array.isArray(v) ? v.filter(isStr).ma
 
 function inRange(v: number | null, lo: number, hi: number): number | null {
   return v !== null && v >= lo && v <= hi ? v : null
+}
+
+/** 只允許 https:// 或站內絕對路徑 `/…`（不含 `//`）；其他一律當作沒有 */
+export function safeImageUrl(v: unknown): string | null {
+  if (!isStr(v)) return null
+  const u = v.trim()
+  if (/^https:\/\/[^\s]+$/i.test(u)) return u
+  if (/^\/(?!\/)[^\s]*$/.test(u)) return u
+  return null
+}
+
+/** 驗證相片清單：壞的丟掉、最多 24 張（payload 太大時不讓整頁卡住） */
+export function parsePhotos(v: unknown): FoodPhoto[] {
+  if (!Array.isArray(v)) return []
+  const out: FoodPhoto[] = []
+  for (const item of v) {
+    if (!item || typeof item !== 'object') continue
+    const r = item as Record<string, unknown>
+    const url = safeImageUrl(r['url'])
+    if (!url) continue
+    const takenAt = strOrNull(r['takenAt'])
+    const w = numOrNull(r['w'])
+    const h = numOrNull(r['h'])
+    out.push({
+      url,
+      thumb: safeImageUrl(r['thumb']),
+      w: w !== null && w > 0 ? w : null,
+      h: h !== null && h > 0 ? h : null,
+      takenAt: takenAt && DATE_RE.test(takenAt) ? takenAt : null,
+      caption: strOrNull(r['caption']),
+    })
+    if (out.length >= 24) break
+  }
+  return out
+}
+
+/** 封面縮圖：第一張相片的縮圖，沒有縮圖就用原圖；沒有相片回 null */
+export function coverPhoto(p: Pick<FoodPlace, 'photos'>): string | null {
+  const f = p.photos[0]
+  return f ? f.thumb ?? f.url : null
 }
 
 /** 驗證單筆；缺 id／name／合法 status／addedAt 的列整筆丟掉（回 null） */
@@ -111,6 +169,8 @@ export function parseFoodPlace(raw: unknown): FoodPlace | null {
     visitedAt: visitedAt && DATE_RE.test(visitedAt) ? visitedAt : null,
     days: strList(r['days']).filter((d) => DATE_RE.test(d)),
     mapUrl: strOrNull(r['mapUrl']),
+    kind: (PLACE_KINDS as string[]).includes(r['kind'] as string) ? (r['kind'] as PlaceKind) : 'food',
+    photos: parsePhotos(r['photos']),
   }
 }
 

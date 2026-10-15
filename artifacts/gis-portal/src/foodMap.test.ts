@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   TAIWAN_BOUNDS, areaCounts, coordsFromMapUrl, daysBetween, filterPlaces, foodStats, foodStatusMessage, nextFoodStatuses,
-  parseFoodPayload, parseFoodPlace, priceLabel, projectPlaces, sortPlaces, stars, tagCounts, type FoodPlace,
+  coverPhoto, parseFoodPayload, parseFoodPlace, parsePhotos, safeImageUrl, priceLabel, projectPlaces, sortPlaces, stars, tagCounts, type FoodPlace,
 } from './foodMap'
 import { sampleFoodData } from './foodSample'
 
@@ -186,5 +186,38 @@ describe('sample data', () => {
     expect(d.places).toHaveLength(10)
     expect(d.places.find(p => p.id === 'FOOD-0009')).toMatchObject({ lat: 25.0365, lng: 121.4999 })
     expect(foodStats(d.places, NOW).mapped).toBe(9)
+  })
+})
+
+describe('相片與種類', () => {
+  const base = { id: 'FOOD-0001', name: '店', status: 'want', addedAt: '2026-01-01' }
+  it('safeImageUrl 只收 https 與站內絕對路徑', () => {
+    expect(safeImageUrl('https://a.example/x.jpg')).toBe('https://a.example/x.jpg')
+    expect(safeImageUrl('/media/x.webp')).toBe('/media/x.webp')
+    expect(safeImageUrl('http://a.example/x.jpg')).toBeNull()
+    expect(safeImageUrl('//evil.example/x.jpg')).toBeNull()
+    expect(safeImageUrl('javascript:alert(1)')).toBeNull()
+    expect(safeImageUrl('data:image/svg+xml;base64,AAAA')).toBeNull()
+    expect(safeImageUrl('https://a.example/a b.jpg')).toBeNull()
+    expect(safeImageUrl(42)).toBeNull()
+  })
+  it('parsePhotos 丟掉壞的、補空欄位、最多 24 張', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ url: `/m/${i}.jpg` }))
+    expect(parsePhotos(many)).toHaveLength(24)
+    expect(parsePhotos('x')).toEqual([])
+    const [a] = parsePhotos([{ url: '/m/a.jpg', thumb: 'javascript:1', w: -5, h: 300, takenAt: '2026/01/01', caption: ' 好吃 ' }, null, { url: 'ftp://x' }])
+    expect(a).toEqual({ url: '/m/a.jpg', thumb: null, w: null, h: 300, takenAt: null, caption: '好吃' })
+  })
+  it('coverPhoto 優先縮圖、其次原圖、沒有相片回 null', () => {
+    expect(coverPhoto({ photos: [] })).toBeNull()
+    expect(coverPhoto({ photos: parsePhotos([{ url: '/m/a.jpg' }]) })).toBe('/m/a.jpg')
+    expect(coverPhoto({ photos: parsePhotos([{ url: '/m/a.jpg', thumb: '/m/a-t.webp' }]) })).toBe('/m/a-t.webp')
+  })
+  it('parseFoodPlace 帶 photos 與 kind，kind 不合法時退回 food', () => {
+    const p = parseFoodPlace({ ...base, kind: 'sight', photos: [{ url: '/m/a.jpg' }] })!
+    expect(p.kind).toBe('sight')
+    expect(p.photos).toHaveLength(1)
+    expect(parseFoodPlace({ ...base, kind: 'zzz' })!.kind).toBe('food')
+    expect(parseFoodPlace(base)!.photos).toEqual([])
   })
 })
