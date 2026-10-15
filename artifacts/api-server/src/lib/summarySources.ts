@@ -20,6 +20,7 @@ import {
 } from "./happinessIndex";
 import { fetchMindIndex } from "./mindIndex";
 import { fetchTravelIndex } from "./adventureLog";
+import { fetchTravelIndexFromTrips } from "./travelTrips";
 import { fetchSocialIndex } from "./socialIndex";
 
 export interface SummarySource {
@@ -134,7 +135,8 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     id: "travel",
     name: "旅遊生活",
     isPrivate: true,
-    fetch: fetchTravelIndex,
+    // AdventureLog 棄用（2026-10-15）：TRAVEL_SOURCE=trips 改由遊記＋美食計分，預設仍是 AdventureLog
+    fetch: process.env["TRAVEL_SOURCE"] === "trips" ? fetchTravelIndexFromTrips : fetchTravelIndex,
   },
   {
     id: "social-index",

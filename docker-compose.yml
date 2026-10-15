@@ -20,6 +20,7 @@ services:
       VIKUNJA_API_TOKEN: ${VIKUNJA_API_TOKEN}
       ADVENTURELOG_API_BASE_URL: ${ADVENTURELOG_API_BASE_URL}
       ADVENTURELOG_API_TOKEN: ${ADVENTURELOG_API_TOKEN}
+      TRAVEL_SOURCE: ${TRAVEL_SOURCE:-adventurelog}
       NTFY_TOPIC_URL: ${NTFY_TOPIC_URL}
       # 摘要來源網址：程式碼以 `??` 取預設值，空字串不會 fallback，所以這裡必須用 `:-` 帶出同一組預設值，
       # 而不是 `${VAR}`（未設會展開成空字串）。要改指向其他主機時在 .env 設定即可。

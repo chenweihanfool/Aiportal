@@ -72,7 +72,7 @@ export const DIMENSIONS: DimensionDef[] = [
     key: 'travel', label: '旅遊', icon: '🧳', color: '#f29e4c',
     scoreKey: 'travelScore', weightKey: 'travelWeight', defaultWeight: 0.12,
     subsystemId: 'travel', rawField: 'travelScore', detail: 'subsystem',
-    about: { measures: '距上次旅行多久、近 180 天累積的旅行天數，有排定的行程再加分。', source: '旅遊生活（AdventureLog）' },
+    about: { measures: '距上次旅行多久、近 180 天累積的旅行天數、近 90 天吃過幾間美食，有排定的行程再加分。', source: '旅遊生活（遊記＋美食地圖；舊版為 AdventureLog）' },
   },
 ]
 
