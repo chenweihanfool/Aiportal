@@ -104,6 +104,11 @@ body,
 /* flex 項目內的 margin 不會與外層折疊；歸零，保持手機版與改版前逐像素相同 */
 .ip-aside .ip-tools { margin-bottom: 0 !important; }
 
+/* 美食及旅遊地圖入口：手機放頁首；電腦版左側欄已有入口卡，頁首那顆隱藏（頁首高度不能變，電腦版要一個畫面放得下） */
+@media (min-width: 1100px) {
+  .fm-entry-pill { display: none !important; }
+}
+
 @media (min-width: 1100px) {
   .ip-scroll {
     padding: 1.2rem 1.6rem 2rem !important;
