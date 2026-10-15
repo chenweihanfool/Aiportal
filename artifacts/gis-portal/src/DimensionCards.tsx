@@ -108,7 +108,7 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
   )
 }
 
-function AdventureLogSummaryBody({ data }: { data: Record<string, unknown> }) {
+function TravelSummaryBody({ data }: { data: Record<string, unknown> }) {
   const daysSinceLastTrip = typeof data['daysSinceLastTrip'] === 'number' ? data['daysSinceLastTrip'] : null
   const lastTripEndDate = typeof data['lastTripEndDate'] === 'string' ? data['lastTripEndDate'] : null
   const recencyScore = typeof data['recencyScore'] === 'number' ? data['recencyScore'] : null
@@ -116,12 +116,17 @@ function AdventureLogSummaryBody({ data }: { data: Record<string, unknown> }) {
   const tripDaysLast180 = typeof data['tripDaysLast180'] === 'number' ? data['tripDaysLast180'] : null
   const anticipationBonus = typeof data['anticipationBonus'] === 'number' ? data['anticipationBonus'] : 0
   const hasUpcomingTrip = data['hasUpcomingTrip'] === true
+  // 遊記版（TRAVEL_SOURCE=trips）才有美食項；舊來源沒有這兩個欄位
+  const foodScore = typeof data['foodScore'] === 'number' ? data['foodScore'] : null
+  const foodVisits = typeof data['foodVisitsLast90'] === 'number' ? data['foodVisitsLast90'] : null
+  const hasFood = foodVisits !== null
 
   const items = [
     { label: '距上次旅行', value: daysSinceLastTrip !== null ? `${daysSinceLastTrip} 天` : '尚無紀錄', formula: '距離最近一次已結束行程的天數（還沒發生的計畫中行程不算）——換算成 recency 子分數' },
-    { label: '最近一次行程結束', value: lastTripEndDate ? new Date(lastTripEndDate).toLocaleDateString('zh-TW') : '—', formula: 'AdventureLog 裡最近一筆已結束行程的結束日期' },
+    { label: '最近一次行程結束', value: lastTripEndDate ? new Date(lastTripEndDate).toLocaleDateString('zh-TW') : '—', formula: '旅遊紀錄裡最近一筆已結束行程的結束日期' },
     { label: 'Recency 子分數', value: recencyScore !== null ? String(recencyScore) : '—', formula: '3 天內剛玩回來 = 100 分，之後線性遞減，約 93 天沒出去玩 = 0 分' },
     { label: 'Frequency 子分數', value: frequencyScore !== null ? String(frequencyScore) : '—', formula: `min(100, round(近 180 天累積行程天數 ÷ 20 × 100))${tripDaysLast180 !== null ? `（目前近 180 天累積 ${tripDaysLast180} 天）` : ''}` },
+    ...(hasFood ? [{ label: '美食子分數', value: foodScore !== null ? String(foodScore) : '—', formula: `近 90 天吃過的美食地點 ÷ 6 × 100，上限 100（目前 ${foodVisits} 間；來源：美食地圖，狀態為去過／愛店）` }] : []),
     { label: '期待加分', value: hasUpcomingTrip ? `+${anticipationBonus}` : '無', formula: '有已排定但還沒發生的行程 +5 分（開關預設開啟）' },
   ]
 
@@ -129,7 +134,7 @@ function AdventureLogSummaryBody({ data }: { data: Record<string, unknown> }) {
     <>
       <SupportStats items={items} />
       <FormulaPanel rows={[
-        { label: '旅遊（來源：旅遊生活）', formula: 'travelScore = clamp(round(0.5 × Recency + 0.5 × Frequency) + 期待加分, 0, 100)——要維持一定的整體旅遊頻率，不是只看距上次旅行天數' },
+        { label: '旅遊（來源：旅遊生活）', formula: hasFood ? 'travelScore = clamp(round(0.4 × Recency + 0.4 × Frequency + 0.2 × 美食) + 期待加分, 0, 100)——旅行（遊記）與吃好料（美食地圖）一起算' : 'travelScore = clamp(round(0.5 × Recency + 0.5 × Frequency) + 期待加分, 0, 100)——要維持一定的整體旅遊頻率，不是只看距上次旅行天數' },
         ...items,
       ]} />
     </>
@@ -139,7 +144,7 @@ function AdventureLogSummaryBody({ data }: { data: Record<string, unknown> }) {
 export const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unknown> }) => React.ReactElement> = {
   'pf-cwh': PfCwhSummaryBody,
   'fitnessforge': FitnessForgeSummaryBody,
-  'travel': AdventureLogSummaryBody,
+  'travel': TravelSummaryBody,
   'vikunja': VikunjaSummaryBody,
 }
 
