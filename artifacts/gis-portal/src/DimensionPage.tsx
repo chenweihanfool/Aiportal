@@ -1,0 +1,211 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { biggestDrag, buildHhiBreakdown } from './boardView'
+import { DIM_ABOUT, PERCENTILE_NOTE, deltaText, dimHash, dimNeighbors, rangeStats } from './dimensionPage'
+import { fetchHhiHistoryStrict } from './homeApi'
+import { DIMENSION_FALLBACK_COLOR, HOME_DIMENSIONS, dimensionOf } from './homeDimensions'
+import { useAsync, useNow } from './homeHooks'
+import { EXPECTED_EVERY_MIN, blockState, dimensionSeries, historyUpdatedAtMs, sparkGeometry, taipeiDate, type DimSeries } from './homeView'
+import { Skeleton, StateFrame } from './StateFrame'
+import { COLOR, FONT } from './theme'
+
+// 面向頁（#dim/<key>）：從首頁點某個面向進來，看這一個面向自己的東西——
+// 現在的分數與權重、近 30／90 天走勢與統計、這個分數怎麼來（原始數據與算法）、相關連結。
+// 資料全部來自既有接口：/api/dashboard 的 hhi 摘要（分數、權重）、/api/happiness/history（每面向的 components）、
+// 各子系統摘要（由 App.tsx 組成 detail 傳進來）。沒有新後端。
+
+const fetchHistory90 = (pw: string) => fetchHhiHistoryStrict(pw, 90)
+
+export interface DimLink { label: string; hash?: string; onClick?: () => void }
+
+export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocked, unlockedPassword, toneOf, onRequestUnlock, detail, links }: {
+  dimKey: string
+  hhiData: Record<string, unknown> | undefined
+  hhiFetchedAt?: string | null
+  hhiError?: boolean
+  unlocked: boolean
+  unlockedPassword: string | null
+  toneOf: (s: number) => { color: string; label: string }
+  onRequestUnlock: () => void
+  /** 這個面向的原始數據與算法（App.tsx 依面向組好；null＝沒有） */
+  detail: ReactNode
+  links: DimLink[]
+}) {
+  const dim = dimensionOf(dimKey)
+  const color = dim?.color ?? DIMENSION_FALLBACK_COLOR
+  const pw = unlocked && unlockedPassword ? unlockedPassword : null
+  const now = useNow()
+  const nowMs = now.getTime()
+  const todayIso = taipeiDate(now)
+  const [range, setRange] = useState<30 | 90>(30)
+  // Esc 回首頁（燈箱、對話框之類在上層的東西自己會攔掉 Esc）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) window.location.hash = '' }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
+  const row = breakdown?.rows.find((r) => r.key === dimKey) ?? null
+  const drag = breakdown ? biggestDrag(breakdown.rows) : null
+  const isDrag = !!row && drag?.key === row.key
+  const history = useAsync(pw, fetchHistory90)
+  const series = useMemo(() => (history.data ? dimensionSeries(history.data, dimKey, todayIso, range) : null), [history.data, dimKey, todayIso, range])
+  const stats = useMemo(() => rangeStats(series), [series])
+
+  const heroSt = blockState({
+    unlocked: !!pw, loading: !hhiData && !hhiError, error: !!hhiError, hasData: !!row && row.value !== null, nowMs,
+    updatedAtMs: hhiFetchedAt ? Date.parse(hhiFetchedAt) : null, expectedEveryMin: EXPECTED_EVERY_MIN.hhi,
+  })
+  const trendSt = blockState({
+    unlocked: !!pw, loading: history.loading, error: history.error, hasData: history.data !== null, nowMs,
+    updatedAtMs: history.data ? historyUpdatedAtMs(history.data) : null, expectedEveryMin: EXPECTED_EVERY_MIN.hhiHistory,
+  })
+  const nb = dimNeighbors(dimKey)
+  const about = DIM_ABOUT[dimKey]
+  const tone = row && row.value !== null ? toneOf(row.value) : null
+  const delta = deltaText(series?.delta ?? null)
+
+  if (!dim) {
+    return (
+      <Shell title="面向" dimKey={dimKey}>
+        <div className="dp-body"><div className="dp-wrap"><p className="hm-note">找不到這個面向。<a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = '' }} style={{ color: COLOR.amber }}>回首頁</a></p></div></div>
+      </Shell>
+    )
+  }
+
+  return (
+    <Shell title={dim.label} dimKey={dimKey}>
+      <div className="dp-body" data-testid="dim-page" data-dim={dimKey}>
+        <div className="dp-wrap" style={{ ['--dim' as string]: color }}>
+          <div className="dp-grid">
+            <div className="dp-col">
+              <section className="hm-card dp-hero" aria-label={`${dim.label}現況`}>
+                <div className="dp-hero-top">
+                  <span className="dp-ico" aria-hidden>{dim.icon}</span>
+                  <h2 className="dp-name">{dim.label}</h2>
+                  {isDrag && <span className="hm-chip hm-chip--warn" title="權重 × 離滿分的差最大，補它最能拉高總分">目前最大短板</span>}
+                </div>
+                <StateFrame status={heroSt} source="幸福指數" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={2} />}
+                  empty="這個面向現在沒有分數（來源系統還沒有資料）。" className="dp-hero-frame">
+                  {row && row.value !== null && tone && (
+                    <div className="dp-hero-body">
+                      <div className="dp-score" aria-label={`${dim.label} ${Math.round(row.value)} 分，${tone.label}`}>
+                        <span className="dp-score-n" style={{ color }}>{Math.round(row.value)}</span><span className="dp-score-of">/100</span>
+                      </div>
+                      <div className="dp-meta">
+                        <span className="dp-tone" style={{ color: tone.color }}>{tone.label}</span>
+                        {delta && <span className="dp-delta" title="與前一個有資料的日子相比" style={{ color: (series?.delta ?? 0) > 0 ? COLOR.ok : (series?.delta ?? 0) < 0 ? COLOR.concern : COLOR.steelDim }}>{delta}</span>}
+                        <span className="dp-wt">權重 {row.weightPct}%・貢獻 {row.points ?? '—'} 分</span>
+                      </div>
+                    </div>
+                  )}
+                </StateFrame>
+                {about && <p className="dp-about"><b>衡量什麼：</b>{about.measures}<span className="dp-src">資料來源：{about.source}</span></p>}
+                <p className="dp-note">{PERCENTILE_NOTE}</p>
+              </section>
+
+              <section className="hm-card dp-trend" aria-label={`${dim.label}走勢`}>
+                <h2 className="hm-h">走勢<span className="hm-h-right">
+                  {([30, 90] as const).map((n) => (
+                    <button key={n} type="button" className={`dp-range${range === n ? ' is-on' : ''}`} aria-pressed={range === n} data-testid={`dp-range-${n}`} onClick={() => setRange(n)}>近 {n} 天</button>
+                  ))}
+                </span></h2>
+                <StateFrame status={trendSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={history.reload} skeleton={<Skeleton lines={3} />} className="dp-trend-frame">
+                  {series && stats ? (
+                    <>
+                      <DimChart series={series} color={color} avg={stats.avg} />
+                      <dl className="dp-stats" data-testid="dp-stats">
+                        <div><dt>平均</dt><dd>{stats.avg}</dd></div>
+                        <div><dt>最高</dt><dd>{stats.max.value}<small>{stats.max.date.slice(5)}</small></dd></div>
+                        <div><dt>最低</dt><dd>{stats.min.value}<small>{stats.min.date.slice(5)}</small></dd></div>
+                        <div><dt>區間變化</dt><dd style={{ color: stats.change === null ? undefined : stats.change > 0 ? COLOR.ok : stats.change < 0 ? COLOR.concern : undefined }}>{stats.change === null ? '—' : stats.change > 0 ? `+${stats.change}` : String(stats.change)}<small>{stats.firstDate.slice(5)} 起</small></dd></div>
+                      </dl>
+                      <p className="dp-note">有資料 {stats.count} 天；沒有資料的日子斷線，不補 0。</p>
+                    </>
+                  ) : (
+                    <p className="hm-note" data-testid="dp-trend-pending">走勢還沒有資料：每個面向的每日分數要等後端的歷史接口（components）有資料才畫得出來，目前有效的天數不到 2 天。</p>
+                  )}
+                </StateFrame>
+              </section>
+            </div>
+
+            <div className="dp-col">
+              <section className="hm-card dp-detail" aria-label={`${dim.label}的分數怎麼來`}>
+                <h2 className="hm-h">分數怎麼來</h2>
+                {!pw ? (
+                  <button type="button" className="hm-lock" onClick={onRequestUnlock}>🔒 解鎖後顯示</button>
+                ) : detail ? <div className="dp-detail-body" data-testid="dp-detail">{detail}</div> : <p className="hm-note">這個面向的來源系統還沒有送出資料。</p>}
+              </section>
+              {links.length > 0 && (
+                <section className="hm-card dp-links" aria-label="相關連結">
+                  <h2 className="hm-h">相關</h2>
+                  <div className="dp-link-row">
+                    {links.map((l) => (
+                      <a key={l.label} className="dp-link" href={l.hash !== undefined ? `#${l.hash}` : '#'} onClick={(e) => { e.preventDefault(); if (l.onClick) l.onClick(); else if (l.hash !== undefined) window.location.hash = l.hash }}>{l.label}</a>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
+          {nb && (
+            <nav className="dp-pager" aria-label="切換面向">
+              <a href={`#${dimHash(nb.prev)}`} data-testid="dp-prev" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.prev) }}>← {dimensionOf(nb.prev)?.label}</a>
+              <a href={`#${dimHash(nb.next)}`} data-testid="dp-next" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.next) }}>{dimensionOf(nb.next)?.label} →</a>
+            </nav>
+          )}
+        </div>
+      </div>
+    </Shell>
+  )
+}
+
+function Shell({ title, dimKey, children }: { title: string; dimKey: string; children: ReactNode }) {
+  return (
+    <div className="dp-page" style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
+      <header className="dp-head">
+        <a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); window.location.hash = '' }}>← 首頁</a>
+        <nav className="dp-nav" aria-label="六個面向">
+          {HOME_DIMENSIONS.map((d) => (
+            <a key={d.key} href={`#${dimHash(d.key)}`} data-testid={`dp-nav-${d.key}`} className={`dp-chip${d.key === dimKey ? ' is-on' : ''}`} style={{ ['--dim' as string]: d.color }}
+              aria-current={d.key === dimKey ? 'page' : undefined} aria-label={d.label} title={d.label}
+              onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(d.key) }}>
+              <span aria-hidden>{d.icon}</span><span className="dp-chip-t">{d.label}</span>
+            </a>
+          ))}
+        </nav>
+        <span className="dp-title" aria-hidden>{title}</span>
+      </header>
+      {children}
+    </div>
+  )
+}
+
+// 走勢圖：縱軸依區間內的最小／最大值縮放（至少 20 分寬，免得幾乎持平的線被放大成劇烈起伏）；沒資料的日子斷線；虛線＝區間平均
+const W = 640, H = 190, PL = 30, PR = 12, PT = 12, PB = 22
+function DimChart({ series, color, avg }: { series: DimSeries; color: string; avg: number }) {
+  const g = sparkGeometry(series, 20)
+  const x = (nx: number) => PL + nx * (W - PL - PR)
+  const y = (ny: number) => PT + ny * (H - PT - PB)
+  const yOf = (v: number) => y(1 - (v - g.lo) / (g.hi - g.lo))
+  const first = series.days[0]!.date
+  const lastDay = series.days[series.days.length - 1]!.date
+  return (
+    <svg className="dp-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`近 ${series.days.length} 天走勢，最新 ${Math.round(series.last.value)} 分`} data-testid="dp-chart">
+      {[g.hi, (g.hi + g.lo) / 2, g.lo].map((v, i) => (
+        <g key={i}>
+          <line x1={PL} x2={W - PR} y1={yOf(v)} y2={yOf(v)} stroke="#2a2d36" strokeWidth={1} />
+          <text x={PL - 6} y={yOf(v) + 3} fontSize="10" textAnchor="end" fill="#5b6270" fontFamily="IBM Plex Mono, monospace">{Math.round(v)}</text>
+        </g>
+      ))}
+      <line x1={PL} x2={W - PR} y1={yOf(avg)} y2={yOf(avg)} stroke={color} strokeOpacity={0.55} strokeWidth={1} strokeDasharray="4 4" />
+      {g.lines.map((ln, i) => (
+        <polyline key={i} points={ln.map((p) => `${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      ))}
+      {g.dots.map((p, i) => <circle key={i} cx={x(p.x)} cy={y(p.y)} r={2.5} fill={color} />)}
+      <circle cx={x(g.end.x)} cy={y(g.end.y)} r={4.5} fill={color} stroke="#1a1c22" strokeWidth={2} />
+      <text x={PL} y={H - 6} fontSize="10" fill="#5b6270" fontFamily="IBM Plex Mono, monospace">{first.slice(5)}</text>
+      <text x={W - PR} y={H - 6} fontSize="10" textAnchor="end" fill="#5b6270" fontFamily="IBM Plex Mono, monospace">{lastDay.slice(5)}</text>
+    </svg>
+  )
+}

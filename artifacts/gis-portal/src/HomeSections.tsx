@@ -19,8 +19,8 @@ import { biggestDrag } from './boardView'
 
 type Tone = (score: number) => { color: string; label: string }
 
-const Head = ({ no, title, right }: { no: string; title: string; right?: ReactNode }) => (
-  <h2 className="hm-h"><span className="hm-no" aria-hidden>{no}</span>{title}{right && <span className="hm-h-right">{right}</span>}</h2>
+const Head = ({ title, right }: { title: string; right?: ReactNode }) => (
+  <h2 className="hm-h">{title}{right && <span className="hm-h-right">{right}</span>}</h2>
 )
 
 // ── ① 今天 ────────────────────────────────────
@@ -117,7 +117,8 @@ export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlo
   breakdown: HhiBreakdown | null
   /** 每面向的 30 天序列；null（還沒載入／接口沒有 components／有效點不到 2 個）＝不畫線，只留數值條 */
   series: Record<string, DimSeries | null> | null
-  onOpen: () => void
+  /** 點某個面向小卡：進該面向自己的頁（#dim/<key>） */
+  onOpen: (key: string) => void
   onRequestUnlock: () => void
 }) {
   const drag = breakdown ? biggestDrag(breakdown.rows) : null
@@ -125,7 +126,7 @@ export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlo
   const ghost = <div className="hm-dims">{Array.from({ length: 6 }, (_, i) => <div key={i} className="hm-dim hm-dim--ghost"><Skeleton lines={2} /></div>)}</div>
   return (
     <section className="hm-card hm-dimsec" aria-label="六個面向">
-      <Head no="②" title="六個面向" right={anySpark ? <span className="hm-hide-sm">細線＝近 30 天</span> : undefined} />
+      <Head title="六個面向" right={anySpark ? <span className="hm-hide-sm">細線＝近 30 天</span> : undefined} />
       <StateFrame status={st} source="幸福指數" skeleton={ghost} onRequestUnlock={onRequestUnlock} empty="六個面向還沒有資料。">
         <div className="hm-dims">
           {breakdown?.rows.map((r) => {
@@ -134,8 +135,8 @@ export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlo
             const isDrag = drag?.key === r.key
             const sp = series?.[r.key] ?? null
             return (
-              <button key={r.key} type="button" className={`hm-dim${isDrag ? ' is-drag' : ''}${sp ? ' has-spark' : ''}`} style={{ ['--dim' as string]: color }} onClick={onOpen}
-                aria-label={`${meta?.label ?? r.label} ${r.value ?? '沒有資料'}，點開看詳情`}>
+              <button key={r.key} type="button" className={`hm-dim${isDrag ? ' is-drag' : ''}${sp ? ' has-spark' : ''}`} style={{ ['--dim' as string]: color }} onClick={() => onOpen(r.key)}
+                aria-label={`${meta?.label ?? r.label} ${r.value ?? '沒有資料'}，點開看這個面向的頁面`}>
                 <span className="hm-dim-name"><span aria-hidden>{meta?.icon ?? '◆'}</span>{meta?.label ?? r.label}{isDrag && <span className="hm-chip hm-chip--warn">短板</span>}</span>
                 <span className="hm-dim-num">{r.value ?? '—'}</span>
                 <span className="hm-dim-bar" aria-hidden><i style={{ width: `${r.value === null ? 0 : Math.max(2, r.value)}%` }} /></span>
@@ -194,7 +195,7 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
   const tiles: Array<[string, number | null, number | null]> = [['人物', kb.people, kb.newPeopleThisWeek], ['事件', kb.events, kb.newEventsThisWeek], ['概念', kb.concepts, null], ['方法', kb.methods, null]]
   return (
     <section className="hm-card hm-growth" aria-label="成長軌跡">
-      <Head no="③" title="成長軌跡" right={<><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a></>} />
+      <Head title="成長軌跡" right={<><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a></>} />
       <div className="hm-growth-body">
         <StateFrame status={histSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={onRetryHistory}
           pendingText={heatPending} className="hm-heat-frame">
@@ -256,7 +257,7 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
 }) {
   return (
     <section className="hm-card hm-fun" aria-label="好玩的">
-      <Head no="④" title="好玩的" right={<button type="button" className="hm-link" onClick={onOpenIdeas}>全部想法 →</button>} />
+      <Head title="好玩的" right={<button type="button" className="hm-link" onClick={onOpenIdeas}>全部想法 →</button>} />
       <div className="hm-fun-body">
         <div className="hm-sub">💡 想法庫前三名</div>
         <StateFrame status={ideasSt} source="想法庫" onRequestUnlock={onRequestUnlock} onRetry={onRetryIdeas}
@@ -329,7 +330,7 @@ export function SystemSection({ st, light, onOpen, onRequestUnlock }: {
       <StateFrame status={st} source="系統狀態" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={1} />} className="hm-sys-frame">
         <button type="button" className="hm-sys-bar" onClick={onOpen} aria-haspopup="dialog" aria-label={`系統：${light.headline}。點開看戰情室`}>
           <i className="hm-lamp" style={{ background: color, boxShadow: `0 0 8px ${color}` }} aria-hidden />
-          <b className="hm-sys-name">⑤ 系統</b>
+          <b className="hm-sys-name">系統</b>
           <span className="hm-sys-text" style={{ color: alert ? color : undefined }}>{light.headline}</span>
           <span className="hm-link">戰情室 →</span>
         </button>

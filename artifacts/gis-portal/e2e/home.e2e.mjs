@@ -40,14 +40,15 @@ const iso = (agoMs = 0) => new Date(Date.now() - agoMs).toISOString()
 const link = (label) => [{ label, url: 'https://example.com' }]
 const site = (id, name, subtitle, isPrivate, subsystemId = null) => ({ id, name, subtitle, links: link(name), worldXZ: [0, 0], isPrivate, subsystemId })
 const sites = [
-  site('s1', '人生進度管理系統', 'Life Progress', true), site('s2', '健身追蹤', 'Fitness Tracking', true), site('s3', '任務追蹤系統', '', true),
-  site('s4', '旅遊生活', '', true), site('s5', '圖根點管理系統', 'Survey Control', false), site('s6', '案件排程系統', 'Case Scheduling', false),
+  site('s1', '人生進度管理系統', 'Life Progress', true, 'pf-cwh'), site('s2', '健身追蹤', 'Fitness Tracking', true, 'fitnessforge'), site('s3', '任務追蹤系統', '', true, 'vikunja'),
+  site('s4', '旅遊生活', '', true, 'travel'), site('s5', '圖根點管理系統', 'Survey Control', false), site('s6', '案件排程系統', 'Case Scheduling', false),
   site('s7', '地籍圖套圖+調整', '', false), site('s8', 'Disk Space Analyzer', '', false), site('s9', 'NEC 地籍檔定位修正工具', '', false), site('s10', 'jpg2jgw', '', false),
 ]
 const hhi = (over = {}) => ({
   subsystemId: 'hhi', name: '幸福指數', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3),
   data: { displayedScore: 71, baseScore: 74.5, weakestScore: 55, finalScore: 72, weakestComponent: '旅遊生活', isSnapshotFinal: true, usingStaleData: false,
     lifeFreedomScore: 68, fitnessHabitScore: 81, calmScore: 74, mindScore: 79, socialScore: 77, travelScore: 55,
+    mindCombined: { score: 72, ideas: 68, report: { date: tpDate(0), total: 80, parts: [{ label: '推進', value: 3, note: '' }] } },
     weights: { lifeFreedomWeight: 0.27, fitnessWeight: 0.18, calmWeight: 0.15, mindWeight: 0.15, socialWeight: 0.13, travelWeight: 0.12 } },
   ...over,
 })
@@ -99,7 +100,12 @@ const historyWithComponents = (shape = 'ok') => Array.from({ length: 30 }, (_, k
 
 // 場景：每個 API 路徑 → 回應（或 'fail' / 'delay'）
 function scenario(name) {
-  const s = { dashboard: [hhi(), { subsystemId: 'mind-index', name: '心智指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { score: 72.4, conversion: 90, linkHealth: 80, vitality: 55, rhythm: 66, stale: false } }], history: { history: historyRows() }, graph: graph(), ideas: ideas(), food: food(), trips: trips(), pipeline: pipeline(), status: status(), usage: usage(), fail: new Set(), delayMs: 0, history30: null }
+  const s = { dashboard: [hhi(), { subsystemId: 'mind-index', name: '心智指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { score: 72.4, conversion: 90, linkHealth: 80, vitality: 55, rhythm: 66, stale: false } },
+  { subsystemId: 'pf-cwh', name: '人生進度管理系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { totalAssetsTWD: 12345678, twrr: 0.082, mwrr: 0.071, pacingIndex: 0.93, lifeFreedomIndex: 68 } },
+  { subsystemId: 'fitnessforge', name: '運動 APP 系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { weeklyScore: 1234, trendPct: 4.2, balanceScore: 62, coverageScore: 71, activityBonusPoints: 3, muscleComposites: [{ name: '胸', composite: 90 }], habitIndex: 55 } },
+  { subsystemId: 'vikunja', name: '任務追蹤系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { overdueScore: 40, loadScore: 55, stagnationScore: 30, completionScore: 45, busyIndex: 42, stale: false } },
+  { subsystemId: 'travel', name: '旅遊生活', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { daysSinceLastTrip: 24, lastTripEndDate: '2026-09-23', recencyScore: 78, frequencyScore: 40, tripDaysLast180: 8, anticipationBonus: 0, hasUpcomingTrip: false, travelScore: 59 } },
+  { subsystemId: 'social-index', name: '社交指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { observedDayCount: 6, distinctPersonCount: 3, daysWithInteraction: 4, breadthScore: 60, intensityScore: 47, connectionRateScore: 67, socialScore: 55, personNames: ['小明', '阿華'] } }], history: { history: historyRows() }, graph: graph(), ideas: ideas(), food: food(), trips: trips(), pipeline: pipeline(), status: status(), usage: usage(), fail: new Set(), delayMs: 0, history30: null }
   if (name === 'alert') {
     s.pipeline = pipeline({ L3: layer('crit', 'apply 失敗：磁碟寫入錯誤') })
     s.usage = usage({ level: 'warn', shortfallUsd: 21.4, daysUntilEmpty: 9, emptyDate: tpDate(9) })
@@ -153,7 +159,7 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
     if (!authed) return json({ message: 'no' }, 403)
     const key = { '/api/happiness/history': 'history', '/api/hermes-graph': 'graph', '/api/hermes-ideas': 'ideas', '/api/hermes-places': 'food', '/api/hermes-trips': 'trips', '/api/hermes-pipeline': 'pipeline', '/api/hermes-status': 'status', '/api/hermes-usage': 'usage' }[p]
     if (key) {
-      const k = key === 'history' && u.searchParams.get('days') === '30' ? 'history30' : key
+      const k = key === 'history' && (u.searchParams.get('days') === '30' || u.searchParams.get('days') === '90') ? 'history30' : key
       calls.push(`${p}?days=${u.searchParams.get('days')}`)
       if (k === 'history30' && S.fail.has('history30')) return json({ message: 'boom' }, 500)
       if (S.delayMs) await new Promise((r) => setTimeout(r, S.delayMs))
@@ -242,10 +248,13 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
   if ((w === 1440 && h === 900) || (w === 1920 && h === 1080) || (w === 1366 && h === 768) || (w === 1536 && h === 864)) await page.screenshot({ path: path.join(SHOTS, `home-${w}x${h}.png`) })
   if (w === 1440) {
+    const dEntries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, card: !!document.querySelector('[data-testid="food-entry"]')?.getClientRects().length, text: document.body.innerText }))
+    check(`${T}：美食及旅遊地圖入口只有一個（側欄大卡可見、頁首膠囊隱藏）`, dEntries.card && !dEntries.pill, JSON.stringify({ pill: dEntries.pill, card: dEntries.card }))
+    check(`${T}：整頁沒有 ①～⑤ 或「04」這類意義不明的數字符號`, !/[①②③④⑤]/.test(dEntries.text) && !/(^|\n)04(\s|\n)/.test(dEntries.text), (dEntries.text.match(/[①②③④⑤]|(^|\n)04(\s|\n)/g) ?? []).join(','))
     // 互動：點小卡開幸福指數抽屜、ESC 關；⑤ 開戰情室抽屜；想法開想法庫抽屜
-    await page.locator('.hm-dim').first().click()
+    await page.locator('.hm-score').first().click()
     await page.waitForSelector('.bd-drawer', { timeout: 5000 })
-    check(`${T}：點面向小卡 → 開幸福指數詳情抽屜`, /幸福指數詳情/.test(await page.locator('.bd-drawer').getAttribute('aria-label')))
+    check(`${T}：點今天的大分數 → 開幸福指數詳情抽屜`, /幸福指數詳情/.test(await page.locator('.bd-drawer').getAttribute('aria-label')))
     const drawerTxt = await page.locator('.bd-drawer').innerText()
     check(`${T}：抽屜的雷達與權重列用新名稱（財務自由／身體／從容／心智／社交／旅遊）`, ['財務自由', '身體', '從容', '心智', '社交', '旅遊'].every((n) => drawerTxt.includes(n)) && !/人生自由|健身習慣|生活從容/.test(drawerTxt), drawerTxt.slice(0, 160).replace(/\n/g, '|'))
     await page.keyboard.press('Escape')
@@ -386,6 +395,10 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
     // 手機的工具連結（頁面最下面）與頁首入口
     if (scn === 'normal') {
       check(`${T}：頁首有「🍜🧭 美食及旅遊地圖」入口、工具連結在頁面下方`, (await page.locator('[data-testid="food-entry-pill"]').isVisible()) && (await page.locator('.ip-tools').count()) === 1)
+      // 整頁合理性：美食入口只出現一個（手機＝頁首膠囊；側欄的大卡在窄螢幕隱藏）、沒有意義不明的數字符號
+      const entries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, card: !!document.querySelector('[data-testid="food-entry"]')?.getClientRects().length, text: document.body.innerText }))
+      check(`${T}：美食及旅遊地圖入口只有一個（膠囊可見、側欄大卡隱藏）`, entries.pill && !entries.card, JSON.stringify({ pill: entries.pill, card: entries.card }))
+      check(`${T}：整頁沒有 ①～⑤ 或「04」這類意義不明的數字符號`, !/[①②③④⑤]/.test(entries.text) && !/(^|\n)04(\s|\n)/.test(entries.text), (entries.text.match(/[①②③④⑤]|(^|\n)04(\s|\n)/g) ?? []).join(','))
       // 首屏利用率：頁首壓成一小條，②面向小卡的上緣在第一屏內（原本頁首獨佔近半個螢幕、② 要捲很久才看到）
       const top = await page.evaluate(() => { const r = (sel) => { const e = document.querySelector(sel); return e ? e.getBoundingClientRect() : null }; const hd = r('.ip-head'), td = r('.hm-today'), dm = r('.hm-dimsec'), sc = r('.hm-score-n'), mt = r('.hm-score-meta'); return { headH: Math.round(hd.height), todayH: Math.round(td.height), dimsTop: Math.round(dm.top), scoreTop: Math.round(sc.top), metaTop: Math.round(mt.top), scoreRight: Math.round(sc.right), metaLeft: Math.round(mt.left) } })
       check(`${T}：頁首壓成一條（高 ${top.headH}px ≤ ${Math.round(h * 0.17)}px）`, top.headH <= h * 0.17, JSON.stringify(top))
@@ -571,6 +584,101 @@ for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
   check('⌘K 選「舊版首頁」→ 前往 #legacy', (await page.evaluate(() => location.hash)) === '#legacy')
   check('⌘K：沒有頁面錯誤', errors.length === 0, errors.join('|'))
   await ctx.close()
+}
+
+// ═══ 7. 面向頁（#dim/<key>）：六個面向各有自己的頁，不是同一個抽屜 ═══
+const DIM_EXPECT = {
+  lifeFreedom: { name: '財務自由', score: '68', detail: ['TWRR', 'MWRR', '休假配速'] },
+  fitness: { name: '身體', score: '81', detail: ['覆蓋率', '均衡度', '本週積分'] },
+  calm: { name: '從容', score: '74', detail: ['逾期壓力', '近期負荷', '停滯程度'] },
+  mind: { name: '心智', score: '79', detail: ['想法分數', '日報分數'] },
+  social: { name: '社交', score: '77', detail: ['廣度', '互動強度', '連結率'] },
+  travel: { name: '旅遊', score: '55', detail: ['Recency', 'Frequency', '距上次旅行'] },
+}
+{
+  // 7a 從首頁點小卡 → 進該面向的頁（網址變 #dim/<key>），不再是同一個抽屜
+  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'spark')
+  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
+  await page.locator('.hm-dim').nth(1).click()
+  await page.waitForSelector('[data-testid="dim-page"]', { timeout: 5000 })
+  check('面向頁：點「身體」小卡 → 網址 #dim/fitness、開的是面向頁而不是抽屜', (await page.evaluate(() => location.hash)) === '#dim/fitness' && (await page.locator('.bd-drawer').count()) === 0 && (await page.locator('[data-testid="dim-page"]').getAttribute('data-dim')) === 'fitness')
+  check('面向頁：Esc 回首頁', await (async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(300); return (await page.evaluate(() => location.hash)) === '' && (await page.locator('[data-testid="dim-page"]').count()) === 0 })())
+  check('面向頁：從首頁進出沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))
+  await ctx.close()
+}
+for (const [key, ex] of Object.entries(DIM_EXPECT)) {
+  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'spark', { hash: `#dim/${key}`, wait: false })
+  await page.waitForSelector('[data-testid="dim-page"]', { timeout: 8000 })
+  await page.waitForSelector('[data-testid="dp-detail"]', { timeout: 8000 })
+  // 旅遊在假資料裡只有最後一天有值（有效點不到 2 個）：走勢區應說明原因，而不是畫一條假線
+  const noTrend = key === 'travel'
+  await page.waitForSelector(noTrend ? '[data-testid="dp-trend-pending"]' : '[data-testid="dp-chart"]', { timeout: 8000 })
+  const hero = await page.locator('.dp-hero').innerText()
+  const det = await page.locator('[data-testid="dp-detail"]').innerText()
+  const T = `面向頁 ${ex.name}`
+  check(`${T}：標題、分數 ${ex.score}、權重與貢獻`, hero.includes(ex.name) && new RegExp(`\\b${ex.score}\\b`).test(hero) && /權重 \d+%・貢獻/.test(hero), hero.replace(/\n/g, '|').slice(0, 120))
+  check(`${T}：「分數怎麼來」是這個面向自己的數據（${ex.detail.join('、')}）`, ex.detail.every((t) => det.includes(t)), det.replace(/\n/g, '|').slice(0, 140))
+  const others = Object.entries(DIM_EXPECT).filter(([k]) => k !== key).flatMap(([, e]) => e.detail)
+  check(`${T}：不含其他面向的數據（頁面不是共用同一份內容）`, !others.some((t) => det.includes(t) && !ex.detail.includes(t)), others.filter((t) => det.includes(t)).join(','))
+  check(noTrend ? `${T}：有效點不足 → 走勢區說明原因、不畫圖，仍有「衡量什麼」` : `${T}：走勢圖、四個統計（平均／最高／最低／區間變化）、有說明「衡量什麼」`, (noTrend ? (await page.locator('[data-testid="dp-chart"]').count()) === 0 : (await page.locator('[data-testid="dp-stats"] > div').count()) === 4) && /衡量什麼/.test(hero) && /資料來源/.test(hero))
+  check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
+  if (key === 'travel') {
+    const linkTxt = await page.locator('.dp-links').innerText()
+    check(`${T}：相關連結有「遊記」「美食及旅遊地圖」「前往 旅遊生活」`, /遊記/.test(linkTxt) && /美食及旅遊地圖/.test(linkTxt) && /前往 旅遊生活/.test(linkTxt), linkTxt.replace(/\n/g, '|'))
+    await page.screenshot({ path: path.join(SHOTS, 'dim-travel-1440.png') })
+  }
+  if (key === 'lifeFreedom') {
+    check(`${T}：目前最大短板標記（權重 × 離滿分最大）`, /目前最大短板/.test(hero))
+    await page.screenshot({ path: path.join(SHOTS, 'dim-lifeFreedom-1440.png') })
+  }
+  await ctx.close()
+}
+{
+  // 7b 面向之間切換、上一個／下一個、區間切換、返回
+  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/calm', wait: false })
+  await page.waitForSelector('[data-testid="dp-chart"]')
+  check('面向頁：頁首六顆切換鈕，目前的是 aria-current', (await page.locator('.dp-nav .dp-chip').count()) === 6 && (await page.locator('.dp-chip[aria-current="page"]').getAttribute('data-testid')) === 'dp-nav-calm')
+  await page.locator('[data-testid="dp-nav-social"]').click(); await page.waitForTimeout(300)
+  check('面向頁：點頁首「社交」→ #dim/social，內容換成社交的', (await page.evaluate(() => location.hash)) === '#dim/social' && /廣度/.test(await page.locator('[data-testid="dp-detail"]').innerText()))
+  await page.locator('[data-testid="dp-next"]').click(); await page.waitForTimeout(300)
+  check('面向頁：「下一個」→ 旅遊；再下一個回到財務自由（循環）', (await page.evaluate(() => location.hash)) === '#dim/travel')
+  await page.locator('[data-testid="dp-next"]').click(); await page.waitForTimeout(300)
+  check('面向頁：循環到財務自由', (await page.evaluate(() => location.hash)) === '#dim/lifeFreedom')
+  const before = await page.locator('[data-testid="dp-chart"]').innerHTML()
+  await page.locator('[data-testid="dp-range-90"]').click(); await page.waitForTimeout(200)
+  check('面向頁：切到「近 90 天」按鈕狀態更新、統計仍在', (await page.locator('[data-testid="dp-range-90"]').getAttribute('aria-pressed')) === 'true' && (await page.locator('[data-testid="dp-stats"]').count()) === 1, before.length + '')
+  await page.locator('[data-testid="dp-back"]').click(); await page.waitForTimeout(400)
+  check('面向頁：「← 首頁」回首頁', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-root').count()) === 1)
+  check('面向頁：切換與返回沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))
+  await ctx.close()
+}
+{
+  // 7c 手機：不橫向捲動、切換鈕不被擠出畫面
+  const { ctx, page, errors } = await open({ width: 390, height: 844 }, 'spark', { hash: '#dim/fitness', wait: false })
+  await page.waitForSelector('[data-testid="dp-chart"]'); await page.waitForTimeout(400)
+  const m = await page.evaluate(() => { const b = document.querySelector('.dp-body'); const nav = document.querySelector('.dp-nav').getBoundingClientRect(); return { docW: document.documentElement.scrollWidth, innerW: window.innerWidth, bodyW: b.scrollWidth, bodyCW: b.clientWidth, navR: Math.round(nav.right), heroTop: Math.round(document.querySelector('.dp-hero').getBoundingClientRect().top), headH: Math.round(document.querySelector('.dp-head').getBoundingClientRect().height) } })
+  check('面向頁 手機 390：不橫向捲動、頁首切換鈕在畫面內', m.docW <= m.innerW && m.bodyW <= m.bodyCW + 1 && m.navR <= m.innerW, JSON.stringify(m))
+  check(`面向頁 手機 390：頁首不超過 130px（${m.headH}px），分數卡在首屏上半部（top ${m.heroTop}px）`, m.headH <= 130 && m.heroTop < 200, JSON.stringify(m))
+  await page.screenshot({ path: path.join(SHOTS, 'dim-fitness-mobile-top.png') })
+  await page.setViewportSize({ width: 390, height: 2000 }); await page.waitForTimeout(300)
+  await page.screenshot({ path: path.join(SHOTS, 'dim-fitness-mobile-full.png') })
+  check('面向頁 手機 390：沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))
+  await ctx.close()
+}
+{
+  // 7d 沒有歷史 components（接口未部署）：走勢區寫明原因、不報錯；未解鎖：鎖頭、不發私領域請求；不認得的 key 回首頁
+  const a = await open({ width: 1440, height: 900 }, 'normal', { hash: '#dim/mind', wait: false })
+  await a.page.waitForSelector('[data-testid="dim-page"]'); await a.page.waitForSelector('[data-testid="dp-trend-pending"]', { timeout: 8000 })
+  check('面向頁：歷史沒有 components 時，走勢區說明原因（不畫假線、不報錯）', /還沒有資料/.test(await a.page.locator('[data-testid="dp-trend-pending"]').innerText()) && a.errors.length === 0, a.errors.join(' | ').slice(0, 200))
+  await a.ctx.close()
+  const b = await open({ width: 1440, height: 900 }, 'normal', { unlocked: false, hash: '#dim/calm', wait: false })
+  await b.page.waitForSelector('[data-testid="dim-page"]'); await b.page.waitForTimeout(800)
+  const privCalls = b.calls.filter((p) => /hermes-|happiness|media/.test(p))
+  check('面向頁：未解鎖 → 顯示「🔒 解鎖後顯示」、不發私領域請求', (await b.page.locator('.hm-lock').count()) >= 1 && privCalls.length === 0, JSON.stringify(privCalls))
+  await b.ctx.close()
+  const c = await open({ width: 1440, height: 900 }, 'normal', { hash: '#dim/nope' })
+  check('面向頁：不認得的面向網址 → 當作首頁（沒有面向頁）', (await c.page.locator('[data-testid="dim-page"]').count()) === 0 && (await c.page.locator('.hm-root').count()) === 1)
+  await c.ctx.close()
 }
 
 await browser.close()
