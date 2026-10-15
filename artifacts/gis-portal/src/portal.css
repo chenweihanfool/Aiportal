@@ -528,6 +528,9 @@ button.bd-hrow:hover, button.bd-hrow:focus-visible { background: rgba(255,255,25
   .fm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fm-split { grid-template-columns: minmax(0, 1fr); height: auto; }
   .fm-map { height: 56vh; }
+  /* 附近模式（手機隨身用）：先看清單與地圖，把統計與標籤收起來 */
+  .fm-page.is-nearby .fm-stats, .fm-page.is-nearby .fm-tags { display: none !important; }
+  .fm-page.is-nearby .fm-map { height: 36vh; }
   .fm-list { overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) { .fm-pulse { animation: none; } .fm-row, .fm-thumb img { transition: none; } }

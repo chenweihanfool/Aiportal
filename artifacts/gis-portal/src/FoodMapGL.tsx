@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { COLOR } from './theme'
-import { FOOD_STATUS_ICON, FOOD_STATUS_LABEL, coverPhoto, type FoodPlace, type FoodStatus } from './foodMap'
+import { FOOD_STATUS_ICON, coverPhoto, statusLabelFor, type FoodPlace, type FoodStatus, type LatLng } from './foodMap'
 
 // ─────────────────────────────────────────────
 // 🗺️ 美食／旅遊地圖的真底圖（MapLibre GL）。
@@ -24,7 +24,7 @@ function markerEl(p: FoodPlace, on: boolean): HTMLButtonElement {
   const size = photo ? (on ? 58 : 44) : (on ? 34 : 26)
   const el = document.createElement('button')
   el.type = 'button'
-  el.setAttribute('aria-label', `${p.name}（${FOOD_STATUS_LABEL[p.status]}）`)
+  el.setAttribute('aria-label', `${p.name}（${statusLabelFor(p.kind, p.status)}）`)
   el.title = p.name
   Object.assign(el.style, {
     width: `${size}px`, height: `${size}px`, borderRadius: '50%', padding: '0', cursor: 'pointer',
@@ -42,6 +42,8 @@ interface Props {
   selected: string | null
   onSelect: (id: string) => void
   onFail: () => void
+  /** 目前位置（附近模式才有）；畫成藍點並納入縮放範圍 */
+  origin?: LatLng | null
 }
 
 // 只用到的 maplibre 型別面；避免在這裡 import 型別造成同步載入整包
@@ -55,7 +57,7 @@ interface GLMap {
 }
 interface GLMarker { remove(): void; getElement(): HTMLElement }
 
-export function FoodMapGL({ places, selected, onSelect, onFail }: Props) {
+export function FoodMapGL({ places, selected, onSelect, onFail, origin = null }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const mapRef = useRef<GLMap | null>(null)
   const libRef = useRef<{ Marker: new (o: { element: HTMLElement }) => GLMarker & { setLngLat(l: [number, number]): GLMarker & { addTo(m: GLMap): GLMarker } } } | null>(null)
@@ -66,6 +68,10 @@ export function FoodMapGL({ places, selected, onSelect, onFail }: Props) {
   failRef.current = onFail
   const mapped = useMemo(() => places.filter(p => p.lat !== null && p.lng !== null), [places])
   const [ready, setReady] = useState(false)
+  const originRef = useRef<LatLng | null>(origin)
+  originRef.current = origin
+  const originMarker = useRef<(GLMarker & { setLngLat(l: [number, number]): unknown }) | null>(null)
+  const hasOrigin = origin !== null
 
   // 建立地圖（一次）
   useEffect(() => {
@@ -89,6 +95,8 @@ export function FoodMapGL({ places, selected, onSelect, onFail }: Props) {
     })()
     return () => {
       dead = true
+      originMarker.current?.remove()
+      originMarker.current = null
       markers.current.forEach(m => m.remove())
       markers.current.clear()
       mapRef.current?.remove()
@@ -113,17 +121,35 @@ export function FoodMapGL({ places, selected, onSelect, onFail }: Props) {
     }
   }, [mapped, selected, ready])
 
-  // 範圍：清單變動時框住所有點；選取時飛過去
+  // 目前位置：藍點。位置更新只移動點，不重新縮放（免得走路時地圖一直跳）
   useEffect(() => {
     const map = mapRef.current
-    if (!map || mapped.length === 0) return
+    const lib = libRef.current
+    if (!map || !lib) return
+    if (!origin) { originMarker.current?.remove(); originMarker.current = null; return }
+    if (originMarker.current) { originMarker.current.setLngLat([origin.lng, origin.lat]); return }
+    const el = document.createElement('div')
+    el.setAttribute('aria-label', '你的位置')
+    Object.assign(el.style, {
+      width: '18px', height: '18px', borderRadius: '50%', background: '#2f80ff', border: '3px solid #fff',
+      boxShadow: '0 0 0 6px rgba(47,128,255,.28), 0 2px 6px rgba(0,0,0,.5)', pointerEvents: 'none', zIndex: '20',
+    } as Partial<CSSStyleDeclaration>)
+    originMarker.current = new lib.Marker({ element: el }).setLngLat([origin.lng, origin.lat]).addTo(map) as unknown as NonNullable<typeof originMarker.current>
+  }, [origin, ready])
+
+  // 範圍：清單變動、或剛取得位置時框住所有點（含目前位置）；選取時飛過去
+  useEffect(() => {
+    const map = mapRef.current
+    const o = originRef.current
+    if (!map || (mapped.length === 0 && !o)) return
     let w = 180, s = 90, e = -180, n = -90
     for (const p of mapped) {
       w = Math.min(w, p.lng as number); e = Math.max(e, p.lng as number)
       s = Math.min(s, p.lat as number); n = Math.max(n, p.lat as number)
     }
-    map.fitBounds([[w, s], [e, n]], { padding: 60, maxZoom: 14, duration: 500 })
-  }, [mapped, ready])
+    if (o) { w = Math.min(w, o.lng); e = Math.max(e, o.lng); s = Math.min(s, o.lat); n = Math.max(n, o.lat) }
+    map.fitBounds([[w, s], [e, n]], { padding: 60, maxZoom: o ? 16 : 14, duration: 500 })
+  }, [mapped, ready, hasOrigin])
 
   useEffect(() => {
     const map = mapRef.current

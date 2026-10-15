@@ -27,10 +27,12 @@ const VERSION_HISTORY = [
   {
     version: '2.33.0',
     date: '2026-10-15',
-    summary: '美食地圖原型（示範資料）：地圖＋清單＋想吃／去過狀態',
+    summary: '美食及旅遊地圖原型（示範資料）：真底圖、相片、附近由近到遠',
     changes: [
       '新增「🍜 美食地圖」頁（網址 #food，或按 ⌘K／Ctrl+K 輸入「美食」）：上方是想吃、去過、實現率、今年吃了幾家；中間依狀態、標籤、地區篩選與搜尋；左邊地圖、右邊清單，點任一家看為什麼想吃、必點、出現在哪幾天的日記。',
-      '目前只顯示虛構的示範資料，還沒接知識庫，也沒有地圖底圖（只示意相對位置）。要改狀態時，按鈕會複製一句「🍜✅ FOOD-0003「店名」去過 評分 4」貼給 HERMES，入口網本身不寫入，跟想法庫同一套。',
+      '地圖有真底圖（MapLibre＋OpenFreeMap 公開圖磚；載入失敗或沒有 WebGL 時退回示意圖），標記與清單以相片為主，點進去有相片牆與燈箱。美食與旅遊景點同一張地圖，可用「🍜 美食／🧭 旅遊」篩選。',
+      '按「📍 找附近」（需要允許瀏覽器定位，只能在 https 網址使用）：清單改成以你目前的位置由近到遠排序，顯示距離與方位，可選 500 m／1 km／3 km／10 km／不限，預設只看還沒去的；點開一個地點可直接用 Google 地圖導航。位置只在你的瀏覽器裡計算，不會送到任何伺服器。',
+      '目前只顯示虛構的示範資料，還沒接知識庫。要改狀態時，按鈕會複製一句「🍜✅ FOOD-0003「店名」去過 評分 4」貼給 HERMES，入口網本身不寫入，跟想法庫同一套。',
       '正式接法（日記格式、萃取、推送、底圖）與 AdventureLog 的整合評估寫在 docs/portal-audit-2026-10.md，等你決定後再做。',
     ],
   },
@@ -3329,7 +3331,7 @@ function CommandPalette({
   const matches = q.length === 0 ? sites : sites.filter(s => s.name.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q))
   const graphKeywords = ['圖', '關係', '宇宙', 'graph']
   const showGraphShortcut = q.length === 0 || graphKeywords.some(k => k.toLowerCase().includes(q) || q.includes(k))
-  const foodKeywords = ['美食', '吃', '餐廳', '地圖', 'food']
+  const foodKeywords = ['美食', '吃', '餐廳', '地圖', '旅遊', '附近', 'food']
   const showFoodShortcut = q.length === 0 || foodKeywords.some(k => k.includes(q) || q.includes(k))
 
   const rowStyle: React.CSSProperties = {
@@ -3372,7 +3374,7 @@ function CommandPalette({
               style={{ ...rowStyle, background: 'rgba(245,166,35,0.05)' }}
             >
               <span style={{ color: COLOR.amber }}>🍜</span>
-              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>美食地圖（原型・示範資料）</span>
+              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>美食及旅遊地圖（原型・示範資料）</span>
               <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
             </div>
           )}

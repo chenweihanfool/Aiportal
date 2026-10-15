@@ -20,6 +20,10 @@ const RAW = {
     { id: 'FOOD-0006', name: '示範・港邊海產', area: '高雄 鼓山', lat: 22.6205, lng: 120.2690, cuisine: '海鮮', tags: ['聚餐', '旅行清單'], status: 'visited', priceLevel: 3, why: '家族旅遊想找大桌的店', source: '家人', mustTry: ['鹽烤魚'], rating: 3, addedAt: '2026-04-04', visitedAt: '2026-04-19', days: ['2026-04-04', '2026-04-19'] },
     { id: 'FOOD-0007', name: '示範・深夜拉麵', area: '台北 信義', lat: 25.0400, lng: 121.5680, cuisine: '拉麵', tags: ['宵夜'], status: 'want', priceLevel: 2, why: '加班後想吃重口味', source: '我', mustTry: ['豚骨拉麵'], addedAt: '2026-09-29', days: ['2026-09-29'] },
     { id: 'FOOD-0008', name: '示範・溫泉區甜品', area: '宜蘭 礁溪', lat: 24.8270, lng: 121.7700, cuisine: '甜點', tags: ['旅行清單', '週末'], status: 'skip', priceLevel: 2, why: '排隊名店', source: 'IG', mustTry: [], rating: 2, addedAt: '2026-02-08', visitedAt: '2026-02-15', days: ['2026-02-08', '2026-02-15'] },
+    // 旅遊景點（kind: sight）：同一張地圖、同一組狀態；want 在旅遊顯示成「想去」
+    { id: 'FOOD-0011', name: '示範・山城老街步道', kind: 'sight', area: '新北 瑞芳', lat: 25.1090, lng: 121.8450, tags: ['半日遊', '拍照'], status: 'want', why: '看到日落時整條街會變金色', source: 'YouTube', mustTry: [], addedAt: '2026-08-02', days: ['2026-08-02'] },
+    { id: 'FOOD-0012', name: '示範・海邊燈塔', kind: 'sight', area: '新竹 香山', lat: 24.7540, lng: 120.9100, tags: ['海邊', '親子'], status: 'visited', why: '家族出遊順路', source: '家人', mustTry: [], rating: 4, addedAt: '2026-05-20', visitedAt: '2026-06-07', days: ['2026-05-20', '2026-06-07'] },
+    { id: 'FOOD-0013', name: '示範・稜線觀景台', kind: 'sight', area: '苗栗 三義', lat: 24.4100, lng: 120.7700, tags: ['景觀'], status: 'want', why: '同事說秋天雲海很美', source: '同事', mustTry: [], addedAt: '2026-09-12', days: ['2026-09-12'] },
     // 只有 Google 地圖連結、沒有 lat/lng：驗證「從連結取座標」
     { id: 'FOOD-0009', name: '示範・港式燒臘', area: '台北 萬華', cuisine: '燒臘', tags: ['一個人'], status: 'want', priceLevel: 1, why: '路過聞到很香', source: '我', mustTry: ['三寶飯'], addedAt: '2026-10-10', days: ['2026-10-10'], mapUrl: 'https://www.google.com/maps/place/x/@25.0365,121.4999,17z' },
     // 沒有任何座標：只會出現在清單，地圖上提示「n 家還沒有座標」
@@ -33,6 +37,7 @@ const DEMO_PHOTOS: Record<string, Array<ReturnType<typeof demoPhoto>>> = {
   'FOOD-0003': [demoPhoto('肉圓', 12, '2026-10-03'), demoPhoto('貢丸湯', 40, '2026-10-03')],
   'FOOD-0006': [demoPhoto('鹽烤魚', 190, '2026-04-19'), demoPhoto('港邊夕陽', 20, '2026-04-19'), demoPhoto('大圓桌', 330, '2026-04-19'), demoPhoto('生魚片', 350, '2026-04-19')],
   'FOOD-0008': [demoPhoto('排隊人龍', 270, '2026-02-15')],
+  'FOOD-0012': [demoPhoto('燈塔', 205, '2026-06-07'), demoPhoto('海風', 180, '2026-06-07')],
 }
 
 export function sampleFoodData(): FoodData {

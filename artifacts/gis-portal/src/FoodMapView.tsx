@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { COLOR, FONT } from './theme'
 import {
-  FOOD_STATUS_ICON, FOOD_STATUS_LABEL, areaCounts, coverPhoto, daysBetween, filterPlaces, foodStats, foodStatusMessage, isBeen, nextFoodStatuses,
-  priceLabel, projectPlaces, sortPlaces, stars, tagCounts,
-  type FoodData, type FoodFilter, type FoodPlace, type FoodSort, type FoodStatus, type FoodStatusFilter,
+  FOOD_STATUS_ICON, FOOD_STATUS_LABEL, KIND_ICON, areaCounts, bearingLabel, coverPhoto, daysBetween, filterPlaces, foodStats, foodStatusMessage, formatDistance, isBeen,
+  navigateUrl, nearbyPlaces, nextFoodStatuses, priceLabel, projectPlaces, sortPlaces, stars, statusLabelFor, tagCounts,
+  type FoodData, type FoodFilter, type FoodPlace, type FoodSort, type FoodStatus, type FoodStatusFilter, type PlaceKind,
 } from './foodMap'
 import { sampleFoodData } from './foodSample'
 import { FoodMapGL } from './FoodMapGL'
+import { useGeolocation } from './useGeolocation'
 
 // ─────────────────────────────────────────────
 // 🍜 美食地圖（#food，2026-10-15 原型）
@@ -22,6 +23,8 @@ const STATUS_COLOR: Record<FoodStatus, string> = {
 }
 
 const FILTERS: Array<[FoodStatusFilter, string]> = [['all', '全部'], ['want', '🔖 想吃'], ['been', '✅ 去過'], ['favorite', '❤️ 愛店'], ['skip', '🚫 不再去']]
+const KIND_FILTERS: Array<[PlaceKind | 'all', string]> = [['all', '全部'], ['food', '🍜 美食'], ['sight', '🧭 旅遊']]
+const RADII: Array<[number | null, string]> = [[500, '500 m'], [1000, '1 km'], [3000, '3 km'], [10000, '10 km'], [null, '不限']]
 const SORTS: Array<[FoodSort, string]> = [['oldestWant', '想吃最久'], ['recent', '最近'], ['rating', '評分']]
 
 const pill = (active: boolean, color: string = COLOR.amber): CSSProperties => ({
@@ -88,7 +91,7 @@ function FoodMapCanvas({ places, selected, onSelect }: { places: FoodPlace[]; se
           const c = STATUS_COLOR[pt.status]
           return (
             <g key={pt.id} transform={`translate(${pt.x},${pt.y})`} style={{ cursor: 'pointer' }} onClick={() => onSelect(pt.id)}
-              role="button" tabIndex={0} aria-label={`${p.name}（${FOOD_STATUS_LABEL[p.status]}）`}
+              role="button" tabIndex={0} aria-label={`${p.name}（${statusLabelFor(p.kind, p.status)}）`}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(pt.id) } }}>
               {on && <circle r={16} fill="none" stroke={c} strokeWidth={1.5} className="fm-pulse" />}
               <circle r={on ? 8 : 6} fill={c} stroke={COLOR.panelDeep} strokeWidth={2} opacity={pt.status === 'skip' ? 0.6 : 1} />
@@ -148,7 +151,7 @@ function Gallery({ p }: { p: FoodPlace }) {
   )
 }
 
-function PlaceDetail({ p, now }: { p: FoodPlace; now: Date }) {
+function PlaceDetail({ p, now, meters }: { p: FoodPlace; now: Date; meters: number | null }) {
   const [note, setNote] = useState('')
   const [rating, setRating] = useState<number | null>(p.rating)
   const [copied, setCopied] = useState<{ text: string; ok: boolean } | null>(null)
@@ -163,11 +166,13 @@ function PlaceDetail({ p, now }: { p: FoodPlace; now: Date }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>{p.id}</span>
         <b style={{ color: COLOR.ink, fontSize: '1rem' }}>{p.name}</b>
-        <span style={{ fontSize: '0.72rem', color: STATUS_COLOR[p.status] }}>{FOOD_STATUS_ICON[p.status]} {FOOD_STATUS_LABEL[p.status]}</span>
+        <span style={{ fontSize: '0.72rem', color: STATUS_COLOR[p.status] }}>{FOOD_STATUS_ICON[p.status]} {statusLabelFor(p.kind, p.status)}</span>
+        {meters !== null && <span style={{ fontFamily: FONT.mono, fontSize: '0.72rem', color: '#2f80ff' }}>📍 {formatDistance(meters)}</span>}
+        {navigateUrl(p) && <a href={navigateUrl(p)!} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', ...pill(true, '#2f80ff'), textDecoration: 'none' }}>🧭 導航</a>}
       </div>
       <div style={{ fontSize: '0.74rem', color: COLOR.steel, lineHeight: 1.6 }}>
         {[p.area, p.cuisine, priceLabel(p.priceLevel)].filter(Boolean).join(' · ')}
-        {p.status === 'want' ? ` · 想吃 ${wantDays} 天了` : p.visitedAt ? ` · ${p.visitedAt} 去過 · ${stars(p.rating)}` : ''}
+        {p.status === 'want' ? ` · ${statusLabelFor(p.kind, 'want')} ${wantDays} 天了` : p.visitedAt ? ` · ${p.visitedAt} 去過 · ${stars(p.rating)}` : ''}
       </div>
       <Gallery p={p} />
       {p.why && <div style={{ fontSize: '0.76rem', color: COLOR.ink, lineHeight: 1.6 }}>💭 {p.why}{p.source ? <span style={{ color: COLOR.steelDim }}>（{p.source}）</span> : null}</div>}
@@ -203,16 +208,29 @@ function PlaceDetail({ p, now }: { p: FoodPlace; now: Date }) {
 export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: () => void; data?: FoodData; now?: Date }) {
   const data = useMemo(() => dataProp ?? sampleFoodData(), [dataProp])
   const now = useMemo(() => nowProp ?? new Date(), [nowProp])
-  const [filter, setFilter] = useState<FoodFilter>({ status: 'all', tag: null, area: null, query: '' })
+  const [filter, setFilter] = useState<FoodFilter>({ kind: 'all', status: 'all', tag: null, area: null, query: '' })
   const [sort, setSort] = useState<FoodSort>('oldestWant')
   const [selected, setSelected] = useState<string | null>(null)
   const [glFailed, setGlFailed] = useState(false)
+  const geo = useGeolocation()
+  const [radiusM, setRadiusM] = useState<number | null>(3000)
+  const [wishOnly, setWishOnly] = useState(true)
   const listRef = useRef<HTMLOListElement>(null)
 
   const stats = useMemo(() => foodStats(data.places, now), [data, now])
   const tags = useMemo(() => tagCounts(data.places).slice(0, 12), [data])
   const areas = useMemo(() => areaCounts(data.places), [data])
-  const list = useMemo(() => sortPlaces(filterPlaces(data.places, filter), sort), [data, filter, sort])
+  // 附近模式：定位成功後，清單改成「由近到遠」，距離與方位跟著位置更新
+  const nearbyOn = geo.pos !== null
+  const nearby = useMemo(
+    () => (geo.pos ? nearbyPlaces(filterPlaces(data.places, filter), geo.pos, { radiusM, wishOnly: wishOnly && filter.status === 'all' }) : null),
+    [data, filter, geo.pos, radiusM, wishOnly],
+  )
+  const meterOf = useMemo(() => new Map((nearby?.items ?? []).map(i => [i.place.id, i])), [nearby])
+  const list = useMemo(
+    () => (nearby ? nearby.items.map(i => i.place) : sortPlaces(filterPlaces(data.places, filter), sort)),
+    [data, filter, sort, nearby],
+  )
   const sel = selected ? data.places.find(p => p.id === selected) ?? null : null
 
   const pick = (id: string) => {
@@ -234,10 +252,10 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
   ]
 
   return (
-    <div className="fm-page" style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
+    <div className={`fm-page${nearbyOn ? ' is-nearby' : ''}`} style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}`, flexWrap: 'wrap' }}>
         <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
-        <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜 美食地圖</h1>
+        <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
         {data.sample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
         {stats.oldestWant && (
           <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: COLOR.steel }}>
@@ -256,12 +274,29 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
           ))}
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '0.8rem 0 0.5rem' }}>
+        <div className="fm-nearbar" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '0.8rem 0 0.5rem' }}>
+          <button type="button" data-testid="nearby-toggle" style={pill(nearbyOn || geo.state === 'asking', '#2f80ff')} onClick={() => (geo.state === 'idle' || geo.state === 'denied' || geo.state === 'error' || geo.state === 'unavailable' ? geo.start() : geo.stop())}>
+            {geo.state === 'asking' ? '📍 定位中…' : nearbyOn ? `📍 附近・由近到遠${geo.accuracyM !== null ? `（±${geo.accuracyM} m）` : ''}` : '📍 找附近'}
+          </button>
+          {nearbyOn && (
+            <>
+              {RADII.map(([r, l]) => <button key={l} type="button" style={pill(radiusM === r, COLOR.steel)} onClick={() => setRadiusM(r)}>{l}</button>)}
+              <label style={{ fontSize: '0.68rem', color: COLOR.steel, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="checkbox" checked={wishOnly} onChange={e => setWishOnly(e.target.checked)} /> 只看還沒去的
+              </label>
+            </>
+          )}
+          {geo.message && <span role="alert" style={{ fontSize: '0.68rem', color: COLOR.warn }}>{geo.message}</span>}
+          {nearbyOn && geo.accuracyM !== null && geo.accuracyM > 200 && <span style={{ fontSize: '0.66rem', color: COLOR.warn }}>定位誤差偏大，距離僅供參考</span>}
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '0 0 0.5rem' }}>
+          {KIND_FILTERS.map(([k, l]) => <button key={k} type="button" style={pill((filter.kind ?? 'all') === k, COLOR.steel)} onClick={() => setFilter(f => ({ ...f, kind: k }))}>{l}</button>)}
+          <span style={{ width: 8 }} />
           {FILTERS.map(([k, l]) => <button key={k} type="button" style={pill(filter.status === k)} onClick={() => setFilter(f => ({ ...f, status: k }))}>{l}</button>)}
-          <input value={filter.query} onChange={e => setFilter(f => ({ ...f, query: e.target.value }))} placeholder="搜尋店名、菜、推薦人…" aria-label="搜尋美食"
+          <input value={filter.query} onChange={e => setFilter(f => ({ ...f, query: e.target.value }))} placeholder="搜尋店名、菜、景點、推薦人…" aria-label="搜尋地點"
             style={{ flex: '1 1 160px', minWidth: 0, background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 999, color: COLOR.ink, padding: '5px 12px', fontSize: '0.74rem' }} />
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.8rem' }}>
+        <div className="fm-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.8rem' }}>
           {tags.map(([t, n]) => <button key={t} type="button" style={pill(filter.tag === t, COLOR.steel)} onClick={() => setFilter(f => ({ ...f, tag: f.tag === t ? null : t }))}>#{t} {n}</button>)}
           {areas.length > 1 && (
             <select value={filter.area ?? ''} onChange={e => setFilter(f => ({ ...f, area: e.target.value || null }))} aria-label="地區"
@@ -275,16 +310,19 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
         <div className="fm-split">
           {glFailed
             ? <FoodMapCanvas places={list} selected={selected} onSelect={pick} />
-            : <FoodMapGL places={list} selected={selected} onSelect={pick} onFail={() => setGlFailed(true)} />}
+            : <FoodMapGL places={list} selected={selected} onSelect={pick} onFail={() => setGlFailed(true)} origin={geo.pos} />}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, minHeight: 0 }}>
-            {sel && <PlaceDetail p={sel} now={now} />}
+            {sel && <PlaceDetail p={sel} now={now} meters={meterOf.get(sel.id)?.meters ?? null} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.66rem', color: COLOR.steelDim }}>
-              <span style={{ flex: 1 }}>{list.length} / {data.places.length} 家</span>
-              {SORTS.map(([k, l]) => <button key={k} type="button" style={pill(sort === k, COLOR.steel)} onClick={() => setSort(k)}>{l}</button>)}
+              <span style={{ flex: 1 }}>
+                {nearby ? `${list.length} 個在 ${radiusM === null ? '不限距離' : formatDistance(radiusM)} 內` : `${list.length} / ${data.places.length} 個`}
+                {nearby && nearby.unmapped > 0 ? `・另有 ${nearby.unmapped} 個沒座標，算不出距離` : ''}
+              </span>
+              {!nearby && SORTS.map(([k, l]) => <button key={k} type="button" style={pill(sort === k, COLOR.steel)} onClick={() => setSort(k)}>{l}</button>)}
             </div>
             {list.length === 0 ? (
               <div style={{ color: COLOR.steelDim, fontSize: '0.78rem', padding: '1rem 0' }}>
-                {data.places.length === 0 ? '還沒有美食紀錄。HERMES 在日記寫下 ### HH:MM 🍜 店名 後，下一班 L1 就會出現在這裡。' : '沒有符合的店家'}
+                {data.places.length === 0 ? '還沒有紀錄。HERMES 在日記寫下 ### HH:MM 🍜 店名 後，下一班 L1 就會出現在這裡。' : nearby ? '這個範圍內沒有符合的地點，試試放大距離或取消「只看還沒去的」' : '沒有符合的地點'}
               </div>
             ) : (
               <ol ref={listRef} className="fm-list">
@@ -294,16 +332,18 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
                       style={{ borderLeftColor: STATUS_COLOR[p.status] }}>
                       {coverPhoto(p)
                         ? <img className="fm-row-photo" src={coverPhoto(p)!} alt="" loading="lazy" decoding="async" style={{ borderColor: STATUS_COLOR[p.status] }} />
-                        : <span style={{ fontSize: '1rem', textAlign: 'center' }} aria-hidden>{FOOD_STATUS_ICON[p.status]}</span>}
+                        : <span style={{ fontSize: '1rem', textAlign: 'center' }} aria-hidden>{p.kind === 'food' ? FOOD_STATUS_ICON[p.status] : KIND_ICON[p.kind]}</span>}
                       <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
-                        <span style={{ color: COLOR.ink, fontWeight: 600, fontSize: '0.82rem' }}>{p.name}</span>
+                        <span style={{ color: COLOR.ink, fontWeight: 600, fontSize: '0.82rem' }}>{p.name}{p.kind !== 'food' && <span style={{ marginLeft: 6, fontSize: '0.6rem', color: COLOR.steelDim }}>{statusLabelFor(p.kind, p.status)}</span>}</span>
                         <span style={{ color: COLOR.steelDim, fontSize: '0.66rem' }}>
                           {[p.area ?? '地點未知', p.cuisine, priceLabel(p.priceLevel)].filter(Boolean).join(' · ')}
                           {isBeen(p.status) && p.rating !== null ? ` · ${'★'.repeat(p.rating)}` : ''}
                         </span>
                       </span>
                       <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, whiteSpace: 'nowrap' }}>
-                        {p.status === 'want' ? `${daysBetween(p.addedAt, now)} 天` : p.visitedAt?.slice(5) ?? ''}
+                        {meterOf.get(p.id)
+                          ? <b style={{ color: '#2f80ff', fontSize: '0.74rem' }}>{formatDistance(meterOf.get(p.id)!.meters)}<br />{bearingLabel(meterOf.get(p.id)!.bearing)}</b>
+                          : p.status === 'want' ? `${daysBetween(p.addedAt, now)} 天` : p.visitedAt?.slice(5) ?? ''}
                       </span>
                     </button>
                   </li>

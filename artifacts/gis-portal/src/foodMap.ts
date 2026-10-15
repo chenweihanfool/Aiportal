@@ -213,6 +213,8 @@ export function coordsFromMapUrl(url: string | null | undefined): { lat: number;
 export type FoodStatusFilter = FoodStatus | 'been' | 'all'
 
 export interface FoodFilter {
+  /** 省略或 'all'＝美食與旅遊都要 */
+  kind?: PlaceKind | 'all'
   status: FoodStatusFilter
   tag: string | null
   area: string | null
@@ -224,6 +226,7 @@ export const isBeen = (s: FoodStatus) => s === 'visited' || s === 'favorite'
 export function filterPlaces(places: FoodPlace[], f: FoodFilter): FoodPlace[] {
   const q = f.query.trim().toLowerCase()
   return places.filter((p) => {
+    if (f.kind && f.kind !== 'all' && p.kind !== f.kind) return false
     if (f.status === 'been' ? !isBeen(p.status) : f.status !== 'all' && p.status !== f.status) return false
     if (f.tag && !p.tags.includes(f.tag) && p.cuisine !== f.tag) return false
     if (f.area && p.area !== f.area) return false
@@ -364,3 +367,79 @@ export function foodStatusMessage(p: FoodPlace, next: FoodStatus, rating: number
 
 export const priceLabel = (n: number | null) => (n === null ? '—' : '$'.repeat(n))
 export const stars = (n: number | null) => (n === null ? '—' : '★'.repeat(n) + '☆'.repeat(5 - n))
+
+// ─────────────────────────────────────────────
+// 📍 附近：以目前位置為基準，由近到遠列出有座標的地點（手機隨身用）。
+// 位置只在瀏覽器裡計算，不送到任何伺服器；沒有座標的地點算不出距離，另外計數。
+// ─────────────────────────────────────────────
+
+export interface LatLng { lat: number; lng: number }
+
+export const KIND_LABEL: Record<PlaceKind, string> = { food: '美食', sight: '旅遊景點', stay: '住宿', other: '其他' }
+export const KIND_ICON: Record<PlaceKind, string> = { food: '🍜', sight: '🧭', stay: '🛏️', other: '📍' }
+
+/** 想吃（美食）／想去（旅遊等）：同一個 want 狀態，說法依種類不同 */
+export function statusLabelFor(kind: PlaceKind, s: FoodStatus): string {
+  if (s === 'want') return kind === 'food' ? '想吃' : '想去'
+  if (s === 'visited') return kind === 'food' ? '去過' : '去過'
+  return FOOD_STATUS_LABEL[s]
+}
+
+/** 兩點的球面距離（公尺，haversine） */
+export function distanceM(a: LatLng, b: LatLng): number {
+  const R = 6371008.8
+  const rad = Math.PI / 180
+  const dLat = (b.lat - a.lat) * rad
+  const dLng = (b.lng - a.lng) * rad
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
+}
+
+/** 從 a 看向 b 的方位角（0＝北，順時針，0–360） */
+export function bearingDeg(a: LatLng, b: LatLng): number {
+  const rad = Math.PI / 180
+  const dLng = (b.lng - a.lng) * rad
+  const y = Math.sin(dLng) * Math.cos(b.lat * rad)
+  const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos(dLng)
+  return (Math.atan2(y, x) / rad + 360) % 360
+}
+
+const DIRS = ['北', '東北', '東', '東南', '南', '西南', '西', '西北']
+export const bearingLabel = (deg: number) => DIRS[Math.round((((deg % 360) + 360) % 360) / 45) % 8]!
+
+/** 100 公尺以內顯示到 10 公尺；1 公里以內到整數公尺；之後 km 一位小數；100 公里以上取整數 */
+export function formatDistance(m: number): string {
+  if (!Number.isFinite(m) || m < 0) return '—'
+  if (m < 100) return `${Math.max(10, Math.round(m / 10) * 10)} m`
+  if (m < 1000) return `${Math.round(m / 10) * 10} m`
+  const km = m / 1000
+  return km < 100 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`
+}
+
+export interface NearbyItem { place: FoodPlace; meters: number; bearing: number }
+export interface NearbyResult { items: NearbyItem[]; unmapped: number }
+
+/**
+ * 由近到遠。radiusM 為 null＝不限距離；wishOnly＝只留還沒去的（want）。
+ * 距離相同時用 id 排序，結果穩定。unmapped＝符合其他條件、但沒有座標而算不出距離的筆數。
+ */
+export function nearbyPlaces(places: FoodPlace[], origin: LatLng, opts: { radiusM: number | null; wishOnly: boolean }): NearbyResult {
+  const items: NearbyItem[] = []
+  let unmapped = 0
+  for (const p of places) {
+    if (opts.wishOnly && p.status !== 'want') continue
+    if (p.lat === null || p.lng === null) { unmapped += 1; continue }
+    const at = { lat: p.lat, lng: p.lng }
+    const meters = distanceM(origin, at)
+    if (opts.radiusM !== null && meters > opts.radiusM) continue
+    items.push({ place: p, meters, bearing: bearingDeg(origin, at) })
+  }
+  items.sort((a, b) => a.meters - b.meters || a.place.id.localeCompare(b.place.id))
+  return { items, unmapped }
+}
+
+/** 開啟 Google 地圖導航（手機會喚起地圖 App）；沒有座標回 null。只是一般連結，不需要金鑰。 */
+export function navigateUrl(p: Pick<FoodPlace, 'lat' | 'lng'>): string | null {
+  if (p.lat === null || p.lng === null) return null
+  return `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`
+}

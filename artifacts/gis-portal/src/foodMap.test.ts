@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   TAIWAN_BOUNDS, areaCounts, coordsFromMapUrl, daysBetween, filterPlaces, foodStats, foodStatusMessage, nextFoodStatuses,
-  coverPhoto, parseFoodPayload, parseFoodPlace, parsePhotos, safeImageUrl, priceLabel, projectPlaces, sortPlaces, stars, tagCounts, type FoodPlace,
+  bearingDeg, bearingLabel, coverPhoto, distanceM, filterPlaces as filterPlacesK, formatDistance, navigateUrl, nearbyPlaces, statusLabelFor, parseFoodPayload, parseFoodPlace, parsePhotos, safeImageUrl, priceLabel, projectPlaces, sortPlaces, stars, tagCounts, type FoodPlace,
 } from './foodMap'
 import { sampleFoodData } from './foodSample'
 
@@ -183,9 +183,9 @@ describe('sample data', () => {
   it('parses every sample row, is flagged as sample, and exercises the map-link fallback and unmapped case', () => {
     const d = sampleFoodData()
     expect(d.sample).toBe(true)
-    expect(d.places).toHaveLength(10)
+    expect(d.places).toHaveLength(13)
     expect(d.places.find(p => p.id === 'FOOD-0009')).toMatchObject({ lat: 25.0365, lng: 121.4999 })
-    expect(foodStats(d.places, NOW).mapped).toBe(9)
+    expect(foodStats(d.places, NOW).mapped).toBe(12)
   })
 })
 
@@ -219,5 +219,63 @@ describe('相片與種類', () => {
     expect(p.photos).toHaveLength(1)
     expect(parseFoodPlace({ ...base, kind: 'zzz' })!.kind).toBe('food')
     expect(parseFoodPlace(base)!.photos).toEqual([])
+  })
+})
+
+describe('附近（由近到遠）', () => {
+  const taipei = { lat: 25.0330, lng: 121.5654 }
+  const mk = (id: string, lat: number | null, lng: number | null, status: 'want' | 'visited' = 'want', kind: 'food' | 'sight' = 'food') =>
+    parseFoodPlace({ id, name: id, status, kind, lat, lng, addedAt: '2026-01-01' })!
+
+  it('distanceM：台北 101 到台北車站約 5 公里，同點為 0，對稱', () => {
+    const station = { lat: 25.0478, lng: 121.5170 }
+    const d = distanceM(taipei, station)
+    expect(d).toBeGreaterThan(4800); expect(d).toBeLessThan(5400)
+    expect(distanceM(taipei, taipei)).toBe(0)
+    expect(distanceM(station, taipei)).toBeCloseTo(d, 6)
+  })
+  it('bearingDeg：正北 0、正東 90、正南 180、正西 270；標籤', () => {
+    expect(bearingDeg(taipei, { lat: taipei.lat + 0.01, lng: taipei.lng })).toBeCloseTo(0, 3)
+    expect(bearingDeg(taipei, { lat: taipei.lat, lng: taipei.lng + 0.01 })).toBeCloseTo(90, 0)
+    expect(bearingDeg(taipei, { lat: taipei.lat - 0.01, lng: taipei.lng })).toBeCloseTo(180, 3)
+    expect(bearingDeg(taipei, { lat: taipei.lat, lng: taipei.lng - 0.01 })).toBeCloseTo(270, 0)
+    expect(bearingLabel(0)).toBe('北'); expect(bearingLabel(90)).toBe('東'); expect(bearingLabel(225)).toBe('西南'); expect(bearingLabel(359)).toBe('北'); expect(bearingLabel(-45)).toBe('西北')
+  })
+  it('formatDistance 的進位', () => {
+    expect(formatDistance(3)).toBe('10 m')
+    expect(formatDistance(84)).toBe('80 m')
+    expect(formatDistance(342)).toBe('340 m')
+    expect(formatDistance(999)).toBe('1000 m')
+    expect(formatDistance(1234)).toBe('1.2 km')
+    expect(formatDistance(48_900)).toBe('48.9 km')
+    expect(formatDistance(120_400)).toBe('120 km')
+    expect(formatDistance(NaN)).toBe('—'); expect(formatDistance(-1)).toBe('—')
+  })
+  it('nearbyPlaces：由近到遠、半徑內、沒座標另計、wishOnly 排除去過的', () => {
+    const near = mk('N', 25.0340, 121.5654)             // 約 120 m
+    const mid = mk('M', 25.0400, 121.5654)              // 約 780 m
+    const far = mk('F', 25.1000, 121.5654)              // 約 7.5 km
+    const been = mk('B', 25.0335, 121.5654, 'visited')  // 約 55 m，但去過了
+    const none = mk('X', null, null)
+    const all = [far, none, mid, been, near]
+    const r = nearbyPlaces(all, taipei, { radiusM: 3000, wishOnly: true })
+    expect(r.items.map(i => i.place.id)).toEqual(['N', 'M'])
+    expect(r.unmapped).toBe(1)
+    expect(nearbyPlaces(all, taipei, { radiusM: 3000, wishOnly: false }).items.map(i => i.place.id)).toEqual(['B', 'N', 'M'])
+    expect(nearbyPlaces(all, taipei, { radiusM: null, wishOnly: true }).items.map(i => i.place.id)).toEqual(['N', 'M', 'F'])
+    expect(nearbyPlaces([], taipei, { radiusM: null, wishOnly: true })).toEqual({ items: [], unmapped: 0 })
+  })
+  it('距離相同時用 id 排序（結果穩定）', () => {
+    const a = mk('A', 25.034, 121.5654), b = mk('B', 25.034, 121.5654)
+    expect(nearbyPlaces([b, a], taipei, { radiusM: null, wishOnly: false }).items.map(i => i.place.id)).toEqual(['A', 'B'])
+  })
+  it('種類篩選、想去／想吃用語、導航連結', () => {
+    const f = mk('F', 25, 121, 'want', 'food'), s = mk('S', 25, 121, 'want', 'sight')
+    const base = { status: 'all' as const, tag: null, area: null, query: '' }
+    expect(filterPlacesK([f, s], { ...base, kind: 'sight' }).map(p => p.id)).toEqual(['S'])
+    expect(filterPlacesK([f, s], base).map(p => p.id)).toEqual(['F', 'S'])
+    expect(statusLabelFor('food', 'want')).toBe('想吃'); expect(statusLabelFor('sight', 'want')).toBe('想去'); expect(statusLabelFor('sight', 'favorite')).toBe('愛店')
+    expect(navigateUrl(f)).toBe('https://www.google.com/maps/dir/?api=1&destination=25,121')
+    expect(navigateUrl(mk('Z', null, null))).toBeNull()
   })
 })
