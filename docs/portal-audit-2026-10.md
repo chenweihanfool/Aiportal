@@ -536,6 +536,27 @@
 5. 資料表遷移：需由 HERMES 以 `db-migrate` 在 VPS 上執行；Claude 不執行。
 6. 部署：由 HERMES 執行，Claude 不部署。部署後要驗證 GET 的 403／`available:false`，以及 POST 的 200／400 回應。
 
+### 4.11 遊記（2026-10-15）
+
+使用者 2026-10-15 三個決定：
+1. 每日文字**用日記原文**，不濃縮。
+2. 資料權威在 HERMES 端（kb-pipeline 推送），入口網只讀、顯示。
+3. 相片檔案的儲存與提供**這次不做**，只收網址；沒有網址的相片以「📷 n 張相片（處理中）」顯示。
+
+**資料契約摘要**（完整見 `docs/trips-api.md`）：`POST /api/admin/hermes-trips`（管理員密碼，整份覆寫）、`GET /api/hermes-trips`（解鎖後讀）。趟次 → 每日 → 依時間排列的條目（`time`、純文字 `text`、`photos`、`photosPending`）。驗證規則見 `lib/hermesTrips.ts`，趟次／天數／條目／相片上限見文件。
+
+**已做**
+- 資料表 `hermes_trips_snapshot`（單列 `latest`）；遷移 `lib/db/migrations/0023_tranquil_bullseye.sql`，**未套用到任何正式資料庫**。
+- 驗證 `sanitizeTripsPayload`、路由 POST／GET、註冊於 `routes/index.ts`。
+- 前端 `#trips`（列表）與 `#trips/<id>`（單趟）：小地圖重用 `FoodMapGL`、相片牆與燈箱抽成共用 `PhotoGallery.tsx`（美食地圖行為不變）；⌘K 加「遊記」捷徑；美食地圖頁頭加「📖 遊記」按鈕；版本 2.34.0。
+- 測試：api-server 單元 13 項、整合 4 項（拋棄式 Postgres）；前端 tripsApi 10 項、tripsView 10 項；Playwright 實機 31 項（以假 API 驗證）。
+
+**未做／待決定**
+1. HERMES 端的推送（從日記與相片萃取趟次、組 JSON、POST）在 kb-pipeline，本 repo 不做。
+2. 相片檔案處理（縮圖、media 儲存、提供路由）未做；目前 `url` 只能指向既有的 https 或站內路徑。
+3. 遷移與部署由 HERMES 執行，Claude 不執行、不部署。部署後要驗證 GET 的 403／`available:false`，以及 POST 的 200／400 回應。
+4. 趟次與條目的上限（50 趟、60 天、200 條目、600 相片）與 `area`／`summary` 的長度上限是本次自行訂的，若 HERMES 端有不同需求，請再決定。
+
 ## 5. 分階段路線圖
 
 ### P0（現在，低風險、不動資料源與部署設定）
