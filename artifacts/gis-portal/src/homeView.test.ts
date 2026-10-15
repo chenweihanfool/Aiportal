@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addDays, ageText, badFeedNames, blockState, buildHeatmap, dimensionLine, formatAge, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats,
+  addDays, ageText, badFeedNames, blockState, buildHeatmap, dimensionLine, formatAge, formatDuration, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats,
   latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
   type BlockInput, type SystemLightInput,
 } from './homeView'
@@ -149,6 +149,11 @@ describe('todaySentence', () => {
   })
   it('all perfect: no drag', () => {
     expect(todaySentence({ trend: trend(), rows: rows([100, 100]) })).toContain('沒有明顯的短板')
+  })
+  it('history unavailable: says nothing about the trend instead of claiming "no record yesterday"', () => {
+    const s = todaySentence({ trend: trend({ delta: null, yesterday: null, historyDays: 0 }), rows: [row('travel', '旅遊生活', 55, 12)], trendKnown: false })
+    expect(s).toBe('現在最大的短板是「旅遊生活」（55 分，拉低總分 5.4 分）。')
+    expect(s).not.toContain('昨天')
   })
   it('works with the real breakdown builder', () => {
     const b = buildHhiBreakdown({ displayedScore: 72, lifeFreedomScore: 68, fitnessHabitScore: 81, calmScore: 74, mindScore: 79, socialScore: 77, travelScore: 55 })!
@@ -409,6 +414,8 @@ describe('formatAge / historyUpdatedAtMs', () => {
     expect(formatAge(180)).toBe('3 小時前')
     expect(formatAge(47 * 60)).toBe('47 小時前')
     expect(formatAge(3 * 1440)).toBe('3 天前')
+    expect(formatDuration(3 * 60)).toBe('3 小時')
+    expect(formatDuration(0.1)).toBe('1 分鐘')
   })
   it('history is complete at the end of its last day (Taipei)', () => {
     expect(historyUpdatedAtMs([])).toBeNull()
@@ -510,7 +517,7 @@ describe('systemLight', () => {
     expect(l.headline).toBe('管線、主機、Ollama正常；推送尚無資料')
   })
   it('dead data blocks raise the light', () => {
-    const l = systemLight({ ...ok(), deadBlocks: [{ label: '幸福指數歷史', days: 4 }] })
+    const l = systemLight({ ...ok(), deadBlocks: [{ label: '幸福指數歷史', ageMin: 4 * 1440 }] })
     expect(l.level).toBe('warn')
     expect(l.reasons[0]).toMatchObject({ source: 'data', text: '幸福指數歷史已 4 天沒有更新' })
   })

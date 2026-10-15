@@ -95,11 +95,12 @@ export function hhiTrend(history: HhiHistoryPoint[], todayIso: string, current: 
  * ① 那一句話：不呼叫任何模型，用規則組句——先講趨勢（連續天數優先，其次與昨天的差），再講最大短板。
  * 沒有資料時直接說沒有，不編。
  */
-export function todaySentence(i: { trend: HhiTrend | null; rows: HhiRow[] }): string {
+export function todaySentence(i: { trend: HhiTrend | null; rows: HhiRow[]; /** 歷史讀不到時填 false：不講趨勢，免得把「讀失敗」說成「昨天沒有紀錄」 */ trendKnown?: boolean }): string {
   const t = i.trend
   if (!t || t.score === null) return '今天的幸福指數還沒有資料，等資料進來再說。'
-  let lead: string
-  if (t.streak && t.streak.days >= 2) lead = `連 ${t.streak.days} 天${t.streak.direction === 'up' ? '上升' : '下降'}`
+  let lead: string | null
+  if (i.trendKnown === false) lead = null
+  else if (t.streak && t.streak.days >= 2) lead = `連 ${t.streak.days} 天${t.streak.direction === 'up' ? '上升' : '下降'}`
   else if (t.delta === null) lead = '昨天沒有紀錄，沒辦法跟昨天比'
   else if (t.delta > 0) lead = `比昨天高 ${t.delta} 分`
   else if (t.delta < 0) lead = `比昨天低 ${-t.delta} 分`
@@ -114,7 +115,7 @@ export function todaySentence(i: { trend: HhiTrend | null; rows: HhiRow[] }): st
     if (missing > 0) tail += `，另有 ${missing} 個面向今天沒有資料`
   } else if (scored.length === 0) tail = '六個面向今天都沒有分數，先不下結論'
   else tail = '目前沒有明顯的短板'
-  return `${lead}，${tail}。`
+  return lead === null ? `${tail}。` : `${lead}，${tail}。`
 }
 
 /** 面向小卡的一句話：不編故事，只把分數翻成生活語言（門檻與 hhiTone 的 80／65／50／35 相同） */
@@ -325,12 +326,16 @@ export const EXPECTED_EVERY_MIN = {
   trips: null,
 } as const
 
-/** 「資料 n 小時前」：<60 分用分鐘，<48 小時用小時，其餘用天 */
+/** 一段時間的長度：<60 分用分鐘，<48 小時用小時，其餘用天（「已 3 天沒有更新」的「3 天」） */
+export function formatDuration(min: number): string {
+  if (min < 60) return `${Math.max(1, Math.round(min))} 分鐘`
+  if (min < 48 * 60) return `${Math.round(min / 60)} 小時`
+  return `${Math.round(min / 1440)} 天`
+}
+
+/** 「資料 n 小時前」 */
 export function formatAge(min: number): string {
-  if (min < 1) return '剛剛'
-  if (min < 60) return `${Math.round(min)} 分鐘前`
-  if (min < 48 * 60) return `${Math.round(min / 60)} 小時前`
-  return `${Math.round(min / 1440)} 天前`
+  return min < 1 ? '剛剛' : `${formatDuration(min)}前`
 }
 
 /** 幸福指數歷史的「資料時間」：最後一筆那天的結束（隔天 00:00 台北）；沒有資料回 null */
@@ -363,7 +368,7 @@ export interface SystemLightInput {
   /** 落後的推送來源名稱（已轉成中文） */
   badFeeds: string[]
   /** 首頁各資料區塊死掉（超過 3 倍預期間隔）的清單 */
-  deadBlocks: Array<{ label: string; days: number }>
+  deadBlocks: Array<{ label: string; ageMin: number }>
 }
 
 const SOURCE_ORDER: Record<LightReason['source'], number> = { pipeline: 0, host: 1, push: 2, ollama: 3, data: 4 }
@@ -424,7 +429,7 @@ export function systemLight(i: SystemLightInput): SystemLight {
     add(ollLevel, 'ollama', f.shortfallUsd !== null ? `Ollama 會在補點前用完（${when}，約缺 $${Math.round(f.shortfallUsd)}）` : `Ollama 餘額偏低（${when}）`)
   }
   // 首頁資料區塊太久沒更新
-  for (const d of i.deadBlocks) add('warn', 'data', `${d.label}已 ${d.days} 天沒有更新`)
+  for (const d of i.deadBlocks) add('warn', 'data', `${d.label}已 ${formatDuration(d.ageMin)}沒有更新`)
 
   reasons.sort((a, b) => (a.level === b.level ? 0 : a.level === 'crit' ? -1 : 1) || SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source])
   const level: SystemLight['level'] = reasons.some((r) => r.level === 'crit') ? 'crit' : reasons.length ? 'warn' : checked.length ? 'ok' : 'unknown'
