@@ -289,7 +289,7 @@
 ### 3.4 其他風險與觀察
 
 - **地點不是實體**：美食、旅遊、常去的地方都長不出來。建議新增 `Place` 實體（名稱、座標或地圖連結、類別、別名），L1 只在日記**明確寫出店名或地點**時抽取（同樣用逐字比對閘），美食是 Place 加上狀態。【需決定】這會改 L1 prompt，等於推翻「不抽地點」的既有決定。
-- **知識庫健康 4 項已經脫鉤卻仍在計算**：建議停掉 `daily-life-score.py` 的推送，或改算新架構的指標（每日新事件數、L3 落地率、孤兒率）。【需決定】
+- **知識庫健康 4 項已經脫鉤卻仍在計算**（**§4.16 更正：2026-09-10 起已改量測新架構，此句前提過時**）：建議停掉 `daily-life-score.py` 的推送，或改算新架構的指標（每日新事件數、L3 落地率、孤兒率）。【需決定】
 - **pf-cwh、FitnessForge 的 `/api/public/summary` 不需登入**：建議改成需要一把共享金鑰（header），由 api-server 帶上。這會動到兩個子系統和 api-server 的環境設定，屬於部署變更。【需決定】
 - **入口網每次開頁都即時打 NAS 上 3 個 API**：首頁速度受 NAS 影響。建議改成「先回快取並附資料年齡，背景再更新」——快取已經存在（`subsystem_summaries`，每 20 分鐘），現在只拿來當備援。
 - **文件漂移**：`pipeline-architecture.md` 的排程表要依 `jobs-index.md` 更新（`jobs-index.md` 是自動產生的，以它為準）。
@@ -672,6 +672,26 @@
 - 戰情室抽屜與 `kb-pipeline` 端的面向名稱（上面「刻意沒改」那幾處）。
 - 部署與實機驗證由 HERMES 做：驗收建議看狀態碼與 bundle 字串（例如 `2.36.0`、`舊版首頁（退路）`、`財務自由`，舊版不含這些字串）。
 - 新首頁的 e2e `artifacts/gis-portal/e2e/home.e2e.mjs` 與舊首頁的 `board.e2e.mjs`（改載入 `#legacy`）都是手動執行、不在 CI。
+
+### 4.16 摘要端點金鑰、遊記相片管線、知識庫健康的前提更正（2026-10-15）
+
+使用者原話：「pf-cwh 和 FitnessForge 的 /api/public/summary 加 key。」「相片檔案處理需要 VPS 掛載 media 目錄，授權。」「知識庫健康四項停用，改算新指標。」
+
+**1. 摘要端點加金鑰（已實作，等部署）**
+- pf-cwh、FitnessForge 各新增 `server/summaryKey.ts`：環境變數 `SUMMARY_API_KEY` 有設，`/api/public/summary` 就要求 `x-summary-key`（或 `Authorization: Bearer`）且相符（雜湊後 `timingSafeEqual`），否則 401；**沒設則維持舊行為並在啟動時警告**——這樣先部署程式、後設金鑰（或反過來）都不會中斷 Aiportal 的拉取。`/api/public/life-score`（pf-cwh 夜間人生積分 job 用）不在這次範圍，沒動。
+- Aiportal 端 `summarySources.ts` 的 `fetchJson` 在 `PF_CWH_SUMMARY_KEY`／`FITNESSFORGE_SUMMARY_KEY` 有值時送 `x-summary-key`；`docker-compose.yml`、`.env.example` 已加對應變數。
+- **上線順序（部署者做）**：①三個 repo 的程式都部署；②產生一把金鑰（`openssl rand -hex 24`）；③pf-cwh、FitnessForge 的 `.env` 設 `SUMMARY_API_KEY`，Aiportal 的 `.env` 設兩個 `*_SUMMARY_KEY`（同一把）；④各自重建對應服務；⑤驗證：不帶標頭 401、帶標頭 200、Aiportal 儀表板兩張卡仍有資料。
+
+**2. 遊記相片管線（已實作，等部署與掛載）**
+- 產生端（kb-pipeline）：`kbcore/trip_media.py`＋`trips-pusher.py` 每輪先把遊記引用的 vault 附件做成 `<TRIP_MEDIA_DIR>/<趟次 id>/<檔名>.webp`（長邊 1600）與 `-t.webp`（長邊 320）；WebP、**不帶 EXIF**、依 EXIF 轉正、原檔只讀；冪等、每輪最多 25 秒、有新檔當輪就推網址；單張壞檔不擋文字推送。需要 Pillow。細節見 kb-pipeline `docs/trips.md`。
+- 提供端（Aiportal）：`GET /api/media/trips/:tripId/:file`，登入閘同其他私領域資料；只讀 `trips/<單層>/<單檔>.webp`，擋 `..`、隱藏檔、symlink 逃逸，8 MB 上限，ETag＋`private` 快取；媒體資料夾以**唯讀**掛進 api-server（`MEDIA_DIR`→`/data/media`）。
+- 前端：`AuthImage` 以 fetch＋Blob 顯示（`<img>` 帶不了解鎖碼），捲到附近才抓；卡片封面用縮圖、縮圖 404 退回原圖。瀏覽器驗證見 `e2e/media.e2e.mjs`（12 項）。
+- **限制**：①美食地圖的 MapLibre 標記是命令式 DOM，沒走 `AuthImage`，所以**地點**相片目前仍只能用外部 https 網址；地點相片的衍生檔管線這次沒做。②相片沒有 EXIF，座標與時間仍無從取得。③`w`、`h`、`caption` 仍為 null。④同一趟裡兩張不同資料夾、同檔名的相片會撞衍生檔名（只處理第一張，記 `dup_stem`）。⑤這個 sandbox 沒有真實 vault 與真實手機，沒有用真實相片驗證。
+
+**3. 知識庫健康四項：前提更正，尚未動手**
+- 本報告 §3 與 §5 說這四項「已經脫鉤卻仍在計算」，依據是版本歷程 2.2.0 的一句話。**這個前提過時了**：`daily-life-score.py` 在 2026-09-10 已把量測標的遷到新架構——轉化率量 `pipeline/佇列/` 的 candidates→normalized 吞吐、連結健康度與活化度掃 `Events/`＋`People/`、節奏量這三個資料夾的 git 活動與 L3 落地紀錄。也就是說，它們現在量的正是新架構。
+- 而且 Aiportal 前端目前**沒有任何地方畫這四項**：時間軸徽章與戰情室面板都已拿掉，只剩推送健康表裡的 `life-score` 一列（`mind_index_history` 的 `score`／`conversion`／`link_health`／`vitality`／`rhythm` 欄位仍在收）。
+- 所以「停用」省不到什麼、「改算新指標」大半會和現有四項重複（孤兒率＝連結健康度、L3 落地＝活化度的一部分、新事件數＝節奏）。這與你下決定時我給的前提不同，**先不動，等你重新裁定**（選項見回覆）。
 
 ---
 

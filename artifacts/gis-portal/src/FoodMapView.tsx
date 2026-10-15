@@ -8,6 +8,7 @@ import {
 import { sampleFoodData } from './foodSample'
 import { FoodMapGL } from './FoodMapGL'
 import { PhotoGallery } from './PhotoGallery'
+import { AuthImage, MediaAuthContext } from './AuthImage'
 import { useGeolocation } from './useGeolocation'
 import { apiFetchFood, formatReceivedAt } from './foodApi'
 
@@ -194,7 +195,13 @@ function useFoodSource(pw: string | null, enabled: boolean): FoodSource {
   return { loading: false, real: got.data.available ? got.data : null, note: null }
 }
 
-export function FoodMapView({ onBack, data: dataProp, now: nowProp, unlockedPassword = null }: { onBack: () => void; data?: FoodData; now?: Date; unlockedPassword?: string | null }) {
+type FoodMapViewProps = { onBack: () => void; data?: FoodData; now?: Date; unlockedPassword?: string | null }
+
+export function FoodMapView(props: FoodMapViewProps) {
+  return <MediaAuthContext.Provider value={props.unlockedPassword ?? ''}><FoodMapPage {...props} /></MediaAuthContext.Provider>
+}
+
+function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = null }: FoodMapViewProps) {
   const src = useFoodSource(unlockedPassword, dataProp === undefined)
   const data = useMemo(() => dataProp ?? src.real ?? sampleFoodData(), [dataProp, src.real])
   // 既有的 data prop（測試／原型）照舊：只看它自己的 sample 旗標
@@ -341,7 +348,7 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp, unlockedPass
                     <button type="button" className={`fm-row${p.id === selected ? ' is-on' : ''}`} onClick={() => setSelected(p.id === selected ? null : p.id)}
                       style={{ borderLeftColor: STATUS_COLOR[p.status] }}>
                       {coverPhoto(p)
-                        ? <img className="fm-row-photo" src={coverPhoto(p)!} alt="" loading="lazy" decoding="async" style={{ borderColor: STATUS_COLOR[p.status] }} />
+                        ? <AuthImage className="fm-row-photo" src={coverPhoto(p)!} alt="" loading="lazy" decoding="async" style={{ borderColor: STATUS_COLOR[p.status] }} />
                         : <span style={{ fontSize: '1rem', textAlign: 'center' }} aria-hidden>{p.kind === 'food' ? FOOD_STATUS_ICON[p.status] : KIND_ICON[p.kind]}</span>}
                       <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
                         <span style={{ color: COLOR.ink, fontWeight: 600, fontSize: '0.82rem' }}>{p.name}{p.kind !== 'food' && <span style={{ marginLeft: 6, fontSize: '0.6rem', color: COLOR.steelDim }}>{statusLabelFor(p.kind, p.status)}</span>}</span>

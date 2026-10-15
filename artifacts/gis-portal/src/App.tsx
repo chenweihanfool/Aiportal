@@ -27,6 +27,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.37.0',
+    date: '2026-10-15',
+    summary: '遊記相片：登入後才提供的縮圖與檢視圖（HERMES 產生、唯讀掛載）；兩個子系統的摘要端點加存取金鑰',
+    changes: [
+      '遊記與美食地圖的相片現在可以顯示入口網自己的相片：網址 /api/media/trips/<趟次>/<檔名>.webp，由 api-server 從唯讀掛載的 media 資料夾提供，跟其他私領域資料同一道登入閘（沒有公開網址）；只讀 trips/<單層資料夾>/<單一檔名>.webp，擋 .. 、隱藏檔、指到資料夾外的符號連結，超過 8 MB 不給。媒體資料夾沒掛載時回「尚未掛載」，其他功能不受影響。',
+      '前端新增帶憑證的圖片元件：<img> 帶不了解鎖碼，所以用 fetch 取成 Blob 再顯示（Google 登入者靠 cookie）；捲到附近才抓。卡片封面改載縮圖（縮圖 404 時退回原圖），相片牆用縮圖、燈箱用檢視圖。外部 https 圖照舊直接載入。',
+      '相片的縮圖（長邊 320）與檢視圖（長邊 1600）由 HERMES 端 kb-pipeline 的 trips-pusher 每輪先產生（WebP、不帶 EXIF、依 EXIF 轉正、原檔只讀不動），有新檔當輪就把網址推上來。要啟用：主機 .env 設 MEDIA_DIR、HERMES 端設 TRIP_MEDIA_DIR=<MEDIA_DIR>/trips，並重建 api-server。',
+      'pf-cwh 與 FitnessForge 的 /api/public/summary 加存取金鑰（兩邊環境變數 SUMMARY_API_KEY，Aiportal 端 PF_CWH_SUMMARY_KEY／FITNESSFORGE_SUMMARY_KEY 填同一把，以 x-summary-key 標頭送）。金鑰沒設時維持舊行為，所以兩邊先後順序不拘；設了之後沒帶或不符一律 401。',
+    ],
+  },
+  {
     version: '2.36.0',
     date: '2026-10-15',
     summary: '新首頁成為預設首頁（舊版在 #legacy）、六面向改名、里程碑重做、面向小卡迷你線（需後端接口）',

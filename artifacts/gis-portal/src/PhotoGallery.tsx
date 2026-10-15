@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FoodPhoto } from './foodMap'
+import { AuthImage } from './AuthImage'
 import { COLOR, FONT } from './theme'
 
 // ─────────────────────────────────────────────
@@ -28,13 +29,13 @@ export function PhotoGallery({ photos, label, resetKey }: { photos: FoodPhoto[];
       <div className="fm-gallery" aria-label={`${label} 的相片`}>
         {photos.map((ph, i) => (
           <button key={ph.url} type="button" className="fm-thumb" onClick={() => setOpen(i)} aria-label={`放大第 ${i + 1} 張相片`}>
-            <img src={ph.thumb ?? ph.url} alt={ph.caption ?? `${label} 相片 ${i + 1}`} loading="lazy" decoding="async" />
+            <AuthImage src={ph.thumb ?? ph.url} fallbackSrc={ph.thumb ? ph.url : undefined} alt={ph.caption ?? `${label} 相片 ${i + 1}`} loading="lazy" decoding="async" />
           </button>
         ))}
       </div>
       {cur && (
         <div className="fm-lightbox" role="dialog" aria-modal="true" aria-label="相片檢視" onClick={() => setOpen(null)}>
-          <img src={cur.url} alt={cur.caption ?? label} onClick={e => e.stopPropagation()} />
+          <AuthImage key={cur.url} src={cur.url} alt={cur.caption ?? label} onClick={e => e.stopPropagation()} />
           <div className="fm-lightbox-cap" onClick={e => e.stopPropagation()}>
             {cur.caption ?? label}{cur.takenAt ? ` · ${cur.takenAt}` : ''} · {open! + 1}/{photos.length}
             <button type="button" onClick={() => setOpen(null)} style={{ marginLeft: 12, fontFamily: FONT.mono, fontSize: '0.68rem', padding: '4px 10px', borderRadius: 999, cursor: 'pointer', color: COLOR.steel, background: 'transparent', border: `1px solid ${COLOR.steel}`, whiteSpace: 'nowrap' }}>關閉</button>

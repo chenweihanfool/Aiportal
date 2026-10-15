@@ -30,8 +30,12 @@ export interface SummarySource {
   fetch: () => Promise<unknown>;
 }
 
-async function fetchJson(url: string, timeoutMs = 8000): Promise<unknown> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+async function fetchJson(url: string, timeoutMs = 8000, summaryKey?: string): Promise<unknown> {
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    // pf-cwh / FitnessForge 設了 SUMMARY_API_KEY 之後要帶這個標頭；沒設金鑰就不送。
+    headers: summaryKey ? { "x-summary-key": summaryKey } : undefined,
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -97,14 +101,22 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     name: "人生進度管理系統",
     isPrivate: true,
     fetch: () =>
-      fetchJson(process.env["PF_CWH_SUMMARY_URL"] ?? "https://cwh2023.synology.me/pf/api/public/summary"),
+      fetchJson(
+        process.env["PF_CWH_SUMMARY_URL"] ?? "https://cwh2023.synology.me/pf/api/public/summary",
+        undefined,
+        process.env["PF_CWH_SUMMARY_KEY"],
+      ),
   },
   {
     id: "fitnessforge",
     name: "運動 APP 系統",
     isPrivate: true,
     fetch: () =>
-      fetchJson(process.env["FITNESSFORGE_SUMMARY_URL"] ?? "https://cwh2023.synology.me/fitness/api/public/summary"),
+      fetchJson(
+        process.env["FITNESSFORGE_SUMMARY_URL"] ?? "https://cwh2023.synology.me/fitness/api/public/summary",
+        undefined,
+        process.env["FITNESSFORGE_SUMMARY_KEY"],
+      ),
   },
   {
     id: "vikunja",
