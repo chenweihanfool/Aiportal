@@ -12,7 +12,7 @@ import { DIMENSIONS } from './dimensions'
 import { useAsync, useNow } from './homeHooks'
 import { DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
 import {
-  EXPECTED_EVERY_MIN, badFeedNames, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
+  EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
   oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus, type DimSeries,
 } from './homeView'
 
@@ -56,6 +56,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const trips = useAsync(pw, apiFetchTrips)
   const pipeline = useAsync(pw, apiFetchBoardPipeline)
   const status = useAsync(pw, apiFetchBoardStatus)
+  const pushers = status.data?.pushers
   const usage = useAsync(pw, apiFetchUsage)
 
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
@@ -87,13 +88,13 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const kb = useMemo(() => knowledgeStats(kbData?.metrics), [kbData])
   const kbSt = blockState({
     unlocked: on, loading: graph.loading, error: graph.error, hasData: !!kbData, empty: !!kbData && !kbData.metrics, nowMs,
-    updatedAtMs: kbData?.computedAt ? Date.parse(kbData.computedAt) : null, expectedEveryMin: EXPECTED_EVERY_MIN.graph,
+    updatedAtMs: kbData?.computedAt ? Date.parse(kbData.computedAt) : null, expectedEveryMin: dataEveryMinFor(pushers, 'hermes-graph', EXPECTED_EVERY_MIN.graph),
   })
   const ideasList = ideas.data
   const ideaTop = useMemo(() => (ideasList ? pickTopIdeas(ideasList.ideas, ideasList.top) : []), [ideasList])
   const ideasSt = blockState({
     unlocked: on, loading: ideas.loading, error: ideas.error, hasData: !!ideasList, empty: !!ideasList && (!ideasList.available || ideaTop.length === 0), nowMs,
-    expectedEveryMin: EXPECTED_EVERY_MIN.ideas,
+    expectedEveryMin: dataEveryMinFor(pushers, 'hermes-ideas', EXPECTED_EVERY_MIN.ideas),
   })
   const places = food.data?.places ?? []
   const wantInfo = useMemo(() => oldestWantPlace(places, now), [places, now])
@@ -105,7 +106,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const trip = useMemo(() => latestTrip(tripList), [tripList])
   const tripsSt = blockState({
     unlocked: on, loading: trips.loading, error: trips.error, hasData: !!trips.data, empty: !!trips.data && !trip, nowMs,
-    expectedEveryMin: EXPECTED_EVERY_MIN.trips,
+    expectedEveryMin: dataEveryMinFor(pushers, 'hermes-trips', EXPECTED_EVERY_MIN.trips),
   })
 
   // ── ① 的趨勢說明與那一句話 ──

@@ -447,6 +447,21 @@ export const EXPECTED_EVERY_MIN = {
   trips: null,
 } as const
 
+/**
+ * 資料新舊的預期間隔：優先用推送端那張表的 `dataEveryMin`（kb-pipeline `portal_push.DATA_EVERY_MIN`，單一來源），
+ * 推送端沒帶（舊版）或沒有這筆時退回 `fallback`（上面 EXPECTED_EVERY_MIN 的內建值）。
+ * 推送端明確回 null＝有變動才送，就不判斷（不退回預設）。
+ */
+export function dataEveryMinFor(
+  pushers: ReadonlyArray<{ feed: string; dataEveryMin?: number | null }> | null | undefined,
+  feed: string,
+  fallback: number | null,
+): number | null {
+  const hit = pushers?.find((p) => p.feed === feed)
+  if (!hit || hit.dataEveryMin === undefined) return fallback
+  return hit.dataEveryMin
+}
+
 /** 一段時間的長度：<60 分用分鐘，<48 小時用小時，其餘用天（「已 3 天沒有更新」的「3 天」） */
 export function formatDuration(min: number): string {
   if (min < 60) return `${Math.max(1, Math.round(min))} 分鐘`

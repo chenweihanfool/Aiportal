@@ -14,6 +14,8 @@ export interface PusherHealth {
   lastError: string | null;
   ageMin: number | null;
   expectedEveryMin: number | null;
+  /** 資料自己多久沒更新才算舊（分）；null＝有變動才送、不判斷；舊版 pusher 沒帶這欄＝undefined（前端用內建預設） */
+  dataEveryMin?: number | null;
   bytes: number | null;
   okCount: number;
   failCount: number;

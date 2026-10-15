@@ -17,4 +17,16 @@ describe("parsePushers", () => {
     expect(r[1]!.level).toBe("warn")
     expect(r[1]!.lastError).toHaveLength(200)
   })
+  it("dataEveryMin：有帶就保留（含 null＝有變動才送）；沒帶（舊 pusher）就不出現這個鍵", () => {
+    const r = parsePushers([
+      { feed: "hermes-graph", dataEveryMin: 120 },
+      { feed: "hermes-trips", dataEveryMin: null },
+      { feed: "hermes-usage" },
+      { feed: "hermes-doc", dataEveryMin: "bad" },
+    ])!
+    expect(r[0]!.dataEveryMin).toBe(120)
+    expect(r[1]).toHaveProperty("dataEveryMin", null)
+    expect(r[2]).not.toHaveProperty("dataEveryMin")
+    expect(r[3]!.dataEveryMin).toBeNull()
+  })
 })

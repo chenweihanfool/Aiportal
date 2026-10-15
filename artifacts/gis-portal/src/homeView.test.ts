@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addDays, ageText, badFeedNames, blockState, buildHeatmap, dimensionLine, formatAge, formatDuration, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats,
+  addDays, ageText, badFeedNames, blockState, dataEveryMinFor, EXPECTED_EVERY_MIN, buildHeatmap, dimensionLine, formatAge, formatDuration, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats,
   dimensionSeries, hhiRecordedDays, latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
   sparkGeometry, type BlockInput, type SystemLightInput,
 } from './homeView'
@@ -677,5 +677,19 @@ describe('ageText / badFeedNames', () => {
     const rows = [{ feed: 'a', level: 'ok' }, { feed: 'hermes-usage', level: 'crit' }, { feed: 'zzz', level: 'warn' }] as PusherHealth[]
     expect(badFeedNames(rows, (f) => (f === 'hermes-usage' ? 'Ollama 用量' : f))).toEqual(['Ollama 用量', 'zzz'])
     expect(badFeedNames(null, (f) => f)).toEqual([])
+  })
+})
+
+describe('dataEveryMinFor（新鮮度判準合併：推送端那張表優先）', () => {
+  it('推送端有帶就用它；明確 null＝有變動才送，不退回預設', () => {
+    const pushers = [{ feed: 'hermes-graph', dataEveryMin: 90 }, { feed: 'hermes-trips', dataEveryMin: null }]
+    expect(dataEveryMinFor(pushers, 'hermes-graph', 120)).toBe(90)
+    expect(dataEveryMinFor(pushers, 'hermes-trips', 999)).toBeNull()
+  })
+  it('舊版推送端沒帶、找不到這筆、沒有推送資料，都退回內建預設', () => {
+    expect(dataEveryMinFor([{ feed: 'hermes-graph' }], 'hermes-graph', 120)).toBe(120)
+    expect(dataEveryMinFor([{ feed: 'hermes-graph', dataEveryMin: 90 }], 'hermes-ideas', null)).toBeNull()
+    expect(dataEveryMinFor(undefined, 'hermes-graph', 120)).toBe(120)
+    expect(dataEveryMinFor(null, 'hermes-graph', EXPECTED_EVERY_MIN.graph)).toBe(120)
   })
 })
