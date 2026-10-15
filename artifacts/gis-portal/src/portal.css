@@ -539,3 +539,28 @@ button.bd-hrow:hover, button.bd-hrow:focus-visible { background: rgba(255,255,25
   .fm-list { overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) { .fm-pulse { animation: none; } .fm-row, .fm-thumb img { transition: none; } }
+
+/* ── 🧳 遊記（#trips，2026-10-15）── */
+.tr-body { flex: 1; min-height: 0; overflow: auto; padding: 0.9rem 1.2rem 1.6rem; }
+.tr-wrap { max-width: 1040px; margin: 0 auto; }
+.tr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.8rem; }
+.tr-card { display: flex; flex-direction: column; min-width: 0; background: #1a1c22; border: 1px solid #3a3d47; border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; transition: border-color 0.15s, background 0.15s; }
+.tr-card:hover, .tr-card:focus-visible { background: #24262e; border-color: #565a68; }
+.tr-cover, .tr-cover-ph { width: 100%; aspect-ratio: 16 / 9; display: block; object-fit: cover; background: #222; }
+.tr-cover-ph { display: grid; place-items: center; font-size: 2rem; background: linear-gradient(135deg, rgba(245, 166, 35, 0.32), rgba(47, 128, 255, 0.26)); }
+.tr-card-body { padding: 0.75rem 0.9rem 0.85rem; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.tr-detail { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.1rem; }
+.tr-map { height: 300px; }
+.tr-map .fm-map { height: 300px; }
+.tr-day { border-top: 1px solid #3a3d47; padding-top: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.tr-entries { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.tr-entry { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 0.7rem; align-items: start; }
+.tr-time { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; color: #9aa4b6; padding-top: 2px; }
+.tr-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.86rem; line-height: 1.75; color: #e6e8ee; }
+.tr-page .fm-gallery { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+@media (max-width: 560px) {
+  .tr-body { padding: 0.8rem 16px 1.4rem; }
+  .tr-entry { grid-template-columns: 44px minmax(0, 1fr); gap: 0.55rem; }
+  .tr-time { font-size: 0.74rem; }
+}
+@media (prefers-reduced-motion: reduce) { .tr-card { transition: none; } }

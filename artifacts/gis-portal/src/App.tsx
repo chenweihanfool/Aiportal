@@ -10,6 +10,7 @@ import { AccountBadge } from './AuthGate'
 import { VersionHistoryDialog } from './VersionHistoryDialog'
 import { DesktopBoard } from './DesktopBoard'
 import { FoodMapView } from './FoodMapView'
+import { TripsView } from './TripsView'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -24,6 +25,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.34.0',
+    date: '2026-10-15',
+    summary: '新增「📖 遊記」頁：每趟旅行的每日紀錄（日記原文＋相片）',
+    changes: [
+      '新增遊記頁（網址 #trips，或按 ⌘K／Ctrl+K 輸入「遊記」）：列表每趟一張卡，顯示封面、名稱、日期、天數、條目與相片數，狀態標籤為計畫中／進行中／已結束。',
+      '點進一趟（#trips/<id>）：上方有這趟的小地圖（只標這趟去過的地點）與統計，下面依天數分段，每天依時間列出條目——左邊時間、右邊日記原文（保留換行，純文字），相片可放大檢視；有相片還沒有網址的顯示「處理中」。',
+      '資料來源是知識庫的 /api/hermes-trips（解鎖後才讀，權威資料在 HERMES 端，入口網只顯示、不寫入）；沒解鎖、沒資料或讀取失敗時退回示範趟次並標「示範資料」。相片檔案的儲存與提供還沒做，目前只收網址。',
+      '美食地圖頁頁首新增「📖 遊記」按鈕，遊記頁頁首可回到美食地圖。格式與推送方式見 docs/trips-api.md。',
+    ],
+  },
   {
     version: '2.33.1',
     date: '2026-10-15',
@@ -3340,6 +3352,11 @@ function InstrumentPanelView({
 // 多發一次通常用不到的請求，改成 RelationshipUniverse.tsx 自己接
 // ⌘K/Ctrl+K 去 focus 它既有的搜尋框（見該檔案）。
 // ─────────────────────────────────────────────
+/** #trips/<id> 的 id（網址編碼還原；格式壞掉就當作找不到） */
+function tripIdFromHash(hash: string): string {
+  try { return decodeURIComponent(hash.slice('#trips/'.length)) } catch { return hash.slice('#trips/'.length) }
+}
+
 function CommandPalette({
   sites,
   unlocked,
@@ -3383,6 +3400,8 @@ function CommandPalette({
   const showGraphShortcut = q.length === 0 || graphKeywords.some(k => k.toLowerCase().includes(q) || q.includes(k))
   const foodKeywords = ['美食', '吃', '餐廳', '地圖', '旅遊', '附近', 'food']
   const showFoodShortcut = q.length === 0 || foodKeywords.some(k => k.includes(q) || q.includes(k))
+  const tripKeywords = ['遊記', '旅遊', '行程', 'trip']
+  const showTripsShortcut = q.length === 0 || tripKeywords.some(k => k.includes(q) || q.includes(k))
 
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0.9rem',
@@ -3425,6 +3444,16 @@ function CommandPalette({
             >
               <span style={{ color: COLOR.amber }}>🍜</span>
               <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>美食及旅遊地圖（原型・示範資料）</span>
+              <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
+            </div>
+          )}
+          {showTripsShortcut && (
+            <div
+              onClick={() => { window.location.hash = 'trips'; setOpen(false) }}
+              style={{ ...rowStyle, background: 'rgba(245,166,35,0.05)' }}
+            >
+              <span style={{ color: COLOR.amber }}>📖</span>
+              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>遊記（每日紀錄・示範資料）</span>
               <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
             </div>
           )}
@@ -3546,6 +3575,13 @@ export default function App() {
   // 美食地圖（2026-10-15）：解鎖後讀知識庫的地點（/api/hermes-places），沒有資料才退回示範資料；入口見首頁按鈕與 ⌘K 輸入「美食」。
   if (hashRoute === '#food') {
     return <FoodMapView onBack={() => { window.location.hash = '' }} unlockedPassword={unlockedPassword} />
+  }
+  // 遊記（2026-10-15）：#trips 列表、#trips/<id> 單趟；兩者同一個元件，切換時不重抓資料
+  if (hashRoute === '#trips') {
+    return <TripsView tripId={null} unlockedPassword={unlockedPassword} />
+  }
+  if (hashRoute.startsWith('#trips/')) {
+    return <TripsView tripId={tripIdFromHash(hashRoute)} unlockedPassword={unlockedPassword} />
   }
 
   return (

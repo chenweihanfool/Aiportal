@@ -7,6 +7,7 @@ import {
 } from './foodMap'
 import { sampleFoodData } from './foodSample'
 import { FoodMapGL } from './FoodMapGL'
+import { PhotoGallery } from './PhotoGallery'
 import { useGeolocation } from './useGeolocation'
 import { apiFetchFood, formatReceivedAt } from './foodApi'
 
@@ -116,43 +117,6 @@ function FoodMapCanvas({ places, selected, onSelect }: { places: FoodPlace[]; se
   )
 }
 
-function Gallery({ p }: { p: FoodPlace }) {
-  const [open, setOpen] = useState<number | null>(null)
-  useEffect(() => { setOpen(null) }, [p.id])
-  useEffect(() => {
-    if (open === null) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopImmediatePropagation(); setOpen(null) }
-      else if (e.key === 'ArrowRight') setOpen(i => (i === null ? i : (i + 1) % p.photos.length))
-      else if (e.key === 'ArrowLeft') setOpen(i => (i === null ? i : (i - 1 + p.photos.length) % p.photos.length))
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [open, p.photos.length])
-  if (p.photos.length === 0) return null
-  const cur = open !== null ? p.photos[open] : null
-  return (
-    <>
-      <div className="fm-gallery" aria-label={`${p.name} 的相片`}>
-        {p.photos.map((ph, i) => (
-          <button key={ph.url} type="button" className="fm-thumb" onClick={() => setOpen(i)} aria-label={`放大第 ${i + 1} 張相片`}>
-            <img src={ph.thumb ?? ph.url} alt={ph.caption ?? `${p.name} 相片 ${i + 1}`} loading="lazy" decoding="async" />
-          </button>
-        ))}
-      </div>
-      {cur && (
-        <div className="fm-lightbox" role="dialog" aria-modal="true" aria-label="相片檢視" onClick={() => setOpen(null)}>
-          <img src={cur.url} alt={cur.caption ?? p.name} onClick={e => e.stopPropagation()} />
-          <div className="fm-lightbox-cap" onClick={e => e.stopPropagation()}>
-            {cur.caption ?? p.name}{cur.takenAt ? ` · ${cur.takenAt}` : ''} · {open! + 1}/{p.photos.length}
-            <button type="button" onClick={() => setOpen(null)} style={{ marginLeft: 12, ...pill(false, COLOR.steel) }}>關閉</button>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
-
 function PlaceDetail({ p, now, meters }: { p: FoodPlace; now: Date; meters: number | null }) {
   const [note, setNote] = useState('')
   const [rating, setRating] = useState<number | null>(p.rating)
@@ -176,7 +140,7 @@ function PlaceDetail({ p, now, meters }: { p: FoodPlace; now: Date; meters: numb
         {[p.area, p.cuisine, priceLabel(p.priceLevel)].filter(Boolean).join(' · ')}
         {p.status === 'want' ? ` · ${statusLabelFor(p.kind, 'want')} ${wantDays} 天了` : p.visitedAt ? ` · ${p.visitedAt} 去過 · ${stars(p.rating)}` : ''}
       </div>
-      <Gallery p={p} />
+      <PhotoGallery photos={p.photos} label={p.name} resetKey={p.id} />
       {p.why && <div style={{ fontSize: '0.76rem', color: COLOR.ink, lineHeight: 1.6 }}>💭 {p.why}{p.source ? <span style={{ color: COLOR.steelDim }}>（{p.source}）</span> : null}</div>}
       {p.mustTry.length > 0 && <div style={{ fontSize: '0.74rem', color: COLOR.steel }}>👉 必點：{p.mustTry.join('、')}</div>}
       <div style={{ fontSize: '0.68rem', color: COLOR.steelDim }}>出現在日記：{p.days.join('、') || '—'}{p.mapUrl && <> · <a href={p.mapUrl} target="_blank" rel="noopener noreferrer" style={{ color: COLOR.amberDim }}>地圖連結 ↗</a></>}</div>
@@ -298,6 +262,8 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp, unlockedPass
       <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}`, flexWrap: 'wrap' }}>
         <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
         <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
+        <a href="#trips" data-testid="food-to-trips" onClick={e => { e.preventDefault(); window.location.hash = 'trips' }}
+          style={{ ...pill(false, COLOR.amberDim), textDecoration: 'none' }}>📖 遊記</a>
         {isSample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
         {src.note && <span data-testid="food-source-note" style={{ fontSize: '0.66rem', color: COLOR.steelDim }}>{src.note}</span>}
         {receivedLabel && <span data-testid="food-received" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>資料：{receivedLabel}</span>}
