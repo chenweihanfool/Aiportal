@@ -169,6 +169,13 @@
       "when": 1792064708604,
       "tag": "0023_tranquil_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792108061163,
+      "tag": "0024_dazzling_payback",
+      "breakpoints": true
     }
   ]
 }
