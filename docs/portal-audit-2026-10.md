@@ -355,11 +355,7 @@
 - **詳細卡**：為什麼想吃（＋來源）、必點、出現在日記的日期（可回溯原始紀錄）、地圖連結；評分星星＋補充說明＋「改成去過、愛店、不再去」按鈕，按下後複製一句話給 HERMES。
 - **手機**（<860px）：統計 2 欄、地圖在上（56vh）、清單在下。
 - **首頁入口**（P1）：§2.6 ④「下一家想吃」小卡：想吃最久、或離最近一次旅遊目的地最近的一家。
-- **正式版地圖底圖**【需決定】：
-  - (a) Leaflet＋OpenStreetMap 圖磚：免費，但要遵守 OSM 使用政策，且圖磚請求會透露你在看哪一區；
-  - (b) MapLibre＋自架或付費向量圖磚；
-  - (c) 維持無底圖示意（目前）。
-  - 選 (a) 或 (b) 都要確認 `gis-portal/nginx.conf` 的 CSP 是否允許外部圖磚網域，屬於部署設定。
+- **正式版地圖底圖**（使用者 2026-10-15：「美食地圖要底圖」，已決定要有）：選型見 §4.6。repo 內的 `gis-portal/nginx.conf` 沒有 CSP 設定；VPS 前面的反向代理有沒有，需 HERMES 唯讀確認（屬部署設定）。
 
 ### 4.5 AdventureLog 整合評估
 
@@ -388,6 +384,64 @@
 **建議：B**。第一階段先做 C 的部分（自建），同步「去過」到 AdventureLog 放在 P2，等使用者確認想在 AdventureLog 上看到美食再做。【需決定】
 
 ---
+
+### 4.6 自建「地點」webapp（類似 pf-cwh）可行性
+
+使用者 2026-10-15：「我其實在vps有架Adventurelog 但感覺用處不大 吃ram又多 這次新增美食地圖 幫我評估自建類似pf-cwh這樣的webapp整合旅遊美食及知識庫地點主題可行性」。
+
+**結論：可行，且比維持 AdventureLog 划算。建議做成「入口網的一個頁面＋api-server 的一組路由」，而不是第六個獨立 webapp。**
+
+**為什麼不另開像 pf-cwh 的獨立 app**：pf-cwh 是 Vite＋Express＋Drizzle＋Postgres＋Google OAuth＋Apache 子路徑（`/pf`）＋獨立容器，維運面很大（登入、session、子路徑、自己的部署流程）。地點資料沒有「別人也要登入」的需求，也沒有獨立的外部資料源要爬。入口網已經有 api-server、Postgres、登入與 `gis-portal`，多一個 app 只會多一份部署與備份。
+
+**資料模型（單一 `places` 表，旅遊與美食共用）**
+
+| 欄位 | 說明 |
+|---|---|
+| id、name、aliases[] | 名稱與別名（日記裡的叫法） |
+| kind | `food` / `sight` / `stay` / `other` |
+| status | `want` / `been` / `fav` / `avoid`（美食用全部；旅遊用 want/been） |
+| lat、lng、map_url、address_hint | 座標優先從地圖連結解析；沒座標也能列入清單 |
+| tags[]、area、rating、must_try、why_want、source | 與 §4.2 日記格式一致 |
+| first_seen_at、visited_at、diary_refs[] | 回溯到日記（目標 1：來源可回溯） |
+| trip_id（選用） | 旅遊群組，取代 AdventureLog 的 collection |
+
+不需要 PostGIS：個人規模（數百到數千筆）用 `lat/lng` 欄位加前端篩選就夠，「離某點最近」用球面距離公式在 api-server 算即可。
+
+**資料流（知識庫是權威來源）**：日記 → 確定性萃取器（比照 ideas，抽 `### HH:MM 🍜 店名` 與旅遊地點段落，不新增模型呼叫）→ 推送到 api-server `POST /api/places/sync`（冪等，以 name＋日記 id 去重）→ 入口網讀 `GET /api/places`。入口網只讀，要改狀態仍走「複製一句話給 HERMES」（原型已有），保持單向、可回溯。這與現有 ideas 管線同一模式，HERMES 已經會做。
+
+**RAM 比較（估計，未實測）**
+
+| 項目 | AdventureLog（現況） | 自建 |
+|---|---|---|
+| 組成 | Django＋SvelteKit＋PostGIS＋Memcached（官方 compose 約 4 個容器） | 多一組路由，沿用既有 api-server 容器與 Postgres |
+| 常駐 RAM | 約 2 GB（本報告 §4.5 的估計；使用者回報「吃 RAM 多」） | 約 0（路由在既有行程內）；底圖若自架 PMTiles 只是靜態檔 |
+| 可以釋放 | 停掉 AdventureLog 的 VPS 實例後釋放該 2 GB | — |
+
+**底圖選型**（要底圖，已決定）
+
+| 方案 | 做法 | 優點 | 缺點 |
+|---|---|---|---|
+| **A（建議）自架 PMTiles＋MapLibre** | 台灣（或東亞）區域的 PMTiles 單一檔案放在 gis-portal 的靜態目錄，MapLibre GL 以 `pmtiles://` 讀取（nginx 要支援 Range 請求） | 不依賴外部服務、不洩漏你在看哪一區、不吃 RAM、離線可用、無 CSP 外部網域問題 | 檔案約數百 MB 到 GB 等級（**未實測，需要實際下載區域擷取後確認**）；要選樣式（可用 Protomaps 的開源樣式）；字型與圖示要一併自架 |
+| B 快速起步：MapLibre＋公開向量圖磚服務 | 直接指到公開的免費向量圖磚（例如 OpenFreeMap） | 半小時可看到底圖 | 外部依賴與請求會透露檢視區域；服務條款與穩定性要另外確認；需放行該網域 |
+| C Leaflet＋OSM 官方圖磚 | 傳統做法 | 最簡單 | OSM 官方圖磚有使用政策，不保證供個人入口網長期使用；同樣洩漏檢視區域 |
+| D 現在的無底圖 SVG | 已完成 | 零依賴 | 使用者已明確要底圖 |
+
+**建議路線**：先用 B 把互動做出來（確認 UI 與標記樣式），再換 A 當正式版（同一個 MapLibre 元件，只換 source）。換 A 需要的部署動作（把 PMTiles 檔放到伺服器、nginx 支援 Range）交給 HERMES，且要使用者放行。
+
+**工作量與風險**
+
+| 項目 | 工作量 | 風險 |
+|---|---|---|
+| `places` 表與 sync／讀取路由（含測試） | 中 | 低：沿用 ideas 模式 |
+| 前端把 SVG 地圖換成 MapLibre（保留篩選、清單、詳細卡） | 中 | 低：純函式與狀態不變，只換渲染 |
+| 萃取器與日記格式 | 中 | 中：要先看 HERMES 盤點的實際格式（等回報） |
+| 既有旅遊資料（AdventureLog）遷移 | 小到中 | 中：先匯出 `/api/locations/` 與 `/api/visits/`，核對再匯入 |
+| 停用 AdventureLog | 小 | 中：入口網旅遊維度（幸福指數權重 12%）目前讀它，需先改成讀 `places`／visits 後才能關 |
+| 地圖定位與標記量 | — | 低：數千點以內 MapLibre 無壓力 |
+
+**不建議做的**：自建行程規劃、預算、協作、ICS 匯出等 AdventureLog 的功能。若用到的是這些，才有理由保留它；使用者說「用處不大」，所以排除。
+
+**【需決定】**：(1) 底圖走 A（自架）還是先 B 再 A；(2) 是否要把旅遊資料也遷進 `places` 並停用 AdventureLog（會影響幸福指數的旅遊維度讀取來源）；(3) 地點萃取器等 HERMES 盤點回報後再定格式。
 
 ## 5. 分階段路線圖
 
