@@ -25,6 +25,14 @@ const UNLOCK_KEY = 'portal_unlocked'
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
   {
+    version: '2.33.1',
+    date: '2026-10-15',
+    summary: '首頁加上「美食及旅遊地圖」入口（手機在頁首、電腦在左側欄最上面）',
+    changes: [
+      '修正：2.33.0 的美食及旅遊地圖只能用 ⌘K 或手動輸入 #food 進入，手機上看不到入口；現在手機版的頁首有一顆「🍜🧭 美食及旅遊地圖 →」按鈕，電腦版左側欄最上面（工具連結上方）有一張入口卡。',
+    ],
+  },
+  {
     version: '2.33.0',
     date: '2026-10-15',
     summary: '美食及旅遊地圖原型（示範資料）：真底圖、相片、附近由近到遠',
@@ -2728,6 +2736,46 @@ function SwitchTile({ site, unlocked, onSelect, showSubtitle = false }: { site: 
   )
 }
 
+// 首頁入口：美食及旅遊地圖（#food）。之前只有 ⌘K 能進，手機沒有這個鍵，首頁上看不到。
+function FoodMapPill() {
+  return (
+    <a
+      href="#food"
+      className="fm-entry-pill"
+      data-testid="food-entry-pill"
+      onClick={e => { e.preventDefault(); window.location.hash = 'food' }}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none', cursor: 'pointer',
+        padding: '0.35rem 0.8rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700,
+        background: 'rgba(245,166,35,0.14)', border: `1px solid ${COLOR.amberDim}`, color: COLOR.amber, whiteSpace: 'nowrap',
+      }}
+    >🍜🧭 美食及旅遊地圖 →</a>
+  )
+}
+
+function FoodMapEntry() {
+  return (
+    <a
+      href="#food"
+      data-testid="food-entry"
+      onClick={e => { e.preventDefault(); window.location.hash = 'food' }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '0.9rem', textDecoration: 'none', cursor: 'pointer',
+        padding: '0.85rem 1rem', marginBottom: '1.1rem', borderRadius: '8px',
+        background: 'linear-gradient(135deg, rgba(245,166,35,0.14), rgba(47,128,255,0.10))',
+        border: `1px solid ${COLOR.amberDim}`, color: COLOR.ink,
+      }}
+    >
+      <span aria-hidden style={{ fontSize: '1.15rem', lineHeight: 1, letterSpacing: '-0.1em' }}>🍜🧭</span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: 0, flex: 1 }}>
+        <b style={{ fontSize: '0.92rem', color: COLOR.amber, whiteSpace: 'nowrap' }}>美食及旅遊地圖</b>
+        <span style={{ fontSize: '0.72rem', color: COLOR.steel, lineHeight: 1.5 }}>想吃、想去的地方都在這 · 📍 找附近由近到遠</span>
+      </span>
+      <span aria-hidden style={{ color: COLOR.amber, fontSize: '1.1rem' }}>→</span>
+    </a>
+  )
+}
+
 function ToolLinksZone({
   privateSites,
   publicSites,
@@ -3233,6 +3281,7 @@ function InstrumentPanelView({
           </span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+          <FoodMapPill />
           <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, textAlign: 'right', lineHeight: 1.6 }}>
             {sites.length > 0 ? `${sites.length} PORTALS AVAILABLE` : 'CONNECTING...'}
           </div>
@@ -3244,6 +3293,7 @@ function InstrumentPanelView({
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
         <div className="ip-layout">
           <aside className="ip-aside">
+        <FoodMapEntry />
         <ToolLinksZone privateSites={privateSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
 
           </aside>
