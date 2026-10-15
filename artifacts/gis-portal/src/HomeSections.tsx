@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { COLOR } from './theme'
 import type { HhiBreakdown } from './boardView'
 import type { IdeaItem } from './boardApi'
@@ -9,7 +9,7 @@ import { DIMENSION_FALLBACK_COLOR, dimensionOf } from './homeDimensions'
 import { useCountUp } from './homeHooks'
 import { Skeleton, StateFrame } from './StateFrame'
 import {
-  dimensionLine, type BlockStatus, type DayPart, type Heatmap, type HhiTrend, type KnowledgeStats, type LatestTrip, type MilestoneSummary,
+  dimensionLine, sparkGeometry, type BlockStatus, type DayPart, type DimSeries, type Heatmap, type HhiTrend, type KnowledgeStats, type LatestTrip, type MilestoneSummary,
   type SystemLight, type YearProgress,
 } from './homeView'
 import { biggestDrag } from './boardView'
@@ -84,29 +84,62 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
 }
 
 // ── ② 六個面向 ────────────────────────────────
-export function DimensionsSection({ st, breakdown, onOpen, onRequestUnlock }: {
+const SPARK_W = 100
+const SPARK_H = 24
+const SPARK_PAD = 3
+/** 30 天迷你線：顏色用面向的識別色（父層 --dim）、沒資料的日子斷線、終點一個點、最後一個值與前一天的差（ ▲ 變好／▼ 變差；分數越高越好） */
+function DimSpark({ series }: { series: DimSeries }) {
+  const g = useMemo(() => sparkGeometry(series), [series])
+  const px = (p: { x: number; y: number }) => ({ x: p.x * SPARK_W, y: SPARK_PAD + p.y * (SPARK_H - 2 * SPARK_PAD) })
+  const pct = (p: { x: number; y: number }) => ({ left: `${p.x * 100}%`, top: `${((SPARK_PAD + p.y * (SPARK_H - 2 * SPARK_PAD)) / SPARK_H) * 100}%` })
+  const d = series.delta
+  return (
+    <span className="hm-dim-spark" role="img"
+      aria-label={`近 ${series.days.length} 天走勢，${series.validCount} 天有資料，最新 ${Math.round(series.last.value)} 分${d === null ? '' : d === 0 ? '，與前一天持平' : d > 0 ? `，比前一天高 ${d} 分` : `，比前一天低 ${-d} 分`}`}>
+      <span className="hm-spark">
+        <svg viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden focusable="false">
+          {g.lines.map((l, i) => <polyline key={i} className="hm-spark-line" fill="none" vectorEffect="non-scaling-stroke" points={l.map((p) => { const q = px(p); return `${q.x.toFixed(2)},${q.y.toFixed(2)}` }).join(' ')} />)}
+        </svg>
+        {g.dots.map((p, i) => <i key={i} className="hm-spark-dot" style={pct(p)} />)}
+        <i className="hm-spark-end" style={pct(g.end)} />
+      </span>
+      {d !== null && (
+        <span className="hm-spark-delta" style={{ color: d > 0 ? COLOR.ok : d < 0 ? COLOR.concern : COLOR.steelDim }} title="最後一個值與前一天的差">
+          {d > 0 ? `▲ ${d}` : d < 0 ? `▼ ${-d}` : '— 0'}
+        </span>
+      )}
+    </span>
+  )
+}
+
+export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlock }: {
   st: BlockStatus
   breakdown: HhiBreakdown | null
+  /** 每面向的 30 天序列；null（還沒載入／接口沒有 components／有效點不到 2 個）＝不畫線，只留數值條 */
+  series: Record<string, DimSeries | null> | null
   onOpen: () => void
   onRequestUnlock: () => void
 }) {
   const drag = breakdown ? biggestDrag(breakdown.rows) : null
+  const anySpark = !!series && Object.values(series).some((x) => x !== null)
   const ghost = <div className="hm-dims">{Array.from({ length: 6 }, (_, i) => <div key={i} className="hm-dim hm-dim--ghost"><Skeleton lines={2} /></div>)}</div>
   return (
     <section className="hm-card hm-dimsec" aria-label="六個面向">
-      <Head no="②" title="六個面向" right={<span className="hm-hide-sm" title="/api/happiness/history 只回總分，沒有每個面向的歷史，所以不畫迷你線，先用數值條">各面向歷史還沒有資料來源，先以數值條呈現</span>} />
+      <Head no="②" title="六個面向" right={anySpark ? <span className="hm-hide-sm">細線＝近 30 天</span> : undefined} />
       <StateFrame status={st} source="幸福指數" skeleton={ghost} onRequestUnlock={onRequestUnlock} empty="六個面向還沒有資料。">
         <div className="hm-dims">
           {breakdown?.rows.map((r) => {
             const meta = dimensionOf(r.key)
             const color = meta?.color ?? DIMENSION_FALLBACK_COLOR
             const isDrag = drag?.key === r.key
+            const sp = series?.[r.key] ?? null
             return (
-              <button key={r.key} type="button" className={`hm-dim${isDrag ? ' is-drag' : ''}`} style={{ ['--dim' as string]: color }} onClick={onOpen}
+              <button key={r.key} type="button" className={`hm-dim${isDrag ? ' is-drag' : ''}${sp ? ' has-spark' : ''}`} style={{ ['--dim' as string]: color }} onClick={onOpen}
                 aria-label={`${meta?.label ?? r.label} ${r.value ?? '沒有資料'}，點開看詳情`}>
                 <span className="hm-dim-name"><span aria-hidden>{meta?.icon ?? '◆'}</span>{meta?.label ?? r.label}{isDrag && <span className="hm-chip hm-chip--warn">短板</span>}</span>
                 <span className="hm-dim-num">{r.value ?? '—'}</span>
                 <span className="hm-dim-bar" aria-hidden><i style={{ width: `${r.value === null ? 0 : Math.max(2, r.value)}%` }} /></span>
+                {sp && <DimSpark series={sp} />}
                 <span className="hm-dim-foot">
                   <span className="hm-dim-sub">權重 {r.weightPct}%・貢獻 {r.points !== null ? `${r.points.toFixed(1)} 分` : '—'}</span>
                   <span className="hm-dim-line">{dimensionLine(r, isDrag)}</span>

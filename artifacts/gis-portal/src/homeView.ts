@@ -276,6 +276,100 @@ export function milestones(i: MilestoneInput): MilestoneSummary {
   return { badges: badges.slice(0, MILESTONE_MAX_BADGES), next }
 }
 
+// ── ② 面向小卡的 30 天迷你線（2026-10-15）──
+// 資料：/api/happiness/history?days=30 每筆選填 components（key 同 homeDimensions，值＝當天面向卡的正規化分數 0–100，null＝當天沒資料）。
+// 後端接口還沒部署：欄位缺、形狀不對、有效點少於 2 個，一律回 null，呼叫端維持原本的數值條，不顯示任何錯誤。
+export const SPARK_DAYS = 30
+export interface DimPoint { date: string; value: number | null }
+export interface DimSeries {
+  key: string
+  /** 近 SPARK_DAYS 天（舊→新，最後一天＝今天），沒有資料的日子 value 是 null */
+  days: DimPoint[]
+  /** 連續有值的區段（idx＝days 的索引）；沒資料的日子斷線，不補 0 */
+  segments: Array<Array<{ idx: number; value: number }>>
+  validCount: number
+  /** 最後一個有值的日子 */
+  last: { idx: number; date: string; value: number }
+  /** 最後一個值與前一天的差（兩者取整後相減）；前一天沒資料就是 null。這個分數越高越好，所以 ＞0＝變好 */
+  delta: number | null
+}
+const clamp100 = (v: number) => Math.min(100, Math.max(0, v))
+
+/** 把 history 轉成某個面向的 30 天序列。history 的順序不拘（會依日期排）；視窗外的日期忽略；值夾在 0–100；有效點少於 2 個回 null */
+export function dimensionSeries(
+  history: ReadonlyArray<{ date: string; components?: Record<string, number | null> | null }> | null | undefined,
+  key: string, todayIso: string, nDays = SPARK_DAYS,
+): DimSeries | null {
+  if (!Array.isArray(history) || nDays < 2) return null
+  const start = addDays(todayIso, -(nDays - 1))
+  const byDate = new Map<string, number | null>()
+  for (const h of history) {
+    if (!h || typeof h.date !== 'string' || h.date < start || h.date > todayIso) continue
+    const c = h.components
+    if (!c || typeof c !== 'object' || Array.isArray(c)) continue
+    const v = c[key]
+    byDate.set(h.date, typeof v === 'number' && Number.isFinite(v) ? clamp100(v) : null)
+  }
+  const days: DimPoint[] = Array.from({ length: nDays }, (_, i) => {
+    const date = addDays(start, i)
+    return { date, value: byDate.get(date) ?? null }
+  })
+  const segments: DimSeries['segments'] = []
+  let cur: DimSeries['segments'][number] | null = null
+  let validCount = 0
+  let lastIdx = -1
+  days.forEach((d, idx) => {
+    if (d.value === null) { cur = null; return }
+    validCount += 1
+    lastIdx = idx
+    if (!cur) { cur = []; segments.push(cur) }
+    cur.push({ idx, value: d.value })
+  })
+  if (validCount < 2) return null
+  const last = days[lastIdx]!
+  const prev = lastIdx > 0 ? days[lastIdx - 1]!.value : null
+  return {
+    key, days, segments, validCount,
+    last: { idx: lastIdx, date: last.date, value: last.value! },
+    delta: prev === null ? null : Math.round(last.value!) - Math.round(prev),
+  }
+}
+
+export interface SparkGeometry {
+  /** 長度 ≥2 的區段，座標 0–1（x：舊→新；y：0＝最高、1＝最低） */
+  lines: Array<Array<{ x: number; y: number }>>
+  /** 孤立的單一點（前後一天都沒資料），畫成小點 */
+  dots: Array<{ x: number; y: number }>
+  /** 終點（最後一個有值的日子） */
+  end: { x: number; y: number }
+  lo: number
+  hi: number
+}
+/** 縱軸依這 30 天的最小／最大值縮放（至少 10 分寬，免得幾乎持平的線被放大成劇烈起伏），仍夾在 0–100 內 */
+export function sparkGeometry(series: DimSeries, minSpan = 10): SparkGeometry {
+  const vals = series.segments.flat().map((p) => p.value)
+  let lo = Math.min(...vals)
+  let hi = Math.max(...vals)
+  if (hi - lo < minSpan) {
+    const mid = (hi + lo) / 2
+    lo = mid - minSpan / 2
+    hi = mid + minSpan / 2
+    if (lo < 0) { hi -= lo; lo = 0 }
+    if (hi > 100) { lo -= hi - 100; hi = 100 }
+    lo = Math.max(0, lo)
+  }
+  const span = hi - lo
+  const nx = (idx: number) => idx / (series.days.length - 1)
+  const pt = (p: { idx: number; value: number }) => ({ x: nx(p.idx), y: 1 - (p.value - lo) / span })
+  const lines: SparkGeometry['lines'] = []
+  const dots: SparkGeometry['dots'] = []
+  for (const seg of series.segments) {
+    if (seg.length === 1) dots.push(pt(seg[0]!))
+    else lines.push(seg.map(pt))
+  }
+  return { lines, dots, end: pt({ idx: series.last.idx, value: series.last.value }), lo, hi }
+}
+
 // ── ④ 好玩的 ──────────────────────────────────
 /** 想吃／想去狀態裡最久的一個（依第一次出現在日記的日期）；沒有就是 null */
 export function oldestWantPlace(places: FoodPlace[], now: Date): { place: FoodPlace; days: number } | null {

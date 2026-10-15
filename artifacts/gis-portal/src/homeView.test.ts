@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   addDays, ageText, badFeedNames, blockState, buildHeatmap, dimensionLine, formatAge, formatDuration, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats,
-  hhiRecordedDays, latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
-  type BlockInput, type SystemLightInput,
+  dimensionSeries, hhiRecordedDays, latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
+  sparkGeometry, type BlockInput, type SystemLightInput,
 } from './homeView'
 import { buildHhiBreakdown, type HhiRow } from './boardView'
 import type { BoardPipeline, BoardStatus, HhiHistoryPoint, PusherHealth, UsageData } from './boardApi'
@@ -341,6 +341,122 @@ describe('hhiRecordedDays', () => {
     expect(hhiRecordedDays([])).toBe(0)
     expect(hhiRecordedDays([pt('2026-10-01', 60), pt('2026-10-01', 61), pt('2026-10-02', 62)])).toBe(2)
     expect(hhiRecordedDays([pt('2026-10-01', Number.NaN), pt('2026-10-02', 62)])).toBe(1)
+  })
+})
+
+describe('dimensionSeries（每面向 30 天迷你線）', () => {
+  const today = '2026-10-15'
+  const day = (back: number) => addDays(today, -back)
+  /** back 天前的一筆；value 可以是 null（那天面向沒資料） */
+  const h = (back: number, mind: number | null, extra: Record<string, number | null> = {}) => ({ date: day(back), components: { mind, ...extra } })
+  it('builds a 30-day window ending today, gaps are null', () => {
+    const s = dimensionSeries([h(3, 60), h(2, 62), h(0, 70)], 'mind', today)!
+    expect(s.days).toHaveLength(30)
+    expect(s.days[29]).toEqual({ date: today, value: 70 })
+    expect(s.days[0]!.date).toBe(day(29))
+    expect(s.days[28]!.value).toBeNull()
+    expect(s.validCount).toBe(3)
+    expect(s.last).toEqual({ idx: 29, date: today, value: 70 })
+  })
+  it('a gap in the middle splits the line instead of filling 0', () => {
+    const s = dimensionSeries([h(5, 50), h(4, 52), h(2, 60), h(1, 61), h(0, 62)], 'mind', today)!
+    expect(s.segments.map((g) => g.map((p) => p.value))).toEqual([[50, 52], [60, 61, 62]])
+    expect(s.days.filter((d) => d.value === 0)).toHaveLength(0)
+  })
+  it('delta = last value minus the day before (rounded values), colour decided by the caller', () => {
+    expect(dimensionSeries([h(1, 60), h(0, 63)], 'mind', today)!.delta).toBe(3)
+    expect(dimensionSeries([h(1, 63), h(0, 60)], 'mind', today)!.delta).toBe(-3)
+    expect(dimensionSeries([h(1, 60.4), h(0, 60.6)], 'mind', today)!.delta).toBe(1) // 60 → 61，與畫面上的整數一致
+    expect(dimensionSeries([h(1, 60), h(0, 60)], 'mind', today)!.delta).toBe(0)
+  })
+  it('delta is null when the previous day has no data', () => {
+    expect(dimensionSeries([h(3, 60), h(0, 63)], 'mind', today)!.delta).toBeNull()
+    expect(dimensionSeries([h(2, 60), h(1, 61), h(0, null)], 'mind', today)!.delta).toBe(1) // 今天沒資料 → 最後一點是昨天，與前天比
+  })
+  it('all null → no series', () => {
+    expect(dimensionSeries([h(2, null), h(1, null), h(0, null)], 'mind', today)).toBeNull()
+  })
+  it('a single valid point is not enough', () => {
+    expect(dimensionSeries([h(2, null), h(1, 55), h(0, null)], 'mind', today)).toBeNull()
+  })
+  it('missing components field or wrong shape → null (card keeps the value bar)', () => {
+    expect(dimensionSeries([{ date: day(1) }, { date: today }], 'mind', today)).toBeNull()
+    expect(dimensionSeries([{ date: day(1), components: null }, { date: today, components: null }], 'mind', today)).toBeNull()
+    expect(dimensionSeries([{ date: day(1), components: [] as never }, { date: today, components: 'x' as never }], 'mind', today)).toBeNull()
+    expect(dimensionSeries(undefined, 'mind', today)).toBeNull()
+    expect(dimensionSeries(null, 'mind', today)).toBeNull()
+    expect(dimensionSeries('oops' as never, 'mind', today)).toBeNull()
+    expect(dimensionSeries([], 'mind', today)).toBeNull()
+  })
+  it('a dimension key that no day has → null; other keys are independent', () => {
+    const hist = [h(1, 60, { travel: 40 }), h(0, 61, { travel: 45 })]
+    expect(dimensionSeries(hist, 'social', today)).toBeNull()
+    expect(dimensionSeries(hist, 'travel', today)!.last.value).toBe(45)
+  })
+  it('non-finite values are treated as no data', () => {
+    expect(dimensionSeries([h(2, 60), h(1, Number.NaN), h(0, 62)], 'mind', today)!.segments).toHaveLength(2)
+    const s = dimensionSeries([{ date: day(1), components: { mind: 'x' as never } }, h(0, 62)], 'mind', today)
+    expect(s).toBeNull() // 只剩一個有效點
+  })
+  it('values outside 0–100 are clamped', () => {
+    const s = dimensionSeries([h(1, -20), h(0, 135)], 'mind', today)!
+    expect(s.days[28]!.value).toBe(0)
+    expect(s.days[29]!.value).toBe(100)
+    expect(s.delta).toBe(100)
+  })
+  it('input order does not matter (reversed history)', () => {
+    const asc = [h(3, 50), h(2, 55), h(1, 60), h(0, 65)]
+    const a = dimensionSeries(asc, 'mind', today)!
+    const b = dimensionSeries([...asc].reverse(), 'mind', today)!
+    expect(b).toEqual(a)
+    expect(b.last.value).toBe(65)
+    expect(b.delta).toBe(5)
+  })
+  it('dates outside the window (older than 30 days, or in the future) are ignored', () => {
+    const s = dimensionSeries([h(40, 10), h(30, 11), h(1, 60), h(0, 61), { date: addDays(today, 1), components: { mind: 99 } }], 'mind', today)!
+    expect(s.validCount).toBe(2)
+    expect(s.days[0]!.date).toBe(day(29))
+    expect(dimensionSeries([h(29, 10), h(0, 11)], 'mind', today)!.days[0]!.value).toBe(10) // 第 30 天（含今天）還在視窗內
+  })
+})
+
+describe('sparkGeometry', () => {
+  const today = '2026-10-15'
+  const mk = (pts: Array<[number, number | null]>) => dimensionSeries(pts.map(([back, v]) => ({ date: addDays(today, -back), components: { mind: v } })), 'mind', today)!
+  it('x spans 0–1 from oldest to newest; y: higher value is higher on screen (smaller y)', () => {
+    const g = sparkGeometry(mk(Array.from({ length: 30 }, (_, i): [number, number] => [29 - i, 40 + (40 * i) / 29])))
+    expect(g.lines).toHaveLength(1)
+    expect(g.lines[0]).toHaveLength(30)
+    expect(g.lines[0]![0]).toEqual({ x: 0, y: 1 })
+    expect(g.lines[0]![29]!.x).toBe(1)
+    expect(g.lines[0]![29]!.y).toBeCloseTo(0, 10)
+    expect(g.end.x).toBe(1)
+    expect(g.end.y).toBeCloseTo(0, 10)
+    expect(g.dots).toEqual([])
+    // 兩個孤立點（中間隔很多天）各是一個小點、沒有線
+    const iso = sparkGeometry(mk([[29, 40], [0, 80]]))
+    expect(iso.lines).toEqual([])
+    expect(iso.dots).toHaveLength(2)
+  })
+  it('a nearly flat series is not blown up (min span 10)', () => {
+    const g = sparkGeometry(mk([[1, 70], [0, 71]]))
+    expect(g.hi - g.lo).toBeCloseTo(10, 5)
+    expect(g.end.y).toBeGreaterThan(0.3)
+    expect(g.end.y).toBeLessThan(0.5)
+  })
+  it('stays within 0–100 near the edges', () => {
+    const g = sparkGeometry(mk([[1, 99], [0, 100]]))
+    expect(g.hi).toBeLessThanOrEqual(100)
+    expect(g.lo).toBeGreaterThanOrEqual(0)
+    expect(g.hi - g.lo).toBeGreaterThan(0)
+    const z = sparkGeometry(mk([[1, 0], [0, 1]]))
+    expect(z.lo).toBe(0)
+  })
+  it('isolated single points become dots, longer runs become lines', () => {
+    const g = sparkGeometry(mk([[6, 50], [4, 55], [3, 56], [1, 60], [0, 61]]))
+    expect(g.dots).toHaveLength(1)
+    expect(g.lines).toHaveLength(2)
+    expect(g.lines.every((l) => l.length >= 2)).toBe(true)
   })
 })
 

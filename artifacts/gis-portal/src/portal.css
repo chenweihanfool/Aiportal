@@ -782,3 +782,31 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .hm-next-bar { display: block; height: 5px; border-radius: 3px; background: #24262e; overflow: hidden; }
 .hm-next-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #8a5f18, #f5a623); }
 @media (max-width: 1299px), (max-height: 639px) { .hm-next-text { white-space: normal; } }
+
+/* ② 面向小卡的 30 天迷你線（2.36.0）：沒有資料就沒有這一列，小卡維持原本的數值條 */
+@keyframes hm-spark-in { from { opacity: 0; } to { opacity: 1; } }
+.hm-dim-spark { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; height: clamp(16px, 3.1vh, 30px); min-width: 0; }
+.hm-spark { position: relative; flex: 1 1 auto; align-self: stretch; margin: 0 4px; min-width: 0; animation: hm-spark-in 0.6s ease both; }
+.hm-spark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.hm-spark-line { stroke: var(--dim); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; opacity: 0.95; }
+.hm-spark-dot, .hm-spark-end { position: absolute; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--dim); }
+.hm-spark-end { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; box-shadow: 0 0 0 2px #24262e, 0 0 8px var(--dim); }
+.hm-dim:hover .hm-spark-end { box-shadow: 0 0 0 2px #2a2d36, 0 0 8px var(--dim); }
+.hm-spark-delta { flex: 0 0 auto; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: clamp(0.6rem, 1.3vh, 0.72rem); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .hm-spark { animation: none !important; } }
+/* 側欄讓主區變窄、也讓高度少約 100px：1366×768 這類小螢幕五段要擠進同一個畫面，把可壓縮的地方壓一點（只動 .hm-wrap 底下，舊類別本身不變） */
+@media (min-width: 1300px) and (min-height: 640px) {
+  .hm-wrap .hm-score-n { font-size: clamp(2rem, 5.4vh, 3.4rem); line-height: 1.3; }
+  .hm-wrap .hm-today { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  .hm-wrap .hm-growth-foot { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
+  .hm-wrap .hm-kb { gap: 0.25rem; }
+  .hm-wrap .hm-kb-tile { padding: 0.25rem 0.4rem; }
+  .hm-wrap .hm-kb-n { font-size: clamp(1rem, 2.3vh, 1.3rem); }
+  .hm-wrap .hm-heat { max-width: min(100%, 104vh); }
+  .hm-wrap .hm-dim.has-spark { row-gap: 0.05rem; padding-top: 0.2rem; padding-bottom: 0.2rem; }
+  .hm-wrap .hm-dim-spark { height: clamp(12px, 2.4vh, 26px); }
+  .hm-wrap .hm-idea { padding-top: 0.1rem; padding-bottom: 0.1rem; }
+  .hm-wrap .hm-idea-title { font-size: clamp(0.68rem, 1.5vh, 0.82rem); line-height: 1.25; }
+}
+/* 手機窄卡：名稱＋「短板」標籤放不下一行時換行，不要把標籤截成一個字 */
+@media (max-width: 479px) { .hm-dim-name { flex-wrap: wrap; white-space: normal; row-gap: 2px; } }
