@@ -5,6 +5,7 @@ import { sampleFoodData } from './foodSample'
 import type { FoodPlace } from './foodMap'
 import { FoodMapGL } from './FoodMapGL'
 import { PhotoGallery } from './PhotoGallery'
+import { AuthImage, MediaAuthContext, thumbOf } from './AuthImage'
 import { MarkdownView } from './MarkdownView'
 import { apiFetchTrips, type Trip, type TripDay, type TripEntry, type TripData, type TripStatus } from './tripsApi'
 import { sampleTripData } from './tripsSample'
@@ -83,7 +84,7 @@ function TripCard({ t }: { t: Trip }) {
     <a href={`#${href}`} className="tr-card" data-testid="trip-card"
       onClick={e => { e.preventDefault(); window.location.hash = href }}>
       {t.cover
-        ? <img className="tr-cover" src={t.cover} alt="" loading="lazy" decoding="async" />
+        ? <AuthImage className="tr-cover" src={thumbOf(t.cover)} fallbackSrc={t.cover} alt="" loading="lazy" decoding="async" />
         : <div className="tr-cover-ph" aria-hidden>🧳</div>}
       <div className="tr-card-body">
         <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: STATUS_COLOR[t.status], letterSpacing: '0.08em' }}>{TRIP_STATUS_LABEL[t.status]}</span>
@@ -227,7 +228,11 @@ function TripDetail({ trip, places }: { trip: Trip; places: FoodPlace[] }) {
   )
 }
 
-export function TripsView({ tripId, unlockedPassword = null }: { tripId: string | null; unlockedPassword?: string | null }) {
+export function TripsView(props: { tripId: string | null; unlockedPassword?: string | null }) {
+  return <MediaAuthContext.Provider value={props.unlockedPassword ?? ''}><TripsPage {...props} /></MediaAuthContext.Provider>
+}
+
+function TripsPage({ tripId, unlockedPassword = null }: { tripId: string | null; unlockedPassword?: string | null }) {
   const src = useTripSource(unlockedPassword)
   // 真資料或示範資料只決定一次：有真資料就用真的，否則退回示範
   const data = useMemo<TripData>(() => src.trips ?? sampleTripData(), [src.trips])

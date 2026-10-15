@@ -3,6 +3,7 @@ import { COLOR, FONT } from './theme'
 import { HermesDiskPanel, type DiskHistoryPoint } from './HermesDiskPanel'
 import { shortSchedule, scheduleLine } from './pipelineSchedule'
 import { describeForecast, type DiskAlertLevel, type DiskForecastInfo, type StorageItem } from './diskView'
+import { kbHealthCells, type KbCell } from './kbHealth'
 import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, type HermesGraphEventNode, type HermesGraphEdge } from './hermesGraphApi'
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { TimelineView } from './TimelineView'
@@ -26,6 +27,19 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.37.0',
+    date: '2026-10-15',
+    summary: '手機首頁首屏改版、戰情室加「知識庫體檢」；遊記相片（登入後才提供的縮圖與檢視圖）；兩個子系統的摘要端點加存取金鑰',
+    changes: [
+      '手機首頁的上半部重新排版：頁首（標題、美食及旅遊地圖入口、帳號、版本）從垂直堆疊的四列壓成一小條，而且跟著內容一起捲走、不再釘在最上面；「今天」卡的大分數與等級／差／連續天數改成左右並排、一句話整行放下面。首屏現在看得到頁首、今天卡與全部六個面向小卡（原本到 ② 之前要捲很久）。電腦版不受影響。',
+      '戰情室抽屜最上面新增「知識庫體檢」：本週新事件（含新人物）、佇列積壓（各層合計與哪幾層有積壓）、L3 最近落地（多久以前、處理與失敗數）、知識庫健康分與四項（轉化／連結／活化／節奏）。全部來自既有接口，沒有新增後端；讀不到的欄位顯示「—」不拿 0 充數；積壓 ≥ 20、本週 0 個新事件、L3 超過 36 小時沒跑或失敗、分數過期或偏低會變色。四項分數的算法與推送都沒動。',
+      '遊記與美食地圖的相片現在可以顯示入口網自己的相片：網址 /api/media/trips/<趟次>/<檔名>.webp，由 api-server 從唯讀掛載的 media 資料夾提供，跟其他私領域資料同一道登入閘（沒有公開網址）；只讀 trips/<單層資料夾>/<單一檔名>.webp，擋 .. 、隱藏檔、指到資料夾外的符號連結，超過 8 MB 不給。媒體資料夾沒掛載時回「尚未掛載」，其他功能不受影響。',
+      '前端新增帶憑證的圖片元件：<img> 帶不了解鎖碼，所以用 fetch 取成 Blob 再顯示（Google 登入者靠 cookie）；捲到附近才抓。卡片封面改載縮圖（縮圖 404 時退回原圖），相片牆用縮圖、燈箱用檢視圖。外部 https 圖照舊直接載入。',
+      '相片的縮圖（長邊 320）與檢視圖（長邊 1600）由 HERMES 端 kb-pipeline 的 trips-pusher 每輪先產生（WebP、不帶 EXIF、依 EXIF 轉正、原檔只讀不動），有新檔當輪就把網址推上來。要啟用：主機 .env 設 MEDIA_DIR、HERMES 端設 TRIP_MEDIA_DIR=<MEDIA_DIR>/trips，並重建 api-server。',
+      'pf-cwh 與 FitnessForge 的 /api/public/summary 加存取金鑰（兩邊環境變數 SUMMARY_API_KEY，Aiportal 端 PF_CWH_SUMMARY_KEY／FITNESSFORGE_SUMMARY_KEY 填同一把，以 x-summary-key 標頭送）。金鑰沒設時維持舊行為，所以兩邊先後順序不拘；設了之後沒帶或不符一律 401。',
+    ],
+  },
   {
     version: '2.36.0',
     date: '2026-10-15',
@@ -2580,6 +2594,54 @@ function HermesTrendPanel({ unlockedPassword }: { unlockedPassword: string | nul
   )
 }
 
+// 知識庫體檢（使用者 2026-10-15 選 C）：新事件、佇列積壓、L3 最近落地、健康分（四項）——全部來自既有接口，純邏輯在 kbHealth.ts
+function KbHealthPanel({ unlockedPassword }: { unlockedPassword: string | null }) {
+  const [graph, setGraph] = useState<HermesGraphData | null>(null)
+  const [pipeline, setPipeline] = useState<HermesPipelineData | null>(null)
+  const [mind, setMind] = useState<Record<string, unknown> | null>(null)
+  const [failed, setFailed] = useState({ graph: false, pipeline: false, mind: false })
+  const [loaded, setLoaded] = useState({ graph: false, pipeline: false, mind: false })
+
+  useEffect(() => {
+    if (!unlockedPassword) return
+    let cancelled = false
+    const done = (k: 'graph' | 'pipeline' | 'mind', bad: boolean) => {
+      if (cancelled) return
+      setLoaded(v => ({ ...v, [k]: true }))
+      if (bad) setFailed(v => ({ ...v, [k]: true }))
+    }
+    apiFetchHermesGraph(unlockedPassword).then(d => { if (!cancelled) setGraph(d); done('graph', false) }).catch(() => done('graph', true))
+    apiFetchHermesPipeline(unlockedPassword).then(d => { if (!cancelled) setPipeline(d); done('pipeline', false) }).catch(() => done('pipeline', true))
+    apiFetchDashboard(unlockedPassword)
+      .then(d => { if (!cancelled) setMind(d.summaries.find(x => x.subsystemId === 'mind-index')?.data ?? null); done('mind', false) })
+      .catch(() => done('mind', true))
+    return () => { cancelled = true }
+  }, [unlockedPassword])
+
+  const allLoaded = loaded.graph && loaded.pipeline && loaded.mind
+  const allFailed = failed.graph && failed.pipeline && failed.mind
+  const cells: KbCell[] = kbHealthCells({
+    graph: graph?.available ? (graph.metrics ?? null) : null,
+    pipeline: pipeline?.available ? pipeline.layers : null,
+    mind,
+    now: Date.now(),
+  })
+  const toneColor = (t: KbCell['tone']) => (t === 'crit' ? COLOR.crit : t === 'warn' ? COLOR.warn : t === 'dim' ? COLOR.steelDim : undefined)
+  return (
+    <SubPanel title="知識庫體檢" sub="新架構的原始數字 · 健康分（四項）每天 04:00 計算，量的是佇列吞吐、Events／People 的連結與活動量">
+      {!allLoaded ? (
+        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+      ) : allFailed ? (
+        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
+      ) : (
+        <div data-testid="kb-health" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden' }}>
+          {cells.map(c => <StatCell key={c.key} label={c.label} value={c.value} sub={c.sub ?? undefined} valueColor={toneColor(c.tone)} />)}
+        </div>
+      )}
+    </SubPanel>
+  )
+}
+
 function HermesWarRoomSection({
   unlocked,
   unlockedPassword,
@@ -2622,6 +2684,10 @@ function HermesWarRoomSection({
 
   return (
     <div>
+      <div style={{ marginBottom: '0.9rem' }}>
+        <KbHealthPanel unlockedPassword={unlockedPassword} />
+      </div>
+
       <HermesEventGraphPanel unlockedPassword={unlockedPassword} />
 
       <div style={{ marginTop: '0.9rem' }}>
@@ -3329,8 +3395,8 @@ function InstrumentPanelView({
   const opsDetail = <HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
-      <div style={{
+    <div className="ip-shell" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
+      <div className="ip-head" style={{
         position: 'relative', flexShrink: 0, padding: '1.4rem 2rem 1.1rem', borderBottom: `2px solid ${COLOR.line}`,
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1.5rem', flexWrap: 'wrap',
       }}>
@@ -3345,13 +3411,13 @@ function InstrumentPanelView({
             </a>
           )}
           </div>
-          <span style={{ fontFamily: FONT.latin, fontSize: '0.62rem', letterSpacing: '0.2em', color: COLOR.amber, textTransform: 'uppercase', marginTop: '0.3rem', display: 'block' }}>
+          <span className="ip-head-sub" style={{ fontFamily: FONT.latin, fontSize: '0.62rem', letterSpacing: '0.2em', color: COLOR.amber, textTransform: 'uppercase', marginTop: '0.3rem', display: 'block' }}>
             Life Instrumentation · 即時遙測面板
           </span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+        <div className="ip-head-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
           <FoodMapPill />
-          <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, textAlign: 'right', lineHeight: 1.6 }}>
+          <div className="ip-portals" style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, textAlign: 'right', lineHeight: 1.6 }}>
             {sites.length > 0 ? `${sites.length} PORTALS AVAILABLE` : 'CONNECTING...'}
           </div>
           <AccountBadge />

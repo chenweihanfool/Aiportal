@@ -14,6 +14,7 @@ import hermesTripsRouter from "./hermesTrips";
 import hermesTimelineRouter from "./hermesTimeline";
 import hermesDocRouter from "./hermesDoc";
 import hermesAttachmentRouter from "./hermesAttachment";
+import hermesMediaRouter from "./hermesMedia";
 import exportRouter from "./export";
 
 const router: IRouter = Router();
@@ -34,6 +35,7 @@ router.use(hermesTripsRouter);
 router.use(hermesTimelineRouter);
 router.use(hermesDocRouter);
 router.use(hermesAttachmentRouter);
+router.use(hermesMediaRouter);
 router.use(exportRouter);
 
 export default router;

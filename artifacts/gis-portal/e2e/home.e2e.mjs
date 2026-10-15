@@ -99,7 +99,7 @@ const historyWithComponents = (shape = 'ok') => Array.from({ length: 30 }, (_, k
 
 // 場景：每個 API 路徑 → 回應（或 'fail' / 'delay'）
 function scenario(name) {
-  const s = { dashboard: [hhi()], history: { history: historyRows() }, graph: graph(), ideas: ideas(), food: food(), trips: trips(), pipeline: pipeline(), status: status(), usage: usage(), fail: new Set(), delayMs: 0, history30: null }
+  const s = { dashboard: [hhi(), { subsystemId: 'mind-index', name: '心智指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { score: 72.4, conversion: 90, linkHealth: 80, vitality: 55, rhythm: 66, stale: false } }], history: { history: historyRows() }, graph: graph(), ideas: ideas(), food: food(), trips: trips(), pipeline: pipeline(), status: status(), usage: usage(), fail: new Set(), delayMs: 0, history30: null }
   if (name === 'alert') {
     s.pipeline = pipeline({ L3: layer('crit', 'apply 失敗：磁碟寫入錯誤') })
     s.usage = usage({ level: 'warn', shortfallUsd: 21.4, daysUntilEmpty: 9, emptyDate: tpDate(9) })
@@ -254,6 +254,9 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
     await page.waitForSelector('.bd-drawer')
     await page.waitForTimeout(600)
     check(`${T}：點 ⑤ → 開戰情室抽屜（推送健康在最上）`, /HERMES 戰情室/.test(await page.locator('.bd-drawer').getAttribute('aria-label')) && /入口網推送健康/.test(await page.locator('.bd-drawer').innerText()))
+    await page.waitForSelector('[data-testid="kb-health"]', { timeout: 5000 })
+    const kb = await page.locator('[data-testid="kb-health"]').innerText()
+    check(`${T}：戰情室有「知識庫體檢」：本週新事件 23、佇列積壓、L3 最近落地、健康分 72（四項）`, /本週新事件/.test(kb) && /23/.test(kb) && /佇列積壓/.test(kb) && /L3 最近落地/.test(kb) && /知識庫健康分/.test(kb) && /72/.test(kb) && /轉化 90・連結 80・活化 55・節奏 66/.test(kb), kb.replace(/\n/g, '|').slice(0, 200))
     await page.keyboard.press('Escape')
     await page.locator('.hm-idea').first().click()
     await page.waitForSelector('.bd-drawer')
@@ -383,6 +386,17 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
     // 手機的工具連結（頁面最下面）與頁首入口
     if (scn === 'normal') {
       check(`${T}：頁首有「🍜🧭 美食及旅遊地圖」入口、工具連結在頁面下方`, (await page.locator('[data-testid="food-entry-pill"]').isVisible()) && (await page.locator('.ip-tools').count()) === 1)
+      // 首屏利用率：頁首壓成一小條，②面向小卡的上緣在第一屏內（原本頁首獨佔近半個螢幕、② 要捲很久才看到）
+      const top = await page.evaluate(() => { const r = (sel) => { const e = document.querySelector(sel); return e ? e.getBoundingClientRect() : null }; const hd = r('.ip-head'), td = r('.hm-today'), dm = r('.hm-dimsec'), sc = r('.hm-score-n'), mt = r('.hm-score-meta'); return { headH: Math.round(hd.height), todayH: Math.round(td.height), dimsTop: Math.round(dm.top), scoreTop: Math.round(sc.top), metaTop: Math.round(mt.top), scoreRight: Math.round(sc.right), metaLeft: Math.round(mt.left) } })
+      check(`${T}：頁首壓成一條（高 ${top.headH}px ≤ ${Math.round(h * 0.17)}px）`, top.headH <= h * 0.17, JSON.stringify(top))
+      check(`${T}：① 今天卡不超過首屏 40%（${top.todayH}px）`, top.todayH <= h * 0.4, JSON.stringify(top))
+      check(`${T}：② 面向小卡的上緣在首屏內，且露出至少 100px（${top.dimsTop}px）`, top.dimsTop + 100 <= h, JSON.stringify(top))
+      check(`${T}：分數與等級／差並排（同一列，分數在左）`, Math.abs(top.scoreTop - top.metaTop) < 60 && top.metaLeft >= top.scoreRight - 2, JSON.stringify(top))
+      // 手機頁首跟著內容捲走（不釘在最上面）
+      const sc = await page.evaluate(async () => { const sh = document.querySelector('.ip-shell'); sh.scrollTo({ top: 500 }); await new Promise((r) => setTimeout(r, 200)); const hd = document.querySelector('.ip-head').getBoundingClientRect(); return { top: Math.round(sh.scrollTop), headBottom: Math.round(hd.bottom) } })
+      check(`${T}：往下捲時頁首跟著捲走（scrollTop ${sc.top}、頁首下緣 ${sc.headBottom}）`, sc.top > 300 && sc.headBottom <= 0, JSON.stringify(sc))
+      await page.evaluate(() => document.querySelector('.ip-shell').scrollTo({ top: 0 }))
+      if (w === 390) { await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOTS, 'home-mobile-390-first-screen.png') }) }
       const tt = await toolsText(page)
       check(`${T}：手機工具連結列出全部私領域＋公領域`, ALL_TOOL_NAMES.every((n) => tt.includes(n)), tt.slice(0, 120))
     }
