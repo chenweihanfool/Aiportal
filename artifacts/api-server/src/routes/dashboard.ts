@@ -6,8 +6,13 @@ import { SUMMARY_SOURCES } from "../lib/summarySources";
 import { isAuthorized } from "../lib/adminSession";
 import { PERCENTILE_WINDOW_DAYS } from "../lib/happinessIndex";
 import { computeDimensionSeries } from "../lib/happinessDimensionHistory";
+import { createStaleWhileRevalidate } from "../lib/dashboardCache";
 
 const router = Router();
+
+// 先回快取：60 秒內直接回；超過 60 秒但不到 10 分鐘先回舊的、背景更新；更舊才等重抓。
+// 各面向的資料年齡看每筆的 fetchedAt；回應另附 cache.ageSec／stale 表示這份清單本身多久前抓的。
+const summaryCache = createStaleWhileRevalidate(fetchFreshSummaries, { freshMs: 60_000, maxStaleMs: 10 * 60_000 });
 
 // Serves the subsystem summaries fetched DIRECTLY from their origin APIs on
 // every page load. Previously read from a 20-minute DB cache; now real-time
@@ -20,7 +25,7 @@ router.get("/dashboard", async (req: Request, res: Response) => {
   const unlocked = isAuthorized(req.headers["x-admin-password"]);
 
   try {
-    const freshMap = await fetchFreshSummaries();
+    const { value: freshMap, ageSec, stale } = await summaryCache.get();
 
     // Iterate the map itself, not SUMMARY_SOURCES — "hhi" is computed from
     // the other three's results rather than being one of the fetched
@@ -44,7 +49,7 @@ router.get("/dashboard", async (req: Request, res: Response) => {
     // which was wrong the moment any private source could fail on its own
     // (first hit by the travel/AdventureLog source) — it would silently
     // clear a perfectly valid stored password and re-lock the UI.
-    res.json({ summaries, unlocked });
+    res.json({ summaries, unlocked, cache: { ageSec, stale } });
   } catch (err) {
     // If the real-time fetch itself crashes (e.g. DB unreachable), fall back
     // to the old cached rows so the page isn't completely blank.
