@@ -583,3 +583,189 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
   .tr-time { font-size: 0.74rem; }
 }
 @media (prefers-reduced-motion: reduce) { .tr-card { transition: none; } }
+
+/* ─── 新首頁預覽（HomeBoard，#home）───
+   五段式（審計報告 §2.6）：① 今天、② 六個面向、③ 成長軌跡、④ 好玩的、⑤ 系統一顆燈；全部用 hm- 前綴，不改既有類別。
+   電腦版（≥1100px 寬且 ≥640px 高，與 .ip-board-wrap 同一組條件）：一個畫面放得下，不捲動；
+   手機、窄／矮視窗：上下堆疊，順序 ① → ⑤（只在異常時）→ ② 兩欄 → ④ → ③，頁面往下捲。
+   ⑤ 平常是最下面一條細列；有警告／異常時（.hm-root[data-sys="alert"]）改排到 ① 下方。 */
+@keyframes hm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes hm-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes hm-lamp { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.hm-page { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; color: #ece9e2; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.hm-topbar { flex: 0 0 auto; display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 1.2rem; border-bottom: 1px solid #3a3d47; }
+.hm-topbar h1 { margin: 0; font-size: 1.05rem; font-weight: 800; white-space: nowrap; }
+.hm-topbar h1 span { margin-left: 0.35rem; font-size: 0.78rem; font-weight: 600; color: #f5a623; }
+.hm-preview-badge { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; color: #121319; background: #f5a623; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.hm-back { margin-left: auto; color: #f5a623; font-size: 0.76rem; text-decoration: none; border: 1px solid rgba(245,166,35,0.35); background: rgba(245,166,35,0.07); padding: 3px 11px; border-radius: 999px; white-space: nowrap; }
+.hm-back:hover { background: rgba(245,166,35,0.16); border-color: #f5a623; }
+.hm-scroll { flex: 1 1 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0.8rem 0.9rem 2.2rem; }
+.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "fun" "growth" "sys"; }
+.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "fun" "growth"; }
+.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; }
+
+.hm-card {
+  position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.4rem; overflow: hidden;
+  padding: 0.65rem 0.85rem; background: #1a1c22; border: 1px solid #3a3d47; border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 22px rgba(0,0,0,0.25);
+  animation: hm-rise 0.5s cubic-bezier(.2,.7,.2,1) both;
+}
+.hm-dimsec { animation-delay: 0.05s; } .hm-growth { animation-delay: 0.1s; } .hm-fun { animation-delay: 0.14s; } .hm-sys { animation-delay: 0.18s; }
+.hm-h { margin: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; font-weight: 700; color: #ece9e2; flex: 0 0 auto; }
+.hm-no { font-family: "IBM Plex Mono", ui-monospace, monospace; color: #f5a623; font-size: 0.78rem; }
+.hm-h-right { margin-left: auto; display: flex; align-items: center; gap: 0.8rem; font-weight: 400; font-size: 0.62rem; color: #5b6270; min-width: 0; }
+.hm-sub { font-size: 0.66rem; color: #9aa4b6; letter-spacing: 0.04em; flex: 0 0 auto; }
+.hm-muted { font-size: 0.68rem; color: #5b6270; }
+.hm-note { margin: 0; font-size: 0.74rem; color: #9aa4b6; line-height: 1.55; }
+.hm-note--bad { color: #e8b23d; }
+.hm-link { font: inherit; font-size: 0.68rem; color: #f5a623; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.hm-link:hover { text-decoration: underline; }
+.hm-chip { display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.56rem; letter-spacing: 0.06em; padding: 1px 6px; border: 1px solid #5b6270; border-radius: 4px; color: #9aa4b6; white-space: nowrap; }
+.hm-chip--warn { color: #e8b23d; border-color: #e8b23d; }
+.hm-root a:focus-visible, .hm-root button:focus-visible, .hm-back:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; border-radius: 6px; }
+
+/* 狀態機（StateFrame） */
+.hm-frame { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.hm-faded { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; opacity: 0.55; }
+.hm-frame > .hm-dims, .hm-faded > .hm-dims, .hm-frame > .hm-ideas, .hm-faded > .hm-ideas, .hm-frame > .hm-today-body { flex: 1 1 auto; min-height: 0; }
+.hm-skel { display: grid; gap: 0.3rem; width: 100%; }
+.hm-skel i { display: block; height: 0.7rem; border-radius: 4px; background: linear-gradient(90deg, #24262e 25%, #2f323d 50%, #24262e 75%); background-size: 200% 100%; animation: hm-shimmer 1.4s linear infinite; }
+.hm-ghost { flex: 1 1 auto; min-height: 0; filter: blur(2.5px); opacity: 0.55; pointer-events: none; display: flex; flex-direction: column; justify-content: center; }
+.hm-lock { position: absolute; inset: 0; margin: auto; width: max-content; height: max-content; max-width: 92%; font: inherit; font-size: 0.72rem; color: #e8b23d; background: rgba(18,19,25,0.85); border: 1px solid rgba(232,178,61,0.5); border-radius: 999px; padding: 4px 14px; cursor: pointer; }
+span.hm-lock { cursor: default; }
+button.hm-lock:hover { border-color: #e8b23d; }
+.hm-badge { position: absolute; top: -2px; right: 0; z-index: 2; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.58rem; letter-spacing: 0.04em; padding: 1px 6px; border: 1px solid; border-radius: 4px; background: #1a1c22; white-space: nowrap; }
+.hm-badge--stale { color: #e8b23d; border-color: rgba(232,178,61,0.6); }
+.hm-badge--warn { color: #d9772e; border-color: rgba(217,119,46,0.6); }
+.hm-dead { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.hm-dead b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.6rem; color: #5b6270; font-weight: 600; }
+.hm-dead span { font-size: 0.72rem; color: #e8b23d; }
+.hm-retry { align-self: flex-start; margin-top: 0.3rem; font: inherit; font-size: 0.68rem; color: #f5a623; background: transparent; border: 1px solid #8a5f18; border-radius: 5px; padding: 3px 10px; cursor: pointer; }
+
+/* ① 今天 */
+.hm-today { flex-direction: row; align-items: center; gap: 1.4rem; background: radial-gradient(ellipse 50% 130% at 12% 40%, var(--hm-glow, rgba(245,166,35,0.08)), transparent 70%), #1a1c22; }
+.hm-today[data-part="morning"] { --hm-glow: rgba(245,166,35,0.13); }
+.hm-today[data-part="noon"] { --hm-glow: rgba(232,178,61,0.11); }
+.hm-today[data-part="afternoon"] { --hm-glow: rgba(217,119,46,0.11); }
+.hm-today[data-part="evening"] { --hm-glow: rgba(155,140,240,0.13); }
+.hm-today[data-part="night"] { --hm-glow: rgba(95,155,240,0.14); }
+.hm-today-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.hm-hello { display: flex; align-items: baseline; gap: 0.6rem; font-size: 0.82rem; color: #9aa4b6; }
+.hm-hello b { font-size: 0.95rem; color: #ece9e2; font-weight: 700; }
+.hm-today-frame { min-height: 3.2rem; }
+.hm-today-body { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+.hm-score { flex: 0 0 auto; display: flex; align-items: baseline; gap: 0.15rem; font: inherit; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
+.hm-score-n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: clamp(2.3rem, 6.4vh, 3.8rem); line-height: 1.3; text-shadow: 0 0 22px currentColor; }
+.hm-score-of { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.7rem; color: #5b6270; }
+.hm-today-text { min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.hm-score-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.7rem; font-size: 0.8rem; }
+.hm-tone { font-weight: 700; letter-spacing: 0.04em; }
+.hm-delta { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; }
+.hm-streak { color: #9aa4b6; font-size: 0.74rem; }
+.hm-sentence { margin: 0; font-size: clamp(0.8rem, 1.9vh, 0.98rem); line-height: 1.5; color: #ece9e2; }
+.hm-year { flex: 0 0 clamp(170px, 20vw, 270px); display: flex; flex-direction: column; gap: 0.25rem; }
+.hm-year-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.74rem; color: #9aa4b6; }
+.hm-year-top b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.15rem; color: #ece9e2; font-weight: 600; }
+.hm-year-bar { height: 7px; border-radius: 4px; background: #24262e; overflow: hidden; }
+.hm-year-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8a5f18, #f5a623); border-radius: 4px; }
+.hm-year-sub { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.6rem; color: #5b6270; }
+
+/* ② 六個面向 */
+.hm-dims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+.hm-dim { --dim: #9aa4b6; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto; align-content: center; column-gap: 0.5rem; row-gap: 0.2rem; text-align: left; font: inherit; color: inherit; cursor: pointer; padding: 0.3rem 0.6rem; background: #24262e; border: 1px solid transparent; border-left: 3px solid var(--dim); border-radius: 8px; transition: border-color 0.15s ease, background 0.15s ease; overflow: hidden; }
+.hm-dim:hover { background: #2a2d36; border-color: #565a68; border-left-color: var(--dim); }
+.hm-dim.is-drag { border-color: rgba(232,178,61,0.45); border-left-color: var(--dim); }
+.hm-dim--ghost { border-left-color: #3a3d47; display: block; cursor: default; }
+.hm-dim-name { grid-column: 1; display: flex; align-items: center; gap: 0.35rem; font-size: clamp(0.76rem, 1.7vh, 0.92rem); color: #ece9e2; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.hm-dim-num { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: clamp(1.3rem, 4.2vh, 2.6rem); line-height: 1; color: #ece9e2; }
+.hm-dim-bar { grid-column: 1; align-self: center; height: clamp(5px, 0.8vh, 8px); border-radius: 3px; background: #121319; overflow: hidden; }
+.hm-dim-bar i { display: block; height: 100%; background: var(--dim); border-radius: 3px; }
+.hm-dim-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 0.6rem; font-size: clamp(0.64rem, 1.35vh, 0.78rem); color: #7d8696; line-height: 1.35; min-width: 0; }
+.hm-dim-line { color: #9aa4b6; }
+.hm-dim.is-drag .hm-dim-line { color: #e8b23d; }
+
+/* ③ 成長軌跡：上＝年熱圖（整排寬），下＝知識庫累積四格＋里程碑 */
+.hm-growth-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.55rem; }
+.hm-heat-frame { flex: 0 1 auto; }
+.hm-heat { display: flex; flex-direction: column; gap: 3px; max-width: min(100%, 120vh); }
+.hm-heat-months { display: grid; gap: 2px; height: 0.85rem; font-size: 0.56rem; color: #5b6270; font-family: "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; overflow: hidden; }
+.hm-heat-grid { display: grid; grid-template-rows: repeat(7, auto); gap: 2px; }
+.hm-cell { display: block; aspect-ratio: 1 / 1; border-radius: 2px; background: #24262e; min-width: 0; }
+.hm-cell.is-empty { background: transparent; box-shadow: inset 0 0 0 1px #2c2f39; }
+.hm-heat-legend { display: flex; align-items: center; gap: 4px; font-size: 0.56rem; color: #5b6270; }
+.hm-heat-legend .hm-cell { width: 9px; flex: 0 0 9px; }
+.hm-heat-legend span:last-child { margin-left: 4px; }
+.hm-growth-foot { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0.8rem; }
+.hm-growth-kb, .hm-growth-miles { min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.hm-miles { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.4rem; }
+.hm-mile { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; color: #ece9e2; background: #24262e; border: 1px solid #3a3d47; border-radius: 999px; padding: 2px 9px; white-space: nowrap; cursor: default; }
+.hm-kb { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.35rem; }
+.hm-kb-tile { min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 0.25rem 0.5rem; background: #24262e; border-radius: 6px; }
+.hm-kb-label { font-size: 0.6rem; color: #5b6270; letter-spacing: 0.1em; }
+.hm-kb-n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: clamp(1rem, 2.6vh, 1.4rem); line-height: 1.15; color: #ece9e2; }
+.hm-kb-week { font-size: 0.58rem; color: #5fbf7a; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* ④ 好玩的 */
+.hm-fun-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.hm-ideas { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 4px; }
+.hm-ideas li { min-height: 0; display: flex; }
+.hm-idea { flex: 1; min-width: 0; display: grid; grid-template-columns: 1.3rem minmax(0, 1fr) auto 2.4rem; align-items: center; gap: 0.5rem; font: inherit; color: inherit; text-align: left; cursor: pointer; background: #24262e; border: 1px solid transparent; border-radius: 7px; padding: 0.2rem 0.5rem; }
+.hm-idea:hover { border-color: #3a3d47; }
+.hm-idea-rank { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 700; font-size: 1.1rem; text-align: center; }
+.hm-idea-title { font-size: clamp(0.7rem, 1.6vh, 0.84rem); line-height: 1.3; color: #ece9e2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hm-cat { font-size: 0.56rem; padding: 0 6px; border: 1px solid; border-radius: 999px; white-space: nowrap; }
+.hm-idea-score { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.8rem; color: #f5a623; text-align: right; }
+.hm-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; flex: 0 0 auto; }
+.hm-tile { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem 0.55rem; background: #24262e; border-radius: 7px; min-height: 3.6rem; }
+.hm-tile .hm-frame { flex: 1 1 auto; }
+.hm-tile-link { display: flex; flex-direction: column; gap: 1px; color: inherit; text-decoration: none; min-width: 0; }
+.hm-tile-link b { font-size: 0.76rem; color: #ece9e2; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-tile-link span { font-size: 0.62rem; color: #9aa4b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-tile-link:hover b { color: #f5a623; }
+
+/* ⑤ 系統一顆燈 */
+.hm-sys { padding: 0.3rem 0.75rem; gap: 0.25rem; }
+.hm-sys-frame { flex: 0 0 auto; }
+.hm-sys-bar { width: 100%; display: flex; align-items: center; gap: 0.6rem; font: inherit; color: inherit; background: none; border: 0; padding: 0.2rem 0; cursor: pointer; text-align: left; min-width: 0; }
+.hm-lamp { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; }
+.hm-sys.is-alert .hm-lamp { animation: hm-lamp 1.8s ease-in-out infinite; }
+.hm-sys-name { flex: 0 0 auto; font-size: 0.78rem; }
+.hm-sys-text { flex: 1 1 auto; min-width: 0; font-size: 0.74rem; color: #9aa4b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-sys.is-alert .hm-sys-text { font-weight: 600; }
+.hm-reasons { list-style: none; margin: 0; padding: 0 0 0.2rem 1.45rem; display: grid; gap: 1px; font-size: 0.7rem; }
+
+/* 電腦版：一個畫面放得下 */
+@media (min-width: 1100px) and (min-height: 640px) {
+  .hm-scroll { overflow: hidden; padding: 0.7rem 1.2rem 0.8rem; }
+  .hm-root { height: 100%; gap: 0.6rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 0.78fr) minmax(0, 1fr) auto; grid-template-areas: "today today" "dims dims" "growth fun" "sys sys"; }
+  .hm-root[data-sys="alert"] { grid-template-rows: auto auto minmax(0, 0.78fr) minmax(0, 1fr); grid-template-areas: "today today" "sys sys" "dims dims" "growth fun"; }
+}
+/* 手機、窄／矮視窗：上下堆疊 */
+@media (max-width: 1099px), (max-height: 639px) {
+  .hm-today { flex-direction: column; align-items: stretch; gap: 0.7rem; }
+  .hm-year { flex: 0 0 auto; }
+  .hm-today-body { align-items: flex-start; }
+  .hm-dims { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; }
+  .hm-dim { padding: 0.5rem 0.6rem; }
+  .hm-dim-num { font-size: 1.5rem; }
+  .hm-growth-foot { grid-template-columns: minmax(0, 1fr); }
+  .hm-ideas { grid-auto-rows: auto; }
+  .hm-idea { padding: 0.45rem 0.55rem; }
+  .hm-idea-title { font-size: 0.84rem; }
+  .hm-sys-text { white-space: normal; }
+  .hm-hide-sm { display: none; }
+  .hm-heat { max-width: 100%; }
+}
+@media (min-width: 700px) and (max-width: 1099px), (min-width: 700px) and (max-height: 639px) {
+  .hm-dims { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 479px) {
+  .hm-pair { grid-template-columns: minmax(0, 1fr); }
+  .hm-kb { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hm-dim-foot { flex-direction: column; }
+  .hm-today-body { flex-direction: column; gap: 0.4rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-card, .hm-skel i, .hm-sys.is-alert .hm-lamp { animation: none !important; }
+  .hm-dim, .hm-idea { transition: none; }
+}

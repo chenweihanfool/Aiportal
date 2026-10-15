@@ -11,6 +11,7 @@ import { VersionHistoryDialog } from './VersionHistoryDialog'
 import { DesktopBoard } from './DesktopBoard'
 import { FoodMapView } from './FoodMapView'
 import { TripsView } from './TripsView'
+import { HomePreview } from './HomePreview'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -25,6 +26,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.35.0',
+    date: '2026-10-15',
+    summary: '新增「新首頁」預覽（#home），現在的首頁不變',
+    changes: [
+      '新增新首頁預覽（網址 #home，或按 ⌘K／Ctrl+K 輸入「新首頁」）：依審計報告的五段式排版——① 今天（幸福指數、與昨天的差、連續上升或下降幾天、一句規則組出來的話、今年已過幾 %）、② 六個面向小卡、③ 成長軌跡（幸福指數年熱圖、知識庫累積、里程碑）、④ 好玩的（想法庫前三名、想吃最久的地點、最新一趟遊記）、⑤ 系統一顆燈（全部正常時是一條細列；有異常就變色、寫出原因並移到 ① 下方）。',
+      '現在的首頁完全沒有改動，這頁只是預覽（頁首有「預覽版」徽章與「← 回到目前首頁」）；看過截圖同意後才會換成預設首頁。',
+      '每個資料區塊都有統一的狀態：未解鎖顯示「🔒 解鎖後顯示」、載入中顯示骨架、資料累積中、空、資料過期會標「資料 n 小時前」並淡化、太久沒更新顯示「—」、讀取失敗保留上一次的值。所有數字都來自既有 API，拿不到就顯示「—」，沒有示範值。',
+      '六個面向的名稱與識別色集中在 homeDimensions.ts，之後改名只改一處。各面向的 30 天歷史目前沒有資料來源（API 只回總分），所以小卡先用數值條，沒有假造迷你線。',
+    ],
+  },
   {
     version: '2.34.1',
     date: '2026-10-15',
@@ -3243,6 +3255,7 @@ function InstrumentPanelView({
   unlockedPassword,
   onSiteSelect,
   onRequestUnlock,
+  homePreview = false,
 }: {
   sites: SiteData[]
   dashboard: DashboardSummary[]
@@ -3250,6 +3263,8 @@ function InstrumentPanelView({
   unlockedPassword: string | null
   onSiteSelect: (site: SiteData) => void
   onRequestUnlock: () => void
+  /** #home 新首頁預覽：用同一份 hhiDetail／戰情室內容，改畫 HomeBoard（現在的首頁不變） */
+  homePreview?: boolean
 }) {
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
@@ -3286,6 +3301,25 @@ function InstrumentPanelView({
       />
     </div>
   )
+
+  if (homePreview) {
+    return (
+      <HomePreview
+        unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} hhiFetchedAt={hhiSummary?.fetchedAt ?? null}
+        hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
+        hhiDetail={
+          <>
+            <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
+            <div style={{ marginTop: '1.4rem' }}>
+              <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
+              {dimsGrid}
+            </div>
+          </>
+        }
+        opsDetail={<HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />}
+      />
+    )
+  }
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
@@ -3411,6 +3445,8 @@ function CommandPalette({
   const showFoodShortcut = q.length === 0 || foodKeywords.some(k => k.includes(q) || q.includes(k))
   const tripKeywords = ['遊記', '旅遊', '行程', 'trip']
   const showTripsShortcut = q.length === 0 || tripKeywords.some(k => k.includes(q) || q.includes(k))
+  const homeKeywords = ['新首頁', '首頁', '預覽', 'home']
+  const showHomeShortcut = q.length === 0 || homeKeywords.some(k => k.includes(q) || q.includes(k))
 
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0.9rem',
@@ -3463,6 +3499,16 @@ function CommandPalette({
             >
               <span style={{ color: COLOR.amber }}>📖</span>
               <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>遊記（每日紀錄・示範資料）</span>
+              <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
+            </div>
+          )}
+          {showHomeShortcut && (
+            <div
+              onClick={() => { window.location.hash = 'home'; setOpen(false) }}
+              style={{ ...rowStyle, background: 'rgba(245,166,35,0.05)' }}
+            >
+              <span style={{ color: COLOR.amber }}>🏠</span>
+              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>新首頁（預覽版）</span>
               <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
             </div>
           )}
@@ -3602,9 +3648,10 @@ export default function App() {
         unlockedPassword={unlockedPassword}
         onSiteSelect={handleSiteClick}
         onRequestUnlock={handleRequestUnlock}
+        homePreview={hashRoute === '#home'}
       />
 
-      <button
+      {hashRoute !== '#home' && <button
         onClick={() => setAdminAuth(true)}
         title="管理後台"
         style={{
@@ -3612,7 +3659,7 @@ export default function App() {
           background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
           color: COLOR.steelDim, fontSize: '1rem', padding: '0.5rem 0.8rem', cursor: 'pointer', lineHeight: 1,
         }}
-      >⚙</button>
+      >⚙</button>}
 
       <CommandPalette
         sites={sites}
