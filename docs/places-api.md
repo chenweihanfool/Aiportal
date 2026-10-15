@@ -71,6 +71,8 @@ curl -sS -X POST "https://<入口網網域>/api/admin/hermes-places" \
 
 **相片**（`photos[]`）：
 
+- 站內相片網址：`/api/media/places/<地點 id>/<檔名>.webp`（縮圖 `-t.webp`），登入後才提供，由 api-server 唯讀讀取 `<media>/places/<地點 id>/`（與遊記相片同一個掛載，見 `docs/trips-api.md`）。產生方式與對應規則見 kb-pipeline `docs/places-photos.md`。
+
 - `url`：只接受 `https://…`，或站內絕對路徑 `/…`（不含 `//`）；不得含空白；其餘（`javascript:`、`data:`、`http:` 等）整張丟掉。
 - `thumb`：同上規則，不合法時為 null（不丟整張）。
 - `w`、`h`：正數才收，否則 null。`takenAt`：`YYYY-MM-DD`，否則 null。`caption`：修剪後最長 500 字。

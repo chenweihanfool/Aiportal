@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isAuthorized } from "../lib/adminSession";
-import { checkTripMedia, MAX_MEDIA_BYTES } from "../lib/mediaFile";
+import { checkPlaceMedia, checkTripMedia, MAX_MEDIA_BYTES, type MediaCheck } from "../lib/mediaFile";
 
 const router = Router();
 
@@ -14,11 +14,10 @@ function mediaRoot(): string {
   return process.env["HERMES_MEDIA_ROOT"] || "/data/media";
 }
 
-router.get("/media/trips/:tripId/:file", async (req: Request, res: Response) => {
+async function serveMedia(req: Request, res: Response, check: MediaCheck) {
   if (!isAuthorized(req.headers["x-admin-password"])) {
     return res.status(403).json({ message: "需要解鎖私領域才能查看" });
   }
-  const check = checkTripMedia(req.params["tripId"], req.params["file"]);
   if (!check.ok) return res.status(400).json({ message: check.message });
 
   let root: string;
@@ -50,6 +49,13 @@ router.get("/media/trips/:tripId/:file", async (req: Request, res: Response) => 
   const stream = createReadStream(abs);
   stream.on("error", () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
   return stream.pipe(res);
-});
+}
+
+router.get("/media/trips/:tripId/:file", (req: Request, res: Response) =>
+  serveMedia(req, res, checkTripMedia(req.params["tripId"], req.params["file"])));
+
+// 地點相片（方案 1）：<根>/places/<地點 id>/<檔名>.webp，權限與規則同遊記相片
+router.get("/media/places/:placeId/:file", (req: Request, res: Response) =>
+  serveMedia(req, res, checkPlaceMedia(req.params["placeId"], req.params["file"])));
 
 export default router;
