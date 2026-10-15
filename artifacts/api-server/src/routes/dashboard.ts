@@ -4,6 +4,8 @@ import { desc } from "drizzle-orm";
 import { fetchFreshSummaries } from "../lib/summarySources";
 import { SUMMARY_SOURCES } from "../lib/summarySources";
 import { isAuthorized } from "../lib/adminSession";
+import { PERCENTILE_WINDOW_DAYS } from "../lib/happinessIndex";
+import { computeDimensionSeries } from "../lib/happinessDimensionHistory";
 
 const router = Router();
 
@@ -94,20 +96,40 @@ router.get("/happiness/history", async (req: Request, res: Response) => {
   // weakestComponent included so the frontend can derive "本月最常見短板"
   // and similar stats without a new endpoint — it's already computed and
   // stored here daily, just never surfaced past the single day it's for.
+  //
+  // components（2026-10-15）：每面向「當天原本會顯示在面向卡上」的百分位分數，給首頁六張
+  // 面向小卡畫迷你線。百分位要用該天之前 90 列的原始分數排，所以多撈 PERCENTILE_WINDOW_DAYS
+  // 列當暖機（只回傳 days 天）；算法與 /api/dashboard 共用 lib/happinessDimensionHistory.ts。
   const rows = await db
     .select({
       date: happinessIndexHistoryTable.date,
       finalScore: happinessIndexHistoryTable.finalScore,
       displayedScore: happinessIndexHistoryTable.displayedScore,
       weakestComponent: happinessIndexHistoryTable.weakestComponent,
+      lifeFreedomRaw: happinessIndexHistoryTable.lifeFreedomRaw,
+      fitnessHabitRaw: happinessIndexHistoryTable.fitnessHabitRaw,
+      calmRaw: happinessIndexHistoryTable.calmRaw,
+      mindRaw: happinessIndexHistoryTable.mindRaw,
+      travelRaw: happinessIndexHistoryTable.travelRaw,
+      socialRaw: happinessIndexHistoryTable.socialRaw,
     })
     .from(happinessIndexHistoryTable)
     .orderBy(desc(happinessIndexHistoryTable.date))
-    .limit(days);
+    .limit(days + PERCENTILE_WINDOW_DAYS);
 
-  // Reverse to chronological order (oldest first) — easier for the frontend
-  // chart to plot left-to-right without re-sorting.
-  return res.json({ history: rows.reverse() });
+  // Chronological order (oldest first) — easier for the frontend chart to
+  // plot left-to-right without re-sorting.
+  const asc = rows.reverse();
+  const series = computeDimensionSeries(asc, days);
+  const shown = asc.slice(Math.max(0, asc.length - series.length));
+  const history = shown.map((r, i) => ({
+    date: r.date,
+    finalScore: r.finalScore,
+    displayedScore: r.displayedScore,
+    weakestComponent: r.weakestComponent,
+    components: series[i]!.components,
+  }));
+  return res.json({ history });
 });
 
 export default router;
