@@ -3543,9 +3543,9 @@ export default function App() {
   if (hashRoute === '#graph/timeline') {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
   }
-  // 美食地圖原型（2026-10-15）：只用示範資料、不打 API；首頁還沒放入口，從 ⌘K 指令面板輸入「美食」進來。
+  // 美食地圖（2026-10-15）：解鎖後讀知識庫的地點（/api/hermes-places），沒有資料才退回示範資料；入口見首頁按鈕與 ⌘K 輸入「美食」。
   if (hashRoute === '#food') {
-    return <FoodMapView onBack={() => { window.location.hash = '' }} />
+    return <FoodMapView onBack={() => { window.location.hash = '' }} unlockedPassword={unlockedPassword} />
   }
 
   return (

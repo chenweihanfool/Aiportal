@@ -8,13 +8,15 @@ import {
 import { sampleFoodData } from './foodSample'
 import { FoodMapGL } from './FoodMapGL'
 import { useGeolocation } from './useGeolocation'
+import { apiFetchFood, formatReceivedAt } from './foodApi'
 
 // ─────────────────────────────────────────────
 // 🍜 美食地圖（#food，2026-10-15 原型）
 // 地圖＋清單＋標籤／狀態（想吃 → 去過 → 愛店／不再去）。
 // 底圖：MapLibre GL（FoodMapGL.tsx，預設 OpenFreeMap 公開圖磚，使用者 2026-10-15 決定要底圖）；
 // WebGL 不能用或載入失敗時退回無底圖的 SVG 示意圖。標記與清單以相片為主。
-// 目前只顯示 foodSample.ts 的示範資料；正式資料接法與 AdventureLog 的關係見 docs/portal-audit-2026-10.md。
+// 資料：有解鎖且知識庫有地點時顯示真資料（GET /api/hermes-places）；否則退回 foodSample.ts 的示範資料並標示。
+// 接法與 AdventureLog 的關係見 docs/portal-audit-2026-10.md、docs/places-api.md。
 // 入口網只顯示：要改狀態，按鈕會把一句話複製到剪貼簿，貼到 Telegram 給 HERMES 寫進日記（跟想法庫同一套）。
 // ─────────────────────────────────────────────
 
@@ -205,8 +207,35 @@ function PlaceDetail({ p, now, meters }: { p: FoodPlace; now: Date; meters: numb
   )
 }
 
-export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: () => void; data?: FoodData; now?: Date }) {
-  const data = useMemo(() => dataProp ?? sampleFoodData(), [dataProp])
+interface FoodSource { loading: boolean; real: FoodData | null; note: string | null }
+
+/**
+ * 真資料來源：解鎖後抓 /api/hermes-places，available 且有地點才用真資料；其餘退回示範資料（note 說明原因）。
+ * 載入中回 loading，畫面先不顯示示範資料，避免閃一下再換。
+ */
+function useFoodSource(pw: string | null, enabled: boolean): FoodSource {
+  const [got, setGot] = useState<{ pw: string; data: FoodData | null } | null>(null)
+  useEffect(() => {
+    if (!enabled || !pw) return
+    let alive = true
+    apiFetchFood(pw)
+      .then(data => { if (alive) setGot({ pw, data }) })
+      .catch(() => { if (alive) setGot({ pw, data: null }) })
+    return () => { alive = false }
+  }, [enabled, pw])
+  if (!enabled) return { loading: false, real: null, note: null }
+  if (!pw) return { loading: false, real: null, note: '解鎖私領域後會顯示你的真實地點' }
+  if (!got || got.pw !== pw) return { loading: true, real: null, note: null }
+  if (got.data === null) return { loading: false, real: null, note: '讀取失敗，顯示示範資料' }
+  return { loading: false, real: got.data.available ? got.data : null, note: null }
+}
+
+export function FoodMapView({ onBack, data: dataProp, now: nowProp, unlockedPassword = null }: { onBack: () => void; data?: FoodData; now?: Date; unlockedPassword?: string | null }) {
+  const src = useFoodSource(unlockedPassword, dataProp === undefined)
+  const data = useMemo(() => dataProp ?? src.real ?? sampleFoodData(), [dataProp, src.real])
+  // 既有的 data prop（測試／原型）照舊：只看它自己的 sample 旗標
+  const isSample = dataProp ? !!dataProp.sample : src.real === null
+  const receivedLabel = isSample ? null : formatReceivedAt(data.receivedAt)
   const now = useMemo(() => nowProp ?? new Date(), [nowProp])
   const [filter, setFilter] = useState<FoodFilter>({ kind: 'all', status: 'all', tag: null, area: null, query: '' })
   const [sort, setSort] = useState<FoodSort>('oldestWant')
@@ -251,12 +280,27 @@ export function FoodMapView({ onBack, data: dataProp, now: nowProp }: { onBack: 
     ['今年吃了', `${stats.beenThisYear} 家`],
   ]
 
+  // 載入中：只顯示標題列與「載入中…」，不先畫示範資料
+  if (dataProp === undefined && src.loading) {
+    return (
+      <div className="fm-page" style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
+          <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
+          <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
+        </header>
+        <div role="status" style={{ flex: 1, display: 'grid', placeItems: 'center', color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: '0.8rem' }}>載入中…</div>
+      </div>
+    )
+  }
+
   return (
     <div className={`fm-page${nearbyOn ? ' is-nearby' : ''}`} style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}`, flexWrap: 'wrap' }}>
         <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
         <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
-        {data.sample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
+        {isSample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
+        {src.note && <span data-testid="food-source-note" style={{ fontSize: '0.66rem', color: COLOR.steelDim }}>{src.note}</span>}
+        {receivedLabel && <span data-testid="food-received" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>資料：{receivedLabel}</span>}
         {stats.oldestWant && (
           <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: COLOR.steel }}>
             想吃最久：<b style={{ color: COLOR.amber, cursor: 'pointer' }} onClick={() => pick(stats.oldestWant!.place.id)}>{stats.oldestWant.place.name}</b>（{stats.oldestWant.days} 天）
