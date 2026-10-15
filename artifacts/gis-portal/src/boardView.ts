@@ -3,6 +3,8 @@
 // HappinessHeroCard 完全相同（權重預設 27/18/15/15/13/12），算法就是後端 happinessIndex.ts 已經算好的欄位，
 // 這裡只是把它們攤開：各維度「分數 × 權重 ＝ 貢獻分」，加起來是基礎分，再經短板修正與平滑得到顯示值。
 
+import { DIMENSIONS } from './dimensions'
+
 export interface HhiRow {
   key: string
   label: string
@@ -35,17 +37,9 @@ export function buildHhiBreakdown(data: Record<string, unknown> | undefined): Hh
   if (displayed === null) return null
   const w = (data['weights'] ?? {}) as Record<string, unknown>
   const pct = (key: string, dflt: number) => Math.round((num(w[key]) ?? dflt) * 100)
-  const spec: Array<[string, string, string, string, number]> = [
-    ['lifeFreedom', '財務自由', 'lifeFreedomScore', 'lifeFreedomWeight', 0.27],
-    ['fitness', '身體', 'fitnessHabitScore', 'fitnessWeight', 0.18],
-    ['calm', '從容', 'calmScore', 'calmWeight', 0.15],
-    ['mind', '心智', 'mindScore', 'mindWeight', 0.15],
-    ['social', '社交', 'socialScore', 'socialWeight', 0.13],
-    ['travel', '旅遊', 'travelScore', 'travelWeight', 0.12],
-  ]
-  const rows: HhiRow[] = spec.map(([key, label, scoreKey, weightKey, dflt]) => {
+  const rows: HhiRow[] = DIMENSIONS.map(({ key, label, scoreKey, weightKey, defaultWeight }) => {
     const value = num(data[scoreKey])
-    const weightPct = pct(weightKey, dflt)
+    const weightPct = pct(weightKey, defaultWeight)
     return { key, label, value, weightPct, points: value === null ? null : Math.round(((value * weightPct) / 100) * 10) / 10 }
   })
   return {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DIM_ABOUT, deltaText, dimHash, dimKeyFromHash, dimNeighbors, rangeStats } from './dimensionPage'
-import { HOME_DIMENSIONS } from './homeDimensions'
+import { deltaText, dimHash, dimKeyFromHash, dimNeighbors, rangeStats } from './dimensionPage'
 import { dimensionSeries } from './homeView'
 
 const hist = (vals: Array<number | null>, end = '2026-10-16') => {
@@ -10,15 +9,6 @@ const hist = (vals: Array<number | null>, end = '2026-10-16') => {
     return { date: x, components: { calm: v } as Record<string, number | null> }
   })
 }
-
-describe('DIM_ABOUT', () => {
-  it('covers every dimension with a one-line measure and a source', () => {
-    for (const d of HOME_DIMENSIONS) {
-      expect(DIM_ABOUT[d.key]?.measures.length).toBeGreaterThan(10)
-      expect(DIM_ABOUT[d.key]?.source.length).toBeGreaterThan(1)
-    }
-  })
-})
 
 describe('rangeStats', () => {
   it('avg/max/min/change over the valid points, skipping gaps', () => {

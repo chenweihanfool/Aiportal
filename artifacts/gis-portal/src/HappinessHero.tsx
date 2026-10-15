@@ -1,6 +1,7 @@
 // 翰翰仔幸福指數主卡（舊版首頁與幸福指數抽屜用）。
 import { useEffect, useState } from 'react'
 import { COLOR, FONT } from './theme'
+import { DIMENSIONS } from './dimensions'
 import { Gauge } from './Gauge'
 import { formatMinutesAgo, hhiTone } from './format'
 import { computeHappinessInsights } from './happinessInsights'
@@ -41,15 +42,9 @@ export function HappinessHeroCard({
   const weakestScore = typeof data?.['weakestScore'] === 'number' ? data['weakestScore'] as number : null
   const finalScore = typeof data?.['finalScore'] === 'number' ? data['finalScore'] as number : null
   const weakestComponent = typeof data?.['weakestComponent'] === 'string' ? data['weakestComponent'] as string : null
-  const lifeFreedomScore = typeof data?.['lifeFreedomScore'] === 'number' ? data['lifeFreedomScore'] as number : null
-  const fitnessHabitScore = typeof data?.['fitnessHabitScore'] === 'number' ? data['fitnessHabitScore'] as number : null
-  const calmScore = typeof data?.['calmScore'] === 'number' ? data['calmScore'] as number : null
-  const mindScore = typeof data?.['mindScore'] === 'number' ? data['mindScore'] as number : null
-  const travelScore = typeof data?.['travelScore'] === 'number' ? data['travelScore'] as number : null
-  const socialScore = typeof data?.['socialScore'] === 'number' ? data['socialScore'] as number : null
   const usingStaleData = data?.['usingStaleData'] === true
   const isSnapshotFinal = data?.['isSnapshotFinal'] === true
-  const weights = data?.['weights'] as { lifeFreedomWeight?: number; fitnessWeight?: number; calmWeight?: number; mindWeight?: number; travelWeight?: number; socialWeight?: number } | undefined
+  const weights = data?.['weights'] as Record<string, number | undefined> | undefined
 
   if (isLocked) {
     return <LockedGaugeCard size="primary" label="翰翰仔幸福指數" sub="Hanhan Happiness Index" onRequestUnlock={onRequestUnlock} />
@@ -65,14 +60,11 @@ export function HappinessHeroCard({
   }
 
   const tone = hhiTone(displayedScore)
-  const contributions: Array<{ label: string; value: number | null; weightPct: number }> = [
-    { label: '財務自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.27) * 100) },
-    { label: '身體', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.18) * 100) },
-    { label: '從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.15) * 100) },
-    { label: '心智', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.15) * 100) },
-    { label: '社交', value: socialScore, weightPct: Math.round((weights?.socialWeight ?? 0.13) * 100) },
-    { label: '旅遊', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.12) * 100) },
-  ]
+  // 六列由面向註冊表（dimensions.ts）推導：名稱、分數欄位、權重欄位與預設值只寫在那一處
+  const contributions: Array<{ label: string; value: number | null; weightPct: number }> = DIMENSIONS.map(d => {
+    const v = data[d.scoreKey]
+    return { label: d.label, value: typeof v === 'number' ? v : null, weightPct: Math.round((weights?.[d.weightKey] ?? d.defaultWeight) * 100) }
+  })
   const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
 
   return (
