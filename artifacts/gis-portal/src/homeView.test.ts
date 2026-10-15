@@ -127,8 +127,8 @@ describe('todaySentence', () => {
     expect(todaySentence({ trend: trend({ score: null }), rows: rows([50]) })).toContain('還沒有資料')
   })
   it('streak beats delta and names the biggest drag with its gap', () => {
-    const s = todaySentence({ trend: trend({ streak: { direction: 'up', days: 3 } }), rows: [row('a', '人生自由', 90, 27), row('travel', '旅遊生活', 55, 12)] })
-    expect(s).toBe('連 3 天上升，現在最大的短板是「旅遊生活」（55 分，拉低總分 5.4 分）。')
+    const s = todaySentence({ trend: trend({ streak: { direction: 'up', days: 3 } }), rows: [row('a', '財務自由', 90, 27), row('travel', '旅遊', 55, 12)] })
+    expect(s).toBe('連 3 天上升，現在最大的短板是「旅遊」（55 分，拉低總分 5.4 分）。')
   })
   it('falls back to delta when streak is only 1 day', () => {
     expect(todaySentence({ trend: trend({ streak: { direction: 'up', days: 1 } }), rows: rows([40]) })).toMatch(/^比昨天高 3 分，/)
@@ -151,14 +151,14 @@ describe('todaySentence', () => {
     expect(todaySentence({ trend: trend(), rows: rows([100, 100]) })).toContain('沒有明顯的短板')
   })
   it('history unavailable: says nothing about the trend instead of claiming "no record yesterday"', () => {
-    const s = todaySentence({ trend: trend({ delta: null, yesterday: null, historyDays: 0 }), rows: [row('travel', '旅遊生活', 55, 12)], trendKnown: false })
-    expect(s).toBe('現在最大的短板是「旅遊生活」（55 分，拉低總分 5.4 分）。')
+    const s = todaySentence({ trend: trend({ delta: null, yesterday: null, historyDays: 0 }), rows: [row('travel', '旅遊', 55, 12)], trendKnown: false })
+    expect(s).toBe('現在最大的短板是「旅遊」（55 分，拉低總分 5.4 分）。')
     expect(s).not.toContain('昨天')
   })
   it('works with the real breakdown builder', () => {
     const b = buildHhiBreakdown({ displayedScore: 72, lifeFreedomScore: 68, fitnessHabitScore: 81, calmScore: 74, mindScore: 79, socialScore: 77, travelScore: 55 })!
-    // 人生自由 68×27% 離滿分的缺口（8.6）比旅遊 55×12%（5.4）大，所以最大短板是人生自由（與 biggestDrag 一致）
-    expect(todaySentence({ trend: trend(), rows: b.rows })).toContain('「人生自由」（68 分，拉低總分 8.6 分）')
+    // 財務自由 68×27% 離滿分的缺口（8.6）比旅遊 55×12%（5.4）大，所以最大短板是財務自由（與 biggestDrag 一致）
+    expect(todaySentence({ trend: trend(), rows: b.rows })).toContain('「財務自由」（68 分，拉低總分 8.6 分）')
   })
 })
 

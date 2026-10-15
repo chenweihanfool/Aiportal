@@ -1,26 +1,27 @@
 // 新首頁（HomeBoard）六個面向的名稱與識別色，集中在這一個檔。
-// 使用者尚未裁定新名稱與識別色（審計報告 §2.3、§2.5【需決定】）：
-//   - 名稱先沿用現有的（buildHhiBreakdown／幸福指數表格同一組），之後改名只改這裡。
-//   - 識別色是 §2.5 的「財務＝金、身體＝青綠、從容＝藍、心智＝紫、社交＝珊瑚、旅遊與美食＝橘」提案，
+// 名稱與識別色由使用者 2026-10-15 裁定（審計報告 §2.3、§2.5、§4.15）：
+//   財務自由（舊：人生自由）・身體（健身習慣）・從容（生活從容）・心智（心智指標）・社交（社交指標）・旅遊（旅遊生活）。
+//   - boardView.ts 的 buildHhiBreakdown 與 App.tsx 幸福指數雷達／權重列用同一組名稱；資料庫的「站台名稱」不在此列。
+//   - 識別色是「財務＝金、身體＝青綠、從容＝藍、心智＝紫、社交＝珊瑚、旅遊與美食＝橘」，
 //     與狀態色（ok／warn／crit）分開，只用來讓人用顏色認出面向，不代表好壞。
 // key 必須與 boardView.ts 的 buildHhiBreakdown 一致。
 
 export interface HomeDimension {
   key: string
-  /** 顯示名稱（沿用現有名稱，待使用者裁定） */
+  /** 顯示名稱 */
   label: string
   icon: string
-  /** 識別色（提案值，待使用者裁定） */
+  /** 識別色 */
   color: string
 }
 
 export const HOME_DIMENSIONS: HomeDimension[] = [
-  { key: 'lifeFreedom', label: '人生自由', icon: '💰', color: '#d9b44a' },
-  { key: 'fitness', label: '健身習慣', icon: '🏃', color: '#3fb6a8' },
-  { key: 'calm', label: '生活從容', icon: '🌿', color: '#5f9bf0' },
-  { key: 'mind', label: '心智指標', icon: '🧠', color: '#9b8cf0' },
-  { key: 'social', label: '社交指標', icon: '👥', color: '#ee7a6e' },
-  { key: 'travel', label: '旅遊生活', icon: '🧳', color: '#f29e4c' },
+  { key: 'lifeFreedom', label: '財務自由', icon: '💰', color: '#d9b44a' },
+  { key: 'fitness', label: '身體', icon: '🏃', color: '#3fb6a8' },
+  { key: 'calm', label: '從容', icon: '🌿', color: '#5f9bf0' },
+  { key: 'mind', label: '心智', icon: '🧠', color: '#9b8cf0' },
+  { key: 'social', label: '社交', icon: '👥', color: '#ee7a6e' },
+  { key: 'travel', label: '旅遊', icon: '🧳', color: '#f29e4c' },
 ]
 
 const BY_KEY = new Map(HOME_DIMENSIONS.map((d) => [d.key, d]))

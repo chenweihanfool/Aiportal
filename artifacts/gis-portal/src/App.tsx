@@ -1622,10 +1622,10 @@ const DIMENSION_NORMALIZED_FIELD: Record<string, string> = {
 }
 
 const DIMENSION_SUB: Record<string, string> = {
-  'pf-cwh': '人生自由',
-  'fitnessforge': '運動習慣',
-  'vikunja': '從容指數',
-  'travel': '旅遊生活',
+  'pf-cwh': '財務自由',
+  'fitnessforge': '身體',
+  'vikunja': '從容',
+  'travel': '旅遊',
 }
 
 // Replaces GlassSummaryCard — one gauge tile per HHI-contributing subsystem
@@ -1730,7 +1730,7 @@ function MindIndexCard({
   const tone = bandTone(normalizedScore, MIND_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label="心智指標" sub="想法＋日報" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label="心智" sub="想法＋日報" onRequestUnlock={onSelect} />
   }
 
   const rep = mc?.report ?? null
@@ -1745,7 +1745,7 @@ function MindIndexCard({
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
       <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>心智指標</div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>心智</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
         {normalizedScore !== null ? tone.label : (hhiSummary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
       </div>
@@ -1807,7 +1807,7 @@ function SocialIndexCard({
   const tone = bandTone(normalizedScore, SOCIAL_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label="社交指標" sub="近 7 天社交活動" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label="社交" sub="近 7 天社交活動" onRequestUnlock={onSelect} />
   }
 
   const socialItems = [
@@ -1825,7 +1825,7 @@ function SocialIndexCard({
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
       <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>社交指標</div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>社交</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
         {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 7 天沒有日記可供觀測') : tone.label}
       </div>
@@ -1923,12 +1923,12 @@ function HappinessHeroCard({
 
   const tone = hhiTone(displayedScore)
   const contributions: Array<{ label: string; value: number | null; weightPct: number }> = [
-    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.27) * 100) },
-    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.18) * 100) },
-    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.15) * 100) },
-    { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.15) * 100) },
-    { label: '社交指標', value: socialScore, weightPct: Math.round((weights?.socialWeight ?? 0.13) * 100) },
-    { label: '旅遊生活', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.12) * 100) },
+    { label: '財務自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.27) * 100) },
+    { label: '身體', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.18) * 100) },
+    { label: '從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.15) * 100) },
+    { label: '心智', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.15) * 100) },
+    { label: '社交', value: socialScore, weightPct: Math.round((weights?.socialWeight ?? 0.13) * 100) },
+    { label: '旅遊', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.12) * 100) },
   ]
   const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
 

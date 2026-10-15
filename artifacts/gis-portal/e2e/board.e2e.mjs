@@ -172,7 +172,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   check(`${w}×${h}：沒有卡片內容被裁切`, cl.length === 0, JSON.stringify(cl))
   check(`${w}×${h}：頁面本身不橫向捲動`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   const txt = await page.locator('.ip-board').innerText()
-  check(`${w}×${h}：幸福指數顯示「今日值 × 權重 ＝ 貢獻分」與計算鏈`, /人生自由/.test(txt) && /27%/.test(txt) && /18\.4/.test(txt) && /加權平均/.test(txt) && /74\.5/.test(txt) && /短板修正/.test(txt))
+  check(`${w}×${h}：幸福指數顯示「今日值 × 權重 ＝ 貢獻分」與計算鏈`, /財務自由/.test(txt) && /27%/.test(txt) && /18\.4/.test(txt) && /加權平均/.test(txt) && /74\.5/.test(txt) && /短板修正/.test(txt))
   const order = await page.evaluate(() => { const h = document.querySelector('.bd-hhi')?.getBoundingClientRect(); const o = document.querySelector('.bd-idea')?.getBoundingClientRect(); return h && o ? { hhiLeft: h.left, ideaLeft: o.left, hhiW: h.width, ideaW: o.width, sameRow: Math.abs(h.top - o.top) < 2 } : null })
   check(`${w}×${h}：幸福指數在左、比想法庫寬（主體），想法庫在第一列`, !!order && order.hhiLeft < order.ideaLeft && order.hhiW > order.ideaW && order.sameRow, JSON.stringify(order))
   const ideaTxt = await page.locator('.bd-idea').innerText()
