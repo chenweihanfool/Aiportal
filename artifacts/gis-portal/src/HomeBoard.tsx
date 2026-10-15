@@ -7,20 +7,23 @@ import { biggestDrag, buildHhiBreakdown } from './boardView'
 import { topIdeas as pickTopIdeas, statusCounts } from './ideasView'
 import { Drawer, FEED_LABEL, IdeasPanel, PusherHealthPanel, pusherSummary } from './DesktopBoard'
 import { fetchHhiHistoryStrict } from './homeApi'
+import { HOME_DIMENSIONS } from './homeDimensions'
 import { useAsync, useNow } from './homeHooks'
 import { DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
 import {
-  EXPECTED_EVERY_MIN, badFeedNames, blockState, buildHeatmap, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
-  oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus,
+  EXPECTED_EVERY_MIN, badFeedNames, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
+  oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus, type DimSeries,
 } from './homeView'
 
 // 新首頁（審計報告 §2.6 五段式）：① 今天 → ② 六個面向 → ③ 成長軌跡 → ④ 好玩的 → ⑤ 系統一顆燈（異常時移到 ① 下方）。
-// 獨立元件，props 與 DesktopBoard 類似；目前只掛在 #home 預覽路由，使用者看過截圖同意後才會換成預設首頁。
+// 獨立元件，props 與 DesktopBoard 類似；2.36.0 起是預設首頁的主區（App.tsx 的 InstrumentPanelView，左側欄的工具連結保留），舊版 DesktopBoard 在 #legacy。
 // 資料全部來自既有 API 與既有型別／函式，沒有任何示範值：拿不到就依 StateFrame 的狀態機顯示（未解鎖／載入中／空／過期／失敗）。
 
 type DrawerKey = 'hhi' | 'ops' | 'ideas'
 
 const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
+// 面向小卡的 30 天迷你線：另外要 days=30（後端的 components 欄位只保證在這個呼叫裡；接口還沒部署時沒有該欄位，就不畫線）
+const fetchHistory30 = (pw: string) => fetchHhiHistoryStrict(pw, 30)
 
 export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, hhiError, toneOf, onRequestUnlock, hhiDetail, opsDetail }: {
   unlocked: boolean
@@ -45,6 +48,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const [drawer, setDrawer] = useState<DrawerKey | null>(null)
 
   const history = useAsync(pw, fetchHistory365)
+  const history30 = useAsync(pw, fetchHistory30)
   const graph = useAsync(pw, apiFetchHermesGraph)
   const ideas = useAsync(pw, apiFetchIdeas)
   const food = useAsync(pw, apiFetchFood)
@@ -56,6 +60,14 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
   const histData = history.data ?? []
   const trend = useMemo(() => hhiTrend(histData, todayIso, breakdown?.displayed ?? null), [histData, todayIso, breakdown])
+
+  // ── 每面向 30 天迷你線：失敗、沒有 components、有效點不到 2 個，都靜靜地維持數值條（沒有錯誤提示）──
+  const sparkSeries = useMemo(() => {
+    if (!history30.data) return null
+    const m: Record<string, DimSeries | null> = {}
+    for (const d of HOME_DIMENSIONS) m[d.key] = dimensionSeries(history30.data, d.key, todayIso)
+    return m
+  }, [history30.data, todayIso])
 
   // ── 各區塊的狀態（§2.4）──
   const on = !!pw
@@ -104,13 +116,15 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     : null
   const sentence = todaySentence({ trend, rows: breakdown?.rows ?? [], trendKnown: trendNote === null })
 
-  // ── 里程碑（只列算得出來的）──
+  // ── 里程碑（八組門檻；資料來源不可得的整組略過）──
   const miles = useMemo(() => milestones({
-    events: kb.events, people: kb.people,
+    events: kb.events, people: kb.people, concepts: kb.concepts, methods: kb.methods,
     ideasDone: ideasList ? statusCounts(ideasList.ideas).done : null,
     placesBeen: food.data ? placesBeenCount(places) : null,
-    hhi: history.data ? { score: breakdown?.displayed ?? null, history: history.data, todayIso } : null,
-  }), [kb, ideasList, food.data, places, history.data, breakdown, todayIso])
+    // 還沒出發的計畫中不算「遊記」
+    trips: trips.data ? trips.data.trips.filter((t) => t.status !== 'planned').length : null,
+    hhiDays: history.data ? hhiRecordedDays(history.data) : null,
+  }), [kb, ideasList, food.data, places, trips.data, history.data])
 
   // ── ⑤ 一顆燈 ──
   const pusher = pusherSummary(status.data?.pushers)
@@ -138,7 +152,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence}
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
-      <DimensionsSection st={hhiSt} breakdown={breakdown} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
+      <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
       <FunSection ideasSt={ideasSt} ideasCount={ideasList?.ideas.length ?? 0} topIdeas={ideaTop}

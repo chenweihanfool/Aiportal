@@ -1,4 +1,4 @@
-// 桌面首頁儀表板（DesktopBoard）真實瀏覽器驗證（手動執行；不在 CI 內，同 timeline.e2e.mjs 的做法）。
+// 舊版首頁（DesktopBoard，網址 #legacy；2.36.0 起預設首頁改為 HomeBoard，新首頁的檢查在 home.e2e.mjs）真實瀏覽器驗證（手動執行；不在 CI 內，同 timeline.e2e.mjs 的做法）。
 //
 // 做什麼：本機靜態伺服器提供 dist/public，以「假 API」模擬 sites／dashboard／hermes-usage／hermes-ideas／graph／pipeline／status，
 // 用 Playwright 驅動 Chromium 驗證：各種桌面尺寸一個畫面放得下（頁面不需捲動就看得到六張卡）、
@@ -159,7 +159,7 @@ const clipped = (page) => page.evaluate(() => [...document.querySelectorAll('.bd
 for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366, 768], [1600, 700]]) {
   entries = []
   const { ctx, page, errors } = await newPage({ width: w, height: h })
-  await page.goto(base + '/')
+  await page.goto(base + '/#legacy')
   await page.waitForSelector('.bd-idea .bd-idea-row', { timeout: 15000 })
   await page.waitForSelector('.bd-oll .bd-kv')
   await page.waitForSelector('.bd-net .bd-tiles')
@@ -172,7 +172,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   check(`${w}×${h}：沒有卡片內容被裁切`, cl.length === 0, JSON.stringify(cl))
   check(`${w}×${h}：頁面本身不橫向捲動`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   const txt = await page.locator('.ip-board').innerText()
-  check(`${w}×${h}：幸福指數顯示「今日值 × 權重 ＝ 貢獻分」與計算鏈`, /人生自由/.test(txt) && /27%/.test(txt) && /18\.4/.test(txt) && /加權平均/.test(txt) && /74\.5/.test(txt) && /短板修正/.test(txt))
+  check(`${w}×${h}：幸福指數顯示「今日值 × 權重 ＝ 貢獻分」與計算鏈`, /財務自由/.test(txt) && /27%/.test(txt) && /18\.4/.test(txt) && /加權平均/.test(txt) && /74\.5/.test(txt) && /短板修正/.test(txt))
   const order = await page.evaluate(() => { const h = document.querySelector('.bd-hhi')?.getBoundingClientRect(); const o = document.querySelector('.bd-idea')?.getBoundingClientRect(); return h && o ? { hhiLeft: h.left, ideaLeft: o.left, hhiW: h.width, ideaW: o.width, sameRow: Math.abs(h.top - o.top) < 2 } : null })
   check(`${w}×${h}：幸福指數在左、比想法庫寬（主體），想法庫在第一列`, !!order && order.hhiLeft < order.ideaLeft && order.hhiW > order.ideaW && order.sameRow, JSON.stringify(order))
   const ideaTxt = await page.locator('.bd-idea').innerText()
@@ -291,7 +291,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
 // 版本歷程（時間軸）：左版號日期、右標題可折疊、搜尋、類型篩選、ESC 關閉（電腦與手機各一次）
 for (const [vw, vhh] of [[1440, 900], [390, 844]]) {
   const { ctx, page, errors } = await newPage({ width: vw, height: vhh })
-  await page.goto(base + '/')
+  await page.goto(base + '/#legacy')
   await page.getByRole('button', { name: /版本歷程/ }).first().click()
   await page.waitForSelector('.vh-dialog .vh-row')
   const rows = await page.locator('.vh-row').count()
@@ -327,7 +327,7 @@ for (const [vw, vhh] of [[1440, 900], [390, 844]]) {
 // 手機、平板、寬而矮的視窗：同一組儀表板卡片上下堆疊（2026-10-12 起，原本手機照舊顯示舊面板）
 for (const [w, h, tag] of [[390, 844, 'mobile'], [360, 740, 'mobile-small'], [820, 1180, 'tablet'], [1280, 600, 'wide-short']]) {
   const { ctx, page, errors } = await newPage({ width: w, height: h })
-  await page.goto(base + '/')
+  await page.goto(base + '/#legacy')
   await page.waitForSelector('.bd-idea .bd-idea-row', { timeout: 15000 })
   await page.waitForSelector('.bd-net .bd-tiles')
   await page.waitForSelector('.bd-sys .bd-sys-grid')

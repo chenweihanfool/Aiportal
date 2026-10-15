@@ -11,7 +11,7 @@ import { VersionHistoryDialog } from './VersionHistoryDialog'
 import { DesktopBoard } from './DesktopBoard'
 import { FoodMapView } from './FoodMapView'
 import { TripsView } from './TripsView'
-import { HomePreview } from './HomePreview'
+import { HomeBoard } from './HomeBoard'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -26,6 +26,18 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.36.0',
+    date: '2026-10-15',
+    summary: '新首頁成為預設首頁（舊版在 #legacy）、六面向改名、里程碑重做、面向小卡迷你線（需後端接口）',
+    changes: [
+      '新首頁成為預設首頁：打開網址就是五段式——① 今天、② 六個面向、③ 成長軌跡、④ 好玩的、⑤ 系統一顆燈（全部正常時只是一條細列，有異常會變色、寫出原因並移到 ① 下方）。頁首、左側欄的「美食及旅遊地圖」入口與私領域／公領域工具連結、版本歷程、帳號、⌘K 都跟以前一樣。之前分享的 #home 網址會直接回到首頁。',
+      '舊版首頁保留在網址 #legacy（或按 ⌘K／Ctrl+K 輸入「舊版」）：原樣的儀表板，頁首有「← 回到新首頁」。舊版上的 Ollama 餘額輸入與管線細節，新首頁改放在 ⑤ 系統點開的「HERMES 戰情室」抽屜裡。',
+      '幸福指數的六個面向改名：人生自由→財務自由、健身習慣→身體、生活從容→從容、心智指標→心智、社交指標→社交、旅遊生活→旅遊；首頁小卡、幸福指數雷達與權重列、六維度卡片都用新名稱，每個面向有固定的識別色。工具連結裡的站台名稱不變。最大短板的算法不變（權重 × 離滿分的差）。',
+      '③ 里程碑重做：事件、人物、概念、方法、已實行想法、去過地點、遊記趟數、幸福指數紀錄天數各有門檻，每組顯示「已達成的最高門檻」膠囊（最多 6 顆），另加一條「下一個：事件 2,000（目前 1,156，還差 844）」與進度條；資料讀不到的組整組略過，不顯示 0。',
+      '② 面向小卡新增近 30 天迷你線（用該面向的識別色，沒有資料的日子斷線，終點一個點，旁邊的 ▲／▼ 是與前一天的差）。這需要後端 /api/happiness/history 回傳每個面向的分數，那個接口還沒部署，所以目前仍是數值條；接口上線後自動出現，不需要再改前端。',
+    ],
+  },
   {
     version: '2.35.0',
     date: '2026-10-15',
@@ -1622,10 +1634,10 @@ const DIMENSION_NORMALIZED_FIELD: Record<string, string> = {
 }
 
 const DIMENSION_SUB: Record<string, string> = {
-  'pf-cwh': '人生自由',
-  'fitnessforge': '運動習慣',
-  'vikunja': '從容指數',
-  'travel': '旅遊生活',
+  'pf-cwh': '財務自由',
+  'fitnessforge': '身體',
+  'vikunja': '從容',
+  'travel': '旅遊',
 }
 
 // Replaces GlassSummaryCard — one gauge tile per HHI-contributing subsystem
@@ -1730,7 +1742,7 @@ function MindIndexCard({
   const tone = bandTone(normalizedScore, MIND_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label="心智指標" sub="想法＋日報" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label="心智" sub="想法＋日報" onRequestUnlock={onSelect} />
   }
 
   const rep = mc?.report ?? null
@@ -1745,7 +1757,7 @@ function MindIndexCard({
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
       <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>心智指標</div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>心智</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
         {normalizedScore !== null ? tone.label : (hhiSummary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
       </div>
@@ -1807,7 +1819,7 @@ function SocialIndexCard({
   const tone = bandTone(normalizedScore, SOCIAL_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label="社交指標" sub="近 7 天社交活動" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label="社交" sub="近 7 天社交活動" onRequestUnlock={onSelect} />
   }
 
   const socialItems = [
@@ -1825,7 +1837,7 @@ function SocialIndexCard({
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
       <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>社交指標</div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>社交</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
         {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 7 天沒有日記可供觀測') : tone.label}
       </div>
@@ -1923,12 +1935,12 @@ function HappinessHeroCard({
 
   const tone = hhiTone(displayedScore)
   const contributions: Array<{ label: string; value: number | null; weightPct: number }> = [
-    { label: '人生自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.27) * 100) },
-    { label: '健身習慣', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.18) * 100) },
-    { label: '生活從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.15) * 100) },
-    { label: '心智指標', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.15) * 100) },
-    { label: '社交指標', value: socialScore, weightPct: Math.round((weights?.socialWeight ?? 0.13) * 100) },
-    { label: '旅遊生活', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.12) * 100) },
+    { label: '財務自由', value: lifeFreedomScore, weightPct: Math.round((weights?.lifeFreedomWeight ?? 0.27) * 100) },
+    { label: '身體', value: fitnessHabitScore, weightPct: Math.round((weights?.fitnessWeight ?? 0.18) * 100) },
+    { label: '從容', value: calmScore, weightPct: Math.round((weights?.calmWeight ?? 0.15) * 100) },
+    { label: '心智', value: mindScore, weightPct: Math.round((weights?.mindWeight ?? 0.15) * 100) },
+    { label: '社交', value: socialScore, weightPct: Math.round((weights?.socialWeight ?? 0.13) * 100) },
+    { label: '旅遊', value: travelScore, weightPct: Math.round((weights?.travelWeight ?? 0.12) * 100) },
   ]
   const radarAxes = contributions.map(c => ({ label: c.label, value: c.value }))
 
@@ -2721,6 +2733,8 @@ function HermesWarRoomSection({
 const DESKTOP_QUERY = '(min-width: 1100px)'
 // 首頁儀表板（DesktopBoard）出現的尺寸：要跟 portal.css 的 .ip-board-wrap media query 同一組條件
 const BOARD_QUERY = '(min-width: 1100px) and (min-height: 640px)'
+// 新首頁（HomeBoard）一個畫面放得下的尺寸：側欄佔掉約 240–320px，主區要夠寬才塞得下五段，比舊版多要求 ≥1300px（portal.css 的 .hm-wrap 同一組條件）
+const HOME_QUERY = '(min-width: 1300px) and (min-height: 640px)'
 function useMedia(query: string): boolean {
   const [d, setD] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
   useEffect(() => {
@@ -3255,7 +3269,7 @@ function InstrumentPanelView({
   unlockedPassword,
   onSiteSelect,
   onRequestUnlock,
-  homePreview = false,
+  legacy = false,
 }: {
   sites: SiteData[]
   dashboard: DashboardSummary[]
@@ -3263,8 +3277,8 @@ function InstrumentPanelView({
   unlockedPassword: string | null
   onSiteSelect: (site: SiteData) => void
   onRequestUnlock: () => void
-  /** #home 新首頁預覽：用同一份 hhiDetail／戰情室內容，改畫 HomeBoard（現在的首頁不變） */
-  homePreview?: boolean
+  /** #legacy 舊版首頁：主區改畫原樣的 DesktopBoard（2.36.0 起預設首頁是 HomeBoard，舊版留作退路） */
+  legacy?: boolean
 }) {
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
@@ -3279,7 +3293,7 @@ function InstrumentPanelView({
   richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
   const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
   // 電腦版儀表板要一個畫面放得下，頁尾只在手機、窄／矮視窗（頁面本來就要捲動）顯示
-  const boardOn = useMedia(BOARD_QUERY)
+  const boardOn = useMedia(legacy ? BOARD_QUERY : HOME_QUERY)
 
   const dimsGrid = (
     <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
@@ -3302,24 +3316,17 @@ function InstrumentPanelView({
     </div>
   )
 
-  if (homePreview) {
-    return (
-      <HomePreview
-        unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} hhiFetchedAt={hhiSummary?.fetchedAt ?? null}
-        hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
-        hhiDetail={
-          <>
-            <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
-            <div style={{ marginTop: '1.4rem' }}>
-              <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
-              {dimsGrid}
-            </div>
-          </>
-        }
-        opsDetail={<HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />}
-      />
-    )
-  }
+  // 抽屜內容：新舊首頁共用同一份（幸福指數詳情、HERMES 戰情室）
+  const hhiDetail = (
+    <>
+      <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
+      <div style={{ marginTop: '1.4rem' }}>
+        <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
+        {dimsGrid}
+      </div>
+    </>
+  )
+  const opsDetail = <HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
@@ -3328,9 +3335,16 @@ function InstrumentPanelView({
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1.5rem', flexWrap: 'wrap',
       }}>
         <div>
+          <div className="hm-titlerow">
           <h1 style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 'clamp(1.6rem, 4vw, 2.3rem)', margin: 0, lineHeight: 1, color: COLOR.ink, animation: 'header-flicker 12s infinite' }}>
             翰翰儀表板
           </h1>
+          {legacy && (
+            <a className="hm-legacy-back" href="#" onClick={e => { e.preventDefault(); window.location.hash = '' }} title="回到新首頁">
+              <span className="hm-legacy-badge">舊版首頁</span>← 回到新首頁
+            </a>
+          )}
+          </div>
           <span style={{ fontFamily: FONT.latin, fontSize: '0.62rem', letterSpacing: '0.2em', color: COLOR.amber, textTransform: 'uppercase', marginTop: '0.3rem', display: 'block' }}>
             Life Instrumentation · 即時遙測面板
           </span>
@@ -3353,22 +3367,20 @@ function InstrumentPanelView({
 
           </aside>
           <div className="ip-main">
-        {/* 首頁儀表板：電腦版一個畫面放得下；手機、窄／矮視窗同一組卡片改成上下堆疊（portal.css）。
-            舊面板（戰情室、幸福指數大卡、六維度）的內容都在卡片「詳細」打開的抽屜裡。 */}
-          <div className="ip-board-wrap">
-            <DesktopBoard
-              unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
-              hhiDetail={
-                <>
-                  <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
-                  <div style={{ marginTop: '1.4rem' }}>
-                    <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
-                    {dimsGrid}
-                  </div>
-                </>
-              }
-              opsDetail={<HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />}
-            />
+        {/* 預設首頁（2.36.0 起）：HomeBoard 五段式；電腦版一個畫面放得下（含左側欄），手機、窄／矮視窗上下堆疊（portal.css 的 hm-*）。
+            #legacy 舊版首頁：原樣的 DesktopBoard。兩者共用同一份抽屜內容與 .ip-board-wrap 的高度算法。 */}
+          <div className={`ip-board-wrap${legacy ? '' : ' hm-wrap'}`}>
+            {legacy ? (
+              <DesktopBoard
+                unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
+                hhiDetail={hhiDetail} opsDetail={opsDetail}
+              />
+            ) : (
+              <HomeBoard
+                unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} hhiFetchedAt={hhiSummary?.fetchedAt ?? null}
+                hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} hhiDetail={hhiDetail} opsDetail={opsDetail}
+              />
+            )}
           </div>
 
           </div>
@@ -3445,8 +3457,8 @@ function CommandPalette({
   const showFoodShortcut = q.length === 0 || foodKeywords.some(k => k.includes(q) || q.includes(k))
   const tripKeywords = ['遊記', '旅遊', '行程', 'trip']
   const showTripsShortcut = q.length === 0 || tripKeywords.some(k => k.includes(q) || q.includes(k))
-  const homeKeywords = ['新首頁', '首頁', '預覽', 'home']
-  const showHomeShortcut = q.length === 0 || homeKeywords.some(k => k.includes(q) || q.includes(k))
+  const legacyKeywords = ['舊版首頁', '舊首頁', '舊版', 'legacy']
+  const showLegacyShortcut = q.length === 0 || legacyKeywords.some(k => k.includes(q) || q.includes(k))
 
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0.9rem',
@@ -3502,13 +3514,13 @@ function CommandPalette({
               <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
             </div>
           )}
-          {showHomeShortcut && (
+          {showLegacyShortcut && (
             <div
-              onClick={() => { window.location.hash = 'home'; setOpen(false) }}
+              onClick={() => { window.location.hash = 'legacy'; setOpen(false) }}
               style={{ ...rowStyle, background: 'rgba(245,166,35,0.05)' }}
             >
               <span style={{ color: COLOR.amber }}>🏠</span>
-              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>新首頁（預覽版）</span>
+              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>舊版首頁（退路）</span>
               <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
             </div>
           )}
@@ -3545,9 +3557,18 @@ export default function App() {
   // 全頁 3D 關係宇宙走 hash route（#graph），不是路徑 route——這個 SPA 沒
   // 有接路由庫，路徑 route 在 refresh/直接貼網址時需要伺服端 SPA fallback
   // 設定，hash 則完全是前端狀態，不需要動部署那端的反向代理規則。
-  const [hashRoute, setHashRoute] = useState(() => window.location.hash)
+  // #home（新首頁預覽時期分享出去的網址）已等同預設首頁：直接把網址的 hash 清掉，免得停在一個沒有意義的路由上
+  const readHash = () => {
+    const h = window.location.hash
+    if (h === '#home') {
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 取不到 history 就維持原網址 */ }
+      return ''
+    }
+    return h
+  }
+  const [hashRoute, setHashRoute] = useState(readHash)
   useEffect(() => {
-    const onHashChange = () => setHashRoute(window.location.hash)
+    const onHashChange = () => setHashRoute(readHash())
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
@@ -3648,10 +3669,10 @@ export default function App() {
         unlockedPassword={unlockedPassword}
         onSiteSelect={handleSiteClick}
         onRequestUnlock={handleRequestUnlock}
-        homePreview={hashRoute === '#home'}
+        legacy={hashRoute === '#legacy'}
       />
 
-      {hashRoute !== '#home' && <button
+      <button
         onClick={() => setAdminAuth(true)}
         title="管理後台"
         style={{
@@ -3659,7 +3680,7 @@ export default function App() {
           background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
           color: COLOR.steelDim, fontSize: '1rem', padding: '0.5rem 0.8rem', cursor: 'pointer', lineHeight: 1,
         }}
-      >⚙</button>}
+      >⚙</button>
 
       <CommandPalette
         sites={sites}

@@ -10,7 +10,7 @@ const data = {
 describe('buildHhiBreakdown', () => {
   it('spreads each dimension into score × weight = points, summing to the base score', () => {
     const b = buildHhiBreakdown(data)!
-    expect(b.rows.map((r) => r.label)).toEqual(['人生自由', '健身習慣', '生活從容', '心智指標', '社交指標', '旅遊生活'])
+    expect(b.rows.map((r) => r.label)).toEqual(['財務自由', '身體', '從容', '心智', '社交', '旅遊'])
     expect(b.rows[0]).toMatchObject({ value: 68, weightPct: 27, points: 18.4 })
     expect(b.pointsSum).toBeCloseTo(18.4 + 14.6 + 11.1 + 11.9 + 10.0 + 6.6, 1)
     expect(b.base).toBe(74.5)
@@ -33,8 +33,8 @@ describe('buildHhiBreakdown', () => {
 describe('biggestDrag', () => {
   it('picks the row with the largest weighted gap to 100', () => {
     const b = buildHhiBreakdown(data)!
-    // 人生自由 (100-68)*27% = 8.64 > 旅遊 (100-55)*12% = 5.4
-    expect(biggestDrag(b.rows)!.label).toBe('人生自由')
+    // 財務自由 (100-68)*27% = 8.64 > 旅遊 (100-55)*12% = 5.4
+    expect(biggestDrag(b.rows)!.label).toBe('財務自由')
   })
   it('ignores rows without a score and returns null when everything is 100', () => {
     expect(biggestDrag([{ key: 'a', label: 'a', value: null, weightPct: 10, points: null }])).toBeNull()

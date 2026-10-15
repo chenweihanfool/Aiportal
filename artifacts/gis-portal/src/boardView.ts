@@ -36,12 +36,12 @@ export function buildHhiBreakdown(data: Record<string, unknown> | undefined): Hh
   const w = (data['weights'] ?? {}) as Record<string, unknown>
   const pct = (key: string, dflt: number) => Math.round((num(w[key]) ?? dflt) * 100)
   const spec: Array<[string, string, string, string, number]> = [
-    ['lifeFreedom', '人生自由', 'lifeFreedomScore', 'lifeFreedomWeight', 0.27],
-    ['fitness', '健身習慣', 'fitnessHabitScore', 'fitnessWeight', 0.18],
-    ['calm', '生活從容', 'calmScore', 'calmWeight', 0.15],
-    ['mind', '心智指標', 'mindScore', 'mindWeight', 0.15],
-    ['social', '社交指標', 'socialScore', 'socialWeight', 0.13],
-    ['travel', '旅遊生活', 'travelScore', 'travelWeight', 0.12],
+    ['lifeFreedom', '財務自由', 'lifeFreedomScore', 'lifeFreedomWeight', 0.27],
+    ['fitness', '身體', 'fitnessHabitScore', 'fitnessWeight', 0.18],
+    ['calm', '從容', 'calmScore', 'calmWeight', 0.15],
+    ['mind', '心智', 'mindScore', 'mindWeight', 0.15],
+    ['social', '社交', 'socialScore', 'socialWeight', 0.13],
+    ['travel', '旅遊', 'travelScore', 'travelWeight', 0.12],
   ]
   const rows: HhiRow[] = spec.map(([key, label, scoreKey, weightKey, dflt]) => {
     const value = num(data[scoreKey])

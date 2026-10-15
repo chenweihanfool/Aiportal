@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   addDays, ageText, badFeedNames, blockState, buildHeatmap, dimensionLine, formatAge, formatDuration, greeting, hhiTrend, historyUpdatedAtMs, knowledgeStats,
-  latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
-  type BlockInput, type SystemLightInput,
+  dimensionSeries, hhiRecordedDays, latestTrip, milestones, oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress,
+  sparkGeometry, type BlockInput, type SystemLightInput,
 } from './homeView'
 import { buildHhiBreakdown, type HhiRow } from './boardView'
 import type { BoardPipeline, BoardStatus, HhiHistoryPoint, PusherHealth, UsageData } from './boardApi'
@@ -127,8 +127,8 @@ describe('todaySentence', () => {
     expect(todaySentence({ trend: trend({ score: null }), rows: rows([50]) })).toContain('還沒有資料')
   })
   it('streak beats delta and names the biggest drag with its gap', () => {
-    const s = todaySentence({ trend: trend({ streak: { direction: 'up', days: 3 } }), rows: [row('a', '人生自由', 90, 27), row('travel', '旅遊生活', 55, 12)] })
-    expect(s).toBe('連 3 天上升，現在最大的短板是「旅遊生活」（55 分，拉低總分 5.4 分）。')
+    const s = todaySentence({ trend: trend({ streak: { direction: 'up', days: 3 } }), rows: [row('a', '財務自由', 90, 27), row('travel', '旅遊', 55, 12)] })
+    expect(s).toBe('連 3 天上升，現在最大的短板是「旅遊」（55 分，拉低總分 5.4 分）。')
   })
   it('falls back to delta when streak is only 1 day', () => {
     expect(todaySentence({ trend: trend({ streak: { direction: 'up', days: 1 } }), rows: rows([40]) })).toMatch(/^比昨天高 3 分，/)
@@ -151,14 +151,14 @@ describe('todaySentence', () => {
     expect(todaySentence({ trend: trend(), rows: rows([100, 100]) })).toContain('沒有明顯的短板')
   })
   it('history unavailable: says nothing about the trend instead of claiming "no record yesterday"', () => {
-    const s = todaySentence({ trend: trend({ delta: null, yesterday: null, historyDays: 0 }), rows: [row('travel', '旅遊生活', 55, 12)], trendKnown: false })
-    expect(s).toBe('現在最大的短板是「旅遊生活」（55 分，拉低總分 5.4 分）。')
+    const s = todaySentence({ trend: trend({ delta: null, yesterday: null, historyDays: 0 }), rows: [row('travel', '旅遊', 55, 12)], trendKnown: false })
+    expect(s).toBe('現在最大的短板是「旅遊」（55 分，拉低總分 5.4 分）。')
     expect(s).not.toContain('昨天')
   })
   it('works with the real breakdown builder', () => {
     const b = buildHhiBreakdown({ displayedScore: 72, lifeFreedomScore: 68, fitnessHabitScore: 81, calmScore: 74, mindScore: 79, socialScore: 77, travelScore: 55 })!
-    // 人生自由 68×27% 離滿分的缺口（8.6）比旅遊 55×12%（5.4）大，所以最大短板是人生自由（與 biggestDrag 一致）
-    expect(todaySentence({ trend: trend(), rows: b.rows })).toContain('「人生自由」（68 分，拉低總分 8.6 分）')
+    // 財務自由 68×27% 離滿分的缺口（8.6）比旅遊 55×12%（5.4）大，所以最大短板是財務自由（與 biggestDrag 一致）
+    expect(todaySentence({ trend: trend(), rows: b.rows })).toContain('「財務自由」（68 分，拉低總分 8.6 分）')
   })
 })
 
@@ -269,53 +269,194 @@ describe('knowledgeStats', () => {
 })
 
 describe('milestones', () => {
-  const base = { events: null, people: null, ideasDone: null, placesBeen: null }
-  it('lists nothing when nothing is computable', () => {
-    expect(milestones(base)).toEqual([])
+  const none = { events: null, people: null, concepts: null, methods: null, ideasDone: null, placesBeen: null, trips: null, hhiDays: null }
+  it('lists nothing when no source is available', () => {
+    expect(milestones(none)).toEqual({ badges: [], next: null })
   })
-  it('crossing 1000 events lists the highest reached rung only, with the next target', () => {
-    const m = milestones({ ...base, events: 1156 })
-    expect(m).toHaveLength(1)
-    expect(m[0]).toMatchObject({ id: 'events', title: '事件突破 1,000', detail: '目前 1,156 個事件', next: '下一個 2,000（還差 844）' })
+  it('crossing 1000 events: one badge for the highest rung, next target 2,000', () => {
+    const m = milestones({ ...none, events: 1156 })
+    expect(m.badges).toEqual([{ id: 'events', icon: '📅', title: '事件突破 1,000', detail: '目前 1,156 個事件' }])
+    expect(m.next).toMatchObject({ text: '下一個：事件 2,000（目前 1,156，還差 844）', current: 1156, target: 2000, remaining: 844 })
+    expect(m.next!.ratio).toBeCloseTo(0.578, 3)
   })
-  it('999 events has not crossed 1000', () => {
-    expect(milestones({ ...base, events: 999 })[0]!.title).toBe('事件突破 500')
-    expect(milestones({ ...base, events: 1000 })[0]!.title).toBe('事件突破 1,000')
+  it('rung boundaries are inclusive (999 → 500, 1000 → 1,000)', () => {
+    expect(milestones({ ...none, events: 999 }).badges[0]!.title).toBe('事件突破 500')
+    expect(milestones({ ...none, events: 1000 }).badges[0]!.title).toBe('事件突破 1,000')
+    expect(milestones({ ...none, events: 100 }).badges[0]!.title).toBe('事件突破 100')
   })
-  it('below the first rung → not listed; zero is not listed', () => {
-    expect(milestones({ ...base, events: 99, people: 0, ideasDone: 0, placesBeen: 9 })).toEqual([])
+  it('below the first rung: no badge, but still a next target (a real zero is not hidden)', () => {
+    const m = milestones({ ...none, events: 99, ideasDone: 0 })
+    expect(m.badges).toEqual([])
+    // 99/100 比 0/1 高
+    expect(m.next).toMatchObject({ id: 'events', text: '下一個：事件 100（目前 99，還差 1）' })
   })
-  it('top of the ladder has no next target', () => {
-    expect(milestones({ ...base, events: 6000 })[0]!.next).toBeNull()
+  it('top of a ladder has a badge but no next from that group', () => {
+    const m = milestones({ ...none, events: 6000 })
+    expect(m.badges[0]!.title).toBe('事件突破 5,000')
+    expect(m.next).toBeNull()
   })
-  it('ideas done ≥ 10 and places been', () => {
-    const m = milestones({ ...base, ideasDone: 12, placesBeen: 26 })
-    expect(m.map((x) => x.title)).toEqual(['已實行 10 個想法', '去過 25 個地點'])
+  it('every group has the specified rungs', () => {
+    const m = milestones({ events: 5000, people: 500, concepts: 500, methods: 200, ideasDone: 25, placesBeen: 100, trips: 25, hhiDays: 365 })
+    expect(m.badges.map((b) => b.title)).toEqual(['事件突破 5,000', '人物突破 500', '概念突破 500', '方法突破 200', '已實行 25 個想法', '去過 100 個地點'])
+    expect(m.next).toBeNull()
+    expect(milestones({ ...none, concepts: 50 }).badges[0]!.title).toBe('概念突破 50')
+    expect(milestones({ ...none, methods: 25 }).badges[0]!.title).toBe('方法突破 25')
+    expect(milestones({ ...none, ideasDone: 1 }).badges[0]!.title).toBe('已實行 1 個想法')
+    expect(milestones({ ...none, placesBeen: 10 }).badges[0]!.title).toBe('去過 10 個地點')
+    expect(milestones({ ...none, trips: 5 }).badges[0]!.title).toBe('遊記 5 趟')
+    expect(milestones({ ...none, hhiDays: 100 }).badges[0]!.title).toBe('幸福指數紀錄 100 天')
   })
-  it('order is stable: events, people, ideas, places', () => {
-    const m = milestones({ events: 1156, people: 186, ideasDone: 12, placesBeen: 26 })
-    expect(m.map((x) => x.id)).toEqual(['events', 'people', 'ideasDone', 'placesBeen'])
+  it('shows at most 6 badges, in group order', () => {
+    const m = milestones({ events: 200, people: 60, concepts: 60, methods: 30, ideasDone: 2, placesBeen: 11, trips: 2, hhiDays: 40 })
+    expect(m.badges).toHaveLength(6)
+    expect(m.badges.map((b) => b.id)).toEqual(['events', 'people', 'concepts', 'methods', 'ideasDone', 'placesBeen'])
   })
-  describe('hhi record high', () => {
-    const todayIso = '2026-10-15'
-    it('needs 30 days of earlier history', () => {
-      const history = series('2026-10-01', Array.from({ length: 14 }, () => 60))
-      expect(milestones({ ...base, hhi: { score: 99, history, todayIso } })).toEqual([])
-    })
-    it('strictly higher than every earlier day', () => {
-      const history = series('2026-09-01', Array.from({ length: 44 }, (_, i) => 60 + (i % 5))) // 9/1..10/14
-      const m = milestones({ ...base, hhi: { score: 70, history, todayIso } })
-      expect(m).toHaveLength(1)
-      expect(m[0]).toMatchObject({ id: 'hhiRecord', title: '幸福指數創 45 天新高', detail: '今天 70 分' })
-    })
-    it('a tie is not a record', () => {
-      const history = series('2026-09-01', Array.from({ length: 44 }, () => 70))
-      expect(milestones({ ...base, hhi: { score: 70, history, todayIso } })).toEqual([])
-    })
-    it('no score today: no record', () => {
-      const history = series('2026-09-01', Array.from({ length: 44 }, () => 60))
-      expect(milestones({ ...base, hhi: { score: null, history, todayIso } })).toEqual([])
-    })
+  it('skips unavailable groups entirely instead of showing 0', () => {
+    const m = milestones({ ...none, events: 1156, people: null, trips: 3 })
+    expect(m.badges.map((b) => b.id)).toEqual(['events', 'trips'])
+    expect(milestones({ ...none, people: Number.NaN, events: -5 })).toEqual({ badges: [], next: null })
+  })
+  it('next = the group closest to its next rung by ratio', () => {
+    // events 1156/2000 = 0.578；people 186/200 = 0.93；concepts 74/100 = 0.74；methods 31/50 = 0.62
+    const m = milestones({ ...none, events: 1156, people: 186, concepts: 74, methods: 31 })
+    expect(m.next).toMatchObject({ id: 'people', text: '下一個：人物 200（目前 186，還差 14）' })
+    expect(m.next!.ratio).toBeCloseTo(0.93, 2)
+  })
+  it('ties keep the earlier group', () => {
+    const m = milestones({ ...none, events: 50, people: 25 }) // 都是 0.5
+    expect(m.next!.id).toBe('events')
+  })
+  it('fractional input is floored', () => {
+    expect(milestones({ ...none, events: 99.9 }).next).toMatchObject({ current: 99, remaining: 1 })
+  })
+  it('per-group next text', () => {
+    expect(milestones({ ...none, ideasDone: 1 }).next!.text).toBe('下一個：已實行想法 5（目前 1，還差 4）')
+    expect(milestones({ ...none, trips: 0 }).next!.text).toBe('下一個：遊記 1 趟（目前 0，還差 1）')
+    expect(milestones({ ...none, hhiDays: 80 }).next!.text).toBe('下一個：幸福指數紀錄 100 天（目前 80，還差 20）')
+  })
+})
+
+describe('hhiRecordedDays', () => {
+  it('counts distinct dates with a finite score', () => {
+    expect(hhiRecordedDays([])).toBe(0)
+    expect(hhiRecordedDays([pt('2026-10-01', 60), pt('2026-10-01', 61), pt('2026-10-02', 62)])).toBe(2)
+    expect(hhiRecordedDays([pt('2026-10-01', Number.NaN), pt('2026-10-02', 62)])).toBe(1)
+  })
+})
+
+describe('dimensionSeries（每面向 30 天迷你線）', () => {
+  const today = '2026-10-15'
+  const day = (back: number) => addDays(today, -back)
+  /** back 天前的一筆；value 可以是 null（那天面向沒資料） */
+  const h = (back: number, mind: number | null, extra: Record<string, number | null> = {}) => ({ date: day(back), components: { mind, ...extra } })
+  it('builds a 30-day window ending today, gaps are null', () => {
+    const s = dimensionSeries([h(3, 60), h(2, 62), h(0, 70)], 'mind', today)!
+    expect(s.days).toHaveLength(30)
+    expect(s.days[29]).toEqual({ date: today, value: 70 })
+    expect(s.days[0]!.date).toBe(day(29))
+    expect(s.days[28]!.value).toBeNull()
+    expect(s.validCount).toBe(3)
+    expect(s.last).toEqual({ idx: 29, date: today, value: 70 })
+  })
+  it('a gap in the middle splits the line instead of filling 0', () => {
+    const s = dimensionSeries([h(5, 50), h(4, 52), h(2, 60), h(1, 61), h(0, 62)], 'mind', today)!
+    expect(s.segments.map((g) => g.map((p) => p.value))).toEqual([[50, 52], [60, 61, 62]])
+    expect(s.days.filter((d) => d.value === 0)).toHaveLength(0)
+  })
+  it('delta = last value minus the day before (rounded values), colour decided by the caller', () => {
+    expect(dimensionSeries([h(1, 60), h(0, 63)], 'mind', today)!.delta).toBe(3)
+    expect(dimensionSeries([h(1, 63), h(0, 60)], 'mind', today)!.delta).toBe(-3)
+    expect(dimensionSeries([h(1, 60.4), h(0, 60.6)], 'mind', today)!.delta).toBe(1) // 60 → 61，與畫面上的整數一致
+    expect(dimensionSeries([h(1, 60), h(0, 60)], 'mind', today)!.delta).toBe(0)
+  })
+  it('delta is null when the previous day has no data', () => {
+    expect(dimensionSeries([h(3, 60), h(0, 63)], 'mind', today)!.delta).toBeNull()
+    expect(dimensionSeries([h(2, 60), h(1, 61), h(0, null)], 'mind', today)!.delta).toBe(1) // 今天沒資料 → 最後一點是昨天，與前天比
+  })
+  it('all null → no series', () => {
+    expect(dimensionSeries([h(2, null), h(1, null), h(0, null)], 'mind', today)).toBeNull()
+  })
+  it('a single valid point is not enough', () => {
+    expect(dimensionSeries([h(2, null), h(1, 55), h(0, null)], 'mind', today)).toBeNull()
+  })
+  it('missing components field or wrong shape → null (card keeps the value bar)', () => {
+    expect(dimensionSeries([{ date: day(1) }, { date: today }], 'mind', today)).toBeNull()
+    expect(dimensionSeries([{ date: day(1), components: null }, { date: today, components: null }], 'mind', today)).toBeNull()
+    expect(dimensionSeries([{ date: day(1), components: [] as never }, { date: today, components: 'x' as never }], 'mind', today)).toBeNull()
+    expect(dimensionSeries(undefined, 'mind', today)).toBeNull()
+    expect(dimensionSeries(null, 'mind', today)).toBeNull()
+    expect(dimensionSeries('oops' as never, 'mind', today)).toBeNull()
+    expect(dimensionSeries([], 'mind', today)).toBeNull()
+  })
+  it('a dimension key that no day has → null; other keys are independent', () => {
+    const hist = [h(1, 60, { travel: 40 }), h(0, 61, { travel: 45 })]
+    expect(dimensionSeries(hist, 'social', today)).toBeNull()
+    expect(dimensionSeries(hist, 'travel', today)!.last.value).toBe(45)
+  })
+  it('non-finite values are treated as no data', () => {
+    expect(dimensionSeries([h(2, 60), h(1, Number.NaN), h(0, 62)], 'mind', today)!.segments).toHaveLength(2)
+    const s = dimensionSeries([{ date: day(1), components: { mind: 'x' as never } }, h(0, 62)], 'mind', today)
+    expect(s).toBeNull() // 只剩一個有效點
+  })
+  it('values outside 0–100 are clamped', () => {
+    const s = dimensionSeries([h(1, -20), h(0, 135)], 'mind', today)!
+    expect(s.days[28]!.value).toBe(0)
+    expect(s.days[29]!.value).toBe(100)
+    expect(s.delta).toBe(100)
+  })
+  it('input order does not matter (reversed history)', () => {
+    const asc = [h(3, 50), h(2, 55), h(1, 60), h(0, 65)]
+    const a = dimensionSeries(asc, 'mind', today)!
+    const b = dimensionSeries([...asc].reverse(), 'mind', today)!
+    expect(b).toEqual(a)
+    expect(b.last.value).toBe(65)
+    expect(b.delta).toBe(5)
+  })
+  it('dates outside the window (older than 30 days, or in the future) are ignored', () => {
+    const s = dimensionSeries([h(40, 10), h(30, 11), h(1, 60), h(0, 61), { date: addDays(today, 1), components: { mind: 99 } }], 'mind', today)!
+    expect(s.validCount).toBe(2)
+    expect(s.days[0]!.date).toBe(day(29))
+    expect(dimensionSeries([h(29, 10), h(0, 11)], 'mind', today)!.days[0]!.value).toBe(10) // 第 30 天（含今天）還在視窗內
+  })
+})
+
+describe('sparkGeometry', () => {
+  const today = '2026-10-15'
+  const mk = (pts: Array<[number, number | null]>) => dimensionSeries(pts.map(([back, v]) => ({ date: addDays(today, -back), components: { mind: v } })), 'mind', today)!
+  it('x spans 0–1 from oldest to newest; y: higher value is higher on screen (smaller y)', () => {
+    const g = sparkGeometry(mk(Array.from({ length: 30 }, (_, i): [number, number] => [29 - i, 40 + (40 * i) / 29])))
+    expect(g.lines).toHaveLength(1)
+    expect(g.lines[0]).toHaveLength(30)
+    expect(g.lines[0]![0]).toEqual({ x: 0, y: 1 })
+    expect(g.lines[0]![29]!.x).toBe(1)
+    expect(g.lines[0]![29]!.y).toBeCloseTo(0, 10)
+    expect(g.end.x).toBe(1)
+    expect(g.end.y).toBeCloseTo(0, 10)
+    expect(g.dots).toEqual([])
+    // 兩個孤立點（中間隔很多天）各是一個小點、沒有線
+    const iso = sparkGeometry(mk([[29, 40], [0, 80]]))
+    expect(iso.lines).toEqual([])
+    expect(iso.dots).toHaveLength(2)
+  })
+  it('a nearly flat series is not blown up (min span 10)', () => {
+    const g = sparkGeometry(mk([[1, 70], [0, 71]]))
+    expect(g.hi - g.lo).toBeCloseTo(10, 5)
+    expect(g.end.y).toBeGreaterThan(0.3)
+    expect(g.end.y).toBeLessThan(0.5)
+  })
+  it('stays within 0–100 near the edges', () => {
+    const g = sparkGeometry(mk([[1, 99], [0, 100]]))
+    expect(g.hi).toBeLessThanOrEqual(100)
+    expect(g.lo).toBeGreaterThanOrEqual(0)
+    expect(g.hi - g.lo).toBeGreaterThan(0)
+    const z = sparkGeometry(mk([[1, 0], [0, 1]]))
+    expect(z.lo).toBe(0)
+  })
+  it('isolated single points become dots, longer runs become lines', () => {
+    const g = sparkGeometry(mk([[6, 50], [4, 55], [3, 56], [1, 60], [0, 61]]))
+    expect(g.dots).toHaveLength(1)
+    expect(g.lines).toHaveLength(2)
+    expect(g.lines.every((l) => l.length >= 2)).toBe(true)
   })
 })
 

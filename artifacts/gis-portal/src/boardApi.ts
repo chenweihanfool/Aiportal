@@ -107,14 +107,44 @@ export async function apiFetchBoardDiskHistory(pw: string, days = 30): Promise<B
   return (d.history ?? []).map(h => ({ date: h.date, diskUsedGb: h.diskUsedGb ?? null }))
 }
 
-export interface HhiHistoryPoint { date: string; displayedScore: number }
+export interface HhiHistoryPoint {
+  date: string
+  displayedScore: number
+  /** 各面向當天的正規化分數（0-100；沒資料＝null）。key 同 /api/dashboard hhi 的面向 id（lifeFreedom／fitness／calm／mind／social／travel）。舊 API 沒有這欄。 */
+  components?: Record<string, number | null>
+}
+
+/** 防呆解析 components：不是一般物件就當沒有；值只收有限數字與 null，其他的丟掉；一個有效的都沒有也當沒有。 */
+export function parseHhiComponents(raw: unknown): Record<string, number | null> | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+  const out: Record<string, number | null> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === null) out[k] = null
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** /api/happiness/history 回應 → 資料點（沿用原本的過濾：displayedScore 不是數字的丟掉；components 有才帶）。 */
+export function parseHhiHistory(d: unknown): HhiHistoryPoint[] {
+  const list = (d as { history?: unknown } | null)?.history
+  if (!Array.isArray(list)) return []
+  const out: HhiHistoryPoint[] = []
+  for (const h of list as Array<Record<string, unknown> | null>) {
+    if (!h || typeof h['displayedScore'] !== 'number') continue
+    const point: HhiHistoryPoint = { date: h['date'] as string, displayedScore: h['displayedScore'] }
+    const components = parseHhiComponents(h['components'])
+    if (components) point.components = components
+    out.push(point)
+  }
+  return out
+}
 
 /** 幸福指數近 N 天每日顯示值（儀表板卡片的小趨勢線用）；讀不到回空陣列。 */
 export async function apiFetchHhiHistory(pw: string, days = 30): Promise<HhiHistoryPoint[]> {
   const r = await fetch(`${API_BASE}api/happiness/history?days=${days}`, { headers: authHeaders(pw) })
   if (!r.ok) return []
-  const d = (await r.json()) as { history?: Array<{ date: string; displayedScore: number }> }
-  return (d.history ?? []).filter(h => typeof h.displayedScore === 'number').map(h => ({ date: h.date, displayedScore: h.displayedScore }))
+  return parseHhiHistory(await r.json())
 }
 
 // 💡 想法庫（kb-pipeline 的 ideas-pusher 推上來，入口網只顯示）

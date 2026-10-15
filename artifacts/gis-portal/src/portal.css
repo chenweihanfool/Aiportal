@@ -584,22 +584,14 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
 }
 @media (prefers-reduced-motion: reduce) { .tr-card { transition: none; } }
 
-/* ─── 新首頁預覽（HomeBoard，#home）───
+/* ─── 新首頁（HomeBoard，2.36.0 起是預設首頁；舊版在 #legacy）───
    五段式（審計報告 §2.6）：① 今天、② 六個面向、③ 成長軌跡、④ 好玩的、⑤ 系統一顆燈；全部用 hm- 前綴，不改既有類別。
-   電腦版（≥1100px 寬且 ≥640px 高，與 .ip-board-wrap 同一組條件）：一個畫面放得下，不捲動；
+   電腦版（≥1300px 寬且 ≥640px 高，含左側欄）：一個畫面放得下，不捲動（高度沿用 .ip-board-wrap 的 100vh − 9.4rem）；1100–1299px 寬時主區太窄，同手機改上下堆疊、頁面往下捲；
    手機、窄／矮視窗：上下堆疊，順序 ① → ⑤（只在異常時）→ ② 兩欄 → ④ → ③，頁面往下捲。
    ⑤ 平常是最下面一條細列；有警告／異常時（.hm-root[data-sys="alert"]）改排到 ① 下方。 */
 @keyframes hm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes hm-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes hm-lamp { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.hm-page { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; color: #ece9e2; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; }
-.hm-topbar { flex: 0 0 auto; display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 1.2rem; border-bottom: 1px solid #3a3d47; }
-.hm-topbar h1 { margin: 0; font-size: 1.05rem; font-weight: 800; white-space: nowrap; }
-.hm-topbar h1 span { margin-left: 0.35rem; font-size: 0.78rem; font-weight: 600; color: #f5a623; }
-.hm-preview-badge { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; color: #121319; background: #f5a623; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
-.hm-back { margin-left: auto; color: #f5a623; font-size: 0.76rem; text-decoration: none; border: 1px solid rgba(245,166,35,0.35); background: rgba(245,166,35,0.07); padding: 3px 11px; border-radius: 999px; white-space: nowrap; }
-.hm-back:hover { background: rgba(245,166,35,0.16); border-color: #f5a623; }
-.hm-scroll { flex: 1 1 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0.8rem 0.9rem 2.2rem; }
 .hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "fun" "growth" "sys"; }
 .hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "fun" "growth"; }
 .hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; }
@@ -622,7 +614,7 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
 .hm-link:hover { text-decoration: underline; }
 .hm-chip { display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.56rem; letter-spacing: 0.06em; padding: 1px 6px; border: 1px solid #5b6270; border-radius: 4px; color: #9aa4b6; white-space: nowrap; }
 .hm-chip--warn { color: #e8b23d; border-color: #e8b23d; }
-.hm-root a:focus-visible, .hm-root button:focus-visible, .hm-back:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; border-radius: 6px; }
+.hm-root a:focus-visible, .hm-root button:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; border-radius: 6px; }
 
 /* 狀態機（StateFrame） */
 .hm-frame { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -735,13 +727,13 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .hm-reasons { list-style: none; margin: 0; padding: 0 0 0.2rem 1.45rem; display: grid; gap: 1px; font-size: 0.7rem; }
 
 /* 電腦版：一個畫面放得下 */
-@media (min-width: 1100px) and (min-height: 640px) {
-  .hm-scroll { overflow: hidden; padding: 0.7rem 1.2rem 0.8rem; }
+@media (min-width: 1300px) and (min-height: 640px) {
   .hm-root { height: 100%; gap: 0.6rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 0.78fr) minmax(0, 1fr) auto; grid-template-areas: "today today" "dims dims" "growth fun" "sys sys"; }
   .hm-root[data-sys="alert"] { grid-template-rows: auto auto minmax(0, 0.78fr) minmax(0, 1fr); grid-template-areas: "today today" "sys sys" "dims dims" "growth fun"; }
 }
-/* 手機、窄／矮視窗：上下堆疊 */
-@media (max-width: 1099px), (max-height: 639px) {
+/* 手機、窄／矮視窗、1100–1299px 的窄桌面：上下堆疊（.ip-board-wrap 的固定高度在這裡改回隨內容，頁面往下捲） */
+@media (max-width: 1299px), (max-height: 639px) {
+  .ip-board-wrap.hm-wrap { height: auto; min-height: 0; margin-bottom: 1.4rem; }
   .hm-today { flex-direction: column; align-items: stretch; gap: 0.7rem; }
   .hm-year { flex: 0 0 auto; }
   .hm-today-body { align-items: flex-start; }
@@ -756,7 +748,7 @@ button.hm-lock:hover { border-color: #e8b23d; }
   .hm-hide-sm { display: none; }
   .hm-heat { max-width: 100%; }
 }
-@media (min-width: 700px) and (max-width: 1099px), (min-width: 700px) and (max-height: 639px) {
+@media (min-width: 700px) and (max-width: 1299px), (min-width: 700px) and (max-height: 639px) {
   .hm-dims { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 479px) {
@@ -769,3 +761,52 @@ button.hm-lock:hover { border-color: #e8b23d; }
   .hm-card, .hm-skel i, .hm-sys.is-alert .hm-lamp { animation: none !important; }
   .hm-dim, .hm-idea { transition: none; }
 }
+
+/* ─── 預設首頁（2.36.0）：HomeBoard 放進「側欄＋主區」──
+   原本 .hm-page 包住 HomeBoard 提供字色與字型；現在 HomeBoard 直接放在 .ip-main 的 .ip-board-wrap.hm-wrap 裡，由 .hm-root 自己帶。 */
+.hm-root { color: #ece9e2; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+/* 舊版首頁（#legacy）頁首的退路連結 */
+.hm-legacy-back { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; color: #f5a623; text-decoration: none; border: 1px solid rgba(245,166,35,0.35); background: rgba(245,166,35,0.07); padding: 2px 11px 2px 3px; border-radius: 999px; white-space: nowrap; }
+.hm-legacy-back:hover { background: rgba(245,166,35,0.16); border-color: #f5a623; }
+.hm-legacy-back:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+.hm-legacy-badge { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.1em; color: #121319; background: #f5a623; padding: 1px 8px; border-radius: 999px; }
+.hm-titlerow { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
+/* 電腦版一個畫面：⑤ 右端的「戰情室 →」會被右下角的 ⚙ 管理按鈕（固定在視窗右下）蓋住，右側多留一顆按鈕的寬度 */
+@media (min-width: 1300px) and (min-height: 640px) {
+  .hm-wrap .hm-sys { padding-right: 4.2rem; }
+}
+
+/* ③ 里程碑（2.36.0 重做）：膠囊最多 6 顆＋一條「下一個」進度 */
+.hm-next { display: flex; flex-direction: column; gap: 3px; margin-top: 0.15rem; min-width: 0; }
+.hm-next-text { display: flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; color: #9aa4b6; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-next-bar { display: block; height: 5px; border-radius: 3px; background: #24262e; overflow: hidden; }
+.hm-next-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #8a5f18, #f5a623); }
+@media (max-width: 1299px), (max-height: 639px) { .hm-next-text { white-space: normal; } }
+
+/* ② 面向小卡的 30 天迷你線（2.36.0）：沒有資料就沒有這一列，小卡維持原本的數值條 */
+@keyframes hm-spark-in { from { opacity: 0; } to { opacity: 1; } }
+.hm-dim-spark { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; height: clamp(16px, 3.1vh, 30px); min-width: 0; }
+.hm-spark { position: relative; flex: 1 1 auto; align-self: stretch; margin: 0 4px; min-width: 0; animation: hm-spark-in 0.6s ease both; }
+.hm-spark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.hm-spark-line { stroke: var(--dim); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; opacity: 0.95; }
+.hm-spark-dot, .hm-spark-end { position: absolute; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--dim); }
+.hm-spark-end { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; box-shadow: 0 0 0 2px #24262e, 0 0 8px var(--dim); }
+.hm-dim:hover .hm-spark-end { box-shadow: 0 0 0 2px #2a2d36, 0 0 8px var(--dim); }
+.hm-spark-delta { flex: 0 0 auto; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: clamp(0.6rem, 1.3vh, 0.72rem); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .hm-spark { animation: none !important; } }
+/* 側欄讓主區變窄、也讓高度少約 100px：1366×768 這類小螢幕五段要擠進同一個畫面，把可壓縮的地方壓一點（只動 .hm-wrap 底下，舊類別本身不變） */
+@media (min-width: 1300px) and (min-height: 640px) {
+  .hm-wrap .hm-score-n { font-size: clamp(2rem, 5.4vh, 3.4rem); line-height: 1.3; }
+  .hm-wrap .hm-today { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  .hm-wrap .hm-growth-foot { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
+  .hm-wrap .hm-kb { gap: 0.25rem; }
+  .hm-wrap .hm-kb-tile { padding: 0.25rem 0.4rem; }
+  .hm-wrap .hm-kb-n { font-size: clamp(1rem, 2.3vh, 1.3rem); }
+  .hm-wrap .hm-heat { max-width: min(100%, 104vh); }
+  .hm-wrap .hm-dim.has-spark { row-gap: 0.05rem; padding-top: 0.2rem; padding-bottom: 0.2rem; }
+  .hm-wrap .hm-dim-spark { height: clamp(12px, 2.4vh, 26px); }
+  .hm-wrap .hm-idea { padding-top: 0.1rem; padding-bottom: 0.1rem; }
+  .hm-wrap .hm-idea-title { font-size: clamp(0.68rem, 1.5vh, 0.82rem); line-height: 1.25; }
+}
+/* 手機窄卡：名稱＋「短板」標籤放不下一行時換行，不要把標籤截成一個字 */
+@media (max-width: 479px) { .hm-dim-name { flex-wrap: wrap; white-space: normal; row-gap: 2px; } }
