@@ -155,6 +155,13 @@
       "when": 1791530260622,
       "tag": "0021_tan_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792063279123,
+      "tag": "0022_wooden_steve_rogers",
+      "breakpoints": true
     }
   ]
 }
