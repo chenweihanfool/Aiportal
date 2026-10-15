@@ -104,9 +104,13 @@ body,
 /* flex 項目內的 margin 不會與外層折疊；歸零，保持手機版與改版前逐像素相同 */
 .ip-aside .ip-tools { margin-bottom: 0 !important; }
 
-/* 美食及旅遊地圖入口：手機放頁首；電腦版左側欄已有入口卡，頁首那顆隱藏（頁首高度不能變，電腦版要一個畫面放得下） */
+/* 美食及旅遊地圖入口：手機放頁首膠囊；電腦版左側欄已有入口卡，頁首那顆隱藏（頁首高度不能變，電腦版要一個畫面放得下）。
+   同一個畫面不放兩個入口：窄螢幕把側欄那張大卡隱藏（它在手機上會出現在頁面下方，與頁首膠囊重複）。 */
 @media (min-width: 1100px) {
   .fm-entry-pill { display: none !important; }
+}
+@media (max-width: 1099px) {
+  .ip-aside [data-testid="food-entry"] { display: none !important; }
 }
 
 @media (min-width: 1100px) {
@@ -604,7 +608,6 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
 }
 .hm-dimsec { animation-delay: 0.05s; } .hm-growth { animation-delay: 0.1s; } .hm-fun { animation-delay: 0.14s; } .hm-sys { animation-delay: 0.18s; }
 .hm-h { margin: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; font-weight: 700; color: #ece9e2; flex: 0 0 auto; }
-.hm-no { font-family: "IBM Plex Mono", ui-monospace, monospace; color: #f5a623; font-size: 0.78rem; }
 .hm-h-right { margin-left: auto; display: flex; align-items: center; gap: 0.8rem; font-weight: 400; font-size: 0.62rem; color: #5b6270; min-width: 0; }
 .hm-sub { font-size: 0.66rem; color: #9aa4b6; letter-spacing: 0.04em; flex: 0 0 auto; }
 .hm-muted { font-size: 0.68rem; color: #5b6270; }
@@ -827,3 +830,53 @@ button.hm-lock:hover { border-color: #e8b23d; }
 }
 /* 手機窄卡：名稱＋「短板」標籤放不下一行時換行，不要把標籤截成一個字 */
 @media (max-width: 479px) { .hm-dim-name { flex-wrap: wrap; white-space: normal; row-gap: 2px; } }
+
+/* ─── 面向頁（#dim/<key>）：dp- 前綴；卡片外觀沿用 hm-card ─── */
+.dp-head { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 1rem; border-bottom: 1px solid #3a3d47; flex-wrap: wrap; }
+.dp-back { color: #a87a14; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.74rem; text-decoration: none; white-space: nowrap; padding: 0.3rem 0.2rem; }
+.dp-title { display: none; }
+.dp-nav { display: flex; gap: 0.35rem; flex-wrap: wrap; flex: 1 1 auto; }
+.dp-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.28rem 0.65rem; border-radius: 999px; border: 1px solid #3a3d47; color: #9aa4b6; text-decoration: none; font-size: 0.74rem; white-space: nowrap; }
+.dp-chip:hover, .dp-chip:focus-visible { border-color: var(--dim); color: #ece9e2; }
+.dp-chip.is-on { border-color: var(--dim); color: #ece9e2; background: color-mix(in srgb, var(--dim) 16%, transparent); }
+@media (max-width: 560px) { .dp-chip:not(.is-on) .dp-chip-t { display: none; } .dp-chip { padding: 0.28rem 0.55rem; } }
+.dp-body { flex: 1; min-height: 0; overflow: auto; padding: 0.8rem 1rem 2.4rem; -webkit-overflow-scrolling: touch; }
+.dp-wrap { max-width: 1080px; margin: 0 auto; }
+.dp-grid { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); }
+.dp-col { display: flex; flex-direction: column; gap: 0.8rem; min-width: 0; }
+@media (min-width: 960px) { .dp-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; } }
+.dp-hero { border-left: 3px solid var(--dim); gap: 0.55rem; padding: 0.85rem 1rem; }
+.dp-hero-top { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.dp-ico { font-size: 1.5rem; line-height: 1; }
+.dp-name { margin: 0; font-size: 1.2rem; font-weight: 700; color: #ece9e2; }
+.dp-hero-frame { min-height: 3.4rem; }
+.dp-hero-body { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
+.dp-score { display: flex; align-items: baseline; gap: 0.2rem; }
+.dp-score-n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; font-size: clamp(2.8rem, 12vw, 3.8rem); line-height: 1.15; text-shadow: 0 0 22px currentColor; }
+.dp-score-of { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.75rem; color: #5b6270; }
+.dp-meta { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.dp-tone { font-weight: 700; font-size: 0.95rem; }
+.dp-delta { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.82rem; }
+.dp-wt { font-size: 0.74rem; color: #9aa4b6; }
+.dp-about { margin: 0.1rem 0 0; font-size: 0.84rem; line-height: 1.65; color: #ece9e2; }
+.dp-about b { color: #9aa4b6; font-weight: 600; }
+.dp-src { display: block; margin-top: 0.15rem; font-size: 0.7rem; color: #5b6270; }
+.dp-note { margin: 0; font-size: 0.68rem; color: #5b6270; line-height: 1.6; }
+.dp-range { font: inherit; font-size: 0.7rem; padding: 0.2rem 0.65rem; border-radius: 999px; border: 1px solid #3a3d47; background: transparent; color: #9aa4b6; cursor: pointer; }
+.dp-range.is-on { border-color: var(--dim); color: #ece9e2; background: color-mix(in srgb, var(--dim) 16%, transparent); }
+.dp-trend-frame { min-height: 8rem; }
+.dp-chart { width: 100%; height: auto; display: block; }
+.dp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.4rem; margin: 0.5rem 0 0.4rem; }
+.dp-stats > div { background: #15171c; border: 1px solid #2a2d36; border-radius: 8px; padding: 0.4rem 0.55rem; min-width: 0; }
+.dp-stats dt { font-size: 0.64rem; color: #5b6270; }
+.dp-stats dd { margin: 0.1rem 0 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.1rem; color: #ece9e2; display: flex; align-items: baseline; gap: 0.35rem; flex-wrap: wrap; }
+.dp-stats dd small { font-size: 0.6rem; color: #5b6270; }
+@media (max-width: 479px) { .dp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dp-detail { padding: 0.85rem 1rem; gap: 0.7rem; }
+.dp-detail-body { min-width: 0; }
+.dp-link-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.dp-link { color: #f5a623; border: 1px solid #a87a14; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.78rem; text-decoration: none; }
+.dp-link:hover, .dp-link:focus-visible { background: rgba(245, 166, 35, 0.12); }
+.dp-pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
+.dp-pager a { color: #9aa4b6; text-decoration: none; font-size: 0.82rem; padding: 0.4rem 0.2rem; }
+.dp-pager a:hover, .dp-pager a:focus-visible { color: #f5a623; }

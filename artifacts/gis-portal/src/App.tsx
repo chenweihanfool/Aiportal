@@ -3,6 +3,8 @@ import { COLOR, FONT } from './theme'
 import { HermesDiskPanel, type DiskHistoryPoint } from './HermesDiskPanel'
 import { shortSchedule, scheduleLine } from './pipelineSchedule'
 import { describeForecast, type DiskAlertLevel, type DiskForecastInfo, type StorageItem } from './diskView'
+import { DimensionPage, type DimLink } from './DimensionPage'
+import { dimKeyFromHash } from './dimensionPage'
 import { kbHealthCells, type KbCell } from './kbHealth'
 import { apiFetchHermesGraph, type HermesGraphData, type HermesGraphPersonNode, type HermesGraphEventNode, type HermesGraphEdge } from './hermesGraphApi'
 import { RelationshipUniverse } from './RelationshipUniverse'
@@ -27,6 +29,17 @@ const UNLOCK_KEY = 'portal_unlocked'
 // Version History  (update this before each release)
 // ─────────────────────────────────────────────
 const VERSION_HISTORY = [
+  {
+    version: '2.38.0',
+    date: '2026-10-16',
+    summary: '六個面向各有自己的頁（#dim/<面向>）；拿掉意義不明的數字符號；手機不再出現兩個美食入口',
+    changes: [
+      '六個面向各有自己的頁：首頁點某個面向小卡，會進到 #dim/財務自由、#dim/身體… 這種各自的頁面，不再是六張卡都開同一個幸福指數抽屜。每頁有：現在的分數、等級、權重與貢獻、與前一天的差；這個面向衡量什麼與資料來源；近 30／90 天走勢圖（虛線＝區間平均、沒資料的日子斷線）與平均／最高／最低／區間變化；「分數怎麼來」——這個面向自己的原始數據與算法（財務＝資產與報酬、身體＝訓練量與肌群雷達、從容＝逾期與負荷、心智＝想法與日報、社交＝廣度與互動強度、旅遊＝距上次旅行與頻率）；相關連結（前往來源系統、遊記、美食地圖、時間軸、關係宇宙）。頁首六顆切換鈕可直接換面向，頁尾有上一個／下一個，Esc 或「← 首頁」回首頁。幸福指數總覽的抽屜改由點「今天」的大分數開啟。',
+      '走勢圖需要後端的每面向歷史（/api/happiness/history 的 components，2.37 部署後才開始有）：有效天數不到 2 天時，走勢區會寫明原因，不畫假線。分數說明裡沿用舊名稱的算法標題也改成「財務自由（來源：人生自由指數）」這種寫法。',
+      '拿掉首頁各區塊標題前的 ①②③④⑤ 與工具連結標題的「04」：它們是我設計時的編號，畫面上沒有任何順序可對（手機上的實際順序還是 ② → ④ → ③），只會讓人困惑。',
+      '手機版不再出現兩個美食及旅遊地圖入口：頁首已有膠囊，頁面下方那張大卡在窄螢幕隱藏；電腦版維持左側欄大卡、頁首膠囊隱藏。',
+    ],
+  },
   {
     version: '2.37.0',
     date: '2026-10-15',
@@ -1284,7 +1297,7 @@ function Gauge({
 // within it share the same background/border tokens so the whole page reads
 // as one panel, not a wall of unrelated widgets.
 // ─────────────────────────────────────────────
-function Unit({ code, title, children, className }: { code: string; title: string; children: React.ReactNode; className?: string }) {
+function Unit({ code, title, children, className }: { code?: string; title: string; children: React.ReactNode; className?: string }) {
   return (
     <section className={className} style={{
       position: 'relative',
@@ -1299,7 +1312,7 @@ function Unit({ code, title, children, className }: { code: string; title: strin
         fontFamily: FONT.mono, fontSize: '0.66rem', letterSpacing: '0.2em', textTransform: 'uppercase',
         color: COLOR.steelDim, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.2rem',
       }}>
-        <span style={{ color: COLOR.amberDim }}>{code}</span>
+        {code && <span style={{ color: COLOR.amberDim }}>{code}</span>}
         <span style={{ fontFamily: FONT.body, fontSize: '0.72rem', letterSpacing: '0.08em', color: COLOR.steel, textTransform: 'none' }}>{title}</span>
         <span style={{ flex: 1, height: '1px', background: COLOR.line }} />
       </div>
@@ -1514,7 +1527,7 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
     <>
       <SupportStats items={items} />
       <FormulaPanel rows={[
-        { label: '人生自由指數', formula: '資產分／報酬分／休假配速分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均，不會整個是 0）' },
+        { label: '財務自由（來源：人生自由指數）', formula: '資產分／報酬分／休假配速分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均，不會整個是 0）' },
         ...items,
       ]} />
     </>
@@ -1553,7 +1566,7 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
       <div style={{ flex: '1 1 260px', minWidth: 0 }}>
         <SupportStats items={items} />
         <FormulaPanel rows={[
-          { label: '運動習慣指數', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）' },
+          { label: '身體（來源：運動習慣指數）', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）' },
           ...items,
         ]} />
       </div>
@@ -1584,7 +1597,7 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
     <>
       <SupportStats items={items} />
       <FormulaPanel rows={[
-        { label: '從容指數', formula: '100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容' },
+        { label: '從容（來源：從容指數）', formula: '100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容' },
         ...items,
       ]} />
     </>
@@ -1612,7 +1625,7 @@ function AdventureLogSummaryBody({ data }: { data: Record<string, unknown> }) {
     <>
       <SupportStats items={items} />
       <FormulaPanel rows={[
-        { label: '旅遊生活（HHI v2）', formula: 'travelScore = clamp(round(0.5 × Recency + 0.5 × Frequency) + 期待加分, 0, 100)——要維持一定的整體旅遊頻率，不是只看距上次旅行天數' },
+        { label: '旅遊（來源：旅遊生活）', formula: 'travelScore = clamp(round(0.5 × Recency + 0.5 × Frequency) + 期待加分, 0, 100)——要維持一定的整體旅遊頻率，不是只看距上次旅行天數' },
         ...items,
       ]} />
     </>
@@ -1738,6 +1751,35 @@ interface MindCombinedData {
   ideas: number | null
   report: { date: string; total: number; parts: Array<{ label: string; value: number; note: string }> } | null
 }
+// 心智面向的明細（首頁卡片展開與 #dim/mind 頁共用）：想法分數、日報分數、算法
+function MindDetailBody({ hhiSummary }: { hhiSummary: DashboardSummary | undefined }) {
+  const mc = (hhiSummary?.data?.['mindCombined'] ?? null) as MindCombinedData | null
+  const normalizedScore = typeof hhiSummary?.data?.['mindScore'] === 'number' ? hhiSummary.data['mindScore'] as number : null
+  const rep = mc?.report ?? null
+  const items = [
+    { label: '想法分數（80%）', value: mc?.ideas != null ? mc.ideas.toFixed(1) : '—', formula: '產生 40%（近 7 天新想法 ÷ 過去 8 週每週中位數）＋ 實行 60%（近 28 天實行 ÷ 有機會實行的，達 20% 算滿分）；明細見 HERMES 戰情室想法庫' },
+    { label: rep ? `日報分數（20%，${rep.date.slice(5)}）` : '日報分數（20%）', value: rep ? String(rep.total) : '—', formula: '日報最後的 📊 評分段：推進／決策／卡點／覺察／能量 各 0–4，加總 × 5；取今天或昨天最新的一份（日報每晚 22:00 產出、約 10 分鐘內推上來，所以 22:10 以前用的是昨天那份）' },
+  ]
+
+  return (
+    <>
+            <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+              原始分數（未正規化）：{mc?.score != null ? mc.score.toFixed(1) : '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+            </div>
+            <SupportStats items={items} />
+            {rep && (
+              <div style={{ fontSize: '0.64rem', color: COLOR.steelDim, marginTop: '0.5rem', lineHeight: 1.6 }}>
+                {rep.parts.map(p => `${p.label} ${p.value}`).join('・')}
+              </div>
+            )}
+            <FormulaPanel rows={[
+              { label: '心智指標（計入幸福指數）', formula: '想法分數 × 80% ＋ 最新日報分數 × 20%（沒有日報分數就只用想法分數）' },
+              ...items,
+            ]} />
+    </>
+  )
+}
+
 function MindIndexCard({
   summary,
   hhiSummary,
@@ -1759,12 +1801,6 @@ function MindIndexCard({
     return <LockedGaugeCard label="心智" sub="想法＋日報" onRequestUnlock={onSelect} />
   }
 
-  const rep = mc?.report ?? null
-  const items = [
-    { label: '想法分數（80%）', value: mc?.ideas != null ? mc.ideas.toFixed(1) : '—', formula: '產生 40%（近 7 天新想法 ÷ 過去 8 週每週中位數）＋ 實行 60%（近 28 天實行 ÷ 有機會實行的，達 20% 算滿分）；明細見 HERMES 戰情室想法庫' },
-    { label: rep ? `日報分數（20%，${rep.date.slice(5)}）` : '日報分數（20%）', value: rep ? String(rep.total) : '—', formula: '日報最後的 📊 評分段：推進／決策／卡點／覺察／能量 各 0–4，加總 × 5；取今天或昨天最新的一份（日報每晚 22:00 產出、約 10 分鐘內推上來，所以 22:10 以前用的是昨天那份）' },
-  ]
-
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
@@ -1779,19 +1815,7 @@ function MindIndexCard({
         <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
         {expanded && (
           <div style={{ marginTop: '0.5rem' }} data-testid="mind-card-detail">
-            <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-              原始分數（未正規化）：{mc?.score != null ? mc.score.toFixed(1) : '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
-            </div>
-            <SupportStats items={items} />
-            {rep && (
-              <div style={{ fontSize: '0.64rem', color: COLOR.steelDim, marginTop: '0.5rem', lineHeight: 1.6 }}>
-                {rep.parts.map(p => `${p.label} ${p.value}`).join('・')}
-              </div>
-            )}
-            <FormulaPanel rows={[
-              { label: '心智指標（計入幸福指數）', formula: '想法分數 × 80% ＋ 最新日報分數 × 20%（沒有日報分數就只用想法分數）' },
-              ...items,
-            ]} />
+            <MindDetailBody hhiSummary={hhiSummary} />
           </div>
         )}
       </div>
@@ -1805,6 +1829,41 @@ function MindIndexCard({
 // ─────────────────────────────────────────────
 // 社交指標 (HHI v2) — 全被動日記萃取，資料來源是 social_interactions.jsonl。
 // ─────────────────────────────────────────────
+// 社交面向的明細（首頁卡片展開與 #dim/social 頁共用）：三個子分數、觀測日、算法
+function SocialDetailBody({ summary, hhiSummary }: { summary: DashboardSummary | undefined; hhiSummary: DashboardSummary | undefined }) {
+  const data = summary?.data
+  const observedDayCount = typeof data?.['observedDayCount'] === 'number' ? data['observedDayCount'] as number : null
+  const distinctPersonCount = typeof data?.['distinctPersonCount'] === 'number' ? data['distinctPersonCount'] as number : null
+  const daysWithInteraction = typeof data?.['daysWithInteraction'] === 'number' ? data['daysWithInteraction'] as number : null
+  const breadthScore = typeof data?.['breadthScore'] === 'number' ? data['breadthScore'] as number : null
+  const intensityScore = typeof data?.['intensityScore'] === 'number' ? data['intensityScore'] as number : null
+  const connectionRateScore = typeof data?.['connectionRateScore'] === 'number' ? data['connectionRateScore'] as number : null
+  const socialScore = typeof data?.['socialScore'] === 'number' ? data['socialScore'] as number : null
+  const personNamesRaw = data?.['personNames']
+  const personNames = Array.isArray(personNamesRaw) ? personNamesRaw.filter((v): v is string => typeof v === 'string') : null
+  const stale = data?.['stale'] === true
+  const normalizedScore = typeof hhiSummary?.data?.['socialScore'] === 'number' ? hhiSummary.data['socialScore'] as number : null
+  const socialItems = [
+    { label: '廣度', value: breadthScore !== null ? String(breadthScore) : '—', formula: 'min(100, 近 7 天不重複互動人數 × 20)——5 人封頂' },
+    { label: '互動強度', value: intensityScore !== null ? String(intensityScore) : '—', formula: 'min(100, round(近 7 天加權互動點數 ÷ 15 × 100))——見面 3 點／通話 2 點／訊息 1 點' },
+    { label: '連結率', value: connectionRateScore !== null ? String(connectionRateScore) : '—', formula: 'round(近 7 天有互動的觀測日數 ÷ 近 7 天觀測日數 × 100)' },
+    { label: '觀測日／互動天數', value: observedDayCount !== null ? `${daysWithInteraction ?? 0} / ${observedDayCount}` : '—', formula: '觀測日＝當天有寫日記（≥1 篇）' },
+  ]
+
+  return (
+    <>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+        原始分數（未正規化）：{socialScore ?? '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+      </div>
+      <SupportStats items={socialItems} />
+      <FormulaPanel rows={[
+        { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)' },
+        ...socialItems,
+      ]} />
+    </>
+  )
+}
+
 function SocialIndexCard({
   summary,
   hhiSummary,
@@ -1836,13 +1895,6 @@ function SocialIndexCard({
     return <LockedGaugeCard label="社交" sub="近 7 天社交活動" onRequestUnlock={onSelect} />
   }
 
-  const socialItems = [
-    { label: '廣度', value: breadthScore !== null ? String(breadthScore) : '—', formula: 'min(100, 近 7 天不重複互動人數 × 20)——5 人封頂' },
-    { label: '互動強度', value: intensityScore !== null ? String(intensityScore) : '—', formula: 'min(100, round(近 7 天加權互動點數 ÷ 15 × 100))——見面 3 點／通話 2 點／訊息 1 點' },
-    { label: '連結率', value: connectionRateScore !== null ? String(connectionRateScore) : '—', formula: 'round(近 7 天有互動的觀測日數 ÷ 近 7 天觀測日數 × 100)' },
-    { label: '觀測日／互動天數', value: observedDayCount !== null ? `${daysWithInteraction ?? 0} / ${observedDayCount}` : '—', formula: '觀測日＝當天有寫日記（≥1 篇）' },
-  ]
-
   const showEmpty = observedDayCount === null || observedDayCount === 0 || socialScore === null
 
   return (
@@ -1871,14 +1923,7 @@ function SocialIndexCard({
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
           {expanded && (
             <div style={{ marginTop: '0.5rem' }}>
-              <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-                原始分數（未正規化）：{socialScore ?? '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
-              </div>
-              <SupportStats items={socialItems} />
-              <FormulaPanel rows={[
-                { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)' },
-                ...socialItems,
-              ]} />
+              <SocialDetailBody summary={summary} hhiSummary={hhiSummary} />
             </div>
           )}
         </div>
@@ -2913,7 +2958,7 @@ function ToolLinksZone({
   const isOpen = desktop || open || searchActive
 
   return (
-    <Unit code="04" title="工具連結 · Control Panel" className="ip-tools">
+    <Unit title="工具連結 · Control Panel" className="ip-tools">
       {!desktop && <div
         onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '1rem', marginTop: '-0.4rem' }}
@@ -3328,6 +3373,78 @@ function VersionHistory() {
 // ─────────────────────────────────────────────
 // Instrument Panel View — top-level layout
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// 面向頁（#dim/<key>）的「分數怎麼來」與相關連結。各面向的原始數據元件沿用首頁卡片展開用的同一批
+// （*SummaryBody／MindDetailBody／SocialDetailBody），所以首頁卡片與面向頁不會各說各話。
+// ─────────────────────────────────────────────
+const DIM_SUBSYSTEM: Record<string, string> = { lifeFreedom: 'pf-cwh', fitness: 'fitnessforge', calm: 'vikunja', travel: 'travel' }
+
+function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboard: DashboardSummary[] }) {
+  const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
+  const normalizedKey: Record<string, string> = { lifeFreedom: 'lifeFreedomScore', fitness: 'fitnessHabitScore', calm: 'calmScore', travel: 'travelScore' }
+  const subId = DIM_SUBSYSTEM[dimKey]
+  if (subId) {
+    const summary = dashboard.find(d => d.subsystemId === subId)
+    const Body = SUMMARY_BODIES[subId]
+    const data = summary?.data
+    if (!summary || !data || !Body) return null
+    const rawKey = DIMENSION_HERO_FIELD[subId]
+    const raw = rawKey && typeof data[rawKey] === 'number' ? data[rawKey] as number : null
+    const nk = normalizedKey[dimKey]
+    const normalized = nk && typeof hhiSummary?.data?.[nk] === 'number' ? hhiSummary.data[nk] as number : null
+    return (
+      <div>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steelDim, marginBottom: '0.6rem', lineHeight: 1.6 }}>
+          原始分數（未正規化）：{raw !== null ? raw : '—'}　→　對照近 90 天百分位 = {normalized ?? '—'}
+        </div>
+        {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: COLOR.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
+        <Body data={data} />
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
+      </div>
+    )
+  }
+  if (dimKey === 'mind') {
+    return (
+      <div>
+        <MindDetailBody hhiSummary={hhiSummary} />
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(hhiSummary?.fetchedAt ?? null)}</div>
+      </div>
+    )
+  }
+  if (dimKey === 'social') {
+    const summary = dashboard.find(d => d.subsystemId === 'social-index')
+    const data = summary?.data
+    if (!summary || !data) return null
+    const observed = typeof data['observedDayCount'] === 'number' ? data['observedDayCount'] as number : null
+    const names = Array.isArray(data['personNames']) ? (data['personNames'] as unknown[]).filter((v): v is string => typeof v === 'string') : []
+    if (observed === null || observed === 0) return <p className="hm-note">近 7 天沒有日記可供觀測，所以還算不出社交分數。</p>
+    return (
+      <div>
+        {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: COLOR.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
+        {names.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '0.7rem' }} aria-label="近 7 天互動的人">
+            {names.map(n => <span key={n} style={{ fontSize: '0.68rem', color: COLOR.steel, background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 9px' }}>{n}</span>)}
+          </div>
+        )}
+        <SocialDetailBody summary={summary} hhiSummary={hhiSummary} />
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
+      </div>
+    )
+  }
+  return null
+}
+
+function dimensionLinks(dimKey: string, sites: SiteData[], open: (s: SiteData) => void): DimLink[] {
+  const out: DimLink[] = []
+  const subId = DIM_SUBSYSTEM[dimKey]
+  const site = subId ? sites.find(s => s.subsystemId === subId) : undefined
+  if (site && site.links[0]?.url) out.push({ label: `前往 ${site.name} ↗`, onClick: () => open(site) })
+  if (dimKey === 'travel') out.push({ label: '遊記 →', hash: 'trips' }, { label: '美食及旅遊地圖 →', hash: 'food' })
+  if (dimKey === 'mind') out.push({ label: '時間軸（日報分數）→', hash: 'graph/timeline' })
+  if (dimKey === 'social') out.push({ label: '關係宇宙 →', hash: 'graph' })
+  return out
+}
+
 function InstrumentPanelView({
   sites,
   dashboard,
@@ -3747,6 +3864,19 @@ export default function App() {
           color: COLOR.steelDim, fontSize: '1rem', padding: '0.5rem 0.8rem', cursor: 'pointer', lineHeight: 1,
         }}
       >⚙</button>
+
+      {(() => {
+        const dimKey = dimKeyFromHash(hashRoute)
+        if (!dimKey) return null
+        const hhi = dashboard.find(d => d.subsystemId === 'hhi')
+        return (
+          <DimensionPage
+            dimKey={dimKey} hhiData={hhi?.data ?? undefined} hhiFetchedAt={hhi?.fetchedAt ?? null} hhiError={hhi?.status === 'error'}
+            unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock}
+            detail={<DimensionDetail dimKey={dimKey} dashboard={dashboard} />} links={dimensionLinks(dimKey, sites, handleSiteClick)}
+          />
+        )
+      })()}
 
       <CommandPalette
         sites={sites}

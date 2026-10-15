@@ -6,6 +6,7 @@ import { apiFetchTrips } from './tripsApi'
 import { biggestDrag, buildHhiBreakdown } from './boardView'
 import { topIdeas as pickTopIdeas, statusCounts } from './ideasView'
 import { Drawer, FEED_LABEL, IdeasPanel, PusherHealthPanel, pusherSummary } from './DesktopBoard'
+import { dimHash } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
 import { HOME_DIMENSIONS } from './homeDimensions'
 import { useAsync, useNow } from './homeHooks'
@@ -152,7 +153,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence}
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
-      <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
+      <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
       <FunSection ideasSt={ideasSt} ideasCount={ideasList?.ideas.length ?? 0} topIdeas={ideaTop}
