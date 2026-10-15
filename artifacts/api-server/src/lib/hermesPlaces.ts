@@ -17,8 +17,8 @@ export interface SanitizedPlaces {
   skipped: number
 }
 
-const str = (v: unknown, max = 500): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null)
-const dateOrNull = (v: unknown): string | null => {
+export const str = (v: unknown, max = 500): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null)
+export const dateOrNull = (v: unknown): string | null => {
   const s = str(v, 10)
   return s && DATE_RE.test(s) ? s : null
 }
