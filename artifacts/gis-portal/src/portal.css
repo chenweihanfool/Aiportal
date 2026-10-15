@@ -755,7 +755,24 @@ button.hm-lock:hover { border-color: #e8b23d; }
   .hm-pair { grid-template-columns: minmax(0, 1fr); }
   .hm-kb { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hm-dim-foot { flex-direction: column; }
-  .hm-today-body { flex-direction: column; gap: 0.4rem; }
+  /* ① 今天：大分數在左、等級／差／連續天數在右，一句話整行在下面（原本分數獨佔一整列、右邊全空） */
+  .hm-today-body { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "score meta" "sent sent"; align-items: center; gap: 0.1rem 0.9rem; }
+  .hm-score { grid-area: score; }
+  .hm-today-text { display: contents; }
+  .hm-score-meta { grid-area: meta; }
+  .hm-sentence { grid-area: sent; margin: 0; }
+  .hm-today { gap: 0.5rem; }
+}
+/* 手機頁首：標題一列，入口／帳號／版本擠成一排（原本四個元素垂直堆疊，佔掉近半個首屏） */
+@media (max-width: 699px) {
+  .ip-head { padding: 0.65rem 1rem 0.6rem !important; gap: 0.45rem !important; align-items: center !important; }
+  .ip-head h1 { font-size: 1.5rem !important; }
+  .ip-head-sub, .ip-portals { display: none !important; }
+  .ip-head-right { flex-direction: row !important; flex-wrap: wrap; align-items: center !important; justify-content: flex-start !important; gap: 0.35rem 0.5rem !important; flex: 1 1 100%; }
+  .ip-head-right button { margin-top: 0 !important; }
+  /* 手機的頁首跟著內容一起捲走（原本釘在最上面，永遠吃掉一條高度）：由最外層捲動，.ip-scroll 不再自己捲 */
+  .ip-shell { display: block !important; overflow-y: auto !important; overflow-x: hidden !important; -webkit-overflow-scrolling: touch; }
+  .ip-scroll { overflow: visible !important; flex: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hm-card, .hm-skel i, .hm-sys.is-alert .hm-lamp { animation: none !important; }
