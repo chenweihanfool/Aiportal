@@ -5,17 +5,20 @@ import { sampleFoodData } from './foodSample'
 import type { FoodPlace } from './foodMap'
 import { FoodMapGL } from './FoodMapGL'
 import { PhotoGallery } from './PhotoGallery'
-import { apiFetchTrips, type Trip, type TripDay, type TripData, type TripStatus } from './tripsApi'
+import { MarkdownView } from './MarkdownView'
+import { apiFetchTrips, type Trip, type TripDay, type TripEntry, type TripData, type TripStatus } from './tripsApi'
 import { sampleTripData } from './tripsSample'
 import {
-  TRIP_STATUS_LABEL, dayHeading, dayRouteText, formatDateRange, isEmptyTrip, photoSummary, tripMapPlaces, tripStats,
+  TRIP_STATUS_LABEL, dayDigest, dayHeading, dayPhotoCount, dayRouteText, defaultOpenDays, entryPreview, formatDateRange, isEmptyTrip,
+  isEntryExpandable, photoSummary, splitEntryText, tripMapPlaces, tripStats,
 } from './tripsView'
 
 // ─────────────────────────────────────────────
 // 🧳 遊記（#trips 趟次列表、#trips/<id> 單趟）。2026-10-15 新增。
 // 資料：解鎖後讀 /api/hermes-trips（趟次）與 /api/hermes-places（地點，只用來畫這趟的小地圖與路線名稱）；
 // 沒解鎖、沒資料、讀取失敗就退回 tripsSample.ts 的示範趟次，畫面標「示範資料」。載入中不先閃示範資料。
-// 條目原文一律當純文字顯示（保留換行），不渲染成 HTML。入口網只讀，不寫入。
+// 條目原文：第一行是標題（「類別 — 主題」拆成 chip＋主題），其餘是內文；每天、每個條目都可折疊，預設只展開最相關的一天。
+// 內文走 MarkdownView（輸出是 React 元素，不是 HTML 字串，沒有注入面）。入口網只讀，不寫入。
 // ─────────────────────────────────────────────
 
 const STATUS_COLOR: Record<TripStatus, string> = { planned: '#2f80ff', ongoing: COLOR.amber, done: COLOR.steel }
@@ -96,37 +99,93 @@ function TripCard({ t }: { t: Trip }) {
   )
 }
 
-function DayBlock({ trip, day, places }: { trip: Trip; day: TripDay; places: FoodPlace[] }) {
-  const route = dayRouteText(day, places)
+function EntryRow({ e, open, onToggle, label }: { e: TripEntry; open: boolean; onToggle: () => void; label: string }) {
+  const parts = splitEntryText(e.text)
+  const expandable = isEntryExpandable(e)
+  const preview = !open && parts.body ? entryPreview(parts.body) : ''
+  const photoN = e.photos.length + e.photosPending
+  const head = (
+    <>
+      <span className="tr-time">{e.time}</span>
+      <span className="tr-head-main">
+        <span className="tr-head-line">
+          {parts.category && <span className="tr-chip">{parts.category}</span>}
+          <b className={`tr-topic${parts.body === parts.title ? ' is-clamp' : ''}`}>{parts.topic || '（沒有標題）'}</b>
+          {(photoN > 0 || parts.photoMark) && <span className="tr-meta">📷{photoN > 0 ? ` ${photoN}` : ''}</span>}
+        </span>
+        {preview && <span className="tr-preview">{preview}</span>}
+      </span>
+      {expandable && <span className="tr-chev" aria-hidden>{open ? '▾' : '▸'}</span>}
+    </>
+  )
   return (
-    <section className="tr-day" aria-label={dayHeading(trip, day)}>
-      <header style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-        <h3 style={{ margin: 0, fontSize: '0.95rem', color: COLOR.amber, fontWeight: 700 }}>{dayHeading(trip, day)}</h3>
-        {day.title && <span style={{ fontSize: '0.8rem', color: COLOR.ink }}>{day.title}</span>}
-      </header>
-      {route && <div style={{ fontSize: '0.72rem', color: COLOR.steel, marginTop: 4 }}>🧭 {route}</div>}
-      {day.entries.length === 0
-        ? <div style={{ fontSize: '0.74rem', color: COLOR.steelDim, marginTop: 8 }}>這天還沒有條目</div>
-        : (
-          <ol className="tr-entries">
-            {day.entries.map((e, i) => (
-              <li key={`${e.time}-${i}`} className="tr-entry">
-                <span className="tr-time">{e.time}</span>
-                <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {e.text && <p className="tr-text">{e.text}</p>}
-                  <PhotoGallery photos={e.photos} label={`${day.date} ${e.time}`} resetKey={`${day.date}-${e.time}-${i}`} />
-                  {e.photosPending > 0 && <div style={{ fontSize: '0.7rem', color: COLOR.steelDim }}>📷 {e.photosPending} 張相片（處理中）</div>}
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
+    <li className={`tr-entry${open ? ' is-open' : ''}`} data-testid="trip-entry">
+      {expandable
+        ? <button type="button" className="tr-entry-head" aria-expanded={open} onClick={onToggle}>{head}</button>
+        : <div className="tr-entry-head is-static">{head}</div>}
+      {expandable && open && (
+        <div className="tr-entry-body">
+          {parts.body && <MarkdownView text={parts.body} fontSize="0.86rem" />}
+          <PhotoGallery photos={e.photos} label={label} resetKey={label} />
+          {e.photosPending > 0 && <div style={{ fontSize: '0.7rem', color: COLOR.steelDim }}>📷 {e.photosPending} 張相片（處理中）</div>}
+        </div>
+      )}
+    </li>
+  )
+}
+
+function DayBlock({ trip, day, places, open, onToggle, openEntries, onToggleEntry }: {
+  trip: Trip; day: TripDay; places: FoodPlace[]
+  open: boolean; onToggle: () => void
+  openEntries: Set<string>; onToggleEntry: (key: string) => void
+}) {
+  const route = dayRouteText(day, places)
+  const photoN = dayPhotoCount(day)
+  const digest = dayDigest(day)
+  return (
+    <section className="tr-day" aria-label={dayHeading(trip, day)} data-testid="trip-day">
+      <button type="button" className="tr-day-head" aria-expanded={open} onClick={onToggle}>
+        <span className="tr-chev" aria-hidden>{open ? '▾' : '▸'}</span>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, textAlign: 'left' }}>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: '0.95rem', color: COLOR.amber, fontWeight: 700 }}>{dayHeading(trip, day)}</h3>
+            {day.title && <span style={{ fontSize: '0.8rem', color: COLOR.ink }}>{day.title}</span>}
+            <span className="tr-meta">{day.entries.length} 則{photoN > 0 ? ` · 📷 ${photoN}` : ''}</span>
+          </span>
+          {!open && digest && <span className="tr-preview">{digest}</span>}
+        </span>
+      </button>
+      {open && (
+        <>
+          {route && <div style={{ fontSize: '0.72rem', color: COLOR.steel, marginTop: 2 }}>🧭 {route}</div>}
+          {day.entries.length === 0
+            ? <div style={{ fontSize: '0.74rem', color: COLOR.steelDim, marginTop: 4 }}>這天還沒有條目</div>
+            : (
+              <ol className="tr-entries">
+                {day.entries.map((e, i) => {
+                  const key = `${day.date}|${i}`
+                  return <EntryRow key={key} e={e} open={openEntries.has(key)} onToggle={() => onToggleEntry(key)} label={`${day.date} ${e.time}`} />
+                })}
+              </ol>
+            )}
+        </>
+      )}
     </section>
   )
 }
 
 function TripDetail({ trip, places }: { trip: Trip; places: FoodPlace[] }) {
   const [mapFailed, setMapFailed] = useState(false)
+  // 折疊狀態：預設只展開一天；條目預設都收起來（先看標題，要看再點）。換趟次時重設。
+  const [openDays, setOpenDays] = useState<Set<string>>(() => new Set(defaultOpenDays(trip)))
+  const [openEntries, setOpenEntries] = useState<Set<string>>(() => new Set())
+  useEffect(() => { setOpenDays(new Set(defaultOpenDays(trip))); setOpenEntries(new Set()) }, [trip.id])
+  const toggle = <T,>(set: Set<T>, v: T): Set<T> => { const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); return n }
+  const expandAll = () => {
+    setOpenDays(new Set(trip.days.map(d => d.date)))
+    setOpenEntries(new Set(trip.days.flatMap(d => d.entries.map((_, i) => `${d.date}|${i}`))))
+  }
+  const collapseAll = () => { setOpenDays(new Set()); setOpenEntries(new Set()) }
   const mapPlaces = useMemo(() => tripMapPlaces(trip, places), [trip, places])
   const s = tripStats(trip)
   return (
@@ -151,7 +210,19 @@ function TripDetail({ trip, places }: { trip: Trip; places: FoodPlace[] }) {
 
       {isEmptyTrip(trip)
         ? <p style={{ margin: 0, fontSize: '0.8rem', color: COLOR.steelDim }}>還沒有紀錄。日記寫進來之後會出現在這裡。</p>
-        : trip.days.map(d => <DayBlock key={d.date} trip={trip} day={d} places={places} />)}
+        : (
+          <>
+            <div className="tr-toolbar">
+              <button type="button" className="tr-tool" data-testid="trip-expand-all" onClick={expandAll}>全部展開</button>
+              <button type="button" className="tr-tool" data-testid="trip-collapse-all" onClick={collapseAll}>全部收合</button>
+            </div>
+            {trip.days.map(d => (
+              <DayBlock key={d.date} trip={trip} day={d} places={places}
+                open={openDays.has(d.date)} onToggle={() => setOpenDays(prev => toggle(prev, d.date))}
+                openEntries={openEntries} onToggleEntry={k => setOpenEntries(prev => toggle(prev, k))} />
+            ))}
+          </>
+        )}
     </div>
   )
 }
