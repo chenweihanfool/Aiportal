@@ -15,3 +15,4 @@ export * from "./hermesDoc";
 export * from "./hermesUsage";
 export * from "./hermesIdeas";
 export * from "./hermesPlaces";
+export * from "./hermesTrips";
