@@ -1,6 +1,7 @@
 // 六個面向的摘要內容與卡片（財務／身體／從容／旅遊的 *SummaryBody，心智、社交的明細與卡片）。#dim/<key> 面向頁也用這裡的明細元件。
 import { useState } from 'react'
 import { COLOR, FONT } from './theme'
+import { DIMENSIONS, dimensionOf, type DimensionDef } from './dimensions'
 import { Gauge } from './Gauge'
 import { MIND_SCORE_BANDS, SOCIAL_SCORE_BANDS, bandTone, formatMinutesAgo, formatPct, formatTWD, heroTone } from './format'
 import { FormulaPanel, FormulaToggle, LabeledRadarChart, LockedGaugeCard, SupportStats } from './panelUi'
@@ -142,12 +143,12 @@ export const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unkno
   'vikunja': VikunjaSummaryBody,
 }
 
-export const DIMENSION_HERO_FIELD: Record<string, string> = {
-  'pf-cwh': 'lifeFreedomIndex',
-  'fitnessforge': 'habitIndex',
-  'vikunja': 'busyIndex', // raw, uninverted — shown as "原始分數" detail only
-  'travel': 'travelScore',
-}
+// 以下三張對照表都由面向註冊表（dimensions.ts）推導，key 是來源子系統 id；只含「detail === 'subsystem'」的四個面向。
+const subsystemMap = (pick: (d: DimensionDef) => string | null): Record<string, string> =>
+  Object.fromEntries(DIMENSIONS.filter(d => d.detail === 'subsystem' && pick(d) !== null).map(d => [d.subsystemId, pick(d)!]))
+
+/** 原始分數欄位（未正規化，只在詳細數據裡對照顯示；vikunja 的 busyIndex 是「越高越忙」） */
+export const DIMENSION_HERO_FIELD: Record<string, string> = subsystemMap(d => d.rawField)
 
 // HHI v3 (2026-09-01) — the six dimensions come from four independently
 // designed formulas with wildly different shapes (see happinessIndex.ts's
@@ -156,19 +157,9 @@ export const DIMENSION_HERO_FIELD: Record<string, string> = {
 // its own trailing 90-day history (from the "hhi" summary, already
 // normalized server-side), not the raw formula output — the raw number
 // moves to the "詳細數據" panel below instead.
-const DIMENSION_NORMALIZED_FIELD: Record<string, string> = {
-  'pf-cwh': 'lifeFreedomScore',
-  'fitnessforge': 'fitnessHabitScore',
-  'vikunja': 'calmScore', // already inverted+normalized — higher = calmer
-  'travel': 'travelScore',
-}
+const DIMENSION_NORMALIZED_FIELD: Record<string, string> = subsystemMap(d => d.scoreKey)
 
-const DIMENSION_SUB: Record<string, string> = {
-  'pf-cwh': '財務自由',
-  'fitnessforge': '身體',
-  'vikunja': '從容',
-  'travel': '旅遊',
-}
+const DIMENSION_SUB: Record<string, string> = subsystemMap(d => d.label)
 
 // Replaces GlassSummaryCard — one gauge tile per HHI-contributing subsystem
 // that has a portal_sites row (pf-cwh/fitnessforge/vikunja/travel). Vikunja
@@ -301,7 +292,7 @@ export function MindIndexCard({
   const tone = bandTone(normalizedScore, MIND_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label="心智" sub="想法＋日報" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label={dimensionOf('mind')!.label} sub="想法＋日報" onRequestUnlock={onSelect} />
   }
 
   return (
@@ -310,7 +301,7 @@ export function MindIndexCard({
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
       <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>心智</div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>{dimensionOf('mind')!.label}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
         {normalizedScore !== null ? tone.label : (hhiSummary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
       </div>
@@ -395,7 +386,7 @@ export function SocialIndexCard({
   const tone = bandTone(normalizedScore, SOCIAL_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label="社交" sub="近 7 天社交活動" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label={dimensionOf('social')!.label} sub="近 7 天社交活動" onRequestUnlock={onSelect} />
   }
 
   const showEmpty = observedDayCount === null || observedDayCount === 0 || socialScore === null
@@ -406,7 +397,7 @@ export function SocialIndexCard({
       padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
     }}>
       <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>社交</div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>{dimensionOf('social')!.label}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
         {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 7 天沒有日記可供觀測') : tone.label}
       </div>

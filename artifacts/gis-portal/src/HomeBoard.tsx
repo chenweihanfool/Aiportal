@@ -8,7 +8,7 @@ import { topIdeas as pickTopIdeas, statusCounts } from './ideasView'
 import { Drawer, FEED_LABEL, IdeasPanel, PusherHealthPanel, pusherSummary } from './DesktopBoard'
 import { dimHash } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
-import { HOME_DIMENSIONS } from './homeDimensions'
+import { DIMENSIONS } from './dimensions'
 import { useAsync, useNow } from './homeHooks'
 import { DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
 import {
@@ -66,7 +66,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const sparkSeries = useMemo(() => {
     if (!history30.data) return null
     const m: Record<string, DimSeries | null> = {}
-    for (const d of HOME_DIMENSIONS) m[d.key] = dimensionSeries(history30.data, d.key, todayIso)
+    for (const d of DIMENSIONS) m[d.key] = dimensionSeries(history30.data, d.key, todayIso)
     return m
   }, [history30.data, todayIso])
 

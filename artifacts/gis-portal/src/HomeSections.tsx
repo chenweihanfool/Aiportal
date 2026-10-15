@@ -5,7 +5,7 @@ import type { IdeaItem } from './boardApi'
 import { categoryColor } from './ideasView'
 import { KIND_ICON, statusLabelFor } from './foodMap'
 import { TRIP_STATUS_LABEL } from './tripsView'
-import { DIMENSION_FALLBACK_COLOR, dimensionOf } from './homeDimensions'
+import { DIMENSION_FALLBACK_COLOR, dimensionOf } from './dimensions'
 import { useCountUp } from './homeHooks'
 import { Skeleton, StateFrame } from './StateFrame'
 import {
