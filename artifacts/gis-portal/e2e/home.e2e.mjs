@@ -103,7 +103,7 @@ function scenario(name) {
   const s = { dashboard: [hhi(), { subsystemId: 'mind-index', name: '心智指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { score: 72.4, conversion: 90, linkHealth: 80, vitality: 55, rhythm: 66, stale: false } },
   { subsystemId: 'pf-cwh', name: '人生進度管理系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { totalAssetsTWD: 12345678, twrr: 0.082, mwrr: 0.071, pacingIndex: 0.93, lifeFreedomIndex: 68 } },
   { subsystemId: 'fitnessforge', name: '運動 APP 系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { weeklyScore: 1234, trendPct: 4.2, balanceScore: 62, coverageScore: 71, activityBonusPoints: 3, muscleComposites: [{ name: '胸', composite: 90 }], habitIndex: 55 } },
-  { subsystemId: 'vikunja', name: '任務追蹤系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { overdueScore: 40, loadScore: 55, stagnationScore: 30, completionScore: 45, busyIndex: 42, stale: false } },
+  { subsystemId: 'vikunja', name: '任務追蹤系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { overdueScore: 40, loadScore: 55, stagnationScore: 30, completionScore: 45, busyIndex: 42, stale: false, taskActions: { overdue: 3, dueToday: 2, dueNext7: 5, doneWeek: 7 } } },
   { subsystemId: 'travel', name: '旅遊生活', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { daysSinceLastTrip: 24, lastTripEndDate: '2026-09-23', recencyScore: 78, frequencyScore: 40, tripDaysLast180: 8, anticipationBonus: 0, hasUpcomingTrip: false, travelScore: 59 } },
   { subsystemId: 'social-index', name: '社交指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { observedDayCount: 6, distinctPersonCount: 3, daysWithInteraction: 4, breadthScore: 60, intensityScore: 47, connectionRateScore: 67, socialScore: 55, personNames: ['小明', '阿華'] } }], history: { history: historyRows() }, graph: graph(), ideas: ideas(), food: food(), trips: trips(), pipeline: pipeline(), status: status(), usage: usage(), fail: new Set(), delayMs: 0, history30: null }
   if (name === 'alert') {
@@ -638,6 +638,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/calm', wait: false })
   await page.waitForSelector('[data-testid="dp-chart"]')
   check('面向頁：頁首六顆切換鈕，目前的是 aria-current', (await page.locator('.dp-nav .dp-chip').count()) === 6 && (await page.locator('.dp-chip[aria-current="page"]').getAttribute('data-testid')) === 'dp-nav-calm')
+  { const t = await page.locator('[data-testid="dp-detail"]').innerText(); check('面向頁（從容）：顯示「今天要做什麼」四個數字', /今天要做什麼/.test(t) && /已逾期\s*3/.test(t) && /今天到期\s*2/.test(t) && /7 天內到期\s*5/.test(t) && /近 7 天完成\s*7/.test(t)) }
   await page.locator('[data-testid="dp-nav-social"]').click(); await page.waitForTimeout(300)
   check('面向頁：點頁首「社交」→ #dim/social，內容換成社交的', (await page.evaluate(() => location.hash)) === '#dim/social' && /廣度/.test(await page.locator('[data-testid="dp-detail"]').innerText()))
   await page.locator('[data-testid="dp-next"]').click(); await page.waitForTimeout(300)

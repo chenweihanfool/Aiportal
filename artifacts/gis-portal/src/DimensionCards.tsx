@@ -97,10 +97,30 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
     diagItem('拖延程度', completionScore, '過去 90 天準時完成率的反向指標（指數衰減加權，越近期權重越高），數字越高代表越常拖延'),
   ]
 
+  // 可行動數字（P2-6）：主機端每天算好；舊資料列或還沒部署就沒有這個欄位，不顯示
+  const ta = data['taskActions']
+  const actions = ta && typeof ta === 'object' ? ta as Record<string, unknown> : null
+  const actionNum = (k: string) => (actions && typeof actions[k] === 'number' ? actions[k] as number : null)
+  const overdue = actionNum('overdue'), dueToday = actionNum('dueToday'), dueNext7 = actionNum('dueNext7'), doneWeek = actionNum('doneWeek')
+  const actionItems = overdue !== null && dueToday !== null && dueNext7 !== null && doneWeek !== null ? [
+    { label: '已逾期', value: String(overdue), color: overdue > 0 ? COLOR.crit : undefined, formula: '未完成、到期日早於今天的任務數' },
+    { label: '今天到期', value: String(dueToday), formula: '未完成、到期日是今天（台北時間）的任務數' },
+    { label: '7 天內到期', value: String(dueNext7), formula: '未完成、到期日在明天到 7 天後的任務數' },
+    { label: '近 7 天完成', value: String(doneWeek), formula: '近 7 天（含今天）標記完成的任務數；沒有完成時間的不計' },
+  ] : null
+
   return (
     <>
+      {actionItems && (
+        <>
+          <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, letterSpacing: '0.05em', marginBottom: '6px' }}>今天要做什麼</div>
+          <SupportStats items={actionItems} />
+          <div style={{ height: '1rem' }} />
+        </>
+      )}
       <SupportStats items={items} />
       <FormulaPanel rows={[
+        ...(actionItems ?? []),
         { label: '從容（來源：從容指數）', formula: '100 － 忙碌指數（忙碌指數 = 逾期壓力／近期負荷／停滯程度／拖延程度四項加權平均，每天由 Python 服務算一次）。數字越高代表越從容' },
         ...items,
       ]} />

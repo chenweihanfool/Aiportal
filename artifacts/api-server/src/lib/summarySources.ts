@@ -1,4 +1,5 @@
-import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
+import { db, pool, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
+import { TASK_ACTIONS_SQL, parseTaskActionsRow } from "./taskActions";
 import { loadCombinedMind } from "./mindCombinedSource";
 import type { CombinedMind } from "./mindCombined";
 import {
@@ -65,7 +66,16 @@ async function fetchVikunjaBusynessFromHistory(): Promise<unknown> {
       "busyness_index_history has no rows yet — has services/busyness-index/compute_daily.py run at least once?"
     );
   }
+  // 可行動數字（P2-6）：欄位由 kb-pipeline 新增，還沒建或查詢失敗就當沒有，不影響其餘欄位
+  let taskActions = null;
+  try {
+    const r = await pool.query(TASK_ACTIONS_SQL, [row.date]);
+    taskActions = parseTaskActionsRow(r.rows[0]);
+  } catch {
+    taskActions = null;
+  }
   return {
+    taskActions,
     busyIndex: row.score,
     overdueScore: row.overdueScore,
     loadScore: row.loadScore,
