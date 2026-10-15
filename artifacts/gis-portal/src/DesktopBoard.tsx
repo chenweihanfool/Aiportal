@@ -61,7 +61,7 @@ class DrawerBoundary extends Component<{ children: ReactNode }, { failed: boolea
   }
 }
 
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null
@@ -498,7 +498,7 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
   )
 }
 
-function IdeasPanel({ pw }: { pw: string }) {
+export function IdeasPanel({ pw }: { pw: string }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
   const [cat, setCat] = useState<string | null>(null)
   const [st, setSt] = useState<StatusFilter>('open')
@@ -798,7 +798,7 @@ function DiskBlock({ pw, status }: { pw: string; status: BoardStatus }) {
 }
 
 // 入口網推送健康：每種資料最後一次推送成功的時間、間隔與錯誤（kb-pipeline 的 kbcore/portal_push）
-const FEED_LABEL: Record<string, string> = {
+export const FEED_LABEL: Record<string, string> = {
   'hermes-graph': '關係圖', 'hermes-doc': '事件內文', 'hermes-status': '主機狀態', 'hermes-activity': '近期活動',
   'hermes-pipeline': '管線狀態', 'social-index': '社交指標', 'mind-engagement': '心智（日記篇數）',
   'hermes-timeline': '時間軸', 'hermes-usage': 'Ollama 用量', 'hermes-ideas': '想法庫', 'life-score': '知識庫健康',
@@ -812,7 +812,7 @@ export function pusherSummary(rows: PusherHealth[] | null | undefined): { bad: n
   return { bad, total: rows.length, level: rows.some(r => r.level === 'crit') ? 'crit' : bad ? 'warn' : 'ok' }
 }
 
-function PusherHealthPanel({ pw }: { pw: string }) {
+export function PusherHealthPanel({ pw }: { pw: string }) {
   const { data } = useLoad<BoardStatus>(pw, apiFetchBoardStatus)
   const rows = data?.pushers
   if (!rows || rows.length === 0) return null
