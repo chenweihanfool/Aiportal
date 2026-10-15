@@ -11,7 +11,7 @@ import { VersionHistoryDialog } from './VersionHistoryDialog'
 import { DesktopBoard } from './DesktopBoard'
 import { FoodMapView } from './FoodMapView'
 import { TripsView } from './TripsView'
-import { HomePreview } from './HomePreview'
+import { HomeBoard } from './HomeBoard'
 import './portal.css'
 
 // ─────────────────────────────────────────────
@@ -2721,6 +2721,8 @@ function HermesWarRoomSection({
 const DESKTOP_QUERY = '(min-width: 1100px)'
 // 首頁儀表板（DesktopBoard）出現的尺寸：要跟 portal.css 的 .ip-board-wrap media query 同一組條件
 const BOARD_QUERY = '(min-width: 1100px) and (min-height: 640px)'
+// 新首頁（HomeBoard）一個畫面放得下的尺寸：側欄佔掉約 240–320px，主區要夠寬才塞得下五段，比舊版多要求 ≥1300px（portal.css 的 .hm-wrap 同一組條件）
+const HOME_QUERY = '(min-width: 1300px) and (min-height: 640px)'
 function useMedia(query: string): boolean {
   const [d, setD] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
   useEffect(() => {
@@ -3255,7 +3257,7 @@ function InstrumentPanelView({
   unlockedPassword,
   onSiteSelect,
   onRequestUnlock,
-  homePreview = false,
+  legacy = false,
 }: {
   sites: SiteData[]
   dashboard: DashboardSummary[]
@@ -3263,8 +3265,8 @@ function InstrumentPanelView({
   unlockedPassword: string | null
   onSiteSelect: (site: SiteData) => void
   onRequestUnlock: () => void
-  /** #home 新首頁預覽：用同一份 hhiDetail／戰情室內容，改畫 HomeBoard（現在的首頁不變） */
-  homePreview?: boolean
+  /** #legacy 舊版首頁：主區改畫原樣的 DesktopBoard（2.36.0 起預設首頁是 HomeBoard，舊版留作退路） */
+  legacy?: boolean
 }) {
   const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
@@ -3279,7 +3281,7 @@ function InstrumentPanelView({
   richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
   const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
   // 電腦版儀表板要一個畫面放得下，頁尾只在手機、窄／矮視窗（頁面本來就要捲動）顯示
-  const boardOn = useMedia(BOARD_QUERY)
+  const boardOn = useMedia(legacy ? BOARD_QUERY : HOME_QUERY)
 
   const dimsGrid = (
     <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
@@ -3302,24 +3304,17 @@ function InstrumentPanelView({
     </div>
   )
 
-  if (homePreview) {
-    return (
-      <HomePreview
-        unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} hhiFetchedAt={hhiSummary?.fetchedAt ?? null}
-        hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
-        hhiDetail={
-          <>
-            <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
-            <div style={{ marginTop: '1.4rem' }}>
-              <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
-              {dimsGrid}
-            </div>
-          </>
-        }
-        opsDetail={<HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />}
-      />
-    )
-  }
+  // 抽屜內容：新舊首頁共用同一份（幸福指數詳情、HERMES 戰情室）
+  const hhiDetail = (
+    <>
+      <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
+      <div style={{ marginTop: '1.4rem' }}>
+        <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
+        {dimsGrid}
+      </div>
+    </>
+  )
+  const opsDetail = <HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
@@ -3328,9 +3323,16 @@ function InstrumentPanelView({
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1.5rem', flexWrap: 'wrap',
       }}>
         <div>
+          <div className="hm-titlerow">
           <h1 style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 'clamp(1.6rem, 4vw, 2.3rem)', margin: 0, lineHeight: 1, color: COLOR.ink, animation: 'header-flicker 12s infinite' }}>
             翰翰儀表板
           </h1>
+          {legacy && (
+            <a className="hm-legacy-back" href="#" onClick={e => { e.preventDefault(); window.location.hash = '' }} title="回到新首頁">
+              <span className="hm-legacy-badge">舊版首頁</span>← 回到新首頁
+            </a>
+          )}
+          </div>
           <span style={{ fontFamily: FONT.latin, fontSize: '0.62rem', letterSpacing: '0.2em', color: COLOR.amber, textTransform: 'uppercase', marginTop: '0.3rem', display: 'block' }}>
             Life Instrumentation · 即時遙測面板
           </span>
@@ -3353,22 +3355,20 @@ function InstrumentPanelView({
 
           </aside>
           <div className="ip-main">
-        {/* 首頁儀表板：電腦版一個畫面放得下；手機、窄／矮視窗同一組卡片改成上下堆疊（portal.css）。
-            舊面板（戰情室、幸福指數大卡、六維度）的內容都在卡片「詳細」打開的抽屜裡。 */}
-          <div className="ip-board-wrap">
-            <DesktopBoard
-              unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
-              hhiDetail={
-                <>
-                  <HappinessHeroCard summary={hhiSummary} unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
-                  <div style={{ marginTop: '1.4rem' }}>
-                    <SubLabel>六維度子系統（點卡片可前往該系統）</SubLabel>
-                    {dimsGrid}
-                  </div>
-                </>
-              }
-              opsDetail={<HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />}
-            />
+        {/* 預設首頁（2.36.0 起）：HomeBoard 五段式；電腦版一個畫面放得下（含左側欄），手機、窄／矮視窗上下堆疊（portal.css 的 hm-*）。
+            #legacy 舊版首頁：原樣的 DesktopBoard。兩者共用同一份抽屜內容與 .ip-board-wrap 的高度算法。 */}
+          <div className={`ip-board-wrap${legacy ? '' : ' hm-wrap'}`}>
+            {legacy ? (
+              <DesktopBoard
+                unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} toneOf={hhiTone} onRequestUnlock={onRequestUnlock}
+                hhiDetail={hhiDetail} opsDetail={opsDetail}
+              />
+            ) : (
+              <HomeBoard
+                unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} hhiFetchedAt={hhiSummary?.fetchedAt ?? null}
+                hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} hhiDetail={hhiDetail} opsDetail={opsDetail}
+              />
+            )}
           </div>
 
           </div>
@@ -3445,8 +3445,8 @@ function CommandPalette({
   const showFoodShortcut = q.length === 0 || foodKeywords.some(k => k.includes(q) || q.includes(k))
   const tripKeywords = ['遊記', '旅遊', '行程', 'trip']
   const showTripsShortcut = q.length === 0 || tripKeywords.some(k => k.includes(q) || q.includes(k))
-  const homeKeywords = ['新首頁', '首頁', '預覽', 'home']
-  const showHomeShortcut = q.length === 0 || homeKeywords.some(k => k.includes(q) || q.includes(k))
+  const legacyKeywords = ['舊版首頁', '舊首頁', '舊版', 'legacy']
+  const showLegacyShortcut = q.length === 0 || legacyKeywords.some(k => k.includes(q) || q.includes(k))
 
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0.9rem',
@@ -3502,13 +3502,13 @@ function CommandPalette({
               <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
             </div>
           )}
-          {showHomeShortcut && (
+          {showLegacyShortcut && (
             <div
-              onClick={() => { window.location.hash = 'home'; setOpen(false) }}
+              onClick={() => { window.location.hash = 'legacy'; setOpen(false) }}
               style={{ ...rowStyle, background: 'rgba(245,166,35,0.05)' }}
             >
               <span style={{ color: COLOR.amber }}>🏠</span>
-              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>新首頁（預覽版）</span>
+              <span style={{ color: COLOR.amber, fontSize: '0.82rem', flex: 1 }}>舊版首頁（退路）</span>
               <span style={{ color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.68rem' }}>→</span>
             </div>
           )}
@@ -3545,9 +3545,18 @@ export default function App() {
   // 全頁 3D 關係宇宙走 hash route（#graph），不是路徑 route——這個 SPA 沒
   // 有接路由庫，路徑 route 在 refresh/直接貼網址時需要伺服端 SPA fallback
   // 設定，hash 則完全是前端狀態，不需要動部署那端的反向代理規則。
-  const [hashRoute, setHashRoute] = useState(() => window.location.hash)
+  // #home（新首頁預覽時期分享出去的網址）已等同預設首頁：直接把網址的 hash 清掉，免得停在一個沒有意義的路由上
+  const readHash = () => {
+    const h = window.location.hash
+    if (h === '#home') {
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 取不到 history 就維持原網址 */ }
+      return ''
+    }
+    return h
+  }
+  const [hashRoute, setHashRoute] = useState(readHash)
   useEffect(() => {
-    const onHashChange = () => setHashRoute(window.location.hash)
+    const onHashChange = () => setHashRoute(readHash())
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
@@ -3648,10 +3657,10 @@ export default function App() {
         unlockedPassword={unlockedPassword}
         onSiteSelect={handleSiteClick}
         onRequestUnlock={handleRequestUnlock}
-        homePreview={hashRoute === '#home'}
+        legacy={hashRoute === '#legacy'}
       />
 
-      {hashRoute !== '#home' && <button
+      <button
         onClick={() => setAdminAuth(true)}
         title="管理後台"
         style={{
@@ -3659,7 +3668,7 @@ export default function App() {
           background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
           color: COLOR.steelDim, fontSize: '1rem', padding: '0.5rem 0.8rem', cursor: 'pointer', lineHeight: 1,
         }}
-      >⚙</button>}
+      >⚙</button>
 
       <CommandPalette
         sites={sites}

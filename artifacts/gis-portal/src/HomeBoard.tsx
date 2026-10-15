@@ -15,7 +15,7 @@ import {
 } from './homeView'
 
 // 新首頁（審計報告 §2.6 五段式）：① 今天 → ② 六個面向 → ③ 成長軌跡 → ④ 好玩的 → ⑤ 系統一顆燈（異常時移到 ① 下方）。
-// 獨立元件，props 與 DesktopBoard 類似；目前只掛在 #home 預覽路由，使用者看過截圖同意後才會換成預設首頁。
+// 獨立元件，props 與 DesktopBoard 類似；2.36.0 起是預設首頁的主區（App.tsx 的 InstrumentPanelView，左側欄的工具連結保留），舊版 DesktopBoard 在 #legacy。
 // 資料全部來自既有 API 與既有型別／函式，沒有任何示範值：拿不到就依 StateFrame 的狀態機顯示（未解鎖／載入中／空／過期／失敗）。
 
 type DrawerKey = 'hhi' | 'ops' | 'ideas'
