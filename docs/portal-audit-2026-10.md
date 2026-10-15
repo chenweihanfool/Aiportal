@@ -477,6 +477,26 @@
 
 **實作狀態**：前端（相片資料型別、MapLibre 底圖、相片牆、燈箱、手機版）已在 PR #76 做好，用示範資料與佔位圖；後端的地點表、相片處理與遷移尚未動工，需等 HERMES 回報。
 
+### 4.8 HERMES 第二階段回報（PR #1 comment 6190374796，2026-10-15）與修正
+
+**實測事實**
+- AdventureLog 在 VPS docker：backend／frontend／postgis 三個容器，已運行 12 天；前門是 **Caddy 2**（不是 nginx）。
+- **RAM 實測約 466 MiB**（backend 347＋frontend 61＋db 58；宿主上限約 7.7 GiB）。**§4.5／§4.6 寫的「約 2 GB」是估計，已被實測推翻**；停掉它省的是 0.5 GB 與一套維運，不是 2 GB。
+- 資料量很小：locations 17、visits 17、collections 3（共掛 17 個 location）、images 15（共 1.93 MB）、notes 5、activities 3；有座標的 location 13/17。**遷移成本很低**。
+- 相片自帶座標 0/15（靠 `object_id` 掛到 location）。
+- **相片不能當座標來源**：vault `附件` 147 張（頂層 104 張約 24 MiB），只有 1 張有 EXIF GPS、2 張有拍攝時間，其餘 145 張連 EXIF 都沒有（LINE 轉存、截圖已剝除）；HEIC 0 張。⇒ §4.7 寫的「座標優先用 EXIF」在現有素材上做不到；座標必須來自地圖連結、地理編碼或人工補。
+- **沒有 CSP**：Caddyfile 沒有任何 header／CSP 指令，對外實測也沒有。底圖與相片不會被政策擋。
+- 備援：未帶憑證時 `/api/locations/` 回 200 空清單、`/api/visits/` 回 403；API key 只存雜湊，HERMES 拿不到真樣本。欄位清單取自 backend 的 `serializers.py` 原文（見該留言）。**遷移可以直接由 HERMES 對資料庫做唯讀 SELECT 匯出，不需要 API key。**
+
+**回填**
+- B 已完成（據 HERMES 回報，我無法直接檢查 vault）：口袋名單「待吃」由 2 筆變 4 筆，新增「在心蛋餅舖」「放牛一班牛排」；地區、類型、連結留空，日記原文未動；備份檔 `美食口袋名單.md.bak-hermes-backfill-20261015`。
+- C 草稿：機械粗篩母體 158 列，人工初篩具名店家 **46 家**（完整 JSON 在 VPS `/opt/data/cache/food-visited-candidates-20261015.json`，我讀不到）；母體中有地圖連結 2 筆、有座標 1 筆，其餘全缺座標。另有 43 列只有品項沒有店名，無法自動落成店家。
+
+**對設計的影響**
+1. 落點是資料缺口，不是 UI 問題。可行來源：(a) 一次性地理編碼 46 家店名（需決定用哪個服務，屬第三方請求）；(b) 使用者在 Telegram 貼 Google 地圖分享連結，由 HERMES 寫入；(c) 日後在日記格式加地圖連結欄位。
+2. 相片處理量很小（約 100 多張、數十 MB），縮圖產生不構成負擔；相片與店家的對應靠 `附件/*.jpg.md` 的日期與 `diary` 欄位、Events 的 `source_refs`。
+3. 便利商店、賣場、服務區在母體裡佔相當比例，更像「消費地點」，是否納入美食地圖要決定。
+
 ## 5. 分階段路線圖
 
 ### P0（現在，低風險、不動資料源與部署設定）
