@@ -1,6 +1,12 @@
 import { db, busynessIndexHistoryTable, happinessIndexHistoryTable } from "@workspace/db";
 import { loadCombinedMind } from "./mindCombinedSource";
-import { MIND_COMBINED_SINCE, type CombinedMind } from "./mindCombined";
+import type { CombinedMind } from "./mindCombined";
+import {
+  EMPTY_DIMENSION_HISTORY,
+  buildDimensionHistory,
+  normalizeDimensions,
+  type DimensionHistory,
+} from "./happinessDimensionHistory";
 import { desc, eq, lt } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,
@@ -9,7 +15,6 @@ import {
   computeDisplayedScore,
   computeHappinessComponents,
   getHappinessConfigVersion,
-  percentileRank,
   type HappinessInputs,
   type HappinessResult,
 } from "./happinessIndex";
@@ -206,23 +211,7 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   return results;
 }
 
-export interface DimensionHistory {
-  lifeFreedom: number[];
-  fitness: number[];
-  calm: number[];
-  mind: number[];
-  travel: number[];
-  social: number[];
-}
-
-const EMPTY_HISTORY: DimensionHistory = {
-  lifeFreedom: [],
-  fitness: [],
-  calm: [],
-  mind: [],
-  travel: [],
-  social: [],
-};
+const EMPTY_HISTORY: DimensionHistory = EMPTY_DIMENSION_HISTORY;
 
 /** Reads each dimension's *raw* (pre-normalization) scores from the trailing
  *  PERCENTILE_WINDOW_DAYS days strictly before `beforeDate`, for
@@ -247,18 +236,8 @@ async function fetchDimensionHistory(beforeDate: string): Promise<DimensionHisto
     .orderBy(desc(happinessIndexHistoryTable.date))
     .limit(PERCENTILE_WINDOW_DAYS);
 
-  const pick = (key: Exclude<keyof (typeof rows)[number], "date">, since = ""): number[] =>
-    rows.filter((r) => String(r.date) >= since).map((r) => r[key]).filter((v): v is number => v !== null);
-
-  return {
-    lifeFreedom: pick("lifeFreedomRaw"),
-    fitness: pick("fitnessHabitRaw"),
-    calm: pick("calmRaw"),
-    // 心智 2026-10-10 起改成合成版（想法 80%＋日報 20%）：之前的 mind_raw 是日記篇數版，不同一把尺，不拿來排百分位
-    mind: pick("mindRaw", MIND_COMBINED_SINCE),
-    travel: pick("travelRaw"),
-    social: pick("socialRaw"),
-  };
+  // 視窗整理與心智 MIND_COMBINED_SINCE 的過濾共用 happinessDimensionHistory.ts（/api/happiness/history 也走那裡）
+  return buildDimensionHistory(rows);
 }
 
 /** Pure(ish) extraction step shared by the display path (fetchFreshSummaries,
@@ -307,12 +286,16 @@ async function extractHappinessResult(
   // see its doc comment in happinessIndex.ts).
   const calmRaw = busynessScore === null ? null : clamp(100 - busynessScore, 0, 100);
 
-  const lifeFreedomScore = lifeFreedomRaw === null ? null : percentileRank(lifeFreedomRaw, history.lifeFreedom);
-  const fitnessHabitScore = fitnessHabitRaw === null ? null : percentileRank(fitnessHabitRaw, history.fitness);
-  const calmScore = calmRaw === null ? null : percentileRank(calmRaw, history.calm);
-  const mindScore = mindRaw === null ? null : percentileRank(mindRaw, history.mind);
-  const travelScore = travelRaw === null ? null : percentileRank(travelRaw, history.travel);
-  const socialScore = socialRaw === null ? null : percentileRank(socialRaw, history.social);
+  const normalized = normalizeDimensions(
+    { lifeFreedom: lifeFreedomRaw, fitness: fitnessHabitRaw, calm: calmRaw, mind: mindRaw, social: socialRaw, travel: travelRaw },
+    history
+  );
+  const lifeFreedomScore = normalized.lifeFreedom;
+  const fitnessHabitScore = normalized.fitness;
+  const calmScore = normalized.calm;
+  const mindScore = normalized.mind;
+  const travelScore = normalized.travel;
+  const socialScore = normalized.social;
 
   // computeHappinessComponents inverts busynessScore internally
   // (calmScore = 100 - busynessScore) — it was kept unchanged (and its
