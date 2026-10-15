@@ -721,6 +721,26 @@
 - 測試：`dimensionPage.test.ts`（7 個單元）；`home.e2e.mjs` 新增面向頁六頁各自內容不同、切換、區間、手機版面、未解鎖、不認得的網址等（共 391 項）。
 - **沒有在真實手機上看過**（Chromium 390×844 模擬）。
 
+### 4.18 拆 App.tsx（路線圖 P1-3 的前半，2026-10-16，2.38.1）
+
+使用者：「繼續下一個重構任務」。路線圖裡不需要使用者決定、而且還沒做的項目中，App.tsx 是最大的維護負擔（3,912 行、約 70 個頂層宣告），所以先做這件。
+
+**做法：機械式搬移，行為不變。** 用一支一次性的腳本依原檔的區塊橫幅切段，每段搬到新檔，再依「該檔用到哪些識別字」自動產生 import（先去掉註解再掃，避免註解裡的名字造成假相依），只對被其他檔用到的符號加 `export`；腳本不進 repo。
+
+| 新檔 | 內容 | 行數 |
+|---|---|---|
+| `App.tsx` | 解鎖狀態、網址路由、管理後台與指令面板的掛載 | 206 |
+| `InstrumentPanelView.tsx` | 首頁：頁首、左側欄、主區、兩個抽屜 | 151 |
+| `DimensionCards.tsx` / `DimensionDetail.tsx` | 六面向的摘要內容與卡片 / 面向頁的「分數怎麼來」 | 438 / 77 |
+| `HappinessHero.tsx` | 幸福指數主卡（舊版首頁與抽屜） | 171 |
+| `WarRoom.tsx` / `PipelineFlow.tsx` | 戰情室抽屜 / L1~L5 管線流程圖 | 370 / 324 |
+| `ToolLinks.tsx` / `Dialogs.tsx` / `VersionHistory.tsx` / `CommandPalette.tsx` | 工具連結與美食入口 / 解鎖與管理後台 / 版本按鈕 / ⌘K | 155 / 343 / 28 / 144 |
+| `panelUi.tsx` / `Gauge.tsx` / `format.ts` / `happinessInsights.ts` / `portalApi.ts` / `useMedia.ts` / `versionHistory.ts` | 共用小元件 / 儀表圈 / 格式與分數等級 / 30 天洞察 / 型別與 API / 螢幕尺寸 / 版本資料 | 267 / 97 / 68 / 91 / 262 / 23 / 760 |
+
+**驗證**：搬前搬後逐行比對（去掉 import 與 `export` 前綴後的程式行多重集合）3,652 對 3,652、遺失 0、多出 0；沒有循環相依；`tsc` 通過；vitest 424 全過；瀏覽器測試 home 391/391、board 197/197、media 12/12 全過；timeline 45/48——**搬前（master）也是 45/48、失敗的是同樣 3 項**（「關係圖已聚焦該事件」與兩項 console 404），是這支測試原本就有的問題，與搬移無關、這次沒動；建置產物大小 627.2 kB（搬前 627.4 kB，差在模組拆分後的壓縮命名）。
+
+**路線圖 P1-3 還沒做的後半**：指標註冊表（`MetricDef`）。這需要先決定要不要把「面向、子系統、算法說明、預期更新間隔」收進同一張表，會牽動 `homeDimensions.ts`、`dimensionPage.ts`、`homeView.EXPECTED_EVERY_MIN` 與推送端 `pusherHealth`（即 P1-2 的「全站共用 expectedEveryMin 表」），所以另開一個任務，不和這次的純搬移混在一起。
+
 ---
 
 ## 5. 分階段路線圖
