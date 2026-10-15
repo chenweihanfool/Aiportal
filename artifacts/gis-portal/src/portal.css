@@ -505,3 +505,20 @@ button.bd-hrow:hover, button.bd-hrow:focus-visible { background: rgba(255,255,25
 .vh-changes li { position: relative; font-size: 0.8rem; line-height: 1.75; color: #9aa4b6; }
 .vh-changes li::before { content: ""; position: absolute; left: -19px; top: 10px; width: 6px; height: 6px; border-radius: 999px; background: #565a68; }
 @media (prefers-reduced-motion: reduce) { .vh-chev, .vh-title { transition: none; } }
+
+/* ── 🍜 美食地圖（#food，2026-10-15 原型）── */
+.fm-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; }
+.fm-split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0.9rem; height: calc(100vh - 15rem); min-height: 380px; }
+.fm-map { min-height: 300px; }
+.fm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; flex: 1; }
+.fm-row { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; background: #1a1c22; border: 1px solid #3a3d47; border-left-width: 3px; border-radius: 8px; cursor: pointer; font: inherit; color: inherit; transition: border-color 0.15s, background 0.15s; }
+.fm-row:hover, .fm-row.is-on { background: #24262e; border-color: #565a68; }
+.fm-pulse { animation: fm-pulse 1.6s ease-out infinite; transform-origin: center; }
+@keyframes fm-pulse { from { opacity: 0.9; transform: scale(0.6); } to { opacity: 0; transform: scale(1.4); } }
+@media (max-width: 860px) {
+  .fm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fm-split { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .fm-map { height: 56vh; }
+  .fm-list { overflow: visible; }
+}
+@media (prefers-reduced-motion: reduce) { .fm-pulse { animation: none; } .fm-row { transition: none; } }
