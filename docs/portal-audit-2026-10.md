@@ -793,7 +793,7 @@
 | P1-4 | 美食萃取器＋pusher＋端點，`#food` 接真資料 | ◐（端點、資料、遊記都上線；持續性萃取器沒做，目前靠 HERMES 回填） |
 | P1-5 | 地圖底圖 | ✅（MapLibre＋OpenFreeMap） |
 | P1-6 | `/api/dashboard` 先回快取＋資料年齡 | ✅（記憶體 stale-while-revalidate：60 秒內直接回、10 分鐘內先回舊的並背景更新；回應附 `cache.ageSec／stale`，各面向資料年齡仍看每筆 `fetchedAt`） |
-| P1-7 | `schemas/`＋泛用 feed 端點 | ⬜ |
+| P1-7 | `schemas/`＋泛用 feed 端點 | ✅（使用者 2026-10-16：「P1-7要做」；`POST /api/admin/feed/:name`＋`feed_snapshot` 表＋JSON Schema 登記表，見 `docs/feed-api.md`；既有 11 種不搬） |
 | P1-8 | 知識庫健康四項 | ✅（使用者選 C：保留四項，戰情室加「知識庫體檢」） |
 | P2-1 | 成長軌跡完整版 | ◐（里程碑與熱圖完成；年度回顧入口、各面向年熱圖沒做） |
 | P2-2 | SQLite FTS 查詢索引 | ⬜ |
@@ -803,9 +803,9 @@
 | P2-6 | 任務面向加能行動的數字（需讀 Vikunja API） | ✅（使用者選 B＝主機端算：kb-pipeline `compute_daily.py` 多算逾期／今天到期／7 天內到期／近 7 天完成，寫進 `busyness_index_history` 新欄位；入口網任務面向頁顯示「今天要做什麼」） |
 | P2-7 | 還原演練排程化 | 🔶 |
 
-**路線圖以外、這輪已做完的**：地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（`TRAVEL_SOURCE=trips`，程式已備好、預設仍走 AdventureLog，待使用者決定切換時機；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢。
+**路線圖以外、這輪已做完的**：地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；dry-run 只掛得到 1 張，使用者選「選項2」放寬——當天只有一個地點時，該日所有使用者條目的相片都掛上；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（`TRAVEL_SOURCE=trips`，程式已備好、預設仍走 AdventureLog，待使用者決定切換時機；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢。
 
-**目前位置（2026-10-16）**：剛完成 P1-2 後半（新鮮度判準合併，§4.20）與旅遊分數切到遊記版（交 HERMES 設 `TRAVEL_SOURCE=trips`）；合計 22 項中 ✅ 12、◐ 3、⬜ 4、🔶 2、✖ 1（P2-4 取消）。**下一個候選**：P1-7 `schemas/`＋泛用 feed 端點（沒有急用需求）。**進行中（路線圖以外）**：地點相片衍生檔，等 HERMES 盤點（PR #1 comment 6204320509）。使用者先前說「之後再做」的：補齊沒有座標的地點。
+**目前位置（2026-10-16）**：剛完成 P1-7（泛用 feed）；合計 22 項中 ✅ 13、◐ 3、⬜ 3、🔶 2、✖ 1（P2-4 取消）。**使用者取消**：補齊沒有座標的地點（2026-10-16：「取消的是補齊沒有座標的地點」）。**等 HERMES**：地點相片放寬後的 dry-run。**部署注意**：P1-7 有新資料表，要先跑 db-migrate 再重建 api-server。**還沒做的小項**：AdventureLog 實際停用與 `ADVENTURELOG_*` 清理（要使用者明說）、P0-7 排程文件、P1-4 持續性萃取器等。
 
 
 ### P0（現在，低風險、不動資料源與部署設定）
