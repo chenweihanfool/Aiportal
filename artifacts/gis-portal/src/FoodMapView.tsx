@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { COLOR, FONT } from './theme'
 import {
-  FOOD_STATUS_ICON, FOOD_STATUS_LABEL, KIND_ICON, areaCounts, bearingLabel, coverPhoto, daysBetween, filterPlaces, foodStats, foodStatusMessage, formatDistance, isBeen,
+  FOOD_STATUS_ICON, FOOD_STATUS_LABEL, KIND_ICON, areaCounts, oldestWantSortLabel, wantFilterLabel, bearingLabel, coverPhoto, daysBetween, filterPlaces, foodStats, foodStatusMessage, formatDistance, isBeen,
   navigateUrl, nearbyPlaces, nextFoodStatuses, priceLabel, projectPlaces, sortPlaces, stars, statusLabelFor, tagCounts,
   type FoodData, type FoodFilter, type FoodPlace, type FoodSort, type FoodStatus, type FoodStatusFilter, type PlaceKind,
 } from './foodMap'
@@ -26,10 +26,10 @@ const STATUS_COLOR: Record<FoodStatus, string> = {
   want: COLOR.amber, visited: COLOR.ok, favorite: '#f06292', skip: COLOR.steelDim,
 }
 
-const FILTERS: Array<[FoodStatusFilter, string]> = [['all', '全部'], ['want', '🔖 想吃'], ['been', '✅ 去過'], ['favorite', '❤️ 愛店'], ['skip', '🚫 不再去']]
+const filtersFor = (kind: PlaceKind | 'all' | undefined): Array<[FoodStatusFilter, string]> => [['all', '全部'], ['want', wantFilterLabel(kind)], ['been', '✅ 去過'], ['favorite', '❤️ 愛店'], ['skip', '🚫 不再去']]
 const KIND_FILTERS: Array<[PlaceKind | 'all', string]> = [['all', '全部'], ['food', '🍜 美食'], ['sight', '🧭 旅遊']]
 const RADII: Array<[number | null, string]> = [[500, '500 m'], [1000, '1 km'], [3000, '3 km'], [10000, '10 km'], [null, '不限']]
-const SORTS: Array<[FoodSort, string]> = [['oldestWant', '想吃最久'], ['recent', '最近'], ['rating', '評分']]
+const sortsFor = (kind: PlaceKind | 'all' | undefined): Array<[FoodSort, string]> => [['oldestWant', oldestWantSortLabel(kind)], ['recent', '最近'], ['rating', '評分']]
 
 const pill = (active: boolean, color: string = COLOR.amber): CSSProperties => ({
   fontFamily: FONT.mono, fontSize: '0.68rem', padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
@@ -245,7 +245,8 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
   }, [])
 
   const statTiles: Array<[string, string, string?]> = [
-    ['想吃', String(stats.want), COLOR.amber],
+    ['想吃', String(stats.wantEat), COLOR.amber],
+    ['想去', String(stats.wantGo), COLOR.amber],
     ['去過', String(stats.been), COLOR.ok],
     ['實現率', stats.conversionPct !== null ? `${stats.conversionPct}%` : '—'],
     ['今年吃了', `${stats.beenThisYear} 家`],
@@ -274,9 +275,13 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
         {isSample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
         {src.note && <span data-testid="food-source-note" style={{ fontSize: '0.66rem', color: COLOR.steelDim }}>{src.note}</span>}
         {receivedLabel && <span data-testid="food-received" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>資料：{receivedLabel}</span>}
-        {stats.oldestWant && (
-          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: COLOR.steel }}>
-            想吃最久：<b style={{ color: COLOR.amber, cursor: 'pointer' }} onClick={() => pick(stats.oldestWant!.place.id)}>{stats.oldestWant.place.name}</b>（{stats.oldestWant.days} 天）
+        {(stats.oldestWantEat || stats.oldestWantGo) && (
+          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: COLOR.steel, display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
+            {([['想吃最久', stats.oldestWantEat], ['想去最久', stats.oldestWantGo]] as const).map(([label, o]) => o && (
+              <span key={label} data-testid={label === '想吃最久' ? 'food-oldest-eat' : 'food-oldest-go'}>
+                {label}：<b style={{ color: COLOR.amber, cursor: 'pointer' }} onClick={() => pick(o.place.id)}>{o.place.name}</b>（{o.days} 天）
+              </span>
+            ))}
           </span>
         )}
       </header>
@@ -309,7 +314,7 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '0 0 0.5rem' }}>
           {KIND_FILTERS.map(([k, l]) => <button key={k} type="button" style={pill((filter.kind ?? 'all') === k, COLOR.steel)} onClick={() => setFilter(f => ({ ...f, kind: k }))}>{l}</button>)}
           <span style={{ width: 8 }} />
-          {FILTERS.map(([k, l]) => <button key={k} type="button" style={pill(filter.status === k)} onClick={() => setFilter(f => ({ ...f, status: k }))}>{l}</button>)}
+          {filtersFor(filter.kind).map(([k, l]) => <button key={k} type="button" style={pill(filter.status === k)} onClick={() => setFilter(f => ({ ...f, status: k }))}>{l}</button>)}
           <input value={filter.query} onChange={e => setFilter(f => ({ ...f, query: e.target.value }))} placeholder="搜尋店名、菜、景點、推薦人…" aria-label="搜尋地點"
             style={{ flex: '1 1 160px', minWidth: 0, background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 999, color: COLOR.ink, padding: '5px 12px', fontSize: '0.74rem' }} />
         </div>
@@ -335,7 +340,7 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
                 {nearby ? `${list.length} 個在 ${radiusM === null ? '不限距離' : formatDistance(radiusM)} 內` : `${list.length} / ${data.places.length} 個`}
                 {nearby && nearby.unmapped > 0 ? `・另有 ${nearby.unmapped} 個沒座標，算不出距離` : ''}
               </span>
-              {!nearby && SORTS.map(([k, l]) => <button key={k} type="button" style={pill(sort === k, COLOR.steel)} onClick={() => setSort(k)}>{l}</button>)}
+              {!nearby && sortsFor(filter.kind).map(([k, l]) => <button key={k} type="button" style={pill(sort === k, COLOR.steel)} onClick={() => setSort(k)}>{l}</button>)}
             </div>
             {list.length === 0 ? (
               <div style={{ color: COLOR.steelDim, fontSize: '0.78rem', padding: '1rem 0' }}>

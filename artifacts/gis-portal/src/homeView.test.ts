@@ -475,6 +475,14 @@ describe('oldestWantPlace / placesBeenCount', () => {
     expect(r?.place.id).toBe('A1')
     expect(r?.days).toBe(268)
   })
+  it("group 'eat' only looks at food, 'go' only at non-food; no group = all", () => {
+    const ps = [place('F', { kind: 'food', addedAt: '2026-05-01' }), place('S', { kind: 'sight', addedAt: '2026-02-01' }), place('H', { kind: 'stay', addedAt: '2026-04-01' })]
+    expect(oldestWantPlace(ps, now, 'eat')?.place.id).toBe('F')
+    expect(oldestWantPlace(ps, now, 'go')?.place.id).toBe('S')
+    expect(oldestWantPlace(ps, now)?.place.id).toBe('S')
+    expect(oldestWantPlace([place('F')], now, 'go')).toBeNull()
+    expect(oldestWantPlace([place('S', { kind: 'sight' })], now, 'eat')).toBeNull()
+  })
   it('added today is 0 days; a future addedAt does not go negative', () => {
     expect(oldestWantPlace([place('1', { addedAt: '2026-10-15' })], now)?.days).toBe(0)
     expect(oldestWantPlace([place('1', { addedAt: '2026-10-20' })], now)?.days).toBe(0)
