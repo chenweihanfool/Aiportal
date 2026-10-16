@@ -5,9 +5,14 @@
 //   - 視窗＝該列「之前」最近 PERCENTILE_WINDOW_DAYS 列（是「列」不是日曆天：漏快照的日子不會把視窗拉長）
 //   - 視窗內該面向為 null 的列不計入；不足 MIN_HISTORY_DAYS_FOR_PERCENTILE 筆就退回原始分數（clamp 0-100 後四捨五入）
 //   - 心智只取 MIND_COMBINED_SINCE 起的列（之前是日記篇數版，不同一把尺）
+//   - 旅遊：評估日在 TRAVEL_TRIPS_SINCE 當天或之後時，只取該日起的列（之前是 AdventureLog 來源，不同一把尺；
+//     新來源的分數整體較低，拿去跟舊歷史排百分位會變成「比過去 90 天任何一天都差」＝0，即使人正在旅行中）
 // 這支檔只有純函式、不碰資料庫，方便單元測試。
 import { PERCENTILE_WINDOW_DAYS, percentileRank } from "./happinessIndex";
 import { MIND_COMBINED_SINCE } from "./mindCombined";
+
+/** 旅遊分數改由「遊記＋美食地圖」計算的第一天（2026-10-16，AdventureLog 退場）。 */
+export const TRAVEL_TRIPS_SINCE = "2026-10-16";
 
 /** 面向 key＝/api/dashboard 的 hhi 各面向 id（也是前端 homeDimensions.ts / buildHhiBreakdown 的 key）。 */
 export const DIMENSION_KEYS = ["lifeFreedom", "fitness", "calm", "mind", "social", "travel"] as const;
@@ -51,13 +56,18 @@ export function rawsOfRow(row: RawHistoryRow): DimensionRaws {
 
 const isNum = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 
-/** 把一個視窗的列（順序不拘）整理成每面向的原始分數陣列。心智只取 MIND_COMBINED_SINCE 起的列。 */
-export function buildDimensionHistory(windowRows: RawHistoryRow[]): DimensionHistory {
+/**
+ * 把一個視窗的列（順序不拘）整理成每面向的原始分數陣列。心智只取 MIND_COMBINED_SINCE 起的列。
+ * asOfDate＝評估日（不給＝不做旅遊換尺的過濾）：評估日 ≥ TRAVEL_TRIPS_SINCE 時，旅遊只取該日起的列。
+ */
+export function buildDimensionHistory(windowRows: RawHistoryRow[], asOfDate?: string): DimensionHistory {
+  const travelRescaled = asOfDate !== undefined && String(asOfDate) >= TRAVEL_TRIPS_SINCE;
   const out: DimensionHistory = { lifeFreedom: [], fitness: [], calm: [], mind: [], social: [], travel: [] };
   for (const row of windowRows) {
     const raws = rawsOfRow(row);
     for (const key of DIMENSION_KEYS) {
       if (key === "mind" && String(row.date) < MIND_COMBINED_SINCE) continue;
+      if (key === "travel" && travelRescaled && String(row.date) < TRAVEL_TRIPS_SINCE) continue;
       const v = raws[key];
       if (isNum(v)) out[key].push(v);
     }
@@ -92,7 +102,7 @@ export function computeDimensionSeries(
   const result: Array<{ date: string; components: DimensionScores }> = [];
   for (let i = start; i < rowsAsc.length; i++) {
     const row = rowsAsc[i]!;
-    const history = buildDimensionHistory(rowsAsc.slice(Math.max(0, i - windowDays), i));
+    const history = buildDimensionHistory(rowsAsc.slice(Math.max(0, i - windowDays), i), String(row.date));
     const scores = normalizeDimensions(rawsOfRow(row), history);
     if (String(row.date) < MIND_COMBINED_SINCE) scores.mind = null;
     const components = {} as DimensionScores;

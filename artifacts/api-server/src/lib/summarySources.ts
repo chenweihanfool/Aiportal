@@ -259,7 +259,7 @@ async function fetchDimensionHistory(beforeDate: string): Promise<DimensionHisto
     .limit(PERCENTILE_WINDOW_DAYS);
 
   // 視窗整理與心智 MIND_COMBINED_SINCE 的過濾共用 happinessDimensionHistory.ts（/api/happiness/history 也走那裡）
-  return buildDimensionHistory(rows);
+  return buildDimensionHistory(rows, beforeDate);
 }
 
 /** Pure(ish) extraction step shared by the display path (fetchFreshSummaries,
