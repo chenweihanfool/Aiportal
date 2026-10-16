@@ -155,13 +155,13 @@ export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlo
 }
 
 // ── ③ 成長軌跡 ────────────────────────────────
-function YearHeat({ heat, toneOf }: { heat: Heatmap; toneOf: Tone }) {
+export function YearHeat({ heat, toneOf, label = '幸福指數' }: { heat: Heatmap; toneOf: Tone; label?: string }) {
   return (
     <div className="hm-heat">
       <div className="hm-heat-months" style={{ gridTemplateColumns: `repeat(${heat.cols}, minmax(0, 1fr))` }} aria-hidden>
         {heat.months.map((m) => <span key={`${m.col}-${m.label}`} style={{ gridColumn: `${m.col + 1} / span 4` }}>{m.label}</span>)}
       </div>
-      <div className="hm-heat-grid" role="img" aria-label={`幸福指數年熱圖：${heat.start} 到 ${heat.end} 共 ${heat.cells.length} 天，${heat.withData} 天有紀錄`}
+      <div className="hm-heat-grid" role="img" aria-label={`${label}年熱圖：${heat.start} 到 ${heat.end} 共 ${heat.cells.length} 天，${heat.withData} 天有紀錄`}
         style={{ gridTemplateColumns: `repeat(${heat.cols}, minmax(0, 1fr))` }}>
         {heat.cells.map((c) => (
           <i key={c.date} className={`hm-cell${c.value === null ? ' is-empty' : ''}`} data-date={c.date}
@@ -195,7 +195,7 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
   const tiles: Array<[string, number | null, number | null]> = [['人物', kb.people, kb.newPeopleThisWeek], ['事件', kb.events, kb.newEventsThisWeek], ['概念', kb.concepts, null], ['方法', kb.methods, null]]
   return (
     <section className="hm-card hm-growth" aria-label="成長軌跡">
-      <Head title="成長軌跡" right={<><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a></>} />
+      <Head title="成長軌跡" right={<><a href="#year" className="hm-link" data-testid="hm-year-link">年度回顧 →</a><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a></>} />
       <div className="hm-growth-body">
         <StateFrame status={histSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={onRetryHistory}
           pendingText={heatPending} className="hm-heat-frame">

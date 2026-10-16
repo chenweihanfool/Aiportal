@@ -148,9 +148,31 @@ export interface Heatmap {
  * 以日曆日期逐天推算，所以閏年的 2/29、跨年都照實排；格數永遠等於 days。
  */
 export function buildHeatmap(history: HhiHistoryPoint[], todayIso: string, days = 365): Heatmap {
-  const start = addDays(todayIso, -(days - 1))
   const byDate = new Map<string, number>()
   for (const h of history) if (Number.isFinite(h.displayedScore)) byDate.set(h.date.slice(0, 10), h.displayedScore)
+  return heatmapFromValues(byDate, todayIso, days)
+}
+
+/**
+ * 某一個面向的年熱圖（2026-10-16，P2-1）：值取每天 components[key]（面向卡上的正規化分數，0–100，夾在範圍內）；
+ * 沒有 components 或那天是 null 就是空格，不是 0。其餘排版與 buildHeatmap 完全相同。
+ */
+export function buildDimensionHeatmap(
+  history: ReadonlyArray<{ date: string; components?: Record<string, number | null> | null }> | null | undefined,
+  key: string, todayIso: string, days = 365,
+): Heatmap {
+  const byDate = new Map<string, number>()
+  for (const h of Array.isArray(history) ? history : []) {
+    const c = h?.components
+    if (!h || typeof h.date !== 'string' || !c || typeof c !== 'object' || Array.isArray(c)) continue
+    const v = c[key]
+    if (typeof v === 'number' && Number.isFinite(v)) byDate.set(h.date.slice(0, 10), Math.min(100, Math.max(0, v)))
+  }
+  return heatmapFromValues(byDate, todayIso, days)
+}
+
+function heatmapFromValues(byDate: Map<string, number>, todayIso: string, days: number): Heatmap {
+  const start = addDays(todayIso, -(days - 1))
   const startDow = new Date(isoMs(start)).getUTCDay()
   const cells: HeatCell[] = []
   const months: Heatmap['months'] = []

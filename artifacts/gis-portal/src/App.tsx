@@ -6,6 +6,8 @@ import { RelationshipUniverse } from './RelationshipUniverse'
 import { TimelineView } from './TimelineView'
 import { TripsView } from './TripsView'
 import { dimKeyFromHash } from './dimensionPage'
+import { YearReview } from './YearReview'
+import { yearFromHash } from './yearReview'
 import { COLOR } from './theme'
 import { CommandPalette } from './CommandPalette'
 import { AdminAuthModal, AdminPanel, PasswordModal } from './Dialogs'
@@ -119,6 +121,11 @@ export default function App() {
     await refreshSites()
   }, [adminPassword, refreshSites])
 
+  // 年度回顧（P2-1）：#year＝今年，#year/<年>＝指定的年；年份不合理就當首頁
+  const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
+  if (reviewYear !== null) {
+    return <YearReview year={reviewYear} unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock} />
+  }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
   }

@@ -880,3 +880,24 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .dp-pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
 .dp-pager a { color: #9aa4b6; text-decoration: none; font-size: 0.82rem; padding: 0.4rem 0.2rem; }
 .dp-pager a:hover, .dp-pager a:focus-visible { color: #f5a623; }
+
+/* ── 年度回顧（#year）與各面向年熱圖（P2-1）── */
+.yr-wrap { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 0.8rem; }
+.yr-title { margin: 0.2rem 0 0; font-size: 1.4rem; font-weight: 700; color: #ece9e2; }
+.yr-nav { display: flex; gap: 0.4rem; }
+.yr-nav .dp-range:disabled { opacity: 0.35; cursor: default; }
+.yr-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.3rem; align-items: end; margin-top: 0.4rem; }
+.yr-month { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0; }
+.yr-bar-wrap { display: flex; align-items: flex-end; width: 100%; height: 5.5rem; background: #15171c; border-radius: 4px; overflow: hidden; }
+.yr-bar { display: block; width: 100%; border-radius: 3px 3px 0 0; background: #3a3d47; }
+.yr-m { font-size: 0.62rem; color: #5b6270; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.yr-dim-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.yr-dim { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) 2.6rem auto; gap: 0.6rem; align-items: center; }
+.yr-dim-name { color: #ece9e2; text-decoration: none; font-size: 0.85rem; white-space: nowrap; }
+.yr-dim-name > span { margin-right: 0.35rem; }
+.yr-dim-bar { height: 0.55rem; background: #15171c; border-radius: 999px; overflow: hidden; }
+.yr-dim-bar > i { display: block; height: 100%; background: var(--dim, #f5a623); border-radius: 999px; }
+.yr-dim-n { font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.yr-areas { font-size: 0.85rem !important; }
+.dp-heat-frame { min-height: 6rem; }
+@media (max-width: 479px) { .yr-dim { grid-template-columns: 5rem minmax(0, 1fr) 2.2rem; } .yr-dim .hm-chip { grid-column: 1 / -1; justify-self: start; } }
