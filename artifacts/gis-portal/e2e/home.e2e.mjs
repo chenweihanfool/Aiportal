@@ -159,7 +159,8 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
     if (!authed) return json({ message: 'no' }, 403)
     const key = { '/api/happiness/history': 'history', '/api/hermes-graph': 'graph', '/api/hermes-ideas': 'ideas', '/api/hermes-places': 'food', '/api/hermes-trips': 'trips', '/api/hermes-pipeline': 'pipeline', '/api/hermes-status': 'status', '/api/hermes-usage': 'usage' }[p]
     if (key) {
-      const k = key === 'history' && (u.searchParams.get('days') === '30' || u.searchParams.get('days') === '90') ? 'history30' : key
+      // 面向頁（#dim/…）與年度回顧（#year…）抓 365 天，假資料用「含 components 的那一份」（首頁的 365 天年熱圖仍用 S.history）
+      const k = key === 'history' && (u.searchParams.get('days') === '30' || u.searchParams.get('days') === '90' || (u.searchParams.get('days') === '365' && /#(dim|year)\b/.test(page.url()))) ? 'history30' : key
       calls.push(`${p}?days=${u.searchParams.get('days')}`)
       if (k === 'history30' && S.fail.has('history30')) return json({ message: 'boom' }, 500)
       if (S.delayMs) await new Promise((r) => setTimeout(r, S.delayMs))
@@ -680,6 +681,44 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   const c = await open({ width: 1440, height: 900 }, 'normal', { hash: '#dim/nope' })
   check('面向頁：不認得的面向網址 → 當作首頁（沒有面向頁）', (await c.page.locator('[data-testid="dim-page"]').count()) === 0 && (await c.page.locator('.hm-root').count()) === 1)
   await c.ctx.close()
+}
+
+{
+  // 8 年度回顧（#year）與各面向年熱圖（P2-1）
+  const Y = Number(tpDate().slice(0, 4))
+  const a = await open({ width: 1440, height: 900 }, 'spark')
+  check('成長軌跡有「年度回顧 →」入口', (await a.page.locator('[data-testid="hm-year-link"]').count()) === 1)
+  await a.page.locator('[data-testid="hm-year-link"]').click(); await a.page.waitForSelector('[data-testid="year-page"]')
+  check(`年度回顧：網址 #year、頁面是今年（${Y}）`, (await a.page.evaluate(() => location.hash)) === '#year' && (await a.page.locator('[data-testid="year-page"]').getAttribute('data-year')) === String(Y))
+  await a.page.waitForSelector('[data-testid="yr-hhi-stats"]', { timeout: 8000 })
+  const hhiText = await a.page.locator('[data-testid="yr-hhi-stats"]').innerText()
+  check('年度回顧：幸福指數區有年平均、最好／最低的一天、有紀錄天數', /年平均/.test(hhiText) && /最好的一天/.test(hhiText) && /最低的一天/.test(hhiText) && /有紀錄/.test(hhiText), hhiText.replace(/\s+/g, ' ').slice(0, 120))
+  check('年度回顧：六個面向各一列，有「全年最強」「全年最弱」', (await a.page.locator('[data-testid="yr-dims"] .yr-dim').count()) === 6 && (await a.page.locator('[data-testid="yr-dims"]').innerText()).includes('全年最強') && (await a.page.locator('[data-testid="yr-dims"]').innerText()).includes('全年最弱'))
+  check('年度回顧：旅行與去過的地點兩區有內容或明確的「沒有」說明', (await a.page.locator('[data-testid="yr-trips"]').innerText()).length > 8 && (await a.page.locator('[data-testid="yr-places"]').innerText()).length > 8)
+  check('年度回顧：今年不能再往後（下一年鈕停用）', await a.page.locator('[data-testid="yr-next"]').isDisabled())
+  await a.page.locator('[data-testid="yr-prev"]').click(); await a.page.waitForTimeout(300)
+  check(`年度回顧：往前一年 → #year/${Y - 1}`, (await a.page.evaluate(() => location.hash)) === `#year/${Y - 1}` && (await a.page.locator('[data-testid="year-page"]').getAttribute('data-year')) === String(Y - 1))
+  check('年度回顧：沒有頁面錯誤', a.errors.length === 0, a.errors.join(' | ').slice(0, 300))
+  await a.ctx.close()
+  const b = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/fitness', wait: false })
+  await b.page.waitForSelector('[data-testid="dp-heat"] .hm-heat-grid', { timeout: 8000 })
+  const cells = await b.page.locator('[data-testid="dp-heat"] .hm-cell:not(.is-empty)').count()
+  check(`面向頁：「近一年每天」年熱圖有格子，有資料的日子上色（${cells} 格有值）`, cells >= 25 && (await b.page.locator('[data-testid="dp-heat"] .hm-heat-grid i').count()) >= 365, String(cells))
+  check('面向頁：歷史改向 /api/happiness/history 取 365 天', b.calls.includes('/api/happiness/history'))
+  await b.ctx.close()
+  const c = await open({ width: 1440, height: 900 }, 'normal', { hash: '#dim/mind', wait: false })
+  await c.page.waitForSelector('[data-testid="dp-heat-pending"]', { timeout: 8000 })
+  check('面向頁：歷史沒有 components 時，年熱圖區寫明原因（不畫假圖）', /還不到 2 天/.test(await c.page.locator('[data-testid="dp-heat-pending"]').innerText()))
+  await c.ctx.close()
+  const d = await open({ width: 1440, height: 900 }, 'normal', { hash: '#year/1999' })
+  check('年度回顧：年份不合理（#year/1999）→ 當作首頁', (await d.page.locator('[data-testid="year-page"]').count()) === 0 && (await d.page.locator('.hm-root').count()) === 1)
+  await d.ctx.close()
+  const e = await open({ width: 390, height: 844 }, 'spark', { hash: '#year', wait: false })
+  await e.page.waitForSelector('[data-testid="yr-hhi-stats"]', { timeout: 8000 })
+  const mm = await e.page.evaluate(() => ({ docW: document.documentElement.scrollWidth, innerW: window.innerWidth }))
+  check('年度回顧 手機 390：不橫向捲動', mm.docW <= mm.innerW, JSON.stringify(mm))
+  await e.page.screenshot({ path: path.join(SHOTS, 'year-mobile.png') })
+  await e.ctx.close()
 }
 
 await browser.close()

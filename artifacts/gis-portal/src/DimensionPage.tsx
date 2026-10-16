@@ -4,7 +4,8 @@ import { PERCENTILE_NOTE, deltaText, dimHash, dimNeighbors, rangeStats } from '.
 import { fetchHhiHistoryStrict } from './homeApi'
 import { DIMENSIONS, DIMENSION_FALLBACK_COLOR, dimensionOf } from './dimensions'
 import { useAsync, useNow } from './homeHooks'
-import { EXPECTED_EVERY_MIN, blockState, dimensionSeries, historyUpdatedAtMs, sparkGeometry, taipeiDate, type DimSeries } from './homeView'
+import { EXPECTED_EVERY_MIN, blockState, buildDimensionHeatmap, dimensionSeries, historyUpdatedAtMs, sparkGeometry, taipeiDate, type DimSeries } from './homeView'
+import { YearHeat } from './HomeSections'
 import { Skeleton, StateFrame } from './StateFrame'
 import { COLOR, FONT } from './theme'
 
@@ -13,7 +14,8 @@ import { COLOR, FONT } from './theme'
 // 資料全部來自既有接口：/api/dashboard 的 hhi 摘要（分數、權重）、/api/happiness/history（每面向的 components）、
 // 各子系統摘要（由 App.tsx 組成 detail 傳進來）。沒有新後端。
 
-const fetchHistory90 = (pw: string) => fetchHhiHistoryStrict(pw, 90)
+// 365 天：走勢圖只取近 30／90 天（dimensionSeries 依視窗過濾），年熱圖用整整一年
+const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
 
 export interface DimLink { label: string; hash?: string; onClick?: () => void }
 
@@ -48,9 +50,10 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
   const row = breakdown?.rows.find((r) => r.key === dimKey) ?? null
   const drag = breakdown ? biggestDrag(breakdown.rows) : null
   const isDrag = !!row && drag?.key === row.key
-  const history = useAsync(pw, fetchHistory90)
+  const history = useAsync(pw, fetchHistory365)
   const series = useMemo(() => (history.data ? dimensionSeries(history.data, dimKey, todayIso, range) : null), [history.data, dimKey, todayIso, range])
   const stats = useMemo(() => rangeStats(series), [series])
+  const heat = useMemo(() => (history.data ? buildDimensionHeatmap(history.data, dimKey, todayIso, 365) : null), [history.data, dimKey, todayIso])
 
   const heroSt = blockState({
     unlocked: !!pw, loading: !hhiData && !hhiError, error: !!hhiError, hasData: !!row && row.value !== null, nowMs,
@@ -124,6 +127,17 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                     </>
                   ) : (
                     <p className="hm-note" data-testid="dp-trend-pending">走勢還沒有資料：每個面向的每日分數要等後端的歷史接口（components）有資料才畫得出來，目前有效的天數不到 2 天。</p>
+                  )}
+                </StateFrame>
+              </section>
+
+              <section className="hm-card dp-heat" aria-label={`${dim.label}近一年每天`} data-testid="dp-heat">
+                <h2 className="hm-h">近一年每天</h2>
+                <StateFrame status={trendSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={history.reload} skeleton={<Skeleton lines={3} />} className="dp-heat-frame">
+                  {heat && heat.withData >= 2 ? (
+                    <YearHeat heat={heat} toneOf={toneOf} label={dim.label} />
+                  ) : (
+                    <p className="hm-note" data-testid="dp-heat-pending">這個面向近一年有紀錄的日子還不到 2 天（目前 {heat?.withData ?? 0} 天），累積後才畫年熱圖；沒有紀錄的日子是空格，不是 0。</p>
                   )}
                 </StateFrame>
               </section>
