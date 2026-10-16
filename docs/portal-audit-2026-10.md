@@ -790,22 +790,22 @@
 | P1-1 | 新首頁架構（今天／六面向／好玩的／系統燈／成長軌跡） | ✅（2.36.0 預設首頁；2.38.0 面向頁） |
 | P1-2 | 統一狀態機元件＋全站共用 `expectedEveryMin` 表 | ✅（使用者 2026-10-16 裁定合併：推送端 `portal_push.FEEDS`／`DATA_EVERY_MIN` 一張表兩欄當單一來源，前端 `dataEveryMinFor` 讀它；見 §4.20） |
 | P1-3 | 指標註冊表、拆 App.tsx | ✅（App.tsx 已拆 #85；面向註冊表 `dimensions.ts`，見 §4.19） |
-| P1-4 | 美食萃取器＋pusher＋端點，`#food` 接真資料 | ◐（端點、資料、遊記、日記萃取器 `places-extractor.py` 與併入推送都已部署；還差自動化：掛進 L1 sidecar 與推送總管，要使用者放行） |
+| P1-4 | 美食萃取器＋pusher＋端點，`#food` 接真資料 | ✅（kb-pipeline#165：萃取器與推送掛進推送總管每 10 分鐘；日記寫 `### HH:MM 🍜 店名` 約 10 分鐘內進地圖；沒掛 L1 sidecar，見 kb-pipeline `docs/places-diary.md`） |
 | P1-5 | 地圖底圖 | ✅（MapLibre＋OpenFreeMap） |
 | P1-6 | `/api/dashboard` 先回快取＋資料年齡 | ✅（記憶體 stale-while-revalidate：60 秒內直接回、10 分鐘內先回舊的並背景更新；回應附 `cache.ageSec／stale`，各面向資料年齡仍看每筆 `fetchedAt`） |
 | P1-7 | `schemas/`＋泛用 feed 端點 | ✅（使用者 2026-10-16：「P1-7要做」；`POST /api/admin/feed/:name`＋`feed_snapshot` 表＋JSON Schema 登記表，見 `docs/feed-api.md`；既有 11 種不搬） |
 | P1-8 | 知識庫健康四項 | ✅（使用者選 C：保留四項，戰情室加「知識庫體檢」） |
 | P2-1 | 成長軌跡完整版 | ◐（里程碑與熱圖完成；年度回顧入口、各面向年熱圖沒做） |
-| P2-2 | SQLite FTS 查詢索引 | ⬜ |
-| P2-3 | `Place` 實體、L1 抽地點 | 🔶 |
+| P2-2 | SQLite FTS 查詢索引 | ✖ 不做（使用者 2026-10-16：照 Claude 建議；沒有「查不到」的實際困擾，需求出現再做） |
+| P2-3 | `Place` 實體、L1 抽地點 | ✖ 不做（使用者 2026-10-16：照 Claude 建議；日記固定格式萃取器已涵蓋，需求出現再做） |
 | P2-4 | 「去過」單向同步到 AdventureLog | ✖ 取消（使用者 2026-10-16：AdventureLog 打算棄用，不用同步） |
-| P2-5 | L3 正式檔改由確定性 apply | ⬜ |
+| P2-5 | L3 正式檔改由確定性 apply | ✖ 不做（使用者 2026-10-16：照 Claude 建議；L3 近期沒再出事，動核心管線風險大，L3 又頻繁失敗時再做） |
 | P2-6 | 任務面向加能行動的數字（需讀 Vikunja API） | ✅（使用者選 B＝主機端算：kb-pipeline `compute_daily.py` 多算逾期／今天到期／7 天內到期／近 7 天完成，寫進 `busyness_index_history` 新欄位；入口網任務面向頁顯示「今天要做什麼」） |
-| P2-7 | 還原演練排程化 | 🔶 |
+| P2-7 | 還原演練排程化 | ✅（kb-pipeline#165：`restore-drill.py` 每月；state.db 真的還原驗證、pg 備份驗到「讀得完且像完整備份」，尚未真的還原進資料庫；戰情室 40 天沒新成功檔才提醒，見 kb-pipeline `docs/restore-drill.md`） |
 
 **路線圖以外、這輪已做完的**：AdventureLog 退場（2026-10-16 使用者：「停用 AdventureLog 和清理 ADVENTURELOG_* 設定」；容器已停、api-server 舊來源與 `TRAVEL_SOURCE`／`ADVENTURELOG_*` 設定移除，旅遊分數固定走遊記＋美食地圖）、地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；dry-run 只掛得到 1 張，使用者選「選項2」放寬——當天只有一個地點時，該日所有使用者條目的相片都掛上；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（已於 10/16 切換並成為唯一來源；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢。
 
-**目前位置（2026-10-16）**：AdventureLog 退場、地點日記萃取器與排程文件完成；合計 22 項中 ✅ 15、◐ 2（P1-4 差自動化、P2-1 差年度回顧入口與各面向年熱圖）、⬜ 2（P2-2 FTS 索引、P2-5 L3 確定性 apply）、🔶 2（P2-3 Place 實體與 L1 抽地點、P2-7 還原演練排程化）、✖ 1（P2-4 取消）。其餘全是要使用者決定方向的長期項目。
+**目前位置（2026-10-16）**：計畫表只剩一項沒做完：P2-1 成長軌跡完整版（◐：缺年度回顧入口、各面向年熱圖，要使用者決定里程碑清單與年度回顧樣子）。合計 22 項：✅ 17、◐ 1、✖ 4（P2-2、P2-3、P2-4、P2-5 都是「不做／取消」）。等 HERMES：#165 的部署與驗證回報。表外還沒收尾的小事：地點相片實推（目前約 5 張）與 `PLACE_MEDIA_DIR`、kb-pipeline 三支舊 AdventureLog 腳本（刪除或標記停用）、Caddy 的 `adventure.*` 路由（現回 502）與 AdventureLog 容器／資料的最終移除與 API 金鑰撤銷、還原演練的 pg 真還原（需另外授權）。
 
 
 ### P0（現在，低風險、不動資料源與部署設定）
