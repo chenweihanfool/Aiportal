@@ -10,6 +10,7 @@ import {
 } from "./happinessDimensionHistory";
 import { MIN_HISTORY_DAYS_FOR_PERCENTILE, PERCENTILE_WINDOW_DAYS, percentileRank } from "./happinessIndex";
 import { MIND_COMBINED_SINCE } from "./mindCombined";
+import { TRAVEL_TRIPS_SINCE } from "./happinessDimensionHistory";
 
 // 從 MIND_COMBINED_SINCE 起連續的日期（心智也走百分位路徑）
 const dateAt = (i: number, base = MIND_COMBINED_SINCE) => {
@@ -52,6 +53,7 @@ describe("computeDimensionSeries", () => {
         if (v === null) { expect(s.components[k]).toBeNull(); continue; }
         const hist: number[] = [];
         for (let j = Math.max(0, i - PERCENTILE_WINDOW_DAYS); j < i; j++) {
+          if (k === "travel" && s.date >= TRAVEL_TRIPS_SINCE && rows[j]!.date < TRAVEL_TRIPS_SINCE) continue; // 旅遊換尺
           const x = rawAt(j, k);
           if (x !== null) hist.push(x);
         }
@@ -63,7 +65,7 @@ describe("computeDimensionSeries", () => {
   it("(a) matches the dashboard path: normalizeDimensions(today's raws, buildDimensionHistory(previous rows))", () => {
     const rows = makeRows(120);
     const i = 119;
-    const dash = normalizeDimensions(rawsOfRow(rows[i]!), buildDimensionHistory(rows.slice(i - PERCENTILE_WINDOW_DAYS, i)));
+    const dash = normalizeDimensions(rawsOfRow(rows[i]!), buildDimensionHistory(rows.slice(i - PERCENTILE_WINDOW_DAYS, i), rows[i]!.date));
     expect(computeDimensionSeries(rows, 1)[0]!.components).toEqual(dash);
   });
 
@@ -100,7 +102,7 @@ describe("computeDimensionSeries", () => {
     const gapped = base.filter((_, i) => i !== 50); // 少一天
     const a = computeDimensionSeries(gapped, 1)[0]!;
     const hist = gapped.slice(gapped.length - 1 - PERCENTILE_WINDOW_DAYS, gapped.length - 1);
-    expect(a.components).toEqual(normalizeDimensions(rawsOfRow(gapped.at(-1)!), buildDimensionHistory(hist)));
+    expect(a.components).toEqual(normalizeDimensions(rawsOfRow(gapped.at(-1)!), buildDimensionHistory(hist, gapped.at(-1)!.date)));
   });
 
   it("(c) all-null rows, a single row, empty input, returnCount 0", () => {
@@ -157,5 +159,35 @@ describe("computeDimensionSeries", () => {
     expect(s[20 + 10]!.components.mind).toBe(100);
     // 但其他面向（calm）不受心智切換影響，照常用舊列當前史
     expect(s[20]!.components.calm).toBe(percentileRank(50, Array(20).fill(50)));
+  });
+
+  describe("旅遊換尺（TRAVEL_TRIPS_SINCE）", () => {
+    const old = (n: number) => Array.from({ length: n }, (_, i) => row(dateAt(i - n, TRAVEL_TRIPS_SINCE), { travel: 77 + (i % 24) }));
+
+    it("評估日在換尺日當天或之後：舊來源的列不進旅遊歷史，新資料不足 10 天就退回原始分數（不再是 0）", () => {
+      const hist = buildDimensionHistory(old(80), TRAVEL_TRIPS_SINCE);
+      expect(hist.travel).toEqual([]);
+      expect(normalizeDimensions({ ...rawsOfRow(row(TRAVEL_TRIPS_SINCE)), travel: 74 }, hist).travel).toBe(74);
+    });
+
+    it("沒有舊歷史的過濾時（舊行為）：74 低於所有舊值＝0——這就是這次的症狀", () => {
+      const hist = buildDimensionHistory(old(80));
+      expect(normalizeDimensions({ ...rawsOfRow(row(TRAVEL_TRIPS_SINCE)), travel: 74 }, hist).travel).toBe(0);
+    });
+
+    it("評估日早於換尺日：行為不變（舊來源歷史照舊排百分位），其他面向也不受影響", () => {
+      const rows = old(80);
+      const before = buildDimensionHistory(rows, dateAt(-1, TRAVEL_TRIPS_SINCE));
+      expect(before.travel.length).toBe(80);
+      const none = buildDimensionHistory(rows.map((r) => ({ ...r, calmRaw: 50 })), TRAVEL_TRIPS_SINCE);
+      expect(none.calm.length).toBe(80);
+    });
+
+    it("換尺日起累積的列照常進歷史，滿 10 筆後才排百分位", () => {
+      const fresh = Array.from({ length: 10 }, (_, i) => row(dateAt(i, TRAVEL_TRIPS_SINCE), { travel: 70 + i }));
+      const hist = buildDimensionHistory([...old(80), ...fresh], dateAt(10, TRAVEL_TRIPS_SINCE));
+      expect(hist.travel).toHaveLength(10);
+      expect(normalizeDimensions({ ...rawsOfRow(row(dateAt(10, TRAVEL_TRIPS_SINCE))), travel: 74 }, hist).travel).toBe(50);
+    });
   });
 });
