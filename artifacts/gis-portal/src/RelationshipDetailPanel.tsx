@@ -18,7 +18,7 @@ import { COLOR, FONT } from './theme'
 import type { HermesGraphData } from './hermesGraphApi'
 import { apiFetchHermesDoc, type HermesDoc } from './hermesDocApi'
 import { MarkdownView, InlineText } from './MarkdownView'
-import { groupByMonth, parseNarrative, sortNewestFirst } from './nodeTimeline'
+import { defaultOpenMonths, groupByMonth, monthDigest, parseNarrative, rowDateLabel, sortNewestFirst } from './nodeTimeline'
 import { describeSource, stripSourceSection } from './docContent'
 import { AttachmentViewer } from './AttachmentViewer'
 import {
@@ -362,7 +362,7 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
     return (
       <>
         <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
-          事件 · {ev?.date}{ev?.status ? ` · ${ev.status}` : ''}
+          事件 · {ev?.date || '日期不明'}{ev?.status ? ` · ${ev.status}` : ''}
         </div>
         {ev?.tags && ev.tags.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
@@ -616,7 +616,9 @@ function InsightTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKi
   )
 }
 
-// ── 時間軸分頁：這個節點關聯的事件，日期在左、標題在右，由新到舊，依月份分組 ──
+// ── 時間軸分頁：這個節點關聯的事件，日期（與時間）在左、標題在右，由新到舊，依月份分組 ──
+// 比照遊記：每個月份可折疊，預設只展開最新的月份；收起來的月份顯示前兩個標題當預覽，並有「全部展開／全部收合」。
+// 日期欄上行是日期、下行是時間（寫進日記那行的時間；沒有時戳就是萃取時刻，前面加「~」）。日期是補出來的也加「~」；日期不明顯示「—」，不再印出 null。
 // 事件清單只出現在這裡（關聯分頁不再重複列）；概念／方法的出現脈絡在它們的「內容」分頁。
 function EventTimelineTab({
   index, kind, name, go, expanded,
@@ -625,51 +627,79 @@ function EventTimelineTab({
     () => groupByMonth(sortNewestFirst(entityEvents(index, kind, name))),
     [index, kind, name],
   )
+  const [openMonths, setOpenMonths] = useState<Set<string>>(() => new Set(defaultOpenMonths(groups)))
+  useEffect(() => { setOpenMonths(new Set(defaultOpenMonths(groups))) }, [groups])
+  const toggle = (m: string) => setOpenMonths(prev => { const n = new Set(prev); if (n.has(m)) n.delete(m); else n.add(m); return n })
   const total = groups.reduce((n, g) => n + g.rows.length, 0)
   if (total === 0) return <Note>這個節點目前沒有關聯的事件。</Note>
 
   const dotSize = expanded ? 11 : 8
   const dateW = expanded ? '8.4rem' : '5.6rem'
+  const tool: CSSProperties = {
+    cursor: 'pointer', background: 'transparent', border: `1px solid ${COLOR.line}`, borderRadius: 999, color: COLOR.steel,
+    fontFamily: 'inherit', fontSize: 'calc(var(--ds, 1) * 0.62rem)', padding: '2px 10px',
+  }
   return (
     <div style={{ marginTop: '0.5rem' }}>
-      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: COLOR.steelDim, marginBottom: '2px' }}>
-        共 {total} 筆關聯事件 · 新→舊
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: COLOR.steelDim, marginBottom: '2px' }}>
+        <span>共 {total} 筆關聯事件 · 新→舊</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <button type="button" data-testid="node-tl-expand-all" style={tool} onClick={() => setOpenMonths(new Set(groups.map(g => g.month)))}>全部展開</button>
+          <button type="button" data-testid="node-tl-collapse-all" style={tool} onClick={() => setOpenMonths(new Set())}>全部收合</button>
+        </span>
       </div>
-      {groups.map(g => (
-        <div key={g.month}>
-          <div style={{
-            fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: COLOR.amberDim, letterSpacing: '0.06em',
-            margin: '0.8rem 0 0.3rem', paddingBottom: '2px', borderBottom: `1px solid ${COLOR.line}`,
-          }}>{g.month} · {g.rows.length}</div>
-          <div style={{ position: 'relative' }}>
-            {/* 垂直軸線：在日期欄與標題欄之間 */}
-            <div style={{ position: 'absolute', left: `calc(${dateW} + ${dotSize / 2}px)`, top: 4, bottom: 4, width: 1, background: COLOR.line }} />
-            {g.rows.map(r => (
-              <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', padding: '0.28rem 0' }}>
-                <div style={{
-                  flex: `0 0 ${dateW}`, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim,
-                  paddingTop: '2px', whiteSpace: 'nowrap',
-                }}>{r.date}</div>
-                <div style={{ flexShrink: 0, width: dotSize, paddingTop: '5px', position: 'relative', zIndex: 1 }}>
-                  <span style={{ display: 'block', width: dotSize, height: dotSize, borderRadius: '50%', background: KIND_COLOR.event, boxShadow: `0 0 0 3px ${COLOR.panelDeep}` }} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    onClick={() => go(eventId(r.id))}
-                    style={{ cursor: 'pointer', fontSize: 'calc(var(--ds, 1) * 0.74rem)', color: COLOR.ink, lineHeight: 1.5 }}
-                  >{r.title}</div>
-                  {(r.status || (r.case && kind !== 'case')) && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim, marginTop: '1px' }}>
-                      {r.status && <span>{r.status}</span>}
-                      {r.case && kind !== 'case' && <span>案 · {r.case}</span>}
+      {groups.map(g => {
+        const open = openMonths.has(g.month)
+        return (
+          <div key={g.month} data-testid="node-tl-group">
+            <button type="button" aria-expanded={open} onClick={() => toggle(g.month)} style={{
+              display: 'flex', alignItems: 'baseline', gap: '0.5rem', width: '100%', textAlign: 'left', cursor: 'pointer',
+              background: 'none', border: 'none', borderBottom: `1px solid ${COLOR.line}`, color: 'inherit', font: 'inherit',
+              fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', letterSpacing: '0.06em',
+              margin: '0.8rem 0 0.3rem', padding: '0 0 2px',
+            }}>
+              <span aria-hidden style={{ color: COLOR.steel, width: 12 }}>{open ? '▾' : '▸'}</span>
+              <span style={{ color: COLOR.amberDim }}>{g.month} · {g.rows.length}</span>
+              {!open && <span style={{ color: COLOR.steelDim, letterSpacing: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{monthDigest(g)}</span>}
+            </button>
+            {open && (
+              <div style={{ position: 'relative' }}>
+                {/* 垂直軸線：在日期欄與標題欄之間 */}
+                <div style={{ position: 'absolute', left: `calc(${dateW} + ${dotSize / 2}px)`, top: 4, bottom: 4, width: 1, background: COLOR.line }} />
+                {g.rows.map(r => {
+                  const lab = rowDateLabel(r)
+                  return (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', padding: '0.28rem 0' }}>
+                      <div title={lab.title} data-testid="node-tl-date" style={{
+                        flex: `0 0 ${dateW}`, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: r.dateApprox || !r.date ? COLOR.steelDim : COLOR.steel,
+                        paddingTop: '2px', whiteSpace: 'nowrap', lineHeight: 1.35,
+                      }}>
+                        <div>{lab.date}</div>
+                        {lab.time && <div style={{ fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim }}>{lab.time}</div>}
+                      </div>
+                      <div style={{ flexShrink: 0, width: dotSize, paddingTop: '5px', position: 'relative', zIndex: 1 }}>
+                        <span style={{ display: 'block', width: dotSize, height: dotSize, borderRadius: '50%', background: KIND_COLOR.event, boxShadow: `0 0 0 3px ${COLOR.panelDeep}` }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          onClick={() => go(eventId(r.id))}
+                          style={{ cursor: 'pointer', fontSize: 'calc(var(--ds, 1) * 0.74rem)', color: COLOR.ink, lineHeight: 1.5 }}
+                        >{r.title}</div>
+                        {(r.status || (r.case && kind !== 'case')) && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim, marginTop: '1px' }}>
+                            {r.status && <span>{r.status}</span>}
+                            {r.case && kind !== 'case' && <span>案 · {r.case}</span>}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
+                  )
+                })}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

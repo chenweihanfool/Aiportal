@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupByMonth, parseNarrative, sortNewestFirst, type TimelineRow } from './nodeTimeline'
+import { defaultOpenMonths, groupByMonth, monthDigest, parseNarrative, rowDateLabel, sortNewestFirst, toTimelineRow, type TimelineRow } from './nodeTimeline'
 
 const row = (id: string, date: string, title = id): TimelineRow => ({ id, date, title, status: null, case: null })
 
@@ -19,6 +19,55 @@ describe('sortNewestFirst / groupByMonth', () => {
   it('puts rows without a proper date under 未註明日期', () => {
     expect(groupByMonth([row('x', '')]).map(g => g.month)).toEqual(['未註明日期'])
     expect(groupByMonth([])).toEqual([])
+  })
+})
+
+describe('toTimelineRow：絕不印出 null', () => {
+  const ev = (over: Record<string, unknown> = {}) => ({ id: 'e1', date: '2026-10-16', title: 't', status: null, case: null, ...over }) as Parameters<typeof toTimelineRow>[0]
+  it('the string "null" and other non-dates become 日期不明 (empty), never shown', () => {
+    for (const bad of ['null', '', '~', 'undefined', '2026/10/16', '10-16']) {
+      const r = toTimelineRow(ev({ date: bad, time: '10:00', dateSource: 'diary' }))
+      expect(r.date).toBe('')
+      expect(r.time).toBeNull()                      // 沒有日期就不顯示孤零零的時間
+      expect(rowDateLabel(r).date).toBe('—')
+    }
+  })
+  it('keeps the server-resolved date, time and where they came from', () => {
+    expect(toTimelineRow(ev({ dateSource: 'frontmatter', time: '13:08', timeSource: 'diary' })))
+      .toMatchObject({ date: '2026-10-16', time: '13:08', dateApprox: false, timeApprox: false })
+    expect(toTimelineRow(ev({ dateSource: 'diary', time: '21:05', timeSource: 'diary' }))).toMatchObject({ dateApprox: true, timeApprox: false })
+    expect(toTimelineRow(ev({ dateSource: 'extracted', time: '01:00', timeSource: 'extracted' }))).toMatchObject({ dateApprox: true, timeApprox: true })
+  })
+  it('an older API without the new fields still works (exact date, no time)', () => {
+    expect(toTimelineRow(ev())).toMatchObject({ date: '2026-10-16', time: null, dateApprox: false, timeApprox: false })
+  })
+})
+
+describe('rowDateLabel / sort by time', () => {
+  it('marks derived dates and extracted times with ~; missing date is —', () => {
+    expect(rowDateLabel({ ...row('a', '2026-10-16'), time: '13:08' })).toMatchObject({ date: '2026-10-16', time: '13:08' })
+    expect(rowDateLabel({ ...row('a', '2026-10-16'), time: '01:00', dateApprox: true, timeApprox: true })).toMatchObject({ date: '~2026-10-16', time: '~01:00' })
+    expect(rowDateLabel(row('a', ''))).toMatchObject({ date: '—', time: null })
+  })
+  it('same day: later time first; undated last', () => {
+    const out = sortNewestFirst([row('x', ''), { ...row('a', '2026-10-16'), time: '09:00' }, { ...row('b', '2026-10-16'), time: '13:08' }, row('c', '2026-10-15')])
+    expect(out.map(r => r.id)).toEqual(['b', 'a', 'c', 'x'])
+  })
+})
+
+describe('折疊（比照遊記）', () => {
+  const groups = groupByMonth(sortNewestFirst([row('a', '2026-10-02', '甲'), row('b', '2026-10-01', '乙'), row('c', '2026-09-21', '丙'), row('u', '', '丁')]))
+  it('opens only the newest dated month by default; 未註明日期 stays closed', () => {
+    expect(defaultOpenMonths(groups)).toEqual(['2026-10'])
+  })
+  it('opens the only group even when it is 未註明日期, and nothing when empty', () => {
+    expect(defaultOpenMonths(groupByMonth([row('u', '')]))).toEqual(['未註明日期'])
+    expect(defaultOpenMonths([])).toEqual([])
+  })
+  it('a collapsed month previews its first titles and the total', () => {
+    expect(monthDigest(groups[0]!)).toBe('甲 · 乙')
+    const many = groupByMonth([row('a', '2026-10-05', '一'), row('b', '2026-10-04', '二'), row('c', '2026-10-03', '三')])
+    expect(monthDigest(many[0]!)).toBe('一 · 二 …等 3 筆')
   })
 })
 

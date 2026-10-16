@@ -10,6 +10,7 @@
 // （概念用 k 是因為 c 已被案件佔用。）
 // ─────────────────────────────────────────────
 import type { HermesGraphData, HermesGraphEventNode, HermesGraphHubNarrative } from './hermesGraphApi'
+import { toTimelineRow, type TimelineRow } from './nodeTimeline'
 
 export type NodeKind = 'person' | 'event' | 'case' | 'object' | 'concept' | 'method'
 
@@ -555,7 +556,7 @@ export function abstractionInsight(index: GraphIndex, kind: 'concept' | 'method'
 // 跟敘事合併後統一排序。
 export function entityEvents(
   index: GraphIndex, kind: NodeKind, name: string,
-): Array<{ id: string; date: string; title: string; status: string | null; case: string | null }> {
+): TimelineRow[] {
   const ids: Iterable<string> =
     kind === 'person' ? (index.personEvents.get(name) ?? [])
     : kind === 'case' ? (index.caseEvents.get(name) ?? [])
@@ -563,10 +564,10 @@ export function entityEvents(
     : kind === 'concept' ? (index.conceptEvents.get(name) ?? [])
     : kind === 'method' ? (index.methodEvents.get(name) ?? [])
     : []
-  const out: Array<{ id: string; date: string; title: string; status: string | null; case: string | null }> = []
+  const out: TimelineRow[] = []
   for (const id of ids) {
     const ev = index.eventById.get(id)
-    if (ev) out.push({ id: ev.id, date: ev.date, title: ev.title, status: ev.status, case: ev.case })
+    if (ev) out.push(toTimelineRow(ev))
   }
   return out
 }
@@ -597,7 +598,7 @@ export function searchNodes(
   for (const o of graph.objects) push(objectId(o.name), 'object', o.name, `物件${o.objectType ? ` · ${o.objectType}` : ''}`)
   for (const k of graph.concepts ?? []) push(conceptId(k.name), 'concept', k.name, `概念 · ${k.eventCount} 事件${k.promoted ? '' : ' · 候選'}`)
   for (const m of graph.methods ?? []) push(methodId(m.name), 'method', m.name, `方法 · ${m.eventCount} 事件${m.promoted ? '' : ' · 候選'}`)
-  for (const e of graph.events) push(eventId(e.id), 'event', e.title, `事件 · ${e.date}`)
+  for (const e of graph.events) push(eventId(e.id), 'event', e.title, `事件 · ${e.date || '日期不明'}`)
   hits.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label))
   return hits.slice(0, limit).map(({ score: _score, ...hit }) => hit)
 }

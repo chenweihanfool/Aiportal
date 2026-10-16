@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { taipeiDateString } from "../lib/summarySources";
 import { parseReportScore } from "../lib/reportScore";
+import { resolveEventDate } from "../lib/eventDate";
 import {
   CHILD_LEVEL,
   buildChildren,
@@ -52,7 +53,8 @@ async function loadEvents(): Promise<EventRef[]> {
     .from(hermesGraphSnapshotTable)
     .where(eq(hermesGraphSnapshotTable.id, "latest"))
     .limit(1);
-  return (snap?.events ?? []).map((e) => ({ id: e.id, date: e.date, title: e.title, createdAt: e.createdAt ?? null, writtenAt: e.writtenAt ?? null }));
+  // 日期是 "null"／缺漏的事件用日記時戳、萃取時刻補一個日期，才排得進「當日事件」（lib/eventDate.ts）
+  return (snap?.events ?? []).map((e) => ({ id: e.id, date: resolveEventDate(e).date, title: e.title, createdAt: e.createdAt ?? null, writtenAt: e.writtenAt ?? null }));
 }
 
 
