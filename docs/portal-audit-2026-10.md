@@ -783,14 +783,14 @@
 | P0-1 | 審計報告 | ✅ |
 | P0-2 | 美食地圖 UI（`#food`、⌘K 入口、附近由近到遠） | ✅ |
 | P0-3 | 名稱表定案（六面向命名與識別色） | ✅ |
-| P0-4 | 美食日記格式定案 | ◐（地點由 HERMES 盤點回填；日記裡的固定格式沒定） |
+| P0-4 | 美食日記格式定案 | ✅（2026-10-16：`### HH:MM 🍜 店名`／`🗺️ 地名`＋欄位，見 kb-pipeline `docs/places-diary.md`；格式是 Claude 依想法庫慣例訂的，使用者未逐項裁定） |
 | P0-5 | HERMES 唯讀盤點 vault 的美食紀錄 | ✅ |
 | P0-6 | pf-cwh、FitnessForge 摘要端點金鑰 | ✅（2.37.0，金鑰已設） |
-| P0-7 | kb-pipeline 排程文件更新；~~AdventureLog 同步腳本 token／路徑改走設定~~（AdventureLog 已棄用，此半作廢） | ⬜（只剩排程文件；L1 班次數要先確認） |
+| P0-7 | kb-pipeline 排程文件更新；~~AdventureLog 同步腳本 token／路徑改走設定~~（AdventureLog 已棄用，此半作廢） | ✅（kb-pipeline#163／#164：排程表依 jobs-index 更新；使用者裁定 L1 為 2 班） |
 | P1-1 | 新首頁架構（今天／六面向／好玩的／系統燈／成長軌跡） | ✅（2.36.0 預設首頁；2.38.0 面向頁） |
 | P1-2 | 統一狀態機元件＋全站共用 `expectedEveryMin` 表 | ✅（使用者 2026-10-16 裁定合併：推送端 `portal_push.FEEDS`／`DATA_EVERY_MIN` 一張表兩欄當單一來源，前端 `dataEveryMinFor` 讀它；見 §4.20） |
 | P1-3 | 指標註冊表、拆 App.tsx | ✅（App.tsx 已拆 #85；面向註冊表 `dimensions.ts`，見 §4.19） |
-| P1-4 | 美食萃取器＋pusher＋端點，`#food` 接真資料 | ◐（端點、資料、遊記都上線；持續性萃取器沒做，目前靠 HERMES 回填） |
+| P1-4 | 美食萃取器＋pusher＋端點，`#food` 接真資料 | ◐（端點、資料、遊記、日記萃取器 `places-extractor.py` 與併入推送都已部署；還差自動化：掛進 L1 sidecar 與推送總管，要使用者放行） |
 | P1-5 | 地圖底圖 | ✅（MapLibre＋OpenFreeMap） |
 | P1-6 | `/api/dashboard` 先回快取＋資料年齡 | ✅（記憶體 stale-while-revalidate：60 秒內直接回、10 分鐘內先回舊的並背景更新；回應附 `cache.ageSec／stale`，各面向資料年齡仍看每筆 `fetchedAt`） |
 | P1-7 | `schemas/`＋泛用 feed 端點 | ✅（使用者 2026-10-16：「P1-7要做」；`POST /api/admin/feed/:name`＋`feed_snapshot` 表＋JSON Schema 登記表，見 `docs/feed-api.md`；既有 11 種不搬） |
@@ -805,7 +805,7 @@
 
 **路線圖以外、這輪已做完的**：AdventureLog 退場（2026-10-16 使用者：「停用 AdventureLog 和清理 ADVENTURELOG_* 設定」；容器已停、api-server 舊來源與 `TRAVEL_SOURCE`／`ADVENTURELOG_*` 設定移除，旅遊分數固定走遊記＋美食地圖）、地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；dry-run 只掛得到 1 張，使用者選「選項2」放寬——當天只有一個地點時，該日所有使用者條目的相片都掛上；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（已於 10/16 切換並成為唯一來源；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢。
 
-**目前位置（2026-10-16）**：剛完成 P1-7（泛用 feed）；合計 22 項中 ✅ 13、◐ 3、⬜ 3、🔶 2、✖ 1（P2-4 取消）。**使用者取消**：補齊沒有座標的地點（2026-10-16：「取消的是補齊沒有座標的地點」）。**等 HERMES**：地點相片放寬後的 dry-run。**部署注意**：P1-7 有新資料表，要先跑 db-migrate 再重建 api-server。**還沒做的小項**：AdventureLog 實際停用與 `ADVENTURELOG_*` 清理（要使用者明說）、P0-7 排程文件、P1-4 持續性萃取器等。
+**目前位置（2026-10-16）**：AdventureLog 退場、地點日記萃取器與排程文件完成；合計 22 項中 ✅ 15、◐ 2（P1-4 差自動化、P2-1 差年度回顧入口與各面向年熱圖）、⬜ 2（P2-2 FTS 索引、P2-5 L3 確定性 apply）、🔶 2（P2-3 Place 實體與 L1 抽地點、P2-7 還原演練排程化）、✖ 1（P2-4 取消）。其餘全是要使用者決定方向的長期項目。
 
 
 ### P0（現在，低風險、不動資料源與部署設定）
