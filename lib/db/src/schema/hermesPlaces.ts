@@ -22,8 +22,8 @@ export interface HermesPlace {
   status: HermesPlaceStatus;
   area: string | null;
   address: string | null;
-  lat: number | null; // 合法座標，或 null＝還沒有座標（口袋名單的待吃；只出現在清單，地圖上不畫）
-  lng: number | null;
+  lat: number; // 必填且合法；沒有座標的地點不收
+  lng: number;
   cuisine: string | null;
   tags: string[];
   priceLevel: number | null; // 1-4

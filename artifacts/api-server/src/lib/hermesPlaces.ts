@@ -83,7 +83,7 @@ export function coordsFromMapUrl(url: string | null | undefined): { lat: number;
   return null
 }
 
-/** 驗證單筆；回 null 表示略過（缺必填欄位、非法狀態、座標給了但不合法）。完全沒給座標的地點會收下（lat／lng 為 null，只在清單、不畫在地圖）。 */
+/** 驗證單筆；回 null 表示略過（缺必填欄位、非法狀態、沒有座標） */
 function sanitizePlace(raw: unknown): HermesPlace | null {
   if (!raw || typeof raw !== "object") return null
   const r = raw as Record<string, unknown>
@@ -96,18 +96,12 @@ function sanitizePlace(raw: unknown): HermesPlace | null {
   let lat = inRange(r["lat"], -90, 90)
   let lng = inRange(r["lng"], -180, 180)
   if (lat === null || lng === null) {
-    // 只給了地圖連結時從連結拿座標；短網址拿不到就維持沒有座標
+    // 只給了地圖連結時從連結拿座標；短網址拿不到就略過
     const fromUrl = coordsFromMapUrl(mapUrl)
     lat = fromUrl?.lat ?? null
     lng = fromUrl?.lng ?? null
   }
-  if (lat === null || lng === null) {
-    // 「完全沒給」（兩個都是 null／undefined）才收下當作沒座標；給了卻不合法（超出範圍、不是數字）仍視為壞資料略過
-    const given = (v: unknown) => v !== null && v !== undefined
-    if (given(r["lat"]) || given(r["lng"])) return null
-    lat = null
-    lng = null
-  }
+  if (lat === null || lng === null) return null
   return {
     id, name,
     kind: KINDS.includes(r["kind"] as HermesPlaceKind) ? (r["kind"] as HermesPlaceKind) : "food",

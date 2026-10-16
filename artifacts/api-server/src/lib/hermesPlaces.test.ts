@@ -19,24 +19,16 @@ describe("sanitizePlacesPayload", () => {
     expect(ok.places).toHaveLength(PLACES_MAX)
   })
 
-  it("keeps places with no coordinate at all (lat/lng null, list only) but skips ones whose coordinate is given and invalid", () => {
+  it("skips places without a valid coordinate and counts them (找不到地點就略過)", () => {
     const r = sanitizePlacesPayload({
       places: [place("FOOD-0001"), place("FOOD-0002", { lat: undefined, lng: undefined }), place("FOOD-0003", { lat: 91 }), place("FOOD-0004", { lng: 181 }), place("FOOD-0005", { lat: "25" })],
     })
     if (typeof r === "string") throw new Error(r)
-    expect(r.places.map((p) => p.id)).toEqual(["FOOD-0001", "FOOD-0002"])
-    expect(r.places[1]).toMatchObject({ id: "FOOD-0002", lat: null, lng: null })
-    expect(r.skipped).toBe(3)                           // 91、181、"25"：給了但不合法
+    expect(r.places.map((p) => p.id)).toEqual(["FOOD-0001"])
+    expect(r.skipped).toBe(4)
   })
 
-  it("a lone lat or lng without its partner is bad data, not 'no coordinate'", () => {
-    const r = sanitizePlacesPayload({ places: [place("FOOD-0001", { lng: undefined }), place("FOOD-0002", { lat: null, lng: 121.5 })] })
-    if (typeof r === "string") throw new Error(r)
-    expect(r.places).toEqual([])
-    expect(r.skipped).toBe(2)
-  })
-
-  it("takes coordinates from a Google Maps link when lat/lng are missing; a short link gives none, so the place is kept without coordinates", () => {
+  it("takes coordinates from a Google Maps link when lat/lng are missing, skips short links", () => {
     const r = sanitizePlacesPayload({
       places: [
         place("FOOD-0001", { lat: undefined, lng: undefined, mapUrl: "https://www.google.com/maps/@25.0478,121.5170,17z" }),
@@ -44,10 +36,9 @@ describe("sanitizePlacesPayload", () => {
       ],
     })
     if (typeof r === "string") throw new Error(r)
-    expect(r.places).toHaveLength(2)
+    expect(r.places).toHaveLength(1)
     expect(r.places[0]).toMatchObject({ id: "FOOD-0001", lat: 25.0478, lng: 121.517 })
-    expect(r.places[1]).toMatchObject({ id: "FOOD-0002", lat: null, lng: null, mapUrl: "https://maps.app.goo.gl/AbCdEf" })
-    expect(r.skipped).toBe(0)
+    expect(r.skipped).toBe(1)
   })
 
   it("drops rows missing id, name, valid status or addedAt", () => {
