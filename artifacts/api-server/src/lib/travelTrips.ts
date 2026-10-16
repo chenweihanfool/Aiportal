@@ -1,10 +1,10 @@
-// 旅遊生活（遊記版）：AdventureLog 棄用後，改由知識庫的遊記（hermes_trips_snapshot）
-// 與美食地圖（hermes_places_snapshot）計分。用 TRAVEL_SOURCE=trips 切換，預設仍走 AdventureLog。
-// 計分數學與 adventureLog.ts 共用 recency／frequency／期待加分，另加「美食」一項：
+// 旅遊生活：由知識庫的遊記（hermes_trips_snapshot）與美食地圖（hermes_places_snapshot）計分
+// （2026-10-16 起唯一來源；原本的 AdventureLog 來源已移除）。
+// 計分數學與 travelScore.ts 共用 recency／frequency／期待加分，另加「美食」一項：
 // 近 90 天吃過（visitedAt 或 days 落在窗內）的美食地點數，6 間 = 100。
 import type { HermesTrip, HermesPlace } from "@workspace/db";
 import { clamp, roundHalfUp } from "./happinessIndex";
-import { computeTravelScore, type TravelIndexData } from "./adventureLog";
+import { computeTravelScore, type TravelIndexData } from "./travelScore";
 import { taipeiToday } from "./hermesTrips";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

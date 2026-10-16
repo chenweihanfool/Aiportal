@@ -126,7 +126,7 @@ export interface HappinessInputs {
   fitnessHabitScore: number | null;
   busynessScore: number | null; // lower is better; converted to calmScore below
   mindScore: number | null; // 合成版心智分數（0.8×想法＋0.2×日報，2026-10-10 起），0-100，higher is better
-  travelScore: number | null; // AdventureLog recency+頻率+期待加分換算，0-100，higher is better
+  travelScore: number | null; // 遊記＋美食地圖的 recency+頻率+美食+期待加分換算，0-100，higher is better
   socialScore: number | null; // 近 7 天廣度/互動強度/連結率換算，0-100，higher is better
 }
 

@@ -20,7 +20,6 @@ import {
   type HappinessResult,
 } from "./happinessIndex";
 import { fetchMindIndex } from "./mindIndex";
-import { fetchTravelIndex } from "./adventureLog";
 import { fetchTravelIndexFromTrips } from "./travelTrips";
 import { fetchSocialIndex } from "./socialIndex";
 
@@ -145,8 +144,7 @@ export const SUMMARY_SOURCES: SummarySource[] = [
     id: "travel",
     name: "旅遊生活",
     isPrivate: true,
-    // AdventureLog 棄用（2026-10-15）：TRAVEL_SOURCE=trips 改由遊記＋美食計分，預設仍是 AdventureLog
-    fetch: process.env["TRAVEL_SOURCE"] === "trips" ? fetchTravelIndexFromTrips : fetchTravelIndex,
+    fetch: fetchTravelIndexFromTrips, // 遊記＋美食地圖（AdventureLog 已於 2026-10-16 棄用移除）
   },
   {
     id: "social-index",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeTravelScore, scoreFromDaysSince } from "./adventureLog";
+import { computeTravelScore, scoreFromDaysSince } from "./travelScore";
 
 describe("scoreFromDaysSince (recency, unchanged from v1)", () => {
   it("caps at 100 within 3 days", () => {

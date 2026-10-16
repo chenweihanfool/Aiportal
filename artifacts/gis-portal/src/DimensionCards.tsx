@@ -136,7 +136,7 @@ function TravelSummaryBody({ data }: { data: Record<string, unknown> }) {
   const tripDaysLast180 = typeof data['tripDaysLast180'] === 'number' ? data['tripDaysLast180'] : null
   const anticipationBonus = typeof data['anticipationBonus'] === 'number' ? data['anticipationBonus'] : 0
   const hasUpcomingTrip = data['hasUpcomingTrip'] === true
-  // 遊記版（TRAVEL_SOURCE=trips）才有美食項；舊來源沒有這兩個欄位
+  // 美食項（遊記＋美食地圖的來源才有；後端還沒更新前沒有這兩個欄位就不顯示）
   const foodScore = typeof data['foodScore'] === 'number' ? data['foodScore'] : null
   const foodVisits = typeof data['foodVisitsLast90'] === 'number' ? data['foodVisitsLast90'] : null
   const hasFood = foodVisits !== null

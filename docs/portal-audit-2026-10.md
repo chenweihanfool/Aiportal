@@ -803,7 +803,7 @@
 | P2-6 | 任務面向加能行動的數字（需讀 Vikunja API） | ✅（使用者選 B＝主機端算：kb-pipeline `compute_daily.py` 多算逾期／今天到期／7 天內到期／近 7 天完成，寫進 `busyness_index_history` 新欄位；入口網任務面向頁顯示「今天要做什麼」） |
 | P2-7 | 還原演練排程化 | 🔶 |
 
-**路線圖以外、這輪已做完的**：地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；dry-run 只掛得到 1 張，使用者選「選項2」放寬——當天只有一個地點時，該日所有使用者條目的相片都掛上；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（`TRAVEL_SOURCE=trips`，程式已備好、預設仍走 AdventureLog，待使用者決定切換時機；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢。
+**路線圖以外、這輪已做完的**：AdventureLog 退場（2026-10-16 使用者：「停用 AdventureLog 和清理 ADVENTURELOG_* 設定」；容器已停、api-server 舊來源與 `TRAVEL_SOURCE`／`ADVENTURELOG_*` 設定移除，旅遊分數固定走遊記＋美食地圖）、地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；dry-run 只掛得到 1 張，使用者選「選項2」放寬——當天只有一個地點時，該日所有使用者條目的相片都掛上；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（已於 10/16 切換並成為唯一來源；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢。
 
 **目前位置（2026-10-16）**：剛完成 P1-7（泛用 feed）；合計 22 項中 ✅ 13、◐ 3、⬜ 3、🔶 2、✖ 1（P2-4 取消）。**使用者取消**：補齊沒有座標的地點（2026-10-16：「取消的是補齊沒有座標的地點」）。**等 HERMES**：地點相片放寬後的 dry-run。**部署注意**：P1-7 有新資料表，要先跑 db-migrate 再重建 api-server。**還沒做的小項**：AdventureLog 實際停用與 `ADVENTURELOG_*` 清理（要使用者明說）、P0-7 排程文件、P1-4 持續性萃取器等。
 
