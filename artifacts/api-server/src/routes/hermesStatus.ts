@@ -24,6 +24,7 @@ import { logger } from "../lib/logger";
 import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
 import { deriveAbstractions } from "../lib/hermesAbstractions";
+import { resolveEventDate } from "../lib/eventDate";
 import { diskAlertLevel, forecastDisk, parseStorage } from "../lib/diskForecast";
 
 const router = Router();
@@ -369,7 +370,8 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
     return res.json({ available: false });
   }
 
-  const events = row.events;
+  // 日期為 "null"／缺漏的事件（L1 允許 event_date: null）用日記時戳、萃取時刻補日期與時間，並標明來源（lib/eventDate.ts）；統計與畫面都吃補過的
+  const events = row.events.map((ev) => ({ ...ev, ...resolveEventDate(ev) }));
   const personRelations = row.personRelations ?? [];
   const hubNarratives = row.hubNarratives ?? [];
   const hubAssessments = row.hubAssessments ?? [];
@@ -402,7 +404,7 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
       const existing = peopleByName.get(p.person);
       if (existing) {
         existing.eventCount++;
-        if (ev.date < existing.firstDate) existing.firstDate = ev.date;
+        if (ev.date && (!existing.firstDate || ev.date < existing.firstDate)) existing.firstDate = ev.date;
       } else {
         peopleByName.set(p.person, { name: p.person, eventCount: 1, firstDate: ev.date });
       }
@@ -481,6 +483,10 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
       events: events.map((ev) => ({
         id: ev.id,
         date: ev.date,
+        // 日期從哪裡來（frontmatter／diary＝日記時戳那天／extracted＝萃取那天／none）與時間（HH:mm 台北，與 date 同一天才有）：畫面對補出來的日期加「~」
+        dateSource: ev.dateSource,
+        time: ev.time,
+        timeSource: ev.timeSource,
         title: ev.title,
         status: ev.status,
         tags: ev.tags ?? [],

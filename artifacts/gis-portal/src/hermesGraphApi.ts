@@ -8,7 +8,13 @@ const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 // firstSeenAt：人物頁首次進入 vault 的時間（ISO）；舊版 API／pusher 沒帶時為 null 或缺漏，「最近新增」退回用關聯事件的最早日期
 export interface HermesGraphPersonNode { name: string; eventCount: number; firstSeenAt?: string | null }
-export interface HermesGraphEventNode { id: string; date: string; title: string; status: string | null; tags: string[]; case: string | null }
+// date 為空字串＝日期不明；dateSource 標明日期來源（frontmatter＝檔頭寫的／diary＝補成寫進日記那天／extracted＝補成被萃取那天／none）；
+// time 是 HH:mm（台北，與 date 同一天才有）、timeSource 是它的來源。舊版 API 沒帶這幾個欄位時都當缺漏處理。
+export type EventDateSource = 'frontmatter' | 'diary' | 'extracted' | 'none'
+export interface HermesGraphEventNode {
+  id: string; date: string; title: string; status: string | null; tags: string[]; case: string | null
+  dateSource?: EventDateSource; time?: string | null; timeSource?: 'diary' | 'extracted' | null
+}
 export interface HermesGraphCaseNode { name: string; eventCount: number; status: string | null }
 export interface HermesGraphObjectNode { name: string; objectType: string | null; eventCount: number }
 export interface HermesGraphEdge { person: string; eventId: string; role: string }
