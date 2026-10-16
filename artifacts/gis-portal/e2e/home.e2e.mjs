@@ -115,7 +115,7 @@ function scenario(name) {
     s.history = { history: [] }; s.ideas = ideas({ available: false, ideas: [], top: [] }); s.food = food([]); s.trips = trips([])
   }
   if (name === 'wantfood') {
-    s.food = food([{ ...places[0], status: 'want', name: '示範・鱔魚意麵', area: '台南 中西', addedAt: tpDate(-268), visitedAt: null }, ...places.slice(1)])
+    s.food = food([{ ...places[0], status: 'want', name: '示範・鱔魚意麵', area: '台南 中西', addedAt: tpDate(-268), visitedAt: null, kind: 'food' }, { ...places[1], kind: 'sight', status: 'want', name: '示範・想去的山', area: '苗栗 三義', addedAt: tpDate(-100), visitedAt: null }, ...places.slice(2)])
   }
   if (name === 'error') { s.fail = new Set(['history', 'graph', 'ideas', 'food', 'trips', 'pipeline']) }
   if (name === 'stale') {
@@ -294,6 +294,20 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   await page.waitForSelector('.hm-tile-link'); await settle(page)
   const t = await page.locator('.hm-fun').innerText()
   check('想吃最久：顯示店名、地區、想吃 268 天了', /示範・鱔魚意麵/.test(t) && /台南 中西/.test(t) && /想吃 268 天了/.test(t) || /想去 268 天了/.test(t), t.replace(/\n/g, ' | ').slice(0, 200))
+  const eatTxt = await page.locator('[data-testid="hm-want-eat"]').innerText(), goTxt = await page.locator('[data-testid="hm-want-go"]').innerText()
+  check('首頁：想吃（美食）與想去（景點）各列出等最久的一個', /示範・鱔魚意麵/.test(eatTxt) && /想吃 268 天了/.test(eatTxt) && /示範・想去的山/.test(goTxt) && /苗栗 三義/.test(goTxt) && /想去 100 天了/.test(goTxt), `${eatTxt} | ${goTxt}`.replace(/\n/g, ' '))
+  await page.evaluate(() => { location.hash = 'food' })
+  await page.waitForSelector('.fm-page'); await settle(page)
+  const stat = await page.locator('.fm-stats').innerText()
+  check('美食地圖：統計卡分成「想吃」與「想去」兩個數字', /想吃\s*1\b/.test(stat.replace(/\n/g, ' ')) && /想去\s*1\b/.test(stat.replace(/\n/g, ' ')), stat.replace(/\n/g, ' | '))
+  const head = await page.locator('.fm-page header').innerText()
+  check('美食地圖：頁首同時有「想吃最久」與「想去最久」', /想吃最久：示範・鱔魚意麵（268 天）/.test(head) && /想去最久：示範・想去的山（100 天）/.test(head), head.replace(/\n/g, ' | '))
+  const btnTexts = async () => (await page.locator('.fm-page button').allInnerTexts()).join('|')
+  check('狀態篩選：全部種類時寫「想吃／想去」', (await btnTexts()).includes('🔖 想吃／想去') && (await btnTexts()).includes('想吃／想去最久'))
+  await page.locator('.fm-page button', { hasText: '🧭 旅遊' }).click()
+  check('狀態篩選：選旅遊 → 「想去」，排序 → 「想去最久」', (await btnTexts()).includes('🔖 想去|') && (await btnTexts()).includes('想去最久'), await btnTexts())
+  await page.locator('.fm-page button', { hasText: '🍜 美食' }).click()
+  check('狀態篩選：選美食 → 「想吃」，排序 → 「想吃最久」', (await btnTexts()).includes('🔖 想吃|') && !(await btnTexts()).includes('🔖 想去'), await btnTexts())
   await ctx.close()
 }
 for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {

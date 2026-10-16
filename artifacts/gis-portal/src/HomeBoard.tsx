@@ -97,7 +97,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     expectedEveryMin: dataEveryMinFor(pushers, 'hermes-ideas', EXPECTED_EVERY_MIN.ideas),
   })
   const places = food.data?.places ?? []
-  const wantInfo = useMemo(() => oldestWantPlace(places, now), [places, now])
+  const wantEat = useMemo(() => oldestWantPlace(places, now, 'eat'), [places, now])
+  const wantGo = useMemo(() => oldestWantPlace(places, now, 'go'), [places, now])
   const foodSt = blockState({
     unlocked: on, loading: food.loading, error: food.error, hasData: !!food.data, empty: !!food.data && places.length === 0, nowMs,
     expectedEveryMin: EXPECTED_EVERY_MIN.food,
@@ -158,7 +159,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
       <FunSection ideasSt={ideasSt} ideasCount={ideasList?.ideas.length ?? 0} topIdeas={ideaTop}
-        foodSt={foodSt} food={{ want: wantInfo ? { name: wantInfo.place.name, kind: wantInfo.place.kind, area: wantInfo.place.area, days: wantInfo.days } : null, been: placesBeenCount(places), total: places.length }}
+        foodSt={foodSt} food={{ wantEat: wantEat ? { name: wantEat.place.name, kind: wantEat.place.kind, area: wantEat.place.area, days: wantEat.days } : null, wantGo: wantGo ? { name: wantGo.place.name, kind: wantGo.place.kind, area: wantGo.place.area, days: wantGo.days } : null, been: placesBeenCount(places), total: places.length }}
         tripsSt={tripsSt} trip={trip} onOpenIdeas={() => setDrawer('ideas')} onRequestUnlock={onRequestUnlock}
         onRetryIdeas={ideas.reload} onRetryFood={food.reload} onRetryTrips={trips.reload} />
       {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={closeDrawer}>{hhiDetail}</Drawer>}

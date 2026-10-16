@@ -263,9 +263,28 @@ export function daysBetween(fromIso: string, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - t) / 86_400_000))
 }
 
+/** 想吃（美食）與想去（景點、住宿、其他）：同一個 want 狀態，依種類分開計 */
+export const isWantEat = (p: FoodPlace): boolean => p.status === 'want' && p.kind === 'food'
+export const isWantGo = (p: FoodPlace): boolean => p.status === 'want' && p.kind !== 'food'
+
+/** 狀態篩選「想吃／想去」鈕的字：依目前選的種類顯示 */
+export function wantFilterLabel(kind: PlaceKind | 'all' | undefined): string {
+  return kind === 'food' ? '🔖 想吃' : kind === undefined || kind === 'all' ? '🔖 想吃／想去' : '🔖 想去'
+}
+/** 排序「等最久」鈕的字：依目前選的種類顯示 */
+export function oldestWantSortLabel(kind: PlaceKind | 'all' | undefined): string {
+  return kind === 'food' ? '想吃最久' : kind === undefined || kind === 'all' ? '想吃／想去最久' : '想去最久'
+}
+
 export interface FoodStats {
   total: number
+  /** 想吃＋想去（全部 want） */
   want: number
+  /** 想吃（美食）與想去（非美食）各幾個，以及各自等最久的一個 */
+  wantEat: number
+  wantGo: number
+  oldestWantEat: { place: FoodPlace; days: number } | null
+  oldestWantGo: { place: FoodPlace; days: number } | null
   been: number
   favorite: number
   /** 去過 ÷（想吃＋去過），不含「不再去」；沒有資料回 null */
@@ -277,6 +296,11 @@ export interface FoodStats {
   mapped: number
 }
 
+function oldestOf(list: FoodPlace[], now: Date): { place: FoodPlace; days: number } | null {
+  const o = [...list].sort((a, b) => a.addedAt.localeCompare(b.addedAt) || a.id.localeCompare(b.id))[0]
+  return o ? { place: o, days: daysBetween(o.addedAt, now) } : null
+}
+
 export function foodStats(places: FoodPlace[], now: Date): FoodStats {
   const want = places.filter((p) => p.status === 'want')
   const been = places.filter((p) => isBeen(p.status))
@@ -286,6 +310,10 @@ export function foodStats(places: FoodPlace[], now: Date): FoodStats {
   return {
     total: places.length,
     want: want.length,
+    wantEat: want.filter(isWantEat).length,
+    wantGo: want.filter(isWantGo).length,
+    oldestWantEat: oldestOf(want.filter(isWantEat), now),
+    oldestWantGo: oldestOf(want.filter(isWantGo), now),
     been: been.length,
     favorite: places.filter((p) => p.status === 'favorite').length,
     conversionPct: denom ? Math.round((been.length / denom) * 100) : null,

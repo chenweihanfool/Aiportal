@@ -394,8 +394,9 @@ export function sparkGeometry(series: DimSeries, minSpan = 10): SparkGeometry {
 
 // ── ④ 好玩的 ──────────────────────────────────
 /** 想吃／想去狀態裡最久的一個（依第一次出現在日記的日期）；沒有就是 null */
-export function oldestWantPlace(places: FoodPlace[], now: Date): { place: FoodPlace; days: number } | null {
-  const want = places.filter((p) => p.status === 'want').sort((a, b) => a.addedAt.localeCompare(b.addedAt) || a.id.localeCompare(b.id))[0]
+export function oldestWantPlace(places: FoodPlace[], now: Date, group?: 'eat' | 'go'): { place: FoodPlace; days: number } | null {
+  // group：eat＝想吃（美食）、go＝想去（景點、住宿、其他）；不給＝全部
+  const want = places.filter((p) => p.status === 'want' && (group === undefined || (group === 'eat') === (p.kind === 'food'))).sort((a, b) => a.addedAt.localeCompare(b.addedAt) || a.id.localeCompare(b.id))[0]
   if (!want) return null
   return { place: want, days: Math.max(0, dayDiff(want.addedAt, taipeiDate(now))) }
 }

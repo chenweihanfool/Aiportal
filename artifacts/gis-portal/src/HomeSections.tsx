@@ -24,6 +24,8 @@ const Head = ({ title, right }: { title: string; right?: ReactNode }) => (
 )
 
 // ── ① 今天 ────────────────────────────────────
+type WantEntry = { name: string; kind: Parameters<typeof statusLabelFor>[0]; area: string | null; days: number }
+
 export function TodaySection({ greetingText, part, dateLabel, st, breakdown, trend, trendNote, sentence, year, toneOf, onOpen, onRequestUnlock }: {
   greetingText: string
   part: DayPart
@@ -246,7 +248,7 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
   ideasCount: number
   topIdeas: IdeaItem[]
   foodSt: BlockStatus
-  food: { want: { name: string; kind: Parameters<typeof statusLabelFor>[0]; area: string | null; days: number } | null; been: number; total: number }
+  food: { wantEat: WantEntry | null; wantGo: WantEntry | null; been: number; total: number }
   tripsSt: BlockStatus
   trip: LatestTrip | null
   onOpenIdeas: () => void
@@ -280,14 +282,18 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
         </StateFrame>
         <div className="hm-pair">
           <div className="hm-tile">
-            <div className="hm-sub">🍜 想吃的</div>
+            <div className="hm-sub">🔖 想吃／想去</div>
             <StateFrame status={foodSt} source="地點" onRequestUnlock={onRequestUnlock} onRetry={onRetryFood}
               empty={<a href="#food" className="hm-link">還沒有想吃的紀錄 →</a>}>
-              {food.want ? (
-                <a href="#food" className="hm-tile-link">
-                  <b>{KIND_ICON[food.want.kind]} {food.want.name}</b>
-                  <span>{food.want.area ? `${food.want.area}・` : ''}{statusLabelFor(food.want.kind, 'want')} {food.want.days} 天了</span>
-                </a>
+              {food.wantEat || food.wantGo ? (
+                <>
+                  {[food.wantEat, food.wantGo].map((w) => w && (
+                    <a key={w.kind === 'food' ? 'eat' : 'go'} href="#food" className="hm-tile-link" data-testid={w.kind === 'food' ? 'hm-want-eat' : 'hm-want-go'}>
+                      <b>{KIND_ICON[w.kind]} {w.name}</b>
+                      <span>{w.area ? `${w.area}・` : ''}{statusLabelFor(w.kind, 'want')} {w.days} 天了</span>
+                    </a>
+                  ))}
+                </>
               ) : (
                 <a href="#food" className="hm-tile-link">
                   <b>還沒有想吃的紀錄</b>

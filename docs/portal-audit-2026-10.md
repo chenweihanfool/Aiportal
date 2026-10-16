@@ -801,11 +801,11 @@
 | P2-4 | 「去過」單向同步到 AdventureLog | ✖ 取消（使用者 2026-10-16：AdventureLog 打算棄用，不用同步） |
 | P2-5 | L3 正式檔改由確定性 apply | ✖ 不做（使用者 2026-10-16：照 Claude 建議；L3 近期沒再出事，動核心管線風險大，L3 又頻繁失敗時再做） |
 | P2-6 | 任務面向加能行動的數字（需讀 Vikunja API） | ✅（使用者選 B＝主機端算：kb-pipeline `compute_daily.py` 多算逾期／今天到期／7 天內到期／近 7 天完成，寫進 `busyness_index_history` 新欄位；入口網任務面向頁顯示「今天要做什麼」） |
-| P2-7 | 還原演練排程化 | ✅（kb-pipeline#165：`restore-drill.py` 每月；state.db 真的還原驗證、pg 備份驗到「讀得完且像完整備份」，尚未真的還原進資料庫；戰情室 40 天沒新成功檔才提醒，見 kb-pipeline `docs/restore-drill.md`） |
+| P2-7 | 還原演練排程化 | ✅（kb-pipeline#165／#166／#168：`restore-drill.py` 每月 1 日 06:30；state.db 真的還原驗證，pg 備份在線上實例建暫存庫真還原並一定 DROP（使用者 2026-10-16 授權），已退場的服務用 `--skip-db` 明列略過；戰情室 40 天沒新成功檔才提醒，見 kb-pipeline `docs/restore-drill.md`） |
 
-**路線圖以外、這輪已做完的**：AdventureLog 退場（2026-10-16 使用者：「停用 AdventureLog 和清理 ADVENTURELOG_* 設定」；容器已停、api-server 舊來源與 `TRAVEL_SOURCE`／`ADVENTURELOG_*` 設定移除，旅遊分數固定走遊記＋美食地圖）、地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；dry-run 只掛得到 1 張，使用者選「選項2」放寬——當天只有一個地點時，該日所有使用者條目的相片都掛上；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（已於 10/16 切換並成為唯一來源；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢。
+**路線圖以外、這輪已做完的**：AdventureLog 退場（2026-10-16 使用者：「停用 AdventureLog 和清理 ADVENTURELOG_* 設定」；容器已停、api-server 舊來源與 `TRAVEL_SOURCE`／`ADVENTURELOG_*` 設定移除，旅遊分數固定走遊記＋美食地圖）、地點相片（方案 1：日記條目提到地點名稱才掛那個條目的相片；dry-run 只掛得到 1 張，使用者選「選項2」放寬——當天只有一個地點時，該日所有使用者條目的相片都掛上；kb-pipeline `places-pusher.py`＋api-server `/api/media/places`；2026-10-16 合併，待 HERMES 部署與 dry-run，排程要使用者放行）、旅遊分數改讀遊記＋美食（已於 10/16 切換並成為唯一來源；公式 0.4×Recency＋0.4×Frequency＋0.2×美食＋期待加分）、遊記（趟次檔、相片管線、結構化折疊）、每面向歷史接口與迷你線、手機首屏、面向頁（`#dim/<key>`）、整頁合理性巡檢、知識庫查詢索引與歷年今天（kb-pipeline#167／#168，`kb.py index／query／about／today`，每晚 03:45 重建）、每日自動開發機制（控制頻道 CLAUDE.md §9＋kb-pipeline `docs/kb-daily-dev.md`）、旅遊面向在旅行中顯示 0 的修正（#98：新來源上線前的舊歷史不進百分位）、地圖與首頁把「想吃」和「想去」分開（2.40.0：統計卡、篩選、排序、首頁卡）。
 
-**目前位置（2026-10-16）**：計畫表 22 項全部有結論：✅ 18、✖ 4（P2-2、P2-3、P2-5 不做；P2-4 取消）。剛完成 P2-1 成長軌跡（年度回顧頁與各面向年熱圖）。表外還沒收尾的事：AdventureLog 最後收尾（Caddy 路由、容器與資料移除、金鑰；已派 HERMES）、舊腳本 `al_add_parking.py`／`al_create_kinmen.py`（只在 VPS，要刪）、還原演練的 pg 真還原加強版（已授權，等 #165 的 dry-run 看實際備份格式再做）；地點相片實推使用者決定不做。
+**目前位置（2026-10-16）**：計畫表 22 項全部有結論：✅ 18、✖ 4（P2-2、P2-3、P2-5 不做；P2-4 取消）。表內項目已全部收尾：AdventureLog 退場（容器、資料、金鑰、Caddy 路由、VPS 舊腳本、備份腳本那一項都已處理）、還原演練已升級成真的還原進暫存庫並加每月排程（見 P2-7）；地點相片實推使用者決定不做。表外另見下方「路線圖以外」。
 
 
 ### P0（現在，低風險、不動資料源與部署設定）

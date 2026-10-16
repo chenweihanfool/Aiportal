@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  TAIWAN_BOUNDS, areaCounts, coordsFromMapUrl, daysBetween, filterPlaces, foodStats, foodStatusMessage, nextFoodStatuses,
+  TAIWAN_BOUNDS, areaCounts, oldestWantSortLabel, wantFilterLabel, coordsFromMapUrl, daysBetween, filterPlaces, foodStats, foodStatusMessage, nextFoodStatuses,
   bearingDeg, bearingLabel, coverPhoto, distanceM, filterPlaces as filterPlacesK, formatDistance, navigateUrl, nearbyPlaces, statusLabelFor, parseFoodPayload, parseFoodPlace, parsePhotos, safeImageUrl, priceLabel, projectPlaces, sortPlaces, stars, tagCounts, type FoodPlace,
 } from './foodMap'
 import { sampleFoodData } from './foodSample'
@@ -116,8 +116,37 @@ describe('foodStats', () => {
     expect(s.oldestWant?.place.id).toBe('B')
     expect(s.oldestWant?.days).toBe(283)
   })
+  it('splits 想吃（food）and 想去（non-food）wants, each with its own oldest', () => {
+    const s = foodStats([
+      place({ id: 'F1', kind: 'food', addedAt: '2026-10-05' }),
+      place({ id: 'F2', kind: 'food', addedAt: '2026-09-01' }),
+      place({ id: 'S1', kind: 'sight', addedAt: '2026-02-01' }),
+      place({ id: 'H1', kind: 'stay', addedAt: '2026-08-01' }),
+      place({ id: 'V1', kind: 'sight', status: 'visited', visitedAt: '2026-03-01' }),
+    ], NOW)
+    expect(s).toMatchObject({ want: 4, wantEat: 2, wantGo: 2 })
+    expect(s.oldestWantEat?.place.id).toBe('F2')
+    expect(s.oldestWantGo?.place.id).toBe('S1')
+    expect(s.oldestWant?.place.id).toBe('S1')           // 全部 want 裡最久的，行為不變
+  })
+  it('no 想去 at all → wantGo 0 and no oldestWantGo', () => {
+    const s = foodStats([place({ id: 'F', kind: 'food' })], NOW)
+    expect(s).toMatchObject({ wantEat: 1, wantGo: 0, oldestWantGo: null })
+  })
   it('null conversion and no oldest when empty', () => {
     expect(foodStats([], NOW)).toMatchObject({ conversionPct: null, oldestWant: null, total: 0 })
+  })
+})
+
+describe('wantFilterLabel / oldestWantSortLabel', () => {
+  it('follows the selected kind', () => {
+    expect(wantFilterLabel('food')).toBe('🔖 想吃')
+    expect(wantFilterLabel('sight')).toBe('🔖 想去')
+    expect(wantFilterLabel('all')).toBe('🔖 想吃／想去')
+    expect(wantFilterLabel(undefined)).toBe('🔖 想吃／想去')
+    expect(oldestWantSortLabel('food')).toBe('想吃最久')
+    expect(oldestWantSortLabel('sight')).toBe('想去最久')
+    expect(oldestWantSortLabel('all')).toBe('想吃／想去最久')
   })
 })
 
