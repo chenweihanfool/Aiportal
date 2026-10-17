@@ -146,7 +146,7 @@ function useLoad<T>(pw: string | null, fetcher: (pw: string) => Promise<T>, refr
 // ── Ollama 用量與預估 ───────────────────────────────
 // 2026-10-09 使用者裁定「縮 Ollama」讓位給想法庫：首頁只留小卡（餘額、每天花費、用完日），
 // 完整的走勢圖、每日請求數、模型分佈與「更新餘額」表單搬進抽屜（OllamaPanel），功能一個都沒少。
-function OllamaPanel({ pw }: { pw: string }) {
+export function OllamaPanel({ pw }: { pw: string }) {
   const { data, error, reload } = useLoad<UsageData>(pw, apiFetchUsage)
   const [formOpen, setFormOpen] = useState(false)
   const [saving, setSaving] = useState(false)

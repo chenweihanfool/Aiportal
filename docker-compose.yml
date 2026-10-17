@@ -26,6 +26,9 @@ services:
       # 上面兩個端點設了 SUMMARY_API_KEY 之後，這裡帶同一把（空值＝不帶標頭）
       PF_CWH_SUMMARY_KEY: ${PF_CWH_SUMMARY_KEY:-}
       FITNESSFORGE_SUMMARY_KEY: ${FITNESSFORGE_SUMMARY_KEY:-}
+      # 付費服務卡（GET /api/paid-services）：有金鑰才顯示 DeepSeek 餘額／Tavily 用量；空值＝只顯示「未設定金鑰」
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       # 附件預覽（GET /api/hermes-attachment）讀這個資料夾；唯讀掛載，api-server 無法寫入或改動 vault。
       HERMES_ATTACHMENT_ROOT: /data/attachments
       # 遊記相片的縮圖／檢視圖（GET /api/media/trips/…）讀這個資料夾；唯讀掛載，api-server 無法寫入。

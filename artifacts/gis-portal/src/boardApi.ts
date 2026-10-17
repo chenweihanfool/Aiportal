@@ -1,4 +1,5 @@
 // 桌面首頁儀表板自己用的 API 讀寫（型別只列這裡用到的欄位，不依賴 App.tsx，避免 App ↔ DesktopBoard 循環匯入）。
+import type { PaidServicesData } from './paidServicesView'
 import type { DiskAlertLevel, DiskForecastInfo, StorageItem } from './diskView'
 
 const API_BASE = import.meta.env.BASE_URL ?? '/'
@@ -34,6 +35,12 @@ export async function apiFetchUsage(pw: string): Promise<UsageData> {
   const r = await fetch(`${API_BASE}api/hermes-usage`, { headers: authHeaders(pw) })
   if (!r.ok) throw new Error('Failed to fetch usage')
   return r.json() as Promise<UsageData>
+}
+
+export async function apiFetchPaidServices(pw: string): Promise<PaidServicesData> {
+  const r = await fetch(`${API_BASE}api/paid-services`, { headers: authHeaders(pw) })
+  if (!r.ok) throw new Error('Failed to fetch paid services')
+  return r.json() as Promise<PaidServicesData>
 }
 
 export interface BalanceInput { balanceUsd: number; capUsd?: number; refillAt?: string; monthUsedUsd?: number }

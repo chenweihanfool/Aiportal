@@ -5,6 +5,16 @@
 // ─────────────────────────────────────────────
 export const VERSION_HISTORY = [
   {
+    version: '2.45.0',
+    date: '2026-10-17',
+    summary: '拿掉左上角的美食地圖卡；新首頁找回 Ollama 更新餘額；新增「付費服務」卡',
+    changes: [
+      '左側欄最上面的「美食及旅遊地圖」入口卡拿掉（手機頁首的膠囊、「好玩的」的想吃／想去、⌘K 照舊能進地圖）。',
+      'Ollama 的「更新餘額」表單、餘額走勢與每日請求數，新首頁一直沒有入口（只有 #legacy 舊版有）。現在點首頁的「付費服務」卡就能打開，表單在抽屜下半部。',
+      '新增「付費服務」卡（系統列旁）：Ollama Cloud、Claude Pro、JEV、Tavily、DeepSeek 一列一個。DeepSeek 餘額、Tavily 用量由伺服器用 API 金鑰直接讀（金鑰放環境變數 DEEPSEEK_API_KEY、TAVILY_API_KEY，沒設就顯示「未設定金鑰」）；Ollama 用手動輸入的餘額；Claude Pro、JEV 沒有用量 API，只放連結。',
+    ],
+  },
+  {
     version: '2.44.0',
     date: '2026-10-17',
     summary: '時間軸點事件跳到關係圖後能回得來；相片與附件檢視器有上一張／下一張',

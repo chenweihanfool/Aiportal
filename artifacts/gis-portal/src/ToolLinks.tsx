@@ -1,4 +1,4 @@
-// 左側欄／頁面下方的工具連結區與美食及旅遊地圖入口。
+// 左側欄／頁面下方的工具連結區；手機頁首另有美食及旅遊地圖的入口膠囊。
 import { useState } from 'react'
 import { COLOR, FONT } from './theme'
 import { SubLabel, Unit } from './panelUi'
@@ -57,29 +57,6 @@ export function FoodMapPill() {
         background: 'rgba(245,166,35,0.14)', border: `1px solid ${COLOR.amberDim}`, color: COLOR.amber, whiteSpace: 'nowrap',
       }}
     >🍜🧭 美食及旅遊地圖 →</a>
-  )
-}
-
-export function FoodMapEntry() {
-  return (
-    <a
-      href="#food"
-      data-testid="food-entry"
-      onClick={e => { e.preventDefault(); window.location.hash = 'food' }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '0.9rem', textDecoration: 'none', cursor: 'pointer',
-        padding: '0.85rem 1rem', marginBottom: '1.1rem', borderRadius: '8px',
-        background: 'linear-gradient(135deg, rgba(245,166,35,0.14), rgba(47,128,255,0.10))',
-        border: `1px solid ${COLOR.amberDim}`, color: COLOR.ink,
-      }}
-    >
-      <span aria-hidden style={{ fontSize: '1.15rem', lineHeight: 1, letterSpacing: '-0.1em' }}>🍜🧭</span>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: 0, flex: 1 }}>
-        <b style={{ fontSize: '0.92rem', color: COLOR.amber, whiteSpace: 'nowrap' }}>美食及旅遊地圖</b>
-        <span style={{ fontSize: '0.72rem', color: COLOR.steel, lineHeight: 1.5 }}>想吃、想去的地方都在這 · 📍 找附近由近到遠</span>
-      </span>
-      <span aria-hidden style={{ color: COLOR.amber, fontSize: '1.1rem' }}>→</span>
-    </a>
   )
 }
 
