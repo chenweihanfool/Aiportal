@@ -17,7 +17,7 @@ export const hermesUsageDailyTable = pgTable("hermes_usage_daily", {
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// 使用者手動輸入的 Ollama 帳戶餘額快照（ollama.com 沒有可從本機取得的額度端點）。
+// Ollama 帳戶餘額快照：HERMES pusher 讀 ollama.com GET /api/balance 推來（note＝"auto"），或使用者手動輸入（備援）。
 // 每次輸入一列、只增不改：相鄰兩筆的餘額差就是「實際每天花多少」（含所有用量來源），比用請求數乘單價準。
 export const ollamaBalanceEntryTable = pgTable("ollama_balance_entry", {
   id: serial("id").primaryKey(),

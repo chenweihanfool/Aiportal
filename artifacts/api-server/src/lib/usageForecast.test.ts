@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { DEFAULT_USD_PER_CALL, forecastOllama, observedUsdPerDay, sanitizeBalance, sanitizeUsageDays } from "./usageForecast"
+import { DEFAULT_USD_PER_CALL, forecastOllama, observedUsdPerDay, sanitizeBalance, shouldSkipAutoBalance, sanitizeUsageDays } from "./usageForecast"
 
 const days = (calls: number[], start = "2026-10-01") =>
   calls.map((c, i) => ({ date: new Date(Date.parse(`${start}T00:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10), calls: c }))
@@ -99,5 +99,22 @@ describe("sanitizeBalance", () => {
     expect(sanitizeBalance({ balanceUsd: 5, refillAt: "10/29" })).toMatch(/YYYY-MM-DD/)
     expect(sanitizeBalance({ balanceUsd: 5, monthUsedUsd: "x" })).toMatch(/本月已用/)
     expect(sanitizeBalance(null)).toMatch(/餘額/)
+  })
+})
+
+describe("shouldSkipAutoBalance", () => {
+  const now = new Date("2026-10-17T10:00:00Z")
+  const latest = { enteredAt: "2026-10-17T09:30:00Z", balanceUsd: 72.5, refillAt: "2026-10-15", monthUsedUsd: 27.5 }
+  const auto = { balanceUsd: 72.5, capUsd: 100, refillAt: "2026-10-15", monthUsedUsd: 27.5, note: "auto" }
+  it("skips an unchanged auto push within the hour", () => {
+    expect(shouldSkipAutoBalance(auto, latest, now)).toBe(true)
+  })
+  it("writes when the balance changed, or as an hourly heartbeat", () => {
+    expect(shouldSkipAutoBalance({ ...auto, balanceUsd: 72.4 }, latest, now)).toBe(false)
+    expect(shouldSkipAutoBalance(auto, { ...latest, enteredAt: "2026-10-17T08:30:00Z" }, now)).toBe(false)
+  })
+  it("always writes manual entries and the first entry", () => {
+    expect(shouldSkipAutoBalance({ ...auto, note: null }, latest, now)).toBe(false)
+    expect(shouldSkipAutoBalance(auto, null, now)).toBe(false)
   })
 })

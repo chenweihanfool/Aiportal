@@ -2,7 +2,8 @@
 //
 // 兩個資料來源，誠實分開：
 // 1. HERMES 每日請求數（state.db 聚合）：只含 HERMES 這台 VPS 發出的請求，不含帳號其他用量來源。
-// 2. 使用者手動輸入的餘額快照：ollama.com 沒有可從本機取得的額度端點，這是唯一的「真實餘額」。
+// 2. 餘額快照：HERMES 的 pusher 定期讀 ollama.com 的 GET /api/balance 推來（note＝"auto"），
+//    或使用者手動輸入（備援）。這是唯一的「真實餘額」。
 //    相鄰兩筆的餘額差 ÷ 天數 ＝ 實際每天花多少（含所有來源），所以有兩筆以上時優先用它；
 //    只有一筆時，退回「近 7 日平均請求數 × 單價」的粗估，並在回傳裡標明 source，前端要標「粗估」。
 
@@ -167,7 +168,30 @@ export interface SanitizedBalance {
   note: string | null
 }
 
-/** 手動輸入的餘額。回傳字串＝錯誤訊息（給使用者看的人話），物件＝通過。 */
+export const AUTO_BALANCE_NOTE = "auto"
+const AUTO_HEARTBEAT_MS = 60 * 60_000
+
+/**
+ * pusher 每 10 分鐘推一次，餘額沒變就不必每次都寫一列（會把表塞滿）。
+ * 只略過「note＝auto、且跟最新一筆的餘額／補點日／本月已用都一樣、且最新一筆不到 1 小時」的推送；
+ * 超過 1 小時仍寫一列當心跳，讓走勢圖與實測速度的終點不會停在很久以前。手動輸入永遠寫入。
+ */
+export function shouldSkipAutoBalance(
+  incoming: SanitizedBalance,
+  latest: { enteredAt: string; balanceUsd: number; refillAt: string | null; monthUsedUsd: number | null } | null,
+  now: Date,
+): boolean {
+  if (incoming.note !== AUTO_BALANCE_NOTE || !latest) return false
+  const age = now.getTime() - Date.parse(latest.enteredAt)
+  if (!Number.isFinite(age) || age < 0 || age >= AUTO_HEARTBEAT_MS) return false
+  return (
+    Math.abs(latest.balanceUsd - incoming.balanceUsd) < 0.005 &&
+    latest.refillAt === incoming.refillAt &&
+    (latest.monthUsedUsd ?? null) === incoming.monthUsedUsd
+  )
+}
+
+/** 餘額快照（HERMES 自動推或手動輸入）。回傳字串＝錯誤訊息（給使用者看的人話），物件＝通過。 */
 export function sanitizeBalance(v: unknown): SanitizedBalance | string {
   if (!v || typeof v !== "object") return "請填餘額"
   const r = v as Record<string, unknown>
