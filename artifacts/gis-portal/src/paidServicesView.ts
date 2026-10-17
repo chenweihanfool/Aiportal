@@ -1,5 +1,5 @@
 // 付費服務卡的資料整理（純函式）：把 /api/paid-services 與 Ollama 用量整成每個服務一列。
-// 只有 DeepSeek、Tavily 有能直接讀的額度；Ollama 是手動輸入的餘額；Claude Pro、JEV 沒有額度端點，只放連結。
+// 只有 DeepSeek、Tavily 有能直接讀的額度；Ollama 的餘額由 HERMES 自動抓取（note＝auto），沒有就是手動輸入；Claude Pro、JEV 沒有額度端點，只放連結。
 import type { UsageData } from './boardApi'
 import { formatEmptyDay, formatUsd } from './boardView'
 
@@ -54,7 +54,8 @@ export function ollamaLine(u: UsageData | null | undefined): Pick<ServiceRow, 'l
   const f = u.forecast
   const cap = bal.capUsd
   const when = f.daysUntilEmpty !== null ? `・預估 ${formatEmptyDay(f.emptyDate, f.daysUntilEmpty)}用完` : ''
-  return { line: `餘額 ${formatUsd(bal.balanceUsd)} / $${cap}（手動輸入）${when}`, tone: f.level, live: false }
+  const auto = bal.note === 'auto'
+  return { line: `餘額 ${formatUsd(bal.balanceUsd)} / $${cap}（${auto ? '自動抓取' : '手動輸入'}）${when}`, tone: f.level, live: auto }
 }
 
 export function buildServiceRows(input: { usage: UsageData | null; paid: PaidServicesData | null }): ServiceRow[] {

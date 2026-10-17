@@ -3,7 +3,7 @@ import { db, hermesUsageDailyTable, ollamaBalanceEntryTable } from "@workspace/d
 import { desc } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { taipeiDateString } from "../lib/summarySources";
-import { forecastOllama, sanitizeBalance, sanitizeUsageDays } from "../lib/usageForecast";
+import { forecastOllama, sanitizeBalance, sanitizeUsageDays, shouldSkipAutoBalance } from "../lib/usageForecast";
 
 const router = Router();
 
@@ -25,7 +25,8 @@ router.post("/admin/hermes-usage", async (req: Request, res: Response) => {
   return res.json({ success: true, days: days.length });
 });
 
-// 使用者手動輸入的 Ollama 餘額快照（ollama.com 沒有可從本機取得的額度端點）。
+// Ollama 餘額快照：HERMES 的 pusher 讀 ollama.com GET /api/balance 後推來（note＝"auto"），
+// 使用者手動輸入當備援。auto 且沒變化的推送不寫入（見 shouldSkipAutoBalance）。
 router.post("/admin/ollama-balance", async (req: Request, res: Response) => {
   if (!isAuthorized(req.headers["x-admin-password"])) {
     return res.status(403).json({ message: "需要管理員權限" });
@@ -33,6 +34,10 @@ router.post("/admin/ollama-balance", async (req: Request, res: Response) => {
   const parsed = sanitizeBalance(req.body);
   if (typeof parsed === "string") {
     return res.status(400).json({ message: parsed });
+  }
+  const [prev] = await db.select().from(ollamaBalanceEntryTable).orderBy(desc(ollamaBalanceEntryTable.enteredAt)).limit(1)
+  if (shouldSkipAutoBalance(parsed, prev ? { ...prev, enteredAt: prev.enteredAt.toISOString() } : null, new Date())) {
+    return res.json({ success: true, skipped: true })
   }
   const [row] = await db
     .insert(ollamaBalanceEntryTable)
@@ -81,8 +86,8 @@ router.get("/hermes-usage", async (req: Request, res: Response) => {
       : null,
     entries: entries.map((e) => ({ enteredAt: e.enteredAt.toISOString(), balanceUsd: e.balanceUsd })),
     forecast,
-    // 前端要誠實標示：請求數只含 HERMES 這台 VPS，金額與餘額來自手動輸入
-    scope: "請求數只含 HERMES 這台 VPS 發出的；Ollama 帳號的餘額與金額來自手動輸入的快照",
+    // 前端要誠實標示：請求數只含 HERMES 這台 VPS，金額與餘額來自帳號快照（自動抓取或手動輸入，看 balance.note）
+    scope: "請求數只含 HERMES 這台 VPS 發出的；Ollama 帳號的餘額與金額來自 ollama.com 餘額快照（note＝auto 為自動抓取，否則為手動輸入）",
   });
 });
 

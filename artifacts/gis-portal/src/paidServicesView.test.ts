@@ -45,6 +45,12 @@ describe('ollamaLine', () => {
     expect(r.line).toBe('餘額 $29.31 / $60（手動輸入）・預估 10/27（約 9.8 天）用完')
     expect(r.tone).toBe('warn')
   })
+  it('labels an auto-pushed balance as live', () => {
+    const base = usage()
+    const r = ollamaLine({ ...base, balance: { ...base.balance!, note: 'auto' } })
+    expect(r.line).toContain('（自動抓取）')
+    expect(r.live).toBe(true)
+  })
 })
 
 describe('buildServiceRows', () => {

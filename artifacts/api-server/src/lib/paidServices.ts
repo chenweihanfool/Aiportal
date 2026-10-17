@@ -1,5 +1,5 @@
 // 付費服務用量：只有 DeepSeek（/user/balance）與 Tavily（/usage）有能用 API 金鑰直接讀的額度端點。
-// Ollama（手動輸入餘額，見 hermesUsage）、Claude Pro、JEV 沒有，前端只放連結。
+// Ollama（HERMES 推 /api/balance 快照，手動輸入備援，見 hermesUsage）、Claude Pro、JEV 沒有，前端只放連結。
 // 金鑰只放在 api-server 環境變數，不進 repo、不送前端；沒設金鑰＝回 "no-key"，前端顯示「未設定金鑰」。
 
 export type UsageResult<T> =
