@@ -15,7 +15,9 @@ export interface HermesGraphEventNode {
   id: string; date: string; title: string; status: string | null; tags: string[]; case: string | null
   dateSource?: EventDateSource; time?: string | null; timeSource?: 'diary' | 'extracted' | null
 }
-export interface HermesGraphCaseNode { name: string; eventCount: number; status: string | null }
+// taskState：kb-pipeline 依 Vikunja 專案封存狀態寫在案件頁的標記，入口網只顯示；舊版伺服端／沒有標記的案件沒有這個欄位
+export type CaseTaskState = '進行中' | '已結案'
+export interface HermesGraphCaseNode { name: string; eventCount: number; status: string | null; taskState?: CaseTaskState | null }
 export interface HermesGraphObjectNode { name: string; objectType: string | null; eventCount: number }
 export interface HermesGraphEdge { person: string; eventId: string; role: string }
 export interface HermesGraphCaseEdge { eventId: string; case: string }

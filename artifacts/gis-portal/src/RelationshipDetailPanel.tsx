@@ -23,7 +23,7 @@ import { describeSource, stripSourceSection } from './docContent'
 import { AttachmentViewer } from './AttachmentViewer'
 import {
   buildIndex, resolveWikilink, personInsight, caseInsight, eventInsight, objectInsight, abstractionInsight, entityEvents,
-  personId, eventId, caseId, objectId, conceptId, methodId, splitId,
+  personId, eventId, caseId, objectId, conceptId, methodId, splitId, caseTaskStateLabel,
   type GraphIndex, type NodeKind,
 } from './graphInsights'
 
@@ -411,6 +411,12 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
       <>
         <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
           案件{index.caseStatus.get(name) ? ` · ${index.caseStatus.get(name)}` : ''} · {ids.length} 事件
+          {caseTaskStateLabel(index.caseTaskState.get(name)) && (
+            <span data-testid="case-task-state" title="依 Vikunja 專案是否封存判斷；只是標記，不影響其他數字"
+              style={{ marginLeft: '0.5rem', color: index.caseTaskState.get(name) === '已結案' ? COLOR.steelDim : COLOR.amber }}>
+              · {caseTaskStateLabel(index.caseTaskState.get(name))}
+            </span>
+          )}
         </div>
         {people.size > 0 && (
           <Section title="具名人物">

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildIndex, shortestPath, personInsight, caseInsight, eventInsight, objectInsight,
   entityEvents, searchNodes, recentActivity, personId, eventId, caseId, objectId, splitId,
-  conceptId, methodId, abstractionInsight, resolveWikilink, normalizeLabel,
+  conceptId, methodId, abstractionInsight, resolveWikilink, normalizeLabel, caseTaskStateLabel,
 } from './graphInsights'
 import type { HermesGraphData } from './hermesGraphApi'
 
@@ -522,5 +522,42 @@ describe('resolveWikilink (正文裡的 [[…]] → 圖上節點)', () => {
     expect(resolveWikilink(index, 'AI/知識/陳韋翰.md')).toBeNull()
     expect(resolveWikilink(index, '不存在的東西')).toBeNull()
     expect(resolveWikilink(index, '   ')).toBeNull()
+  })
+})
+
+describe('case task-state mark (Vikunja 專案標記，唯讀顯示)', () => {
+  const withMarks = (): HermesGraphData => {
+    const g = buildGraph()
+    g.cases = [
+      { name: 'CaseA', eventCount: 2, status: 'open', taskState: '進行中' },
+      { name: 'CaseB', eventCount: 1, status: 'open', taskState: '已結案' },
+      { name: 'CaseC', eventCount: 1, status: 'open' },
+      { name: 'CaseD', eventCount: 1, status: 'open', taskState: null },
+      // 舊版／外部輸入的怪值：只放行兩個已知值
+      { name: 'CaseE', eventCount: 1, status: 'open', taskState: '亂寫' as never },
+    ]
+    return g
+  }
+
+  it('indexes only the two known marks; unmarked cases are simply absent', () => {
+    const index = buildIndex(withMarks())
+    expect(index.caseTaskState.get('CaseA')).toBe('進行中')
+    expect(index.caseTaskState.get('CaseB')).toBe('已結案')
+    for (const n of ['CaseC', 'CaseD', 'CaseE']) expect(index.caseTaskState.has(n)).toBe(false)
+  })
+
+  it('does not change any other index data (display-only)', () => {
+    const plain = buildIndex(buildGraph())
+    const marked = buildIndex(withMarks())
+    expect(marked.caseStatus.get('CaseA')).toBe(plain.caseStatus.get('CaseA'))
+    expect(marked.caseEvents.get('CaseA')).toEqual(plain.caseEvents.get('CaseA'))
+  })
+
+  it('labels only known marks', () => {
+    expect(caseTaskStateLabel('進行中')).toBe('任務系統：進行中')
+    expect(caseTaskStateLabel('已結案')).toBe('任務系統：已結案')
+    expect(caseTaskStateLabel(null)).toBeNull()
+    expect(caseTaskStateLabel(undefined)).toBeNull()
+    expect(caseTaskStateLabel('x' as never)).toBeNull()
   })
 })

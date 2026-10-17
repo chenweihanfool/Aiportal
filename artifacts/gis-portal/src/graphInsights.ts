@@ -9,7 +9,7 @@
 //   p:<人名>  e:<事件id>  c:<案件名>  o:<物件名>  k:<概念名>  m:<方法名>
 // （概念用 k 是因為 c 已被案件佔用。）
 // ─────────────────────────────────────────────
-import type { HermesGraphData, HermesGraphEventNode, HermesGraphHubNarrative } from './hermesGraphApi'
+import type { CaseTaskState, HermesGraphData, HermesGraphEventNode, HermesGraphHubNarrative } from './hermesGraphApi'
 import { toTimelineRow, type TimelineRow } from './nodeTimeline'
 
 export type NodeKind = 'person' | 'event' | 'case' | 'object' | 'concept' | 'method'
@@ -50,6 +50,8 @@ export interface GraphIndex {
   /** 概念／方法節點 id（k:/m:）-> 是否已晉升（≥2 事件）；false = 候選 */
   promotedById: Map<string, boolean>
   caseStatus: Map<string, string | null>
+  /** 案件 -> 任務系統標記（Vikunja 專案封存狀態）；沒有標記的案件不在 map 裡 */
+  caseTaskState: Map<string, CaseTaskState>
   objectType: Map<string, string | null>
   /** 人↔人：排序後的 "a|b" -> L5 寫在 People/*.md「## 關係人物」的描述文字 */
   relationDescription: Map<string, string>
@@ -207,6 +209,7 @@ export function buildIndex(graph: NonNullable<HermesGraphData['graph']>): GraphI
     neighbors, labelOf, eventById, personEvents, eventParticipants, eventObjects,
     caseEvents, objectEvents, conceptEvents, methodEvents, eventConcepts, eventMethods, promotedById,
     caseStatus: new Map(graph.cases.map(c => [c.name, c.status])),
+    caseTaskState: new Map(graph.cases.flatMap(c => (c.taskState === '進行中' || c.taskState === '已結案' ? [[c.name, c.taskState] as const] : []))),
     objectType: new Map(graph.objects.map(o => [o.name, o.objectType])),
     relationDescription, coEvents, narrativesByHub, currentAssessmentByHub, nodeIdByLabel, nodeIdByNormLabel,
   }
@@ -692,4 +695,9 @@ export function recentActivity(
   refreshedAssessments.sort(byDateDesc)
 
   return { newPeople, newEvents, newCases, newObjects, newNarratives, refreshedAssessments }
+}
+
+/** 案件詳情上的「任務系統」標記文字（唯讀顯示；標記由 kb-pipeline 依 Vikunja 專案封存狀態寫入）。沒有標記回 null。 */
+export function caseTaskStateLabel(state: CaseTaskState | null | undefined): string | null {
+  return state === '進行中' || state === '已結案' ? `任務系統：${state}` : null
 }
