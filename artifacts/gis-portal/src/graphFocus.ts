@@ -21,3 +21,30 @@ export function consumeGraphFocus(): GraphFocus | null {
   } catch { /* ignore */ }
   return null
 }
+
+// 關係宇宙 → 時間軸 的返回：時間軸跳走前把「列表級別＋開著的對話框堆疊」存起來，
+// 關係宇宙讀到後顯示「← 返回時間軸」；按下去再寫回，時間軸掛上時還原。同樣只用 sessionStorage、全部 try/catch。
+export const TIMELINE_RETURN_KEY = 'kb.timeline.return'
+
+export interface TimelineReturn { level: string; stack: { level: string; periodKey: string }[] }
+
+export function saveTimelineReturn(r: TimelineReturn): void {
+  try { sessionStorage.setItem(TIMELINE_RETURN_KEY, JSON.stringify(r)) } catch { /* ignore */ }
+}
+
+/** 只讀不清（React StrictMode 會重跑 state 初始化）；清除另外呼叫 clearTimelineReturn。 */
+export function peekTimelineReturn(): TimelineReturn | null {
+  try {
+    const raw = sessionStorage.getItem(TIMELINE_RETURN_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as Partial<TimelineReturn>
+    const ok = (x: unknown): x is { level: string; periodKey: string } =>
+      !!x && typeof (x as { level?: unknown }).level === 'string' && typeof (x as { periodKey?: unknown }).periodKey === 'string'
+    if (v && typeof v.level === 'string' && Array.isArray(v.stack) && v.stack.every(ok)) return { level: v.level, stack: v.stack }
+  } catch { /* ignore */ }
+  return null
+}
+
+export function clearTimelineReturn(): void {
+  try { sessionStorage.removeItem(TIMELINE_RETURN_KEY) } catch { /* ignore */ }
+}

@@ -529,6 +529,10 @@ button.bd-hrow:hover, button.bd-hrow:focus-visible { background: rgba(255,255,25
 .fm-thumb:hover img, .fm-thumb:focus-visible img { transform: scale(1.06); }
 .fm-lightbox { position: fixed; inset: 0; z-index: 400; background: rgba(8, 9, 12, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; }
 .fm-lightbox img { max-width: 100%; max-height: calc(100vh - 90px); object-fit: contain; border-radius: 8px; }
+.fm-lightbox-stage { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; min-height: 0; }
+.fm-lightbox-nav { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.6rem; line-height: 1; color: #e6e8ee; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.25); }
+.fm-lightbox-nav:hover { background: rgba(255, 255, 255, 0.18); }
+@media (max-width: 640px) { .fm-lightbox-nav { width: 36px; height: 36px; font-size: 1.3rem; } .fm-lightbox img { max-width: calc(100vw - 100px); } }
 .fm-lightbox-cap { font-size: 0.74rem; color: #c9ccd6; display: flex; align-items: center; flex-wrap: wrap; justify-content: center; }
 .fm-map .maplibregl-ctrl-attrib { font-size: 0.6rem; }
 .fm-pulse { animation: fm-pulse 1.6s ease-out infinite; transform-origin: center; }

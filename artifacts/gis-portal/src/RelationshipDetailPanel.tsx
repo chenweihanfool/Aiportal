@@ -19,7 +19,7 @@ import type { HermesGraphData } from './hermesGraphApi'
 import { apiFetchHermesDoc, type HermesDoc } from './hermesDocApi'
 import { MarkdownView, InlineText } from './MarkdownView'
 import { defaultOpenMonths, groupByMonth, monthDigest, parseNarrative, rowDateLabel, sortNewestFirst } from './nodeTimeline'
-import { describeSource, stripSourceSection } from './docContent'
+import { attachmentKind, describeSource, stripSourceSection } from './docContent'
 import { AttachmentViewer } from './AttachmentViewer'
 import {
   buildIndex, resolveWikilink, personInsight, caseInsight, eventInsight, objectInsight, abstractionInsight, entityEvents,
@@ -215,6 +215,14 @@ export function RelationshipDetailPanel({
 
 // 內容分頁（內容層）：事件＝正文＋來源；概念／方法＝hub 本文（有才有）＋「出現脈絡」時間軸。
 // 內容由 HERMES 每 10 分鐘增量推送；查無＝尚未同步（不是錯誤），明說而不是顯示空白。
+function collectAttachmentPaths(bodyMd: string, sourcePaths: string[]): string[] {
+  const out: string[] = []
+  const add = (p: string) => { const t = p.trim(); if (attachmentKind(t) !== 'other' && !out.includes(t)) out.push(t) }
+  for (const m of bodyMd.matchAll(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) if (m[1].trim().startsWith('附件/')) add(m[1])
+  sourcePaths.forEach(add)
+  return out
+}
+
 type DocState = { status: 'loading' } | { status: 'missing' } | { status: 'error' } | { status: 'ok'; doc: HermesDoc }
 
 function ContentTab({ password, kind, name, go, resolve }: { password: string | null; kind: NodeKind; name: string; go: (id: string) => void; resolve: (target: string) => string | null }) {
@@ -242,6 +250,8 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
   const bodySize = 'calc(var(--ds, 1) * 0.74rem)'
 
   if (doc.kind === 'event') {
+  // 可前後瀏覽的附件：正文內嵌與來源列的圖片／PDF／文字，依出現順序去重（不預覽的類型略過）
+  const siblings = collectAttachmentPaths(doc.bodyMd, doc.sources.filter(s => s.type === 'attachment').map(s => s.path))
     return (
       <>
         <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
@@ -273,7 +283,7 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
             })}
           </Section>
         )}
-        {viewing && password && <AttachmentViewer password={password} path={viewing} onClose={() => setViewing(null)} />}
+        {viewing && password && <AttachmentViewer password={password} path={viewing} onClose={() => setViewing(null)} siblings={siblings} onNavigate={setViewing} />}
       </>
     )
   }

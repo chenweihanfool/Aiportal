@@ -39,7 +39,7 @@ import {
 import { RelationshipDetailPanel, type Selection } from './RelationshipDetailPanel'
 import { GraphShell } from './GraphShell'
 import { coreHeatColor, makeHeatScale, outerHeatColor, CORE_RAMP } from './graphHeat'
-import { consumeGraphFocus } from './graphFocus'
+import { clearTimelineReturn, consumeGraphFocus, peekTimelineReturn, saveTimelineReturn } from './graphFocus'
 import { EDGE_LEVELS, NEAR_SCALE_CAP, edgeLevel, hubDamp, idleEdgeAlpha, nearFade } from './universeStyle'
 import { GOLDEN_ANGLE, fibDir, galaxyLayout, hash01, orthoBasis, positionAt, type GalaxyLayout, type Vec3 } from './galaxyLayout'
 
@@ -348,6 +348,13 @@ function applyMotionTargets(nodes: UNode[], layout: GalaxyLayout, t: number) {
 }
 
 export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPassword: string | null; onBack: () => void }) {
+  // 從時間軸的事件跳過來時，頁首多一顆「← 返回時間軸」（還原級別與日報對話框；見 graphFocus.ts）
+  const [timelineReturn] = useState(peekTimelineReturn)
+  useEffect(() => { clearTimelineReturn() }, [])
+  const backToTimeline = timelineReturn
+    ? <button type="button" data-testid="back-to-timeline" onClick={() => { saveTimelineReturn(timelineReturn); window.location.hash = '#graph/timeline' }}
+        style={{ cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.78rem', padding: '0.25rem 0.8rem', borderRadius: 999, color: COLOR.amber, background: COLOR.panelRaised, border: `1px solid ${COLOR.amber}` }}>← 返回時間軸</button>
+    : undefined
   const [data, setData] = useState<HermesGraphData | null>(null)
   const [error, setError] = useState(false)
   const [coreKind, setCoreKind] = useState<CoreKind>('person')
@@ -1080,7 +1087,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   const isolatedCount = g ? g.events.length - g.events.filter(e => eventTouchedIds.has(e.id)).length : 0
 
   return (
-    <GraphShell tab="universe" onBack={onBack}>
+    <GraphShell tab="universe" onBack={onBack} extra={backToTimeline}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center', padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
           {coreChoices.map(k => (

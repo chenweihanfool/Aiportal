@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { COLOR, FONT } from './theme'
 import { apiFetchAttachment } from './attachmentApi'
 import { attachmentKind } from './docContent'
@@ -8,13 +8,19 @@ import { pathBase } from './markdownLite'
 // 純唯讀；其他類型（docx、xlsx…）不預覽，只說明原因。
 const TEXT_LIMIT = 200_000
 
+const NAV_BTN = { background: 'none', border: `1px solid ${COLOR.line}`, color: COLOR.steel, borderRadius: 4, padding: '2px 10px', cursor: 'pointer', whiteSpace: 'nowrap' } as const
+
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'image' | 'pdf'; url: string }
   | { status: 'text'; text: string; truncated: boolean }
 
-export function AttachmentViewer({ password, path, onClose }: { password: string; path: string; onClose: () => void }) {
+export function AttachmentViewer({ password, path, onClose, siblings, onNavigate }: {
+  password: string; path: string; onClose: () => void
+  /** 同一份內容裡可前後瀏覽的附件路徑（含目前這個）；少於 2 個就不顯示上一張／下一張。 */
+  siblings?: string[]; onNavigate?: (path: string) => void
+}) {
   const [state, setState] = useState<State>({ status: 'loading' })
   const kind = attachmentKind(path)
 
@@ -37,8 +43,18 @@ export function AttachmentViewer({ password, path, onClose }: { password: string
     return () => { ctl.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [password, path, kind])
 
+  const idx = siblings ? siblings.indexOf(path) : -1
+  const canNav = !!onNavigate && !!siblings && siblings.length > 1 && idx >= 0
+  const go = (d: number) => { if (canNav) onNavigate!(siblings![(idx + d + siblings!.length) % siblings!.length]) }
+  const goRef = useRef(go)
+  goRef.current = go
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowLeft') goRef.current(-1)
+      else if (e.key === 'ArrowRight') goRef.current(1)
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
@@ -55,6 +71,13 @@ export function AttachmentViewer({ password, path, onClose }: { password: string
           <span title={path} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLOR.ink, fontSize: '0.82rem' }}>📎 {name}</span>
           {state.status === 'pdf' && (
             <a href={state.url} target="_blank" rel="noopener noreferrer" style={{ color: COLOR.amber, fontSize: '0.74rem', fontFamily: FONT.mono }}>另開分頁</a>
+          )}
+          {canNav && (
+            <>
+              <button type="button" data-testid="attach-prev" onClick={() => go(-1)} aria-label="上一個附件" style={NAV_BTN}>‹ 上一張</button>
+              <span style={{ color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{idx + 1}/{siblings!.length}</span>
+              <button type="button" data-testid="attach-next" onClick={() => go(1)} aria-label="下一個附件" style={NAV_BTN}>下一張 ›</button>
+            </>
           )}
           <button onClick={onClose} aria-label="關閉" style={{ background: 'none', border: `1px solid ${COLOR.line}`, color: COLOR.steel, borderRadius: 4, padding: '2px 10px', cursor: 'pointer' }}>關閉</button>
         </div>
