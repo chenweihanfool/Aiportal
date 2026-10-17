@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { COLOR, FONT } from './theme'
 import { GraphShell } from './GraphShell'
 import { MarkdownView } from './MarkdownView'
-import { requestGraphFocus } from './graphFocus'
+import { clearTimelineReturn, peekTimelineReturn, requestGraphFocus, saveTimelineReturn } from './graphFocus'
 import { countWithTime, eventDisplayTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
 import {
   apiFetchTimelineDetail, apiFetchTimelineList,
@@ -18,6 +18,10 @@ const SCORE_TONE: Record<'great' | 'ok' | 'warn' | 'concern' | 'crit', string> =
 }
 const BADGE_STYLE = { fontFamily: FONT.mono, fontSize: '0.82rem', borderRadius: 4, padding: '0 0.35rem', whiteSpace: 'nowrap' } as const
 const MOBILE_BADGE = { fontSize: '0.7rem', padding: '0 0.2rem' } as const   // 手機寬度不夠，徽章縮小以保留摘要的可讀寬度
+
+function isLevel(v: unknown): v is TimelineLevel {
+  return v === 'day' || v === 'week' || v === 'month' || v === 'quarter' || v === 'year'
+}
 
 function readLevel(): TimelineLevel {
   try {
@@ -41,14 +45,17 @@ function useIsMobile(): boolean {
 interface Ref { level: TimelineLevel; periodKey: string }
 
 export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: string | null; onBack: () => void }) {
-  const [level, setLevel] = useState<TimelineLevel>(readLevel)
+  // 從關係宇宙按「返回時間軸」回來：還原當時的級別與開著的日報對話框（見 graphFocus.ts）
+  const [restore] = useState(peekTimelineReturn)
+  useEffect(() => { clearTimelineReturn() }, [])
+  const [level, setLevel] = useState<TimelineLevel>(() => (restore && isLevel(restore.level) ? restore.level : readLevel()))
   const [items, setItems] = useState<TimelineItem[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [loadedLevel, setLoadedLevel] = useState<TimelineLevel | null>(null)
   // 對話框：stack 最上層是目前顯示的期間；下鑽時 push，「返回」時 pop
-  const [stack, setStack] = useState<Ref[]>([])
+  const [stack, setStack] = useState<Ref[]>(() => (restore ? restore.stack.filter((r): r is Ref => isLevel(r.level)) : []))
   const [detail, setDetail] = useState<TimelineDetail | null>(null)
   const [detailError, setDetailError] = useState(false)
   const genRef = useRef(0)
@@ -132,9 +139,10 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
 
   const jumpToEvent = useCallback((id: string) => {
     requestGraphFocus({ kind: 'event', id: `e:${id}` })
+    saveTimelineReturn({ level, stack })
     setStack([])
     window.location.hash = '#graph'
-  }, [])
+  }, [level, stack])
 
   const groups = groupItems(level, items)
 

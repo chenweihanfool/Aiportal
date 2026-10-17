@@ -5,7 +5,7 @@ import { COLOR, FONT } from './theme'
 
 // ─────────────────────────────────────────────
 // 相片牆＋燈箱（美食地圖與遊記共用）。原本在 FoodMapView.tsx 裡叫 Gallery，抽出來後行為不變。
-// 點縮圖開燈箱；←／→ 換張、Esc 關閉（攔在捕捉階段，不會一起關掉外面的面板）。
+// 點縮圖開燈箱；左右按鈕或 ←／→ 換張、Esc 關閉（攔在捕捉階段，不會一起關掉外面的面板）。
 // resetKey 換了（例如換一家店、換一個條目）就把燈箱收起來。
 // ─────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ export function PhotoGallery({ photos, label, resetKey }: { photos: FoodPhoto[];
   }, [open, photos.length])
   if (photos.length === 0) return null
   const cur = open !== null ? photos[open] : null
+  const step = (d: number) => setOpen(i => (i === null ? i : (i + d + photos.length) % photos.length))
   return (
     <>
       <div className="fm-gallery" aria-label={`${label} 的相片`}>
@@ -35,7 +36,11 @@ export function PhotoGallery({ photos, label, resetKey }: { photos: FoodPhoto[];
       </div>
       {cur && (
         <div className="fm-lightbox" role="dialog" aria-modal="true" aria-label="相片檢視" onClick={() => setOpen(null)}>
-          <AuthImage key={cur.url} src={cur.url} alt={cur.caption ?? label} onClick={e => e.stopPropagation()} />
+          <div className="fm-lightbox-stage">
+            {photos.length > 1 && <button type="button" className="fm-lightbox-nav" data-testid="photo-prev" aria-label="上一張" onClick={e => { e.stopPropagation(); step(-1) }}>‹</button>}
+            <AuthImage key={cur.url} src={cur.url} alt={cur.caption ?? label} onClick={e => e.stopPropagation()} />
+            {photos.length > 1 && <button type="button" className="fm-lightbox-nav" data-testid="photo-next" aria-label="下一張" onClick={e => { e.stopPropagation(); step(1) }}>›</button>}
+          </div>
           <div className="fm-lightbox-cap" onClick={e => e.stopPropagation()}>
             {cur.caption ?? label}{cur.takenAt ? ` · ${cur.takenAt}` : ''} · {open! + 1}/{photos.length}
             <button type="button" onClick={() => setOpen(null)} style={{ marginLeft: 12, fontFamily: FONT.mono, fontSize: '0.68rem', padding: '4px 10px', borderRadius: 999, cursor: 'pointer', color: COLOR.steel, background: 'transparent', border: `1px solid ${COLOR.steel}`, whiteSpace: 'nowrap' }}>關閉</button>

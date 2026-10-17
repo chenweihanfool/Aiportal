@@ -5,7 +5,7 @@ export type GraphTab = 'universe' | 'timeline'
 
 // 全頁殼：頂端「← 返回儀表板」＋兩個分頁（關係宇宙／時間軸）。原本內嵌在 RelationshipUniverse.tsx，
 // 抽出來讓兩個分頁共用同一個頁首；分頁用 hash route 切換（#graph／#graph/timeline），跟既有路由同一套做法。
-export function GraphShell({ tab, onBack, children }: { tab: GraphTab; onBack: () => void; children: ReactNode }) {
+export function GraphShell({ tab, onBack, extra, children }: { tab: GraphTab; onBack: () => void; extra?: ReactNode; children: ReactNode }) {
   const tabStyle = (active: boolean) => ({
     cursor: 'pointer', background: 'none', border: 'none', padding: '0.25rem 0.1rem', fontFamily: FONT.body,
     fontSize: '0.82rem', fontWeight: 600, color: active ? COLOR.amber : COLOR.steelDim,
@@ -21,6 +21,7 @@ export function GraphShell({ tab, onBack, children }: { tab: GraphTab; onBack: (
           <button type="button" aria-current={tab === 'timeline' ? 'page' : undefined} style={tabStyle(tab === 'timeline')}
             onClick={() => { window.location.hash = '#graph/timeline' }}>時間軸</button>
         </nav>
+        {extra}
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
     </div>
