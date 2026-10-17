@@ -25,7 +25,7 @@ import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
 import { deriveAbstractions } from "../lib/hermesAbstractions";
 import { resolveEventDate } from "../lib/eventDate";
-import { sanitizeCaseTaskState } from "../lib/caseTaskState";
+import { isActiveCase, sanitizeCaseTaskState } from "../lib/caseTaskState";
 import { diskAlertLevel, forecastDisk, parseStorage } from "../lib/diskForecast";
 
 const router = Router();
@@ -453,7 +453,10 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
     : null;
   const cases = Array.from(casesByName.values()).sort((a, b) => b.eventCount - a.eventCount);
   const objects = Array.from(objectsByName.values()).sort((a, b) => b.eventCount - a.eventCount);
-  const activeCasesCount = cases.filter((c) => (caseMetaByName.get(c.name)?.status ?? "active") === "active").length;
+  const activeCasesCount = cases.filter((c) => {
+    const meta = caseMetaByName.get(c.name);
+    return isActiveCase(meta?.status, meta?.taskState);
+  }).length;
   // 概念／方法：同樣從 events 反推（舊事件沒有欄位就是空），見 lib/hermesAbstractions.ts
   const abstractions = deriveAbstractions(events);
 
