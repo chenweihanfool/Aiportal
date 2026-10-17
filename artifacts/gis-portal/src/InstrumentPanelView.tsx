@@ -5,7 +5,7 @@ import { HomeBoard } from './HomeBoard'
 import { COLOR, FONT } from './theme'
 import { DimensionGauge, MindIndexCard, SUMMARY_BODIES, SocialIndexCard } from './DimensionCards'
 import { HappinessHeroCard } from './HappinessHero'
-import { FoodMapEntry, FoodMapPill, ToolLinksZone } from './ToolLinks'
+import { FoodMapPill, ToolLinksZone } from './ToolLinks'
 import { VersionHistory } from './VersionHistory'
 import { HermesWarRoomSection } from './WarRoom'
 import { hhiTone } from './format'
@@ -116,7 +116,6 @@ export function InstrumentPanelView({
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
         <div className="ip-layout">
           <aside className="ip-aside">
-        <FoodMapEntry />
         <ToolLinksZone privateSites={privateSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
 
           </aside>

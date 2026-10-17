@@ -1,7 +1,7 @@
 // 新首頁（HomeBoard，2.36.0 起的預設首頁）真實瀏覽器驗證（手動執行；不在 CI 內，同 board.e2e.mjs／timeline.e2e.mjs 的做法）。
 //
 // 做什麼：本機靜態伺服器提供 dist/public，Playwright 攔截所有 /api/*，以「假 API」模擬 sites／dashboard／happiness history／
-// 知識庫／想法庫／地點／遊記／管線／主機狀態／Ollama 用量，驗證「預設首頁」（含左側欄的工具連結與美食入口卡）：
+// 知識庫／想法庫／地點／遊記／管線／主機狀態／Ollama 用量，驗證「預設首頁」（含左側欄的工具連結、付費服務卡）：
 // 桌面四種尺寸（1366×768、1440×900、1536×864、1920×1080）一個畫面放得下、不裁切；手機 390／360 順序與不橫向捲動；
 // 未解鎖（工具連結照常、私領域區塊寫「🔒 解鎖後顯示」、不發私領域請求）、載入中、空、失敗、過期、太久沒更新、異常（⑤ 上移）；
 // 六面向新名稱與識別色、里程碑（分組門檻、最多 6 顆、「下一個」進度）、每面向 30 天迷你線（有資料／沒有資料維持數值條）；
@@ -167,6 +167,7 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
       if (S.fail.has(key)) return json({ message: 'boom' }, 500)
       return json(k === 'history30' ? (S.history30 ?? S.history) : S[key])
     }
+    if (p === '/api/paid-services') return json({ deepseek: { status: 'ok', data: { available: true, balances: [{ currency: 'CNY', total: 88.5, granted: 0, toppedUp: 88.5 }] } }, tavily: { status: 'no-key' }, fetchedAt: iso() })
     if (p === '/api/hermes-activity') return json({ activity: [] })
     if (p === '/api/hermes-status/history') return json({ history: [] })
     return json({}, 404)
@@ -210,7 +211,7 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   const ic = await innerClipped(page)
   check(`${T}：小卡／文字沒被裁切`, ic.length === 0, JSON.stringify(ic))
   check(`${T}：左側欄在（寬 ${g.aside.right - g.aside.left}px，主區在它右邊）`, g.aside.right - g.aside.left >= 230 && g.aside.right - g.aside.left <= 330 && g.today.left >= g.aside.right, JSON.stringify(g.aside))
-  check(`${T}：側欄有「美食及旅遊地圖」入口卡（連 #food）`, (await page.locator('.ip-aside [data-testid="food-entry"]').count()) === 1 && /美食及旅遊地圖/.test(await page.locator('.ip-aside [data-testid="food-entry"]').innerText()))
+  check(`${T}：側欄左上角沒有「美食及旅遊地圖」入口卡（2.45.0 拿掉）`, (await page.locator('[data-testid="food-entry"]').count()) === 0 && !/美食及旅遊地圖/.test(await page.locator('.ip-aside').innerText()))
   const tt = await toolsText(page)
   check(`${T}：側欄工具連結列出全部私領域＋公領域（${ALL_TOOL_NAMES.length} 個）`, /私領域/.test(tt) && /公領域/.test(tt) && ALL_TOOL_NAMES.every((n) => tt.includes(n)), tt.replace(/\n/g, '|').slice(0, 200))
   check(`${T}：⑤ 平常在最下面（細列）`, g.sys.top >= g.growth.bottom - 1 && g.sys.top >= g.fun.bottom - 1, JSON.stringify(g.sys))
@@ -249,8 +250,8 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
   if ((w === 1440 && h === 900) || (w === 1920 && h === 1080) || (w === 1366 && h === 768) || (w === 1536 && h === 864)) await page.screenshot({ path: path.join(SHOTS, `home-${w}x${h}.png`) })
   if (w === 1440) {
-    const dEntries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, card: !!document.querySelector('[data-testid="food-entry"]')?.getClientRects().length, text: document.body.innerText }))
-    check(`${T}：美食及旅遊地圖入口只有一個（側欄大卡可見、頁首膠囊隱藏）`, dEntries.card && !dEntries.pill, JSON.stringify({ pill: dEntries.pill, card: dEntries.card }))
+    const dEntries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, text: document.body.innerText }))
+    check(`${T}：電腦版頁首與側欄都沒有美食地圖入口（膠囊只在手機）`, !dEntries.pill, JSON.stringify({ pill: dEntries.pill }))
     check(`${T}：整頁沒有 ①～⑤ 或「04」這類意義不明的數字符號`, !/[①②③④⑤]/.test(dEntries.text) && !/(^|\n)04(\s|\n)/.test(dEntries.text), (dEntries.text.match(/[①②③④⑤]|(^|\n)04(\s|\n)/g) ?? []).join(','))
     // 互動：點小卡開幸福指數抽屜、ESC 關；⑤ 開戰情室抽屜；想法開想法庫抽屜
     await page.locator('.hm-score').first().click()
@@ -268,12 +269,18 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
     const kb = await page.locator('[data-testid="kb-health"]').innerText()
     check(`${T}：戰情室有「知識庫體檢」：本週新事件 23、佇列積壓、L3 最近落地、健康分 72（四項）`, /本週新事件/.test(kb) && /23/.test(kb) && /佇列積壓/.test(kb) && /L3 最近落地/.test(kb) && /知識庫健康分/.test(kb) && /72/.test(kb) && /轉化 90・連結 80・活化 55・節奏 66/.test(kb), kb.replace(/\n/g, '|').slice(0, 200))
     await page.keyboard.press('Escape')
+    check(`${T}：有「付費服務」卡，五個服務都在（Ollama、Claude Pro、JEV、Tavily、DeepSeek）`, (await page.locator('.hm-svc [data-testid^="svc-chip-"]').count()) === 5)
+    await page.locator('.hm-svc-bar').click()
+    await page.waitForSelector('.bd-drawer .hm-svc-list')
+    const svcTxt = await page.locator('.bd-drawer').innerText()
+    check(`${T}：付費服務抽屜：DeepSeek 餘額自動讀到、Tavily 提示未設金鑰、Claude Pro／JEV 只有連結、Ollama 有「更新餘額」`, /¥88\.50/.test(svcTxt) && /未設定 TAVILY_API_KEY/.test(svcTxt) && (await page.locator('[data-testid="svc-row-claude"] a[href^="https://"]').count()) === 1 && (await page.locator('[data-testid="svc-row-jev"] a[href^="https://"]').count()) === 1 && /更新餘額|輸入目前餘額/.test(svcTxt), svcTxt.replace(/\n/g, '|').slice(0, 240))
+    await page.keyboard.press('Escape')
     await page.locator('.hm-idea').first().click()
     await page.waitForSelector('.bd-drawer')
     check(`${T}：點想法 → 開想法庫抽屜`, /想法庫/.test(await page.locator('.bd-drawer').getAttribute('aria-label')))
     await page.keyboard.press('Escape')
     // 鍵盤：Tab 能走到小卡與 ⑤
-    await page.locator('.ip-aside a[data-testid="food-entry"]').focus()
+    await page.locator('.ip-aside .ip-tools input').focus()
     const seen = new Set()
     for (let i = 0; i < 60; i++) { await page.keyboard.press('Tab'); const c = await page.evaluate(() => document.activeElement?.className?.toString().split(' ')[0] ?? ''); seen.add(c) }
     check(`${T}：鍵盤 Tab 走得到分數、面向小卡、想法、⑤`, ['hm-score', 'hm-dim', 'hm-idea', 'hm-sys-bar'].every((k) => seen.has(k)), [...seen].join(','))
@@ -323,7 +330,7 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   check(`${T}：不需垂直捲動`, g.scrollH <= g.clientH + 2 && g.root.bottom <= h, `${g.scrollH}/${g.clientH}`)
   const cl = await clippedCards(page); const ic = await innerClipped(page)
   check(`${T}：異常時卡片與小卡沒被裁切`, cl.length === 0 && ic.length === 0, JSON.stringify([...cl, ...ic]))
-  check(`${T}：異常時側欄工具連結仍在`, (await page.locator('.ip-aside .ip-tools').count()) === 1 && (await page.locator('.ip-aside [data-testid="food-entry"]').count()) === 1)
+  check(`${T}：異常時側欄工具連結仍在`, (await page.locator('.ip-aside .ip-tools').count()) === 1)
   check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
   if (w === 1440 || w === 1920) await page.screenshot({ path: path.join(SHOTS, `home-alert-${w}x${h}.png`) })
   await ctx.close()
@@ -410,9 +417,9 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
     // 手機的工具連結（頁面最下面）與頁首入口
     if (scn === 'normal') {
       check(`${T}：頁首有「🍜🧭 美食及旅遊地圖」入口、工具連結在頁面下方`, (await page.locator('[data-testid="food-entry-pill"]').isVisible()) && (await page.locator('.ip-tools').count()) === 1)
-      // 整頁合理性：美食入口只出現一個（手機＝頁首膠囊；側欄的大卡在窄螢幕隱藏）、沒有意義不明的數字符號
-      const entries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, card: !!document.querySelector('[data-testid="food-entry"]')?.getClientRects().length, text: document.body.innerText }))
-      check(`${T}：美食及旅遊地圖入口只有一個（膠囊可見、側欄大卡隱藏）`, entries.pill && !entries.card, JSON.stringify({ pill: entries.pill, card: entries.card }))
+      // 整頁合理性：美食入口只出現一個（手機＝頁首膠囊；側欄已沒有大卡）、沒有意義不明的數字符號
+      const entries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, text: document.body.innerText }))
+      check(`${T}：美食及旅遊地圖入口只有一個（頁首膠囊）`, entries.pill, JSON.stringify({ pill: entries.pill }))
       check(`${T}：整頁沒有 ①～⑤ 或「04」這類意義不明的數字符號`, !/[①②③④⑤]/.test(entries.text) && !/(^|\n)04(\s|\n)/.test(entries.text), (entries.text.match(/[①②③④⑤]|(^|\n)04(\s|\n)/g) ?? []).join(','))
       // 首屏利用率：頁首壓成一小條，②面向小卡的上緣在第一屏內（原本頁首獨佔近半個螢幕、② 要捲很久才看到）
       const top = await page.evaluate(() => { const r = (sel) => { const e = document.querySelector(sel); return e ? e.getBoundingClientRect() : null }; const hd = r('.ip-head'), td = r('.hm-today'), dm = r('.hm-dimsec'), sc = r('.hm-score-n'), mt = r('.hm-score-meta'); return { headH: Math.round(hd.height), todayH: Math.round(td.height), dimsTop: Math.round(dm.top), scoreTop: Math.round(sc.top), metaTop: Math.round(mt.top), scoreRight: Math.round(sc.right), metaLeft: Math.round(mt.left) } })
@@ -472,7 +479,7 @@ for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
   check('未解鎖：版面不捲動、不被裁切', g.scrollH <= g.clientH + 2 && (await clippedCards(page)).length === 0)
   check('未解鎖：沒有里程碑假資料、沒有迷你線', (await page.locator('.hm-mile, .hm-next, .hm-dim-spark').count()) === 0)
   const tt = await toolsText(page)
-  check('未解鎖：側欄工具連結照常、美食入口卡在；私領域連結仍列出（點了才要求解鎖）', ALL_TOOL_NAMES.every((n) => tt.includes(n)) && (await page.locator('.ip-aside [data-testid="food-entry"]').count()) === 1, tt.replace(/\n/g, '|').slice(0, 160))
+  check('未解鎖：側欄工具連結照常；私領域連結仍列出（點了才要求解鎖）', ALL_TOOL_NAMES.every((n) => tt.includes(n)), tt.replace(/\n/g, '|').slice(0, 160))
   await page.screenshot({ path: path.join(SHOTS, 'home-state-locked-1440x900.png') })
   await page.locator('.hm-today .hm-lock').click()
   check('未解鎖：點「🔒 解鎖後顯示」會開解鎖視窗', (await page.locator('input[type=password]').count()) >= 1)
@@ -569,7 +576,7 @@ for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
   await page.waitForSelector('.bd-card', { timeout: 15000 })
   await page.waitForTimeout(1200)
   check('#legacy：舊版首頁（六張 .bd-card）、沒有新首頁元素', (await page.locator('.bd-card').count()) === 6 && (await page.locator('.hm-root').count()) === 0)
-  check('#legacy：側欄工具連結與美食入口卡仍在', (await page.locator('.ip-aside .ip-tools').count()) === 1 && (await page.locator('.ip-aside [data-testid="food-entry"]').count()) === 1)
+  check('#legacy：側欄工具連結仍在、沒有美食入口卡', (await page.locator('.ip-aside .ip-tools').count()) === 1 && (await page.locator('[data-testid="food-entry"]').count()) === 0)
   const back = page.locator('.hm-legacy-back')
   check('#legacy：頁首有「舊版首頁」標示與「← 回到新首頁」連結', (await back.count()) === 1 && /舊版首頁/.test(await back.innerText()) && /回到新首頁/.test(await back.innerText()))
   const hdr = await page.evaluate(() => { const b = document.querySelector('.ip-scroll').getBoundingClientRect(); return b.top })

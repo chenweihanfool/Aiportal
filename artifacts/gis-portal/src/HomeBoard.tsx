@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { apiFetchHermesGraph } from './hermesGraphApi'
-import { apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchIdeas, apiFetchUsage } from './boardApi'
+import { apiFetchPaidServices, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchIdeas, apiFetchUsage } from './boardApi'
 import { apiFetchFood } from './foodApi'
 import { apiFetchTrips } from './tripsApi'
 import { biggestDrag, buildHhiBreakdown } from './boardView'
@@ -10,6 +10,7 @@ import { dimHash } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
 import { DIMENSIONS } from './dimensions'
 import { useAsync, useNow } from './homeHooks'
+import { PaidServicesPanel, PaidServicesSection } from './PaidServices'
 import { DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
@@ -20,7 +21,7 @@ import {
 // 獨立元件，props 與 DesktopBoard 類似；2.36.0 起是預設首頁的主區（App.tsx 的 InstrumentPanelView，左側欄的工具連結保留），舊版 DesktopBoard 在 #legacy。
 // 資料全部來自既有 API 與既有型別／函式，沒有任何示範值：拿不到就依 StateFrame 的狀態機顯示（未解鎖／載入中／空／過期／失敗）。
 
-type DrawerKey = 'hhi' | 'ops' | 'ideas'
+type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc'
 
 const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
 // 面向小卡的 30 天迷你線：另外要 days=30（後端的 components 欄位只保證在這個呼叫裡；接口還沒部署時沒有該欄位，就不畫線）
@@ -58,6 +59,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const status = useAsync(pw, apiFetchBoardStatus)
   const pushers = status.data?.pushers
   const usage = useAsync(pw, apiFetchUsage)
+  const paid = useAsync(pw, apiFetchPaidServices)
 
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
   const histData = history.data ?? []
@@ -144,6 +146,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   }), [nowMs, pipeline.data, pipeline.error, status.data, status.error, usage.data, usage.error, hhiSt.state, histBase.state, kbSt.state])
   const sysLoading = pipeline.loading && status.loading && usage.loading
   const sysSt = blockState({ unlocked: on, loading: sysLoading, error: false, hasData: !sysLoading, nowMs })
+  // ⑥ 付費服務：Ollama 用量與額度端點任一回來就顯示；兩邊都還沒回來才是載入中（付費端點失敗不影響首頁，該列自己顯示原因）
+  const svcSt = blockState({ unlocked: on, loading: usage.loading && paid.loading, error: false, hasData: !(usage.loading && paid.loading), nowMs })
   const alert = on && (light.level === 'warn' || light.level === 'crit')
 
   const g = greeting(now)
@@ -155,6 +159,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence}
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
+      <PaidServicesSection st={svcSt} usage={usage.data} paid={paid.data} onOpen={() => setDrawer('svc')} onRequestUnlock={onRequestUnlock} />
       <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
@@ -164,6 +169,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         onRetryIdeas={ideas.reload} onRetryFood={food.reload} onRetryTrips={trips.reload} />
       {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={closeDrawer}>{hhiDetail}</Drawer>}
       {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} /></Drawer>}
+      {drawer === 'svc' && pw && <Drawer title="付費服務：用量與連結・Ollama 更新餘額" onClose={() => { closeDrawer(); usage.reload() }}><PaidServicesPanel pw={pw} usage={usage.data} paid={paid.data} /></Drawer>}
       {drawer === 'ops' && pw && <Drawer title="HERMES 戰情室：推送健康・關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={closeDrawer}><PusherHealthPanel pw={pw} />{opsDetail}</Drawer>}
     </div>
   )

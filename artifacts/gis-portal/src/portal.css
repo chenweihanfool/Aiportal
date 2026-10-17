@@ -104,13 +104,9 @@ body,
 /* flex 項目內的 margin 不會與外層折疊；歸零，保持手機版與改版前逐像素相同 */
 .ip-aside .ip-tools { margin-bottom: 0 !important; }
 
-/* 美食及旅遊地圖入口：手機放頁首膠囊；電腦版左側欄已有入口卡，頁首那顆隱藏（頁首高度不能變，電腦版要一個畫面放得下）。
-   同一個畫面不放兩個入口：窄螢幕把側欄那張大卡隱藏（它在手機上會出現在頁面下方，與頁首膠囊重複）。 */
+/* 美食及旅遊地圖入口：只有手機有頁首膠囊（電腦版從好玩的／⌘K 進；2.45.0 起左側欄的入口卡拿掉）。 */
 @media (min-width: 1100px) {
   .fm-entry-pill { display: none !important; }
-}
-@media (max-width: 1099px) {
-  .ip-aside [data-testid="food-entry"] { display: none !important; }
 }
 
 @media (min-width: 1100px) {
@@ -600,9 +596,9 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
 @keyframes hm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes hm-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes hm-lamp { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "fun" "growth" "sys"; }
-.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "fun" "growth"; }
-.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; }
+.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "fun" "growth" "sys" "svc"; }
+.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "fun" "growth" "svc"; }
+.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; } .hm-svc { grid-area: svc; }
 
 .hm-card {
   position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.4rem; overflow: hidden;
@@ -731,12 +727,22 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .hm-sys-name { flex: 0 0 auto; font-size: 0.78rem; }
 .hm-sys-text { flex: 1 1 auto; min-width: 0; font-size: 0.74rem; color: #9aa4b6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hm-sys.is-alert .hm-sys-text { font-weight: 600; }
+.hm-svc { padding: 0.3rem 0.75rem; animation-delay: 0.22s; }
+.hm-svc-frame { flex: 0 0 auto; }
+.hm-svc-bar { width: 100%; display: flex; align-items: center; gap: 0.6rem; font: inherit; color: inherit; background: none; border: 0; padding: 0.2rem 0; cursor: pointer; text-align: left; min-width: 0; }
+.hm-svc-chips { flex: 1 1 auto; min-width: 0; display: flex; gap: 0.2rem 0.7rem; overflow: hidden; flex-wrap: wrap; max-height: 1.2rem; }
+.hm-svc-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; color: #9aa4b6; white-space: nowrap; }
+.hm-svc-chip i, .hm-svc-row i { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; }
+.hm-svc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.hm-svc-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; background: #24262e; border-radius: 7px; font-size: 0.78rem; color: #ece9e2; min-width: 0; flex-wrap: wrap; }
+.hm-svc-line { flex: 1 1 14rem; min-width: 0; font-size: 0.72rem; color: #9aa4b6; }
 .hm-reasons { list-style: none; margin: 0; padding: 0 0 0.2rem 1.45rem; display: grid; gap: 1px; font-size: 0.7rem; }
 
 /* 電腦版：一個畫面放得下 */
 @media (min-width: 1300px) and (min-height: 640px) {
-  .hm-root { height: 100%; gap: 0.6rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 0.78fr) minmax(0, 1fr) auto; grid-template-areas: "today today" "dims dims" "growth fun" "sys sys"; }
-  .hm-root[data-sys="alert"] { grid-template-rows: auto auto minmax(0, 0.78fr) minmax(0, 1fr); grid-template-areas: "today today" "sys sys" "dims dims" "growth fun"; }
+  .hm-root { height: 100%; gap: 0.6rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 0.78fr) minmax(0, 1fr); grid-template-areas: "today today" "dims dims" "growth fun" "sys svc"; }
+  .hm-root[data-sys="alert"] { grid-template-rows: auto auto minmax(0, 0.78fr) minmax(0, 1fr); grid-template-areas: "today today" "sys svc" "dims dims" "growth fun"; }
+  .hm-root[data-sys="alert"] .hm-svc { align-self: start; }
 }
 /* 手機、窄／矮視窗、1100–1299px 的窄桌面：上下堆疊（.ip-board-wrap 的固定高度在這裡改回隨內容，頁面往下捲） */
 @media (max-width: 1299px), (max-height: 639px) {
