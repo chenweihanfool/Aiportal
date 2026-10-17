@@ -25,6 +25,7 @@ import { taipeiDateString } from "../lib/summarySources";
 import { notifyOnAlertTransition } from "../lib/notify";
 import { deriveAbstractions } from "../lib/hermesAbstractions";
 import { resolveEventDate } from "../lib/eventDate";
+import { sanitizeCaseTaskState } from "../lib/caseTaskState";
 import { diskAlertLevel, forecastDisk, parseStorage } from "../lib/diskForecast";
 
 const router = Router();
@@ -492,7 +493,12 @@ router.get("/hermes-graph", async (req: Request, res: Response) => {
         tags: ev.tags ?? [],
         case: ev.case ?? null,
       })),
-      cases: cases.map((c) => ({ name: c.name, eventCount: c.eventCount, status: caseMetaByName.get(c.name)?.status ?? null })),
+      cases: cases.map((c) => ({
+        name: c.name,
+        eventCount: c.eventCount,
+        status: caseMetaByName.get(c.name)?.status ?? null,
+        taskState: sanitizeCaseTaskState(caseMetaByName.get(c.name)?.taskState),
+      })),
       objects: objects.map((o) => ({ name: o.name, objectType: o.objectType, eventCount: o.eventCount })),
       edges,
       caseEdges,

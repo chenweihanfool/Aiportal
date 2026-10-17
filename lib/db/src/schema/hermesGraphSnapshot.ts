@@ -54,7 +54,9 @@ export const hermesGraphSnapshotTable = pgTable("hermes_graph_snapshot", {
   personRelations: jsonb("person_relations").$type<
     Array<{ from: string; to: string; description: string }>
   >(),
-  cases: jsonb("cases").$type<Array<{ name: string; status: string | null }>>(),
+  // taskState：kb-pipeline 的 case-task-state.py 依 Vikunja 專案封存狀態寫進案件頁的標記（進行中／已結案）；可選欄位，
+  // 舊版 pusher／沒有標記的案件沒有它。jsonb，不需 DB migration；讀取端只做顯示（見 lib/caseTaskState.ts）。
+  cases: jsonb("cases").$type<Array<{ name: string; status: string | null; taskState?: string | null }>>(),
   // 2026-09-19 — L5 轉型「圖譜編織層」：樞紐檔（People/Objects/Cases）新增
   // 「## 圖譜敘事」區塊（`L5-WEAVE：` 前綴，增補、永不收斂），「## 🧠 脈絡
   // 洞察」／Cases 的「## 🧠 案件脈絡與目前進度」則改成只放時效警報
