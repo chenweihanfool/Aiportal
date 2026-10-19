@@ -29,8 +29,10 @@ app.use(cors());
 // 2026-09-11: default 100kb body limit started rejecting collect.ps1's
 // full-payload /admin/hermes-graph POST once Events/ passed ~100 files
 // (413 Payload Too Large, graph frozen at 105 events). 2mb headroom.
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+// 2026-10-19: 整包推送（events + hubNarratives 等）逼近 nginx 1m 與這裡的 2mb，一起放寬到 8mb
+// （nginx.conf 的 client_max_body_size 同值）。
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
 // Every /api response here is computed live on every request (or explicitly
 // rejects with 403/400) — none of it should ever be cached by a browser or
