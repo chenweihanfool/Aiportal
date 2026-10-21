@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
 import { RelationshipUniverse } from './RelationshipUniverse'
+import { NebulaGraph } from './NebulaGraph'
 import { TimelineView } from './TimelineView'
 import { TripsView } from './TripsView'
 import { dimKeyFromHash } from './dimensionPage'
@@ -128,6 +129,9 @@ export default function App() {
   }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
+  }
+  if (hashRoute === '#nebula') {
+    return <NebulaGraph adminPassword={unlockedPassword ?? ''} onBack={() => { window.location.hash = '' }} />
   }
   if (hashRoute === '#graph/timeline') {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />

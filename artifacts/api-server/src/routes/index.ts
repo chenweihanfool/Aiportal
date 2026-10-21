@@ -18,6 +18,7 @@ import hermesDocRouter from "./hermesDoc";
 import hermesAttachmentRouter from "./hermesAttachment";
 import hermesMediaRouter from "./hermesMedia";
 import exportRouter from "./export";
+import graphNebulaRouter from "./graphNebula";
 
 const router: IRouter = Router();
 
@@ -41,5 +42,6 @@ router.use(hermesDocRouter);
 router.use(hermesAttachmentRouter);
 router.use(hermesMediaRouter);
 router.use(exportRouter);
+router.use(graphNebulaRouter);
 
 export default router;
