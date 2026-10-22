@@ -7,6 +7,8 @@ export interface RepoInfo {
   fullName: string;
   description: string | null;
   url: string;
+  /** 倉庫 About 欄位裡填的網站（例如部署出來的工具網址）；沒填是 null */
+  homepage: string | null;
   private: boolean;
   fork: boolean;
   archived: boolean;
@@ -23,6 +25,16 @@ export type ReposResult =
   | { status: "error"; message: string };
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
+/** 只收 http(s) 網址：這個值會變成前端的連結，不能讓 javascript: 之類的字串進來。 */
+const httpUrl = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  try {
+    const u = new URL(v.trim());
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+};
 const int = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
 export function parseRepo(raw: unknown): RepoInfo | null {
@@ -37,6 +49,7 @@ export function parseRepo(raw: unknown): RepoInfo | null {
     fullName,
     description: str(r["description"]),
     url,
+    homepage: httpUrl(r["homepage"]),
     private: r["private"] === true,
     fork: r["fork"] === true,
     archived: r["archived"] === true,

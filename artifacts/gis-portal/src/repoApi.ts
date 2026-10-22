@@ -6,6 +6,8 @@ export interface RepoItem {
   fullName: string
   description: string | null
   url: string
+  /** 倉庫 About 欄位的網站（部署出來的工具網址）；沒填是 null */
+  homepage: string | null
   private: boolean
   fork: boolean
   archived: boolean

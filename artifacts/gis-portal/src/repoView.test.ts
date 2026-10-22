@@ -3,7 +3,7 @@ import type { RepoItem } from './repoApi'
 import { DEFAULT_FILTER, NO_LANGUAGE, filterRepos, languageCounts, pushedLabel, repoStats, sortRepos } from './repoView'
 
 const repo = (name: string, over: Partial<RepoItem> = {}): RepoItem => ({
-  name, fullName: `chenweihanfool/${name}`, description: null, url: `https://github.com/chenweihanfool/${name}`, private: false, fork: false, archived: false,
+  name, fullName: `chenweihanfool/${name}`, description: null, url: `https://github.com/chenweihanfool/${name}`, homepage: null, private: false, fork: false, archived: false,
   language: null, topics: [], pushedAt: null, stars: 0, openIssues: 0, defaultBranch: 'main', ...over,
 })
 

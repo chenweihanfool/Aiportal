@@ -114,11 +114,13 @@ function DimSpark({ series }: { series: DimSeries }) {
   )
 }
 
-export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlock }: {
+export function DimensionsSection({ st, breakdown, series, links, onOpen, onRequestUnlock }: {
   st: BlockStatus
   breakdown: HhiBreakdown | null
   /** 每面向的 30 天序列；null（還沒載入／接口沒有 components／有效點不到 2 個）＝不畫線，只留數值條 */
   series: Record<string, DimSeries | null> | null
+  /** 每面向的子系統連結（dimensionSiteLinks）；沒有的面向不顯示 */
+  links: Record<string, { name: string; url: string }>
   /** 點某個面向小卡：進該面向自己的頁（#dim/<key>） */
   onOpen: (key: string) => void
   onRequestUnlock: () => void
@@ -136,8 +138,10 @@ export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlo
             const color = meta?.color ?? DIMENSION_FALLBACK_COLOR
             const isDrag = drag?.key === r.key
             const sp = series?.[r.key] ?? null
+            const link = links[r.key]
             return (
-              <button key={r.key} type="button" className={`hm-dim${isDrag ? ' is-drag' : ''}${sp ? ' has-spark' : ''}`} style={{ ['--dim' as string]: color }} onClick={() => onOpen(r.key)}
+              <div key={r.key} className="hm-dim-cell">
+              <button type="button" className={`hm-dim${isDrag ? ' is-drag' : ''}${sp ? ' has-spark' : ''}`} style={{ ['--dim' as string]: color }} onClick={() => onOpen(r.key)}
                 aria-label={`${meta?.label ?? r.label} ${r.value ?? '沒有資料'}，點開看這個面向的頁面`}>
                 <span className="hm-dim-name"><span aria-hidden>{meta?.icon ?? '◆'}</span>{meta?.label ?? r.label}{isDrag && <span className="hm-chip hm-chip--warn">短板</span>}</span>
                 <span className="hm-dim-num">{r.value ?? '—'}</span>
@@ -148,6 +152,8 @@ export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlo
                   <span className="hm-dim-line">{dimensionLine(r, isDrag)}</span>
                 </span>
               </button>
+              {link && <a className="hm-dim-open" href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`開啟 ${link.name}（新分頁）`}>開啟 {link.name} ↗</a>}
+              </div>
             )
           })}
         </div>

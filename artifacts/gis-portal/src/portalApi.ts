@@ -42,8 +42,9 @@ export interface DashboardSummary {
 // ─────────────────────────────────────────────
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
-export async function apiFetchSites(): Promise<SiteData[]> {
-  const r = await fetch(`${API_BASE}api/sites`)
+/** 面向對應的子系統連結（要解鎖；伺服器對未解鎖回空清單）。2026-10-22 起不再有手動維護的工具連結。 */
+export async function apiFetchSites(adminPassword: string): Promise<SiteData[]> {
+  const r = await fetch(`${API_BASE}api/sites`, { headers: { 'x-admin-password': adminPassword } })
   if (!r.ok) throw new Error('Failed to fetch sites')
   const data = await r.json() as { sites: SiteData[] }
   return data.sites
@@ -229,34 +230,6 @@ export async function apiVerifyPassword(password: string): Promise<string | null
   if (!r.ok) return null
   const data = await r.json() as { ok: boolean; token?: string }
   return data.ok && data.token ? data.token : null
-}
-
-export async function apiAddSite(data: Omit<SiteData, 'id'>, adminPassword: string): Promise<SiteData> {
-  const r = await fetch(`${API_BASE}api/admin/sites`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-    body: JSON.stringify(data),
-  })
-  if (!r.ok) throw new Error('Failed to add site')
-  return r.json() as Promise<SiteData>
-}
-
-export async function apiUpdateSite(id: string, data: Partial<Omit<SiteData, 'id'>>, adminPassword: string): Promise<SiteData> {
-  const r = await fetch(`${API_BASE}api/admin/sites/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-    body: JSON.stringify(data),
-  })
-  if (!r.ok) throw new Error('Failed to update site')
-  return r.json() as Promise<SiteData>
-}
-
-export async function apiDeleteSite(id: string, adminPassword: string): Promise<void> {
-  const r = await fetch(`${API_BASE}api/admin/sites/${id}`, {
-    method: 'DELETE',
-    headers: { 'x-admin-password': adminPassword },
-  })
-  if (!r.ok) throw new Error('Failed to delete site')
 }
 
 // 回傳 Blob 而不是先 parse 成 JSON 再重新 stringify——內容本來就是伺服器

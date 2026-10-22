@@ -1,4 +1,4 @@
-// 翰翰儀表板入口：解鎖狀態、網址路由（#graph／#food／#trips／#dim／#legacy）、管理後台與指令面板。
+// 翰翰儀表板入口：解鎖狀態、網址路由（#graph／#food／#trips／#dim／#legacy）與指令面板。
 import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
@@ -14,7 +14,7 @@ import { AdminAuthModal, AdminPanel, PasswordModal } from './Dialogs'
 import { DimensionDetail, dimensionLinks } from './DimensionDetail'
 import { InstrumentPanelView } from './InstrumentPanelView'
 import { hhiTone } from './format'
-import { UNLOCK_KEY, apiAddSite, apiDeleteSite, apiFetchDashboard, apiFetchSites, apiUpdateSite, type DashboardSummary, type SiteData } from './portalApi'
+import { UNLOCK_KEY, apiFetchDashboard, apiFetchSites, type DashboardSummary, type SiteData } from './portalApi'
 import './portal.css'
 
 /** #trips/<id> 的 id（網址編碼還原；格式壞掉就當作找不到） */
@@ -52,20 +52,13 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  const refreshSites = useCallback(async () => {
-    try {
-      const data = await apiFetchSites()
-      setSites(data)
-    } catch {
-      // silently keep whatever we have
-    }
-  }, [])
-
+  // 面向對應的子系統連結（人生進度、健身追蹤、任務追蹤）：要解鎖才給；未解鎖或抓失敗就是空清單
   useEffect(() => {
-    apiFetchSites()
+    if (!unlockedPassword) { setSites([]); return }
+    apiFetchSites(unlockedPassword)
       .then(data => { setSites(data) })
       .catch(() => { /* keep empty sites on error */ })
-  }, [])
+  }, [unlockedPassword])
 
   useEffect(() => {
     apiFetchDashboard(unlockedPassword)
@@ -105,21 +98,6 @@ export default function App() {
     setAdminAuth(false)
     setAdminOpen(true)
   }, [])
-
-  const handleAdd = useCallback(async (data: Omit<SiteData, 'id'>) => {
-    await apiAddSite(data, adminPassword)
-    await refreshSites()
-  }, [adminPassword, refreshSites])
-
-  const handleEdit = useCallback(async (id: string, data: Partial<Omit<SiteData, 'id'>>) => {
-    await apiUpdateSite(id, data, adminPassword)
-    await refreshSites()
-  }, [adminPassword, refreshSites])
-
-  const handleDelete = useCallback(async (id: string) => {
-    await apiDeleteSite(id, adminPassword)
-    await refreshSites()
-  }, [adminPassword, refreshSites])
 
   // 年度回顧（P2-1）：#year＝今年，#year/<年>＝指定的年；年份不合理就當首頁
   const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
@@ -198,16 +176,7 @@ export default function App() {
         <AdminAuthModal onSuccess={handleAdminAuthSuccess} onCancel={() => setAdminAuth(false)} />
       )}
 
-      {adminOpen && (
-        <AdminPanel
-          sites={sites}
-          adminPassword={adminPassword}
-          onAdd={handleAdd}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onClose={() => setAdminOpen(false)}
-        />
-      )}
+      {adminOpen && <AdminPanel adminPassword={adminPassword} onClose={() => setAdminOpen(false)} />}
     </div>
   )
 }

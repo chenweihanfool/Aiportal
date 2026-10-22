@@ -59,15 +59,18 @@ export function ReposSection({ st, data, now, onRequestUnlock, onRetry }: {
             <ul className="hm-repo-grid">
               {list.slice(0, shown).map((r) => (
                 <li key={r.fullName}>
-                  <a className="hm-repo" href={r.url} target="_blank" rel="noreferrer" title={r.description ?? r.name}>
-                    <span className="hm-repo-name">{r.private && <span aria-label="私有">🔒 </span>}{r.name}{r.archived && <span className="hm-chip"> 封存</span>}{r.fork && <span className="hm-chip"> fork</span>}</span>
-                    <span className="hm-repo-desc">{r.description ?? '（沒有描述）'}</span>
+                  <div className="hm-repo">
+                    <a className="hm-repo-main" href={r.url} target="_blank" rel="noreferrer" title={r.description ?? r.name}>
+                      <span className="hm-repo-name">{r.private && <span aria-label="私有">🔒 </span>}{r.name}{r.archived && <span className="hm-chip"> 封存</span>}{r.fork && <span className="hm-chip"> fork</span>}</span>
+                      <span className="hm-repo-desc">{r.description ?? '（沒有描述）'}</span>
+                    </a>
                     <span className="hm-repo-meta">
                       {r.language && <span>{r.language}</span>}
                       <span>推送 {pushedLabel(r.pushedAt, now)}</span>
                       {r.openIssues > 0 && <span>Issue {r.openIssues}</span>}
+                      {r.homepage && <a className="hm-repo-site" href={r.homepage} target="_blank" rel="noopener noreferrer" aria-label={`開啟 ${r.name} 的網站（新分頁）`}>🌐 網站 ↗</a>}
                     </span>
-                  </a>
+                  </div>
                 </li>
               ))}
             </ul>

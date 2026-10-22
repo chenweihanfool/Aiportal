@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildHhiBreakdown } from './boardView'
 import { DIMENSION_HERO_FIELD } from './DimensionCards'
-import { DIMENSIONS, dimensionBySubsystem, dimensionOf } from './dimensions'
+import { DIMENSIONS, dimensionBySubsystem, dimensionOf, dimensionSiteLinks } from './dimensions'
 
 describe('面向註冊表', () => {
   it('六個面向、key／名稱／識別色／分數欄位／權重欄位都不重複', () => {
@@ -66,5 +66,23 @@ describe('與後端不漂移', () => {
       expect(m, d.weightKey).not.toBeNull()
       expect(Number(m![1]), d.weightKey).toBe(d.defaultWeight)
     }
+  })
+})
+
+describe('dimensionSiteLinks', () => {
+  const site = (subsystemId: string | null, url: string, name = subsystemId ?? 'x') => ({ name, subsystemId, links: [{ url }] })
+  it('maps pf-cwh, fitnessforge and vikunja to their dimensions', () => {
+    const out = dimensionSiteLinks([site('pf-cwh', 'https://a.test/'), site('fitnessforge', 'https://b.test/'), site('vikunja', 'https://c.test/')])
+    expect(Object.keys(out).sort()).toEqual(['calm', 'fitness', 'lifeFreedom'].sort())
+    expect(out['lifeFreedom']).toEqual({ name: 'pf-cwh', url: 'https://a.test/' })
+  })
+  it('gives travel, mind and social no external link', () => {
+    const out = dimensionSiteLinks([site('travel', 'https://t.test/'), site('mind-index', 'https://m.test/'), site('social-index', 'https://s.test/')])
+    expect(out).toEqual({})
+  })
+  it('ignores non-http(s) urls, empty links and sites without a subsystem', () => {
+    expect(dimensionSiteLinks([site('pf-cwh', 'javascript:alert(1)')])).toEqual({})
+    expect(dimensionSiteLinks([{ name: 'a', subsystemId: 'pf-cwh', links: [] }])).toEqual({})
+    expect(dimensionSiteLinks([site(null, 'https://x.test/')])).toEqual({})
   })
 })

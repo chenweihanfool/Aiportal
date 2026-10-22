@@ -6,6 +6,8 @@ import { HOME_SECTIONS, activeSection } from './homeNav'
 export function HomeNav() {
   const [active, setActive] = useState<string | null>(HOME_SECTIONS[0]?.id ?? null)
   const visible = useRef(new Set<string>())
+  // 點了導覽後的一小段時間不聽 IntersectionObserver：頁面捲不到底的區塊（最後幾個）不會因為上面的區塊還在視窗內而被搶走高亮
+  const lockUntil = useRef(0)
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return
@@ -16,6 +18,7 @@ export function HomeNav() {
         if (e.isIntersecting) visible.current.add(e.target.id)
         else visible.current.delete(e.target.id)
       }
+      if (Date.now() < lockUntil.current) return
       setActive((prev) => activeSection(order, visible.current, prev))
     }, { rootMargin: '-8% 0px -40% 0px' })
     for (const id of order) {
@@ -30,6 +33,7 @@ export function HomeNav() {
     if (!el) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+    lockUntil.current = Date.now() + 1000
     setActive(id)
   }
 

@@ -11,7 +11,8 @@ import { topIdeas as pickTopIdeas, statusCounts } from './ideasView'
 import { Drawer, FEED_LABEL, IdeasPanel, PusherHealthPanel, pusherSummary } from './DesktopBoard'
 import { dimHash } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
-import { DIMENSIONS } from './dimensions'
+import { DIMENSIONS, dimensionSiteLinks } from './dimensions'
+import type { SiteData } from './portalApi'
 import { useAsync, useNow } from './homeHooks'
 import { PaidServicesPanel, PaidServicesSection } from './PaidServices'
 import { DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
@@ -30,7 +31,7 @@ const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
 // 面向小卡的 30 天迷你線：另外要 days=30（後端的 components 欄位只保證在這個呼叫裡；接口還沒部署時沒有該欄位，就不畫線）
 const fetchHistory30 = (pw: string) => fetchHhiHistoryStrict(pw, 30)
 
-export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, hhiError, toneOf, onRequestUnlock, hhiDetail, opsDetail }: {
+export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, hhiError, toneOf, onRequestUnlock, hhiDetail, opsDetail, sites }: {
   unlocked: boolean
   unlockedPassword: string | null
   /** /api/dashboard 的 hhi 摘要資料（App.tsx 的 hhiSummary?.data）；undefined＝還沒載入 */
@@ -45,6 +46,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   hhiDetail: ReactNode
   /** 抽屜「HERMES 戰情室」（與 DesktopBoard 同一份） */
   opsDetail: ReactNode
+  /** 面向對應的子系統連結（/api/sites，要解鎖才有內容） */
+  sites: SiteData[]
 }) {
   const pw = unlocked && unlockedPassword ? unlockedPassword : null
   const now = useNow()
@@ -65,6 +68,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const paid = useAsync(pw, apiFetchPaidServices)
   const repos = useAsync(pw, apiFetchRepos)
 
+  const dimLinks = useMemo(() => dimensionSiteLinks(sites), [sites])
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
   const histData = history.data ?? []
   const trend = useMemo(() => hhiTrend(histData, todayIso, breakdown?.displayed ?? null), [histData, todayIso, breakdown])
@@ -171,7 +175,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
       <PaidServicesSection st={svcSt} usage={usage.data} paid={paid.data} onOpen={() => setDrawer('svc')} onRequestUnlock={onRequestUnlock} />
-      <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
+      <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} links={dimLinks} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
       <FunSection ideasSt={ideasSt} ideasCount={ideasList?.ideas.length ?? 0} topIdeas={ideaTop}

@@ -1,11 +1,11 @@
-// 入口網首頁：頁首、左側欄、主區（新首頁或舊版首頁）與兩個抽屜的內容。
+// 入口網首頁：頁首、主區（新首頁或舊版首頁）與兩個抽屜的內容。
 import { AccountBadge } from './AuthGate'
 import { DesktopBoard } from './DesktopBoard'
 import { HomeBoard } from './HomeBoard'
 import { COLOR, FONT } from './theme'
 import { DimensionGauge, MindIndexCard, SUMMARY_BODIES, SocialIndexCard } from './DimensionCards'
 import { HappinessHeroCard } from './HappinessHero'
-import { FoodMapPill, ToolLinksZone } from './ToolLinks'
+import { FoodMapPill } from './FoodMapPill'
 import { VersionHistory } from './VersionHistory'
 import { HermesWarRoomSection } from './WarRoom'
 import { hhiTone } from './format'
@@ -34,11 +34,10 @@ export function InstrumentPanelView({
   /** #legacy 舊版首頁：主區改畫原樣的 DesktopBoard（2.36.0 起預設首頁是 HomeBoard，舊版留作退路） */
   legacy?: boolean
 }) {
-  const publicSites = sites.filter(s => !s.isPrivate)
   const privateSites = sites.filter(s => s.isPrivate)
 
-  // 有摘要的四個子系統（pf-cwh 等）在「六維度」卡上顯示儀表，連結本身仍列在工具連結的「私領域」裡——
-  // 原本手機版把它們從工具連結拿掉、只留在六維度卡上，改用儀表板後六維度收進抽屜，私領域連結就整串不見了。
+  // 有摘要的四個子系統（pf-cwh 等）在「六維度」卡上顯示儀表，連結（人生進度、健身追蹤、任務追蹤）
+  // 2026-10-22 起也放在首頁六個面向卡上；工具連結區已拿掉。
   const richSites = privateSites.filter(s => {
     const summary = s.subsystemId ? dashboard.find(d => d.subsystemId === s.subsystemId) : undefined
     return !!(summary && SUMMARY_BODIES[summary.subsystemId])
@@ -116,10 +115,6 @@ export function InstrumentPanelView({
 
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
         <div className="ip-layout">
-          <aside className="ip-aside">
-        <ToolLinksZone privateSites={privateSites} publicSites={publicSites} unlocked={unlocked} onSelect={onSiteSelect} />
-
-          </aside>
           <div className="ip-main">
         {/* 預設首頁（2.36.0 起）：HomeBoard 五段式；電腦版一個畫面放得下（含左側欄），手機、窄／矮視窗上下堆疊（portal.css 的 hm-*）。
             #legacy 舊版首頁：原樣的 DesktopBoard。兩者共用同一份抽屜內容與 .ip-board-wrap 的高度算法。 */}
@@ -132,7 +127,7 @@ export function InstrumentPanelView({
             ) : (
               <HomeBoard
                 unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} hhiFetchedAt={hhiSummary?.fetchedAt ?? null}
-                hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} hhiDetail={hhiDetail} opsDetail={opsDetail}
+                hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} hhiDetail={hhiDetail} opsDetail={opsDetail} sites={sites}
               />
             )}
           </div>

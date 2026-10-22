@@ -11,6 +11,13 @@ describe("parseRepo", () => {
     expect(r).toMatchObject({ name: "a", description: "x", language: "TypeScript", topics: ["t"], stars: 3, openIssues: 2, archived: true, private: true, fork: false })
     expect(parseRepo(repo("b"))).toMatchObject({ description: null, language: null, topics: [], pushedAt: null, stars: 0 })
   })
+  it("keeps only http(s) homepages", () => {
+    expect(parseRepo(repo("a", { homepage: "https://kc2-cwh.replit.app/" }))?.homepage).toBe("https://kc2-cwh.replit.app/");
+    expect(parseRepo(repo("a", { homepage: "javascript:alert(1)" }))?.homepage).toBeNull();
+    expect(parseRepo(repo("a", { homepage: "" }))?.homepage).toBeNull();
+    expect(parseRepo(repo("a", { homepage: "not a url" }))?.homepage).toBeNull();
+    expect(parseRepo(repo("a"))?.homepage).toBeNull();
+  });
   it("rejects rows missing name or url", () => {
     expect(parseRepo({ name: "a" })).toBeNull()
     expect(parseRepo(null)).toBeNull()

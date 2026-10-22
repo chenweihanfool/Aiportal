@@ -1,55 +1,46 @@
-// 站台寫入端點的路由表與權限測試（不連資料庫：@workspace/db 以最小替身取代）。
-// 起因：前端實際打 /api/admin/sites*（POST／PATCH／DELETE），舊版只註冊 /sites*、且沒有 PATCH →「新增／編輯／刪除網站」全 404。
+// /sites 的路由表與讀取行為（不連資料庫：@workspace/db 以最小替身取代）。
+// 2026-10-22 起工具連結（公領域／私領域）拿掉，寫入端點全部移除；只剩「面向對應的子系統連結」的唯讀清單，且要解鎖才給。
 import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+const row = (id: number, name: string, subsystemId: string | null) => ({
+  id, name, subtitle: "", links: [{ label: "進入系統", url: `https://example.test/${id}` }], worldX: 1, worldZ: 2, isPrivate: true, sortOrder: id, subsystemId,
+});
+// 替身資料庫：where 子句我們不解析，直接依「有沒有呼叫 where」回傳已過濾／未過濾的列，用來確認路由確實有帶 where。
+const ALL = [row(1, "人生進度管理系統", "pf-cwh"), row(2, "圖根點管理系統", null)];
+const calls: string[] = [];
 vi.mock("@workspace/db", () => ({
-  db: {},
-  portalSitesTable: {},
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => { calls.push("where"); return { orderBy: async () => ALL.filter((r) => r.subsystemId !== null) }; },
+        orderBy: async () => ALL,
+      }),
+    }),
+  },
+  portalSitesTable: { subsystemId: {}, sortOrder: {}, id: {} },
 }));
+vi.mock("drizzle-orm", () => ({ isNotNull: () => "notnull", asc: () => "asc", eq: () => "eq" }));
 process.env["ADMIN_PASSWORD"] = "sites-test-pwd";
 
-type Layer = { route?: { path: string | string[]; methods: Record<string, boolean>; stack: { name: string }[] } };
+type Layer = { route?: { path: string | string[]; methods: Record<string, boolean> } };
 
 describe("sites 路由表", () => {
   let router: { stack: Layer[] };
   beforeAll(async () => { router = (await import("./sites")).default as unknown as { stack: Layer[] }; });
-
   const has = (method: string, path: string) =>
-    router.stack.some((l) => {
-      const paths = l.route ? ([] as string[]).concat(l.route.path) : [];
-      return paths.includes(path) && l.route!.methods[method];
-    });
-  const guarded = (method: string, path: string) =>
-    router.stack.find((l) => l.route && ([] as string[]).concat(l.route.path).includes(path) && l.route.methods[method])
-      ?.route?.stack[0]?.name === "requireAdmin";
+    router.stack.some((l) => l.route && ([] as string[]).concat(l.route.path).includes(path) && l.route.methods[method]);
 
-  const cases: [string, string][] = [
-    ["post", "/sites"], ["post", "/admin/sites"],
-    ["put", "/sites/:id"], ["put", "/admin/sites/:id"],
-    ["patch", "/sites/:id"], ["patch", "/admin/sites/:id"],
-    ["delete", "/sites/:id"], ["delete", "/admin/sites/:id"],
-  ];
-
-  it.each(cases)("%s %s 已註冊且第一關是 requireAdmin", (method, path) => {
-    expect(has(method, path)).toBe(true);
-    expect(guarded(method, path)).toBe(true);
-  });
-
-  it("前端實際呼叫的三個端點（POST／PATCH／DELETE 的 admin 前綴）都存在", () => {
-    expect(has("post", "/admin/sites")).toBe(true);
-    expect(has("patch", "/admin/sites/:id")).toBe(true);
-    expect(has("delete", "/admin/sites/:id")).toBe(true);
-  });
-
-  it("GET /sites 維持公開讀取（沒有 requireAdmin），且沒有 admin 前綴的 GET", () => {
+  it("只剩 GET /sites 與 POST /auth/verify", () => {
     expect(has("get", "/sites")).toBe(true);
-    expect(guarded("get", "/sites")).toBe(false);
-    expect(has("get", "/admin/sites")).toBe(false);
+    expect(has("post", "/auth/verify")).toBe(true);
+  });
+  it.each(["post", "put", "patch", "delete"])("%s 站台寫入端點已移除（兩種前綴都沒有）", (method) => {
+    for (const path of ["/sites", "/admin/sites", "/sites/:id", "/admin/sites/:id"]) expect(has(method, path)).toBe(false);
   });
 });
 
-describe("sites 寫入端點的權限（HTTP，不碰資料庫）", () => {
+describe("GET /sites", () => {
   let server: Server;
   let base = "";
   beforeAll(async () => {
@@ -63,52 +54,27 @@ describe("sites 寫入端點的權限（HTTP，不碰資料庫）", () => {
   });
   afterAll(async () => { await new Promise((r) => server?.close(r)); });
 
-  const calls: [string, string][] = [
-    ["POST", "/api/admin/sites"], ["POST", "/api/sites"],
-    ["PATCH", "/api/admin/sites/1"], ["PUT", "/api/sites/1"], ["PUT", "/api/admin/sites/1"], ["PATCH", "/api/sites/1"],
-    ["DELETE", "/api/admin/sites/1"], ["DELETE", "/api/sites/1"],
-  ];
-  it.each(calls)("%s %s 無密碼 → 401（不是 404）", async (method, path) => {
-    const r = await fetch(`${base}${path}`, { method, headers: { "content-type": "application/json" }, body: method === "DELETE" ? undefined : "{}" });
-    expect(r.status).toBe(401);
+  it("未解鎖：回空清單（200），不洩漏任何網址，也不查資料庫", async () => {
+    calls.length = 0;
+    const r = await fetch(`${base}/api/sites`);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ sites: [] });
+    expect(calls).toEqual([]);
   });
-
-  it.each([["PATCH", "/api/admin/sites/1"], ["PUT", "/api/sites/1"], ["POST", "/api/admin/sites"]])(
-    "%s %s 已授權但沒帶 body → 400（不是 500）；未授權仍先得 401", async (method, path) => {
-      const authed = await fetch(`${base}${path}`, { method, headers: { "x-admin-password": "sites-test-pwd" } });   // 無 Content-Type、無 body
-      expect(authed.status).toBe(400);
-      const anon = await fetch(`${base}${path}`, { method });
-      expect(anon.status).toBe(401);
-    });
-
-  it.each([["PATCH", "/api/admin/sites/1"], ["PUT", "/api/sites/1"]])(
-    "%s %s 帶合法但空的 JSON 物件 {} → 400（不是 500）", async (method, path) => {
-      const r = await fetch(`${base}${path}`, { method, headers: { "x-admin-password": "sites-test-pwd", "content-type": "application/json" }, body: "{}" });
-      expect(r.status).toBe(400);
-      expect(((await r.json()) as { error: string }).error).toBe("No fields to update");
-    });
-
-  it.each([
-    [{}], [{ name: "x" }], [{ name: "  ", links: [], worldXZ: [0, 0] }], [{ name: "x", links: "no", worldXZ: [0, 0] }],
-    [{ name: "x", links: [], worldXZ: [0] }], [{ name: "x", links: [], worldXZ: ["a", 1] }], [{ name: 5, links: [], worldXZ: [0, 0] }],
-  ])("POST /api/admin/sites 必填欄位缺漏或型別不對 %j → 400（不是 500）", async (payload) => {
-    const r = await fetch(`${base}/api/admin/sites`, { method: "POST", headers: { "x-admin-password": "sites-test-pwd", "content-type": "application/json" }, body: JSON.stringify(payload) });
-    expect(r.status).toBe(400);
+  it("密碼錯誤：同樣回空清單", async () => {
+    const r = await fetch(`${base}/api/sites`, { headers: { "x-admin-password": "wrong" } });
+    expect(await r.json()).toEqual({ sites: [] });
   });
-
-  it("body 是陣列或字串也回 400", async () => {
-    for (const payload of ["[]", '"x"', "null"]) {
-      const r = await fetch(`${base}/api/admin/sites/1`, { method: "PATCH", headers: { "x-admin-password": "sites-test-pwd", "content-type": "application/json" }, body: payload });
-      expect(r.status).toBe(400);
-    }
+  it("已解鎖：只回有 subsystemId 的列（沒綁子系統的舊工具連結不再出現）", async () => {
+    calls.length = 0;
+    const r = await fetch(`${base}/api/sites`, { headers: { "x-admin-password": "sites-test-pwd" } });
+    const body = (await r.json()) as { sites: { name: string; subsystemId: string | null; worldXZ: number[] }[] };
+    expect(body.sites.map((s) => s.name)).toEqual(["人生進度管理系統"]);
+    expect(body.sites[0]).toMatchObject({ subsystemId: "pf-cwh", worldXZ: [1, 2] });
+    expect(calls).toEqual(["where"]);
   });
-
-  it("/auth/verify 沒帶 body → 400（不是 500）", async () => {
-    expect((await fetch(`${base}/api/auth/verify`, { method: "POST" })).status).toBe(400);
-  });
-
-  it("密碼錯誤 → 401", async () => {
-    const r = await fetch(`${base}/api/admin/sites/1`, { method: "PATCH", headers: { "x-admin-password": "wrong", "content-type": "application/json" }, body: "{}" });
-    expect(r.status).toBe(401);
+  it("POST /sites 已不存在（404）", async () => {
+    const r = await fetch(`${base}/api/sites`, { method: "POST", headers: { "content-type": "application/json", "x-admin-password": "sites-test-pwd" }, body: "{}" });
+    expect(r.status).toBe(404);
   });
 });
