@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HOME_SECTIONS, activeSection } from './homeNav'
+import { HOME_SECTIONS, activeSection, sectionDef } from './homeNav'
 
 const order = HOME_SECTIONS.map((s) => s.id)
 
@@ -19,5 +19,18 @@ describe('activeSection', () => {
   })
   it('ignores ids that are not registered', () => {
     expect(activeSection(order, new Set(['nope']), 'sec-today')).toBe('sec-today')
+  })
+})
+
+describe('sectionDef', () => {
+  it('每一筆都有標題與圖示，可依 id 取回', () => {
+    for (const s of HOME_SECTIONS) {
+      expect(s.title.length).toBeGreaterThan(0)
+      expect(s.icon.length).toBeGreaterThan(0)
+      expect(sectionDef(s.id)).toBe(s)
+    }
+  })
+  it('不在註冊表裡的 id 丟錯', () => {
+    expect(() => sectionDef('sec-nope')).toThrow(/HOME_SECTIONS/)
   })
 })

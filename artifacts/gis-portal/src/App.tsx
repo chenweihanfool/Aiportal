@@ -137,17 +137,9 @@ export default function App() {
         onSiteSelect={handleSiteClick}
         onRequestUnlock={handleRequestUnlock}
         legacy={hashRoute === '#legacy'}
+        onOpenAdmin={() => setAdminAuth(true)}
       />
 
-      <button
-        onClick={() => setAdminAuth(true)}
-        title="管理後台"
-        style={{
-          position: 'absolute', bottom: '1.5rem', right: '1.5rem', zIndex: 100,
-          background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
-          color: COLOR.steelDim, fontSize: '1rem', padding: '0.5rem 0.8rem', cursor: 'pointer', lineHeight: 1,
-        }}
-      >⚙</button>
 
       {(() => {
         const dimKey = dimKeyFromHash(hashRoute)

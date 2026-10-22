@@ -1,6 +1,7 @@
 // 付費服務卡：Ollama、Claude Pro、JEV、Tavily、DeepSeek 一列一個，能自動讀到額度的直接顯示，其餘放連結。
 // 首頁是一條細列（點開看詳情），詳情在抽屜：每個服務的用量與連結，下面接 Ollama 的走勢與「更新餘額」表單。
 import { COLOR } from './theme'
+import { HomeCard } from './HomeCard'
 import { StateFrame, Skeleton } from './StateFrame'
 import type { BlockStatus } from './homeView'
 import { OllamaPanel } from './DesktopBoard'
@@ -19,7 +20,7 @@ export function PaidServicesSection({ st, usage, paid, onOpen, onRequestUnlock }
 }) {
   const rows = buildServiceRows({ usage, paid })
   return (
-    <section id="sec-svc" className="hm-card hm-svc" aria-label="付費服務">
+    <HomeCard id="sec-svc" className="hm-svc" head={false}>
       <StateFrame status={st} source="付費服務" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={1} />} className="hm-svc-frame">
         <button type="button" className="hm-svc-bar" onClick={onOpen} aria-haspopup="dialog" aria-label="付費服務用量與連結">
           <b className="hm-sys-name">付費服務</b>
@@ -33,7 +34,7 @@ export function PaidServicesSection({ st, usage, paid, onOpen, onRequestUnlock }
           <span className="hm-link">詳情 →</span>
         </button>
       </StateFrame>
-    </section>
+    </HomeCard>
   )
 }
 
