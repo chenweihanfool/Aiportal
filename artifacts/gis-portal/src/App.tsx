@@ -8,6 +8,7 @@ import { TimelineView } from './TimelineView'
 import { TripsView } from './TripsView'
 import { dimKeyFromHash } from './dimensionPage'
 import { YearReview } from './YearReview'
+import { ReportsView } from './ReportsView'
 import { yearFromHash } from './yearReview'
 import { COLOR } from './theme'
 import { CommandPalette } from './CommandPalette'
@@ -104,6 +105,10 @@ export default function App() {
   const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
   if (reviewYear !== null) {
     return <YearReview year={reviewYear} unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock} />
+  }
+  // 週／月報視覺化（2026-10-22）：#reports＝週報、#reports/month＝月報；資料是 feed kb-report-stats
+  if (hashRoute === '#reports' || hashRoute === '#reports/month') {
+    return <ReportsView period={hashRoute === '#reports' ? 'week' : 'month'} unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />
   }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
