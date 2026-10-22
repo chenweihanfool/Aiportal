@@ -1173,3 +1173,49 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .hm-glance-sys .hm-glance-t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
 /* 手機：知識庫四格排成 2×2（auto-fit 在 360px 會變成 3＋1） */
 @media (max-width: 479px) { .hm-kb { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ── 週／月報視覺化頁（#reports，ReportsView.tsx） ── */
+.rp-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.rp-nav .yr-title { margin: 0; font-size: 1.15rem; text-align: center; flex: 1 1 10rem; }
+.rp-nav .dp-range:disabled { opacity: 0.35; cursor: default; }
+.yr-nav .dp-range[aria-pressed='true'] { border-color: var(--c-accent); color: var(--c-accent); }
+.rp-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.rp-stat { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.7rem 0.8rem; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 12px; }
+.rp-stat-t { font-size: 0.8rem; color: var(--c-ink-2); }
+.rp-stat-v { font-size: 1.8rem; font-weight: 700; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
+.rp-stat-v small { font-size: 0.75rem; font-weight: 400; color: var(--c-ink-2); margin-left: 0.2rem; }
+.rp-stat-d, .rp-stat-s { font-size: 0.75rem; color: var(--c-ink-2); }
+.rp-stat[data-tone='up'] .rp-stat-d { color: var(--c-ok); }
+.rp-stat[data-tone='down'] .rp-stat-d { color: var(--c-warn); }
+.rp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.8rem; align-items: start; }
+.rp-hint { font-size: 0.72rem; font-weight: 400; color: var(--c-ink-2); }
+.rp-row { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr); align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.rp-row-l { font-size: 0.78rem; color: var(--c-ink-2); }
+.rp-cells { display: grid; gap: 3px; }
+.rp-cell { display: flex; align-items: center; justify-content: center; min-height: 1.5rem; border-radius: 4px; background: var(--c-raised); font-style: normal; font-size: 0.65rem; color: var(--c-ink-3); }
+.rp-cells[data-dense='true'] .rp-cell { min-height: 1rem; }
+.rp-cell[data-lv='1'] { background: color-mix(in srgb, var(--c-accent) 30%, var(--c-raised)); color: var(--c-ink); }
+.rp-cell[data-lv='2'] { background: color-mix(in srgb, var(--c-accent) 60%, var(--c-raised)); color: var(--c-ink); }
+.rp-cell[data-lv='3'] { background: var(--c-accent); color: var(--c-bg); }
+.rp-sub { margin: 0.7rem 0 0.3rem; font-size: 0.78rem; font-weight: 600; color: var(--c-ink-2); }
+.rp-line { margin: 0.4rem 0; font-size: 0.85rem; line-height: 1.5; }
+.rp-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.rp-bars li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) 2rem; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+.rp-bar-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-ink-2); }
+.rp-bar-track { height: 0.6rem; background: var(--c-raised); border-radius: 999px; overflow: hidden; }
+.rp-bar-track i { display: block; height: 100%; background: var(--c-accent); border-radius: 999px; }
+.rp-bars b { text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.rp-top3 { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; }
+.rp-top3 small { display: block; color: var(--c-ink-2); font-size: 0.72rem; }
+.rp-map { width: 100%; height: auto; display: block; }
+.rp-legend { display: flex; gap: 0.8rem; margin: 0.3rem 0 0; font-size: 0.72rem; color: var(--c-ink-2); }
+.rp-legend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.3rem; }
+.rp-gantt { position: relative; padding: 0.3rem 0 1.2rem; }
+.rp-trip { display: block; box-sizing: border-box; margin-top: 0.3rem; padding: 0.3rem 0.5rem; background: color-mix(in srgb, var(--c-accent) 45%, var(--c-raised)); border-radius: 6px; font-size: 0.78rem; color: var(--c-ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 1.5rem; }
+.rp-trip:hover, .rp-trip:focus-visible { background: var(--c-accent); color: var(--c-bg); outline: none; }
+.rp-axis { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--c-ink-3); }
+.rp-foot { margin-top: 0.6rem; }
+@media (max-width: 640px) {
+  .rp-stats { grid-template-columns: 1fr; }
+  .rp-bars li { grid-template-columns: 4.2rem minmax(0, 1fr) 1.8rem; }
+}

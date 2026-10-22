@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "kb-report-stats feed v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "computedAt",
+    "reports"
+  ],
+  "properties": {
+    "computedAt": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 40
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "maxLength": 300
+      }
+    },
+    "reports": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "required": [
+          "period",
+          "range"
+        ],
+        "properties": {
+          "period": {
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "quarter",
+              "year"
+            ]
+          },
+          "range": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 10
+            }
+          },
+          "ideas": {
+            "type": "object"
+          },
+          "food": {
+            "type": "object"
+          },
+          "travel": {
+            "type": "object"
+          },
+          "prev": {
+            "type": "object"
+          },
+          "series": {
+            "type": "array",
+            "maxItems": 366,
+            "items": {
+              "type": "object"
+            }
+          },
+          "meta": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

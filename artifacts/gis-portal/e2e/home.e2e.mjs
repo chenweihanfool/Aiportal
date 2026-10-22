@@ -134,6 +134,7 @@ function scenario(name) {
   if (name === 'spark-bad') s.history30 = { history: historyWithComponents('badshape') }
   if (name === 'spark-one') s.history30 = { history: historyWithComponents('onepoint') }
   if (name === 'spark-fail') s.fail = new Set(['history30'])
+  if (name === 'report-fail') s.fail.add('report-stats')
   if (name === 'spark-alert') { s.history30 = { history: historyWithComponents('ok') }; s.pipeline = pipeline({ L3: layer('crit', 'apply 失敗：磁碟寫入錯誤') }) }
   return s
 }
@@ -177,6 +178,21 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
         L2: { metrics: [{ label: '待正規化', value: 7, hint: '已有候選、還沒被 L2 正規化的候選數' }, { label: '已正規化', value: 3900 }] },
         L4: { error: 'RuntimeError: 找不到收件夾' },
       } } })
+    }
+    if (p === '/api/feed/kb-report-stats') {
+      calls.push(p)
+      if (S.fail.has('report-stats')) return json({ message: 'boom' }, 500)
+      if (S.reportStatsEmpty) return json({ available: false, name: 'kb-report-stats', schemaVersion: 1, payload: null, generatedAt: null, receivedAt: null })
+      const day = (off) => tpDate(off)
+      const series = (n) => Array.from({ length: n }, (_, i) => ({ date: day(i - n + 1), ideas: i % 3 === 0 ? 1 : 0, food: i % 2, travel: i > n - 4 ? 1 : 0 }))
+      const rep = (period, a, b, extra = {}) => ({ period, range: [a, b], ideas: { new: 4, done: 1, started: 1, openAtEnd: 6, doneRate: 0.14, funnel: { new: 2, evaluating: 1, doing: 1, done: 1 }, byCategory: { 旅遊: 2, 創作: 2 },
+        top3: [{ id: 'IDEA-0012', title: '把關係宇宙做成年度回顧影片', why: ['價值4×(6−難度2)'] }], oldestOpen: { id: 'IDEA-0003', title: '學潛水', days: 40 } },
+        food: { added: 3, visited: 2, wantBacklog: 9, avgRating: 4.5, byCuisine: { 牛肉麵: 2, 咖啡: 1 }, byArea: { 大安區: 2, 信義區: 1 }, pins: [{ name: '老王牛肉麵', lat: 25.03, lng: 121.54, status: 'visited' }, { name: '新店咖啡', lat: 25.04, lng: 121.56, status: 'want' }], oldestWant: { name: '舊店', days: 85 } },
+        travel: { trips: [{ id: 'TRIP-1', title: '台南旅遊', start: a, end: day(0), daysInPeriod: 3, photos: 12, area: '台南' }], tripDays: 3, photos: 12, areas: ['台南'] },
+        prev: { range: ['2026-01-01', '2026-01-07'], ideas: { new: 2, done: 0 }, food: { added: 3, visited: 0 }, travel: { tripDays: 0, trips: 0 } }, series: series(period === 'week' ? 7 : 30), meta: { partial: period === 'week' }, ...extra })
+      const emptyRep = rep('week', '2026-01-01', '2026-01-07', { ideas: { new: 0, done: 0, started: 0 }, food: { added: 0, visited: 0 }, travel: { trips: [], tripDays: 0, photos: 0, areas: [] } })
+      return json({ available: true, name: 'kb-report-stats', schemaVersion: 1, generatedAt: tpDate(0), receivedAt: iso(), payload: { computedAt: iso(120e3), warnings: S.reportWarn ? ['地點讀不到'] : [],
+        reports: [rep('week', tpDate(-3), tpDate(3)), emptyRep, rep('month', tpDate(-20), tpDate(10))] } })
     }
     if (p === '/api/paid-services') return json({ deepseek: { status: 'ok', data: { available: true, balances: [{ currency: 'CNY', total: 88.5, granted: 0, toppedUp: 88.5 }] } }, tavily: { status: 'no-key' }, fetchedAt: iso() })
     if (p === '/api/github/repos') {
@@ -864,6 +880,41 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   check('年度回顧 手機 390：不橫向捲動', mm.docW <= mm.innerW, JSON.stringify(mm))
   await e.page.screenshot({ path: path.join(SHOTS, 'year-mobile.png') })
   await e.ctx.close()
+}
+
+{
+  // 9 週／月報視覺化（#reports，feed kb-report-stats）
+  const a = await open({ width: 1440, height: 900 }, 'normal')
+  check('成長軌跡有「週月報圖表」入口', (await a.page.locator('[data-testid="hm-reports-link"]').count()) === 1)
+  await a.page.locator('[data-testid="hm-reports-link"]').click(); await a.page.waitForSelector('[data-testid="reports-page"]')
+  await a.page.waitForSelector('[data-testid="rp-ideas"]', { timeout: 8000 })
+  check('週報：網址 #reports、週期是 week、標題有「週報」', (await a.page.evaluate(() => location.hash)) === '#reports' && (await a.page.locator('[data-testid="reports-page"]').getAttribute('data-period')) === 'week' && /週報/.test(await a.page.locator('[data-testid="rp-title"]').innerText()))
+  check('週報：三個主題卡（想法・美食・旅遊）與活動節奏都在', (await a.page.locator('[data-testid="rp-ideas"],[data-testid="rp-food"],[data-testid="rp-travel"],[data-testid="rp-rhythm"]').count()) === 4)
+  check('週報：三個數字卡有與上期的差（▲）', (await a.page.locator('.rp-stats').innerText()).includes('▲'))
+  check('週報：活動節奏 3 列、各 7 格', (await a.page.locator('[data-testid="rp-rhythm"] .rp-row').count()) === 3 && (await a.page.locator('[data-testid="rp-rhythm"] .rp-row').first().locator('.rp-cell').count()) === 7)
+  check('週報：想法漏斗 4 階、美食地圖 2 個釘、旅程 1 條甘特', (await a.page.locator('[aria-label="想法漏斗"] li').count()) === 4 && (await a.page.locator('.rp-map circle').count()) === 2 && (await a.page.locator('.rp-trip').count()) === 1)
+  check('週報：進行中的這一週有「還沒結束」提示', (await a.page.locator('[data-testid="rp-partial"]').count()) === 1)
+  check('週報：最新一週不能再往後', await a.page.locator('[data-testid="rp-next"]').isDisabled())
+  await a.page.locator('[data-testid="rp-prev"]').click(); await a.page.waitForSelector('[data-testid="rp-none"]')
+  check('週報：往前一週（沒有紀錄）→ 寫「沒有想法、美食或旅程的紀錄」，不畫全 0 的卡', (await a.page.locator('[data-testid="rp-ideas"]').count()) === 0)
+  await a.page.locator('[data-testid="rp-tab-month"]').click(); await a.page.waitForSelector('[data-testid="reports-page"][data-period="month"]')
+  await a.page.waitForSelector('[data-testid="rp-ideas"]')
+  check('月報：網址 #reports/month、標題是「N 年 M 月」、節奏 30 格', (await a.page.evaluate(() => location.hash)) === '#reports/month' && /年 \d+ 月/.test(await a.page.locator('[data-testid="rp-title"]').innerText()) && (await a.page.locator('[data-testid="rp-rhythm"] .rp-row').first().locator('.rp-cell').count()) === 30)
+  check('週月報：沒有頁面錯誤', a.errors.length === 0, a.errors.join(' | ').slice(0, 300))
+  await a.page.screenshot({ path: path.join(SHOTS, 'reports-desktop.png'), fullPage: true })
+  await a.page.keyboard.press('Escape'); await a.page.waitForTimeout(300)
+  check('週月報：Esc 回首頁', (await a.page.locator('[data-testid="reports-page"]').count()) === 0)
+  await a.ctx.close()
+  const m = await open({ width: 390, height: 844 }, 'normal', { hash: '#reports', wait: false })
+  await m.page.waitForSelector('[data-testid="rp-ideas"]', { timeout: 8000 })
+  const mm = await m.page.evaluate(() => ({ docW: document.documentElement.scrollWidth, innerW: window.innerWidth }))
+  check('週報 手機 390：不橫向捲動', mm.docW <= mm.innerW, JSON.stringify(mm))
+  await m.page.screenshot({ path: path.join(SHOTS, 'reports-mobile.png'), fullPage: true })
+  await m.ctx.close()
+  const n = await open({ width: 1440, height: 900 }, 'report-fail', { hash: '#reports', wait: false })
+  await n.page.waitForSelector('.hm-retry', { timeout: 8000 })
+  check('週報：feed 讀取失敗 → 顯示「暫時讀不到」與重試鈕', /暫時讀不到/.test(await n.page.locator('[data-testid="reports-page"]').innerText()))
+  await n.ctx.close()
 }
 
 await browser.close()
