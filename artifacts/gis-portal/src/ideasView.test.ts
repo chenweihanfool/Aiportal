@@ -128,3 +128,36 @@ describe('idea provenance (來龍去脈)', () => {
     expect(s).toEqual({ total: 3, closed: 2, medianDaysToClose: 15, recurring: 1 })
   })
 })
+
+import { hasMerge, matchesQuery, sortMergedGroups } from './ideasView'
+describe('idea search & merged filter', () => {
+  const list = [
+    idea('IDEA-0001', { title: '日記自動摘要', absorbed: ['IDEA-0002'] }),
+    idea('IDEA-0002', { title: '每日回顧', status: 'absorbed', mergedInto: 'IDEA-0001', why: '跟摘要重複' }),
+    idea('IDEA-0003', { title: '旅遊清單', category: '旅遊', absorbed: [] }),
+    idea('IDEA-0004', { title: 'Docker 備份', status: 'absorbed', mergedInto: 'IDEA-0009' }), // 承接者不在清單內
+  ]
+  it('detects merges in both directions', () => {
+    expect(list.map(hasMerge)).toEqual([true, true, false, true])
+    expect(filterIdeas(list, null, 'merged').map((i) => i.id)).toEqual(['IDEA-0001', 'IDEA-0002', 'IDEA-0004'])
+  })
+  it('searches id, title, why, category, partner id; all tokens must hit; case & width insensitive', () => {
+    const ids = (q: string) => filterIdeas(list, null, 'all', q).map((i) => i.id)
+    expect(ids('摘要')).toEqual(['IDEA-0001', 'IDEA-0002'])
+    expect(ids('摘要 回顧')).toEqual(['IDEA-0002'])
+    expect(ids('docker')).toEqual(['IDEA-0004'])
+    expect(ids('ＤＯＣＫＥＲ')).toEqual(['IDEA-0004'])
+    expect(ids('idea-0003')).toEqual(['IDEA-0003'])
+    expect(ids('旅遊')).toEqual(['IDEA-0003'])
+    expect(ids('IDEA-0009')).toEqual(['IDEA-0004'])
+    expect(ids('  ')).toHaveLength(4)
+    expect(matchesQuery(list[0]!, '不存在')).toBe(false)
+  })
+  it('combines search with the merged filter', () => {
+    expect(filterIdeas(list, null, 'merged', '備份').map((i) => i.id)).toEqual(['IDEA-0004'])
+  })
+  it('groups merged ideas under their absorber', () => {
+    const shuffled = [list[1]!, list[3]!, list[0]!]
+    expect(sortMergedGroups(shuffled).map((i) => i.id)).toEqual(['IDEA-0001', 'IDEA-0002', 'IDEA-0004'])
+  })
+})

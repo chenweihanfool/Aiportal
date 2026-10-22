@@ -48,14 +48,45 @@ export function categoryCounts(ideas: IdeaItem[]): Array<[string, number]> {
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 }
 
-export type StatusFilter = 'open' | 'done' | 'closed' | 'all'
-export function filterIdeas(ideas: IdeaItem[], category: string | null, status: StatusFilter): IdeaItem[] {
+/** 'merged'＝有合併關係（被併入別人，或吸收了別人），不分目前狀態 */
+export type StatusFilter = 'open' | 'done' | 'closed' | 'merged' | 'all'
+
+/** 有合併關係：被併入別的想法，或承接了別的想法（兩個方向都算） */
+export const hasMerge = (i: Pick<IdeaItem, 'mergedInto' | 'absorbed'>): boolean => !!i.mergedInto || (i.absorbed?.length ?? 0) > 0
+
+const norm = (s: string) => s.normalize('NFKC').toLowerCase()
+/** 搜尋：空白分隔的每個詞都要命中（AND），比對編號、標題、原因、類別、維度、來源，以及併入對象的編號 */
+export function matchesQuery(i: IdeaItem, query: string): boolean {
+  const tokens = norm(query).split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return true
+  const hay = norm([i.id, i.title, i.why, i.category, i.dimension, i.source, i.mergedInto, ...(i.absorbed ?? [])].filter(Boolean).join('\n'))
+  return tokens.every((t) => hay.includes(t))
+}
+
+export function filterIdeas(ideas: IdeaItem[], category: string | null, status: StatusFilter, query = ''): IdeaItem[] {
   return ideas.filter((i) => {
     if (category && (i.category ?? '未分類') !== category) return false
-    if (status === 'open') return isOpen(i.status)
-    if (status === 'done') return i.status === 'done'
-    if (status === 'closed') return i.status === 'shelved' || i.status === 'dropped' || i.status === 'absorbed'
-    return true
+    if (status === 'open' && !isOpen(i.status)) return false
+    if (status === 'done' && i.status !== 'done') return false
+    if (status === 'closed' && !(i.status === 'shelved' || i.status === 'dropped' || i.status === 'absorbed')) return false
+    if (status === 'merged' && !hasMerge(i)) return false
+    return matchesQuery(i, query)
+  })
+}
+
+/** 合併清單排序：同一組（承接者＋被併入者）排在一起，承接者在前 */
+export function sortMergedGroups(ideas: IdeaItem[]): IdeaItem[] {
+  const by = new Map(ideas.map((i) => [i.id, i]))
+  const rootOf = (i: IdeaItem): string => {
+    let cur = i
+    const seen = new Set<string>([cur.id])
+    while (cur.mergedInto && by.has(cur.mergedInto) && !seen.has(cur.mergedInto)) { cur = by.get(cur.mergedInto)!; seen.add(cur.id) }
+    return cur.id
+  }
+  return [...ideas].sort((a, b) => {
+    const ra = rootOf(a), rb = rootOf(b)
+    if (ra !== rb) return ra.localeCompare(rb)
+    return (a.id === ra ? 0 : 1) - (b.id === rb ? 0 : 1) || a.id.localeCompare(b.id)
   })
 }
 
