@@ -29,6 +29,9 @@ services:
       # 付費服務卡（GET /api/paid-services）：有金鑰才顯示 DeepSeek 餘額／Tavily 用量；空值＝只顯示「未設定金鑰」
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      # 倉庫索引（GET /api/github/repos）：fine-grained token，只給 Metadata: Read；空值＝只抓公開倉庫。GITHUB_REPO_OWNER 空值＝chenweihanfool。
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_REPO_OWNER: ${GITHUB_REPO_OWNER:-}
       # 附件預覽（GET /api/hermes-attachment）讀這個資料夾；唯讀掛載，api-server 無法寫入或改動 vault。
       HERMES_ATTACHMENT_ROOT: /data/attachments
       # 遊記相片的縮圖／檢視圖（GET /api/media/trips/…）讀這個資料夾；唯讀掛載，api-server 無法寫入。
