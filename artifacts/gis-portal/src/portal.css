@@ -1175,10 +1175,27 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 @media (max-width: 479px) { .hm-kb { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ── 週／月報視覺化頁（#reports，ReportsView.tsx） ── */
-.rp-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
-.rp-nav .yr-title { margin: 0; font-size: 1.15rem; text-align: center; flex: 1 1 10rem; }
-.rp-nav .dp-range:disabled { opacity: 0.35; cursor: default; }
-.yr-nav .dp-range[aria-pressed='true'] { border-color: var(--c-accent); color: var(--c-accent); }
+/* 圖表帶放在時間軸報告對話框裡（ReportBody／ReportCharts）；對話框背景是 panel，卡片用 raised 區隔 */
+.rp-band, .rb-sections, .rb-toggle { font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.rp-band { display: flex; flex-direction: column; gap: 0.8rem; margin: 0.4rem 0 1rem; }
+.rp-band .hm-card { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 12px; padding: 0.8rem 0.9rem; }
+.rb-toggle { display: flex; gap: 0.4rem; margin: 0.6rem 0; }
+.rb-toggle .dp-range[aria-pressed='true'] { border-color: var(--c-accent); color: var(--c-accent); }
+.rb-sections { display: flex; flex-direction: column; gap: 0.7rem; }
+.rb-intro { color: var(--c-ink-2); }
+.rb-card { padding: 0.75rem 0.9rem; background: var(--c-surface); border: 1px solid var(--c-line); border-left: 3px solid var(--rb-tone, var(--c-line-strong)); border-radius: 10px; }
+.rb-h { margin: 0 0 0.4rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; font-weight: 600; color: var(--c-ink); }
+.rb-hero { color: var(--c-ink); line-height: 1.6; }
+.rb-tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.rb-tasks li { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; font-size: 0.95rem; color: var(--c-ink); }
+.rb-task-t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.rb-chip { flex: none; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-family: "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--c-line); color: var(--c-ink-2); }
+.rb-chip[data-kind='overdue'] { color: var(--c-crit); border-color: var(--c-crit); }
+.rb-chip[data-kind='due'] { color: var(--c-warn); border-color: var(--c-warn); }
+.rb-entries { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.6rem; }
+.rb-entry { padding: 0.6rem 0.7rem; background: var(--c-raised); border-radius: 8px; }
+.rb-entry-h { font-weight: 600; color: var(--c-ink); }
+.rb-entry-b { margin-top: 0.3rem; color: var(--c-ink-2); }
 .rp-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .rp-stat { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.7rem 0.8rem; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 12px; }
 .rp-stat-t { font-size: 0.8rem; color: var(--c-ink-2); }

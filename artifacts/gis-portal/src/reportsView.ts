@@ -1,19 +1,5 @@
-// 週／月報頁的純函式（不碰 DOM，方便測）：挑報告、差異文字、長條比例、地圖釘位置、旅程甘特條。
-import type { Pin, Report, ReportPeriod, SeriesRow, TripBar } from './reportsApi'
-
-export const PERIOD_LABEL: Record<ReportPeriod, string> = { week: '週報', month: '月報' }
-
-/** 該週期的報告，新到舊（推送端已排好；這裡再依起日排一次，不依賴推送端順序） */
-export function reportsOf(reports: readonly Report[], period: ReportPeriod): Report[] {
-  return reports.filter((r) => r.period === period).sort((a, b) => b.range[0].localeCompare(a.range[0]))
-}
-
-const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`
-
-export function periodLabel(r: Pick<Report, 'period' | 'range'>): string {
-  if (r.period === 'month') return `${r.range[0].slice(0, 4)} 年 ${Number(r.range[0].slice(5, 7))} 月`
-  return `${md(r.range[0])}–${md(r.range[1])}`
-}
+// 週／月報圖表的純函式（不碰 DOM，方便測）：差異文字、長條比例、地圖釘位置、旅程甘特條。
+import type { Pin, PeriodReport, SeriesRow, TripBar } from './periodStats'
 
 export interface Delta { text: string; tone: 'up' | 'down' | 'flat' }
 /** 與上期比：多了 ▲、少了 ▼、一樣「持平」。沒有「好壞」判斷——想法多不一定好、美食少不一定壞 */
@@ -79,6 +65,6 @@ export function ganttBars(trips: readonly TripBar[], range: readonly [string, st
 }
 
 /** 整期是否一點資料都沒有（三個主題都空）——畫面顯示「這期沒有紀錄」而不是三張全 0 的卡 */
-export function isEmptyReport(r: Report): boolean {
+export function isEmptyReport(r: PeriodReport): boolean {
   return r.ideas.new + r.ideas.done + r.ideas.started === 0 && r.food.added + r.food.visited === 0 && r.travel.tripDays === 0
 }

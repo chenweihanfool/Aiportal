@@ -1,59 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { parseReport, parseReportsFeed } from './reportsApi'
-import { barPct, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, periodLabel, pinPositions, reportsOf, topCounts } from './reportsView'
+import type { PeriodReport } from './periodStats'
+import { barPct, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, pinPositions, topCounts } from './reportsView'
 
-const base = { period: 'week', range: ['2026-10-19', '2026-10-25'] }
-
-describe('parseReport', () => {
-  it('缺欄位一律當 0／空，不丟例外', () => {
-    const r = parseReport(base)!
-    expect(r.ideas.new).toBe(0)
-    expect(r.ideas.funnel).toEqual({ new: 0, evaluating: 0, doing: 0, done: 0 })
-    expect(r.food.pins).toEqual([])
-    expect(r.travel.trips).toEqual([])
-    expect(r.series).toEqual([])
-    expect(r.partial).toBe(false)
-  })
-  it('壞的週期或區間 → null', () => {
-    expect(parseReport({ period: 'decade', range: ['a', 'b'] })).toBeNull()
-    expect(parseReport({ period: 'week', range: ['2026-10-19'] })).toBeNull()
-    expect(parseReport(null)).toBeNull()
-  })
-  it('濾掉壞的釘子、趟次與逐日列', () => {
-    const r = parseReport({
-      ...base,
-      food: { pins: [{ name: 'a', lat: 25, lng: 121, status: 'visited' }, { name: 'b', lat: 'x', lng: 1 }, { lat: 1, lng: 2, status: '怪' }] },
-      travel: { trips: [{ id: 'T1', title: '台南', start: '2026-10-15', end: '2026-10-17', daysInPeriod: 2 }, { title: '沒有 id' }] },
-      series: [{ date: '2026-10-19', ideas: 1 }, { ideas: 5 }],
-    })!
-    expect(r.food.pins.map((p) => [p.name, p.status])).toEqual([['a', 'visited'], ['—', 'want']])
-    expect(r.travel.trips).toHaveLength(1)
-    expect(r.series).toEqual([{ date: '2026-10-19', ideas: 1, food: 0, travel: 0 }])
-  })
+const mkReport = (over: Partial<PeriodReport> = {}): PeriodReport => ({
+  range: ['2026-10-19', '2026-10-25'], partial: false,
+  ideas: { new: 0, done: 0, started: 0, openAtEnd: 0, doneRate: null, funnel: { new: 0, evaluating: 0, doing: 0, done: 0 }, byCategory: {}, top3: [], oldestOpen: null },
+  food: { added: 0, visited: 0, wantBacklog: 0, avgRating: null, byCuisine: {}, byArea: {}, pins: [], oldestWant: null },
+  travel: { trips: [], tripDays: 0, photos: 0, areas: [] },
+  prev: { range: ['2026-10-12', '2026-10-18'], ideas: { new: 0, done: 0 }, food: { added: 0, visited: 0 }, travel: { tripDays: 0, trips: 0 } },
+  series: [], ...over,
 })
 
-describe('parseReportsFeed', () => {
-  it('還沒推送過 → null', () => {
-    expect(parseReportsFeed({ available: false, payload: null })).toBeNull()
-    expect(parseReportsFeed({ available: true, payload: { reports: [] } })).toBeNull()
-  })
-  it('壞掉的報告被略過，其餘照留', () => {
-    const f = parseReportsFeed({ available: true, payload: { computedAt: '2026-10-22T10:00:00', reports: [base, { period: 'x' }], warnings: ['a', 3] } })!
-    expect(f.reports).toHaveLength(1)
-    expect(f.warnings).toEqual(['a'])
-  })
-})
-
-describe('reportsView', () => {
-  it('reportsOf 依週期過濾並新到舊', () => {
-    const mk = (period: string, s: string) => parseReport({ period, range: [s, s] })!
-    const list = [mk('week', '2026-10-12'), mk('month', '2026-10-01'), mk('week', '2026-10-19')]
-    expect(reportsOf(list, 'week').map((r) => r.range[0])).toEqual(['2026-10-19', '2026-10-12'])
-  })
-  it('periodLabel', () => {
-    expect(periodLabel({ period: 'week', range: ['2026-10-19', '2026-10-25'] })).toBe('10/19–10/25')
-    expect(periodLabel({ period: 'month', range: ['2026-09-01', '2026-09-30'] })).toBe('2026 年 9 月')
-  })
+describe('reportsView（圖表純函式）', () => {
   it('delta：多、少、持平', () => {
     expect(delta(5, 3)).toEqual({ text: '▲ 2（上期 3）', tone: 'up' })
     expect(delta(1, 4)).toEqual({ text: '▼ 3（上期 4）', tone: 'down' })
@@ -92,7 +50,7 @@ describe('reportsView', () => {
     expect(ganttBars([], ['2026-10-19', '2026-10-25'])).toEqual([])
   })
   it('isEmptyReport', () => {
-    expect(isEmptyReport(parseReport(base)!)).toBe(true)
-    expect(isEmptyReport(parseReport({ ...base, travel: { tripDays: 2 } })!)).toBe(false)
+    expect(isEmptyReport(mkReport())).toBe(true)
+    expect(isEmptyReport(mkReport({ travel: { trips: [], tripDays: 2, photos: 0, areas: [] } }))).toBe(false)
   })
 })

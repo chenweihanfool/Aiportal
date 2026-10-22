@@ -37,4 +37,4 @@
 |---|---|---|
 | `example` | 1 | 範例（示範格式，沒有畫面使用；第一個真的新 feed 進來時可以刪） |
 | `kb-arch-stats` | 1 | 知識庫架構頁各節點的處理數字（kb-pipeline `arch-stats-pusher.py`） |
-| `kb-report-stats` | 1 | 週／月報的視覺化統計：最近 8 週＋6 個月的想法・美食・旅遊數字與逐日資料（kb-pipeline `report-stats-pusher.py`，約每小時；畫面 `#reports`；設計見 kb-pipeline `docs/report-visual-design.md`） |
+| `kb-report-stats` | 1 | 週／月報的視覺化統計：最近 8 週＋6 個月的想法・美食・旅遊數字與逐日資料（kb-pipeline `report-stats-pusher.py`，約每小時；**2.55.0 起畫面不再使用**（圖表改由入口網依既有 feed 現算，整合進時間軸報告；推送端與此登記待清理 PR 移除）；設計見 kb-pipeline `docs/report-visual-design.md`） |
