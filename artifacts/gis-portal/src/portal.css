@@ -950,3 +950,7 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .hm-repo-desc { font-size: 0.7rem; color: #9aa4b6; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .hm-repo-meta { margin-top: auto; display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; font-size: 0.62rem; color: #5b6270; }
 .hm-repos-more { align-self: flex-start; }
+/* 電腦版左側多了錨點導覽、主區變窄：知識庫累積的四格數字用寬度算字級（以前用視窗高度），「1,156」才不會擠出格子 */
+@media (min-width: 1300px) {
+  .hm-wrap .hm-kb-n { font-size: clamp(0.9rem, 1.35vw, 1.2rem); }
+}
