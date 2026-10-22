@@ -1,12 +1,10 @@
 // 入口網首頁：頁首、主區（新首頁或舊版首頁）與兩個抽屜的內容。
-import { AccountBadge } from './AuthGate'
 import { DesktopBoard } from './DesktopBoard'
 import { HomeBoard } from './HomeBoard'
-import { COLOR, FONT } from './theme'
+import { COLOR } from './theme'
 import { DimensionGauge, MindIndexCard, SUMMARY_BODIES, SocialIndexCard } from './DimensionCards'
 import { HappinessHeroCard } from './HappinessHero'
-import { FoodMapPill } from './FoodMapPill'
-import { VersionHistory } from './VersionHistory'
+import { TopBar } from './TopBar'
 import { HermesWarRoomSection } from './WarRoom'
 import { hhiTone } from './format'
 import { SubLabel } from './panelUi'
@@ -24,6 +22,7 @@ export function InstrumentPanelView({
   onSiteSelect,
   onRequestUnlock,
   legacy = false,
+  onOpenAdmin,
 }: {
   sites: SiteData[]
   dashboard: DashboardSummary[]
@@ -33,6 +32,8 @@ export function InstrumentPanelView({
   onRequestUnlock: () => void
   /** #legacy 舊版首頁：主區改畫原樣的 DesktopBoard（2.36.0 起預設首頁是 HomeBoard，舊版留作退路） */
   legacy?: boolean
+  /** 開管理後台（頂欄的 ⚙） */
+  onOpenAdmin?: () => void
 }) {
   const privateSites = sites.filter(s => s.isPrivate)
 
@@ -84,36 +85,9 @@ export function InstrumentPanelView({
 
   return (
     <div className="ip-shell" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
-      <div className="ip-head" style={{
-        position: 'relative', flexShrink: 0, padding: '1.4rem 2rem 1.1rem', borderBottom: `2px solid ${COLOR.line}`,
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1.5rem', flexWrap: 'wrap',
-      }}>
-        <div>
-          <div className="hm-titlerow">
-          <h1 style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 'clamp(1.6rem, 4vw, 2.3rem)', margin: 0, lineHeight: 1, color: COLOR.ink, animation: 'header-flicker 12s infinite' }}>
-            翰翰儀表板
-          </h1>
-          {legacy && (
-            <a className="hm-legacy-back" href="#" onClick={e => { e.preventDefault(); window.location.hash = '' }} title="回到新首頁">
-              <span className="hm-legacy-badge">舊版首頁</span>← 回到新首頁
-            </a>
-          )}
-          </div>
-          <span className="ip-head-sub" style={{ fontFamily: FONT.latin, fontSize: '0.62rem', letterSpacing: '0.2em', color: COLOR.amber, textTransform: 'uppercase', marginTop: '0.3rem', display: 'block' }}>
-            Life Instrumentation · 即時遙測面板
-          </span>
-        </div>
-        <div className="ip-head-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
-          <FoodMapPill />
-          <div className="ip-portals" style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, textAlign: 'right', lineHeight: 1.6 }}>
-            {sites.length > 0 ? `${sites.length} PORTALS AVAILABLE` : 'CONNECTING...'}
-          </div>
-          <AccountBadge />
-          <VersionHistory />
-        </div>
-      </div>
+      <TopBar portals={sites.length} legacy={legacy} onOpenAdmin={onOpenAdmin} />
 
-      <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.4rem 1.6rem 5rem' }}>
+      <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 'var(--sp-4) var(--sp-5) var(--sp-6)' }}>
         <div className="ip-layout">
           <div className="ip-main">
         {/* 預設首頁（2.36.0 起）：HomeBoard 五段式；電腦版一個畫面放得下（含左側欄），手機、窄／矮視窗上下堆疊（portal.css 的 hm-*）。
@@ -136,7 +110,7 @@ export function InstrumentPanelView({
         </div>
 
         {!boardOn && (
-        <div style={{ marginTop: '1.4rem', paddingTop: '1rem', borderTop: `1px solid ${COLOR.line}`, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, letterSpacing: '0.06em' }}>
+        <div className="ip-foot">
             <span>AIPORTAL · INSTRUMENT PANEL</span>
             <span>🔐 PRIVATE REQUIRES PASSWORD</span>
           </div>

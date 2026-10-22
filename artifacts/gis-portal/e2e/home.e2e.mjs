@@ -239,7 +239,13 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   check(`${T}：③ 與 ④ 同一列`, Math.abs(g.growth.top - g.fun.top) <= 2)
   const sysLink = await page.locator('.hm-sys .hm-link').boundingBox()
   const gear = await page.locator('button[title="管理後台"]').boundingBox()
-  check(`${T}：⑤ 的「戰情室 →」沒被右下角 ⚙ 蓋住`, !(sysLink.x + sysLink.width > gear.x && sysLink.y + sysLink.height > gear.y), JSON.stringify([sysLink, gear]))
+  // 2.53.0 起 ⚙ 收進頂欄：改成真正的矩形相交判斷（以前 ⚙ 固定在右下角，只比右下）
+  const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+  check(`${T}：⑤ 的「戰情室 →」沒被 ⚙ 蓋住`, !overlap(sysLink, gear), JSON.stringify([sysLink, gear]))
+  const head = await page.locator('.ip-head').boundingBox()
+  check(`${T}：頂欄是單列（高 ${Math.round(head.height)}px ≤ 64），⚙ 在頂欄內`, head.height <= 64 && gear.y >= head.y && gear.y + gear.height <= head.y + head.height + 1, JSON.stringify([head, gear]))
+  const glance = await page.evaluate(() => ({ drag: document.querySelector('[data-testid="hm-glance-drag"]')?.innerText ?? '', sys: document.querySelector('[data-testid="hm-glance-sys"]')?.innerText ?? '', todayBottom: document.querySelector('.hm-today').getBoundingClientRect().bottom }))
+  check(`${T}：今天卡的「一眼看」有最弱面向（財務自由 68、拉低 8.6 分）與系統燈（全部正常），且都在首屏內`, /最弱面向/.test(glance.drag) && /財務自由/.test(glance.drag) && /68/.test(glance.drag) && /拉低總分 8\.6 分/.test(glance.drag) && /全部正常/.test(glance.sys) && glance.todayBottom <= h, JSON.stringify(glance))
   const txt = await page.locator('.hm-root').innerText()
   check(`${T}：① 有分數 71、連 3 天上升、今年已過 %`, /71/.test(txt) && /連 3 天上升/.test(txt) && /已過\s*\d+%/.test(txt))
   check(`${T}：① 一句話含最大短板「財務自由」（biggestDrag：68 分 × 27%）`, /最大的短板是「財務自由」（68 分，拉低總分 8\.6 分）/.test(txt))
@@ -591,6 +597,7 @@ for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
   const t = await page.locator('.hm-root').innerText()
   check('未解鎖：私領域區塊都寫「🔒 解鎖後顯示」（①②③④⑤）', (t.match(/🔒 解鎖後顯示/g) ?? []).length >= 7, String((t.match(/🔒 解鎖後顯示/g) ?? []).length))
   check('未解鎖：不顯示任何假分數（沒有 71、186、1,156）', !/\b71\b|186|1,156/.test(t))
+  check('未解鎖：「一眼看」不露出最弱面向與系統燈（只留今年進度）', (await page.locator('[data-testid="hm-glance-drag"], [data-testid="hm-glance-sys"]').count()) === 0 && !/最弱面向/.test(t))
   check('未解鎖：今年已過 % 仍可顯示（不是私領域資料）', /已過\s*\d+%/.test(t))
   check('未解鎖：沒有向私領域 API 發請求', !calls.some((c) => /hermes-|happiness\/history/.test(c)), calls.join(','))
   const g = await geom(page)

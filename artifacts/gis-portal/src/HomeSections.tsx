@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { COLOR } from './theme'
 import type { HhiBreakdown } from './boardView'
 import type { IdeaItem } from './boardApi'
@@ -13,20 +13,20 @@ import {
   type SystemLight, type YearProgress,
 } from './homeView'
 import { biggestDrag } from './boardView'
+import { dimHash } from './dimensionPage'
+import { HomeCard } from './HomeCard'
 
 // 新首頁（HomeBoard）五個區塊的呈現元件。資料與狀態判定都由 HomeBoard.tsx 傳進來，這裡只負責畫。
-// 樣式在 portal.css 的 hm-* 類別。
+// 樣式在 portal.css 的 hm-* 類別；每個區塊外框是 HomeCard（id、標題、圖示來自 homeNav.ts 的註冊表）。
 
 type Tone = (score: number) => { color: string; label: string }
 
-const Head = ({ title, right }: { title: string; right?: ReactNode }) => (
-  <h2 className="hm-h">{title}{right && <span className="hm-h-right">{right}</span>}</h2>
-)
+const LAMP: Record<SystemLight['level'], string> = { ok: COLOR.ok, warn: COLOR.warn, crit: COLOR.crit, unknown: COLOR.steelDim }
 
 // ── ① 今天 ────────────────────────────────────
 type WantEntry = { name: string; kind: Parameters<typeof statusLabelFor>[0]; area: string | null; days: number }
 
-export function TodaySection({ greetingText, part, dateLabel, st, breakdown, trend, trendNote, sentence, year, toneOf, onOpen, onRequestUnlock }: {
+export function TodaySection({ greetingText, part, dateLabel, st, breakdown, trend, trendNote, sentence, year, toneOf, onOpen, onRequestUnlock, system, onOpenSystem }: {
   greetingText: string
   part: DayPart
   dateLabel: string
@@ -40,12 +40,21 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
   toneOf: Tone
   onOpen: () => void
   onRequestUnlock: () => void
+  /** 「一眼看」欄的系統燈；null＝未解鎖或還沒載入（不顯示這一格） */
+  system?: SystemLight | null
+  onOpenSystem?: () => void
 }) {
   const shown = useCountUp(breakdown?.displayed ?? null)
+  // 只有分數本身看得到（新鮮或過期但仍顯示）時才列最弱面向；未解鎖／載入中／失敗都不露出任何分數
+  const scoreVisible = st.state === 'fresh' || st.state === 'stale'
+  const drag = breakdown && scoreVisible ? biggestDrag(breakdown.rows) : null
+  const dragMeta = drag ? dimensionOf(drag.key) : undefined
+  const dragGap = drag && drag.value !== null ? Math.round(((100 - drag.value) * drag.weightPct) / 10) / 10 : null
+  const sysColor = system ? LAMP[system.level] : COLOR.steelDim
   const tone = breakdown ? toneOf(breakdown.displayed) : null
   const d = trend?.delta ?? null
   return (
-    <section id="sec-today" className="hm-card hm-today" data-part={part} aria-label="今天">
+    <HomeCard id="sec-today" className="hm-today" head={false} data={{ part }}>
       <div className="hm-today-main">
         <div className="hm-hello"><b>{greetingText}，翰翰</b><span>{dateLabel}</span></div>
         <StateFrame status={st} source="幸福指數" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={2} />}
@@ -76,12 +85,30 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
           )}
         </StateFrame>
       </div>
-      <div className="hm-year" role="group" aria-label={`${year.year} 年已過 ${year.pct}%`}>
-        <div className="hm-year-top"><span>{year.year} 已過</span><b>{year.pct}%</b></div>
-        <div className="hm-year-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={year.pct} aria-label="今年已過的比例"><i style={{ width: `${year.pct}%` }} /></div>
-        <div className="hm-year-sub">第 {year.dayOfYear} / {year.daysInYear} 天</div>
+      {/* 一眼看（2.53.0）：最弱面向、系統燈、今年進度——最重要的三件事不用往下捲就看得到 */}
+      <div className="hm-glance" aria-label="重點">
+        {drag && dragMeta && drag.value !== null && (
+          <a className="hm-glance-item hm-glance-drag" href={dimHash(drag.key)} style={{ ['--dim' as string]: dragMeta.color }} data-testid="hm-glance-drag"
+            aria-label={`最弱面向：${dragMeta.label} ${drag.value} 分，點開看面向頁`}>
+            <span className="hm-glance-k">最弱面向</span>
+            <span className="hm-glance-v"><span aria-hidden>{dragMeta.icon}</span>{dragMeta.label}<b>{drag.value}</b></span>
+            {dragGap !== null && <span className="hm-glance-s">拉低總分 {dragGap} 分</span>}
+          </a>
+        )}
+        {system && onOpenSystem && (
+          <button type="button" className="hm-glance-item hm-glance-sys" data-level={system.level} onClick={onOpenSystem} aria-haspopup="dialog" data-testid="hm-glance-sys"
+            aria-label={`系統：${system.headline}。點開看戰情室`} title={system.headline}>
+            <span className="hm-glance-k">系統</span>
+            <span className="hm-glance-v"><i className="hm-lamp" style={{ background: sysColor, boxShadow: `0 0 8px ${sysColor}` }} aria-hidden /><span className="hm-glance-t" style={{ color: system.level === 'warn' || system.level === 'crit' ? sysColor : undefined }}>{system.headline}</span></span>
+          </button>
+        )}
+        <div className="hm-glance-item hm-year" role="group" aria-label={`${year.year} 年已過 ${year.pct}%`}>
+          <div className="hm-year-top"><span>{year.year} 已過</span><b>{year.pct}%</b></div>
+          <div className="hm-year-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={year.pct} aria-label="今年已過的比例"><i style={{ width: `${year.pct}%` }} /></div>
+          <div className="hm-year-sub">第 {year.dayOfYear} / {year.daysInYear} 天</div>
+        </div>
       </div>
-    </section>
+    </HomeCard>
   )
 }
 
@@ -125,14 +152,15 @@ export function DimensionsSection({ st, breakdown, series, links, onOpen, onRequ
   onOpen: (key: string) => void
   onRequestUnlock: () => void
 }) {
-  const drag = breakdown ? biggestDrag(breakdown.rows) : null
+  // 只有分數本身看得到（新鮮或過期但仍顯示）時才列最弱面向；未解鎖／載入中／失敗都不露出任何分數
+  const scoreVisible = st.state === 'fresh' || st.state === 'stale'
+  const drag = breakdown && scoreVisible ? biggestDrag(breakdown.rows) : null
   const anySpark = !!series && Object.values(series).some((x) => x !== null)
   const ghost = <div className="hm-dims">{Array.from({ length: 6 }, (_, i) => <div key={i} className="hm-dim hm-dim--ghost"><Skeleton lines={2} /></div>)}</div>
   return (
-    <section id="sec-dims" className="hm-card hm-dimsec" aria-label="六個面向">
-      <Head title="六個面向" right={anySpark ? <span className="hm-hide-sm">細線＝近 30 天</span> : undefined} />
+    <HomeCard id="sec-dims" className="hm-dimsec" right={<span className="hm-hide-sm">{anySpark ? '細線＝近 30 天・' : ''}點卡片看面向頁</span>}>
       <StateFrame status={st} source="幸福指數" skeleton={ghost} onRequestUnlock={onRequestUnlock} empty="六個面向還沒有資料。">
-        <div className="hm-dims">
+        <div className={`hm-dims${Object.keys(links).length > 0 ? ' has-links' : ''}`}>
           {breakdown?.rows.map((r) => {
             const meta = dimensionOf(r.key)
             const color = meta?.color ?? DIMENSION_FALLBACK_COLOR
@@ -158,7 +186,7 @@ export function DimensionsSection({ st, breakdown, series, links, onOpen, onRequ
           })}
         </div>
       </StateFrame>
-    </section>
+    </HomeCard>
   )
 }
 
@@ -188,6 +216,14 @@ export function YearHeat({ heat, toneOf, label = '幸福指數' }: { heat: Heatm
 
 const kbNum = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'))
 
+/** 成長軌跡標題列的入口（新增一個頁面入口＝加一筆） */
+export const GROWTH_LINKS: ReadonlyArray<{ href: string; label: string; testId?: string }> = [
+  { href: '#year', label: '年度回顧', testId: 'hm-year-link' },
+  { href: '#graph/timeline', label: '時間軸' },
+  { href: '#graph', label: '關係宇宙' },
+  { href: '#architecture', label: '知識庫架構', testId: 'hm-arch-link' },
+]
+
 export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones, toneOf, onRequestUnlock, onRetryHistory, onRetryKb }: {
   histSt: BlockStatus
   heat: Heatmap
@@ -202,8 +238,7 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
 }) {
   const tiles: Array<[string, number | null, number | null]> = [['人物', kb.people, kb.newPeopleThisWeek], ['事件', kb.events, kb.newEventsThisWeek], ['概念', kb.concepts, null], ['方法', kb.methods, null]]
   return (
-    <section id="sec-growth" className="hm-card hm-growth" aria-label="成長軌跡">
-      <Head title="成長軌跡" right={<><a href="#year" className="hm-link" data-testid="hm-year-link">年度回顧 →</a><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a><a href="#architecture" className="hm-link" data-testid="hm-arch-link">知識庫架構 →</a></>} />
+    <HomeCard id="sec-growth" className="hm-growth" right={<>{GROWTH_LINKS.map((l) => <a key={l.href} href={l.href} className="hm-link" data-testid={l.testId}>{l.label} →</a>)}</>}>
       <div className="hm-growth-body">
         <StateFrame status={histSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={onRetryHistory}
           pendingText={heatPending} className="hm-heat-frame">
@@ -244,7 +279,7 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
           </div>
         </div>
       </div>
-    </section>
+    </HomeCard>
   )
 }
 
@@ -264,8 +299,7 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
   onRetryTrips: () => void
 }) {
   return (
-    <section id="sec-fun" className="hm-card hm-fun" aria-label="好玩的">
-      <Head title="好玩的" right={<button type="button" className="hm-link" onClick={onOpenIdeas}>全部想法 →</button>} />
+    <HomeCard id="sec-fun" className="hm-fun" right={<button type="button" className="hm-link" onClick={onOpenIdeas}>全部想法 →</button>}>
       <div className="hm-fun-body">
         <div className="hm-sub">💡 想法庫前三名</div>
         <StateFrame status={ideasSt} source="想法庫" onRequestUnlock={onRequestUnlock} onRetry={onRetryIdeas}
@@ -322,13 +356,11 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
           </div>
         </div>
       </div>
-    </section>
+    </HomeCard>
   )
 }
 
 // ── ⑤ 系統一顆燈 ──────────────────────────────
-const LAMP: Record<SystemLight['level'], string> = { ok: COLOR.ok, warn: COLOR.warn, crit: COLOR.crit, unknown: COLOR.steelDim }
-
 export function SystemSection({ st, light, onOpen, onRequestUnlock }: {
   st: BlockStatus
   light: SystemLight
@@ -338,7 +370,7 @@ export function SystemSection({ st, light, onOpen, onRequestUnlock }: {
   const alert = light.level === 'warn' || light.level === 'crit'
   const color = LAMP[light.level]
   return (
-    <section id="sec-sys" className={`hm-card hm-sys${alert ? ' is-alert' : ''}`} data-level={light.level} style={alert ? { borderColor: color } : undefined} aria-label="系統">
+    <HomeCard id="sec-sys" className={`hm-sys${alert ? ' is-alert' : ''}`} head={false} data={{ level: light.level }} style={alert ? { borderColor: color } : undefined}>
       <StateFrame status={st} source="系統狀態" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={1} />} className="hm-sys-frame">
         <button type="button" className="hm-sys-bar" onClick={onOpen} aria-haspopup="dialog" aria-label={`系統：${light.headline}。點開看戰情室`}>
           <i className="hm-lamp" style={{ background: color, boxShadow: `0 0 8px ${color}` }} aria-hidden />
@@ -352,6 +384,6 @@ export function SystemSection({ st, light, onOpen, onRequestUnlock }: {
           </ul>
         )}
       </StateFrame>
-    </section>
+    </HomeCard>
   )
 }

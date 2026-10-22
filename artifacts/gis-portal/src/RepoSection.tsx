@@ -3,6 +3,7 @@ import type { ReposData } from './repoApi'
 import { DEFAULT_FILTER, filterRepos, languageCounts, pushedLabel, repoStats, sortRepos, type RepoFilter } from './repoView'
 import { Skeleton, StateFrame } from './StateFrame'
 import type { BlockStatus } from './homeView'
+import { HomeCard } from './HomeCard'
 
 // ⑤ 倉庫索引（2026-10-22 使用者要求）：伺服器抓 GitHub，這裡只負責搜尋、篩選與顯示。私有倉庫名稱屬個資，整區要解鎖才看得到。
 const PAGE = 12
@@ -24,13 +25,10 @@ export function ReposSection({ st, data, now, onRequestUnlock, onRetry }: {
   const langs = useMemo(() => languageCounts(repos, filter), [repos, filter])
 
   return (
-    <section id="sec-repos" className="hm-card hm-repos" aria-label="倉庫索引">
-      <h2 className="hm-h">倉庫索引
-        <span className="hm-h-right">
-          {data && <span>{data.owner}・{stats.total} 個{stats.private > 0 ? `（私有 ${stats.private}）` : ''}</span>}
-          <a className="hm-link" href={`https://github.com/${data?.owner ?? ''}?tab=repositories`} target="_blank" rel="noreferrer">GitHub →</a>
-        </span>
-      </h2>
+    <HomeCard id="sec-repos" className="hm-repos" right={<>
+      {data && <span>{data.owner}・{stats.total} 個{stats.private > 0 ? `（私有 ${stats.private}）` : ''}</span>}
+      <a className="hm-link" href={`https://github.com/${data?.owner ?? ''}?tab=repositories`} target="_blank" rel="noreferrer">GitHub →</a>
+    </>}>
       <StateFrame status={st} source="GitHub 倉庫" onRequestUnlock={onRequestUnlock} onRetry={onRetry} skeleton={<Skeleton lines={3} />}
         empty="帳號下還沒有倉庫。">
         <div className="hm-repos-body">
@@ -80,6 +78,6 @@ export function ReposSection({ st, data, now, onRequestUnlock, onRetry }: {
           )}
         </div>
       </StateFrame>
-    </section>
+    </HomeCard>
   )
 }
