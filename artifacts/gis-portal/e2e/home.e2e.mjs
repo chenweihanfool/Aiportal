@@ -80,7 +80,7 @@ const trips = (list) => ({ available: (list?.length ?? 1) > 0, receivedAt: iso(7
   { id: 'taichung-2608', name: '台中兩天一夜', start: tpDate(-70), end: tpDate(-69), status: 'done', area: '台中', summary: null, cover: null, placeIds: [], days: [] },
 ] })
 const layer = (h = 'ok', err = null) => ({ status: 'success', lastRun: '', lastRunTs: Date.now() - 14 * 3600e3, processed: 1, committed: 1, failed: 0, backlog: 0, errorSummary: err, durationSeconds: 60, health: h })
-const pipeline = (over = {}) => ({ available: true, computedAt: iso(), layers: { L1: layer(), L2: layer(), L3: layer(), L4: layer(), L5: layer(), ...over } })
+const pipeline = (over = {}) => ({ available: true, computedAt: iso(), layers: { L1: layer(), L2: layer(), L3: { ...layer(), schedule: ['每日 00:10'] }, L4: layer(), L5: layer(), ...over } })
 const pusher = (feed, level = 'ok', err = null) => ({ feed, path: null, lastOk: iso(60e3), lastFail: null, lastError: err, ageMin: 3, expectedEveryMin: 10, bytes: 1, okCount: 5, failCount: level === 'ok' ? 0 : 2, level })
 const status = (over = {}) => ({ available: true, stale: false, computedAt: iso(), cpuPercent: 5, memPercent: 32, disks: [{ drive: '/opt/data', percentUsed: 38, freeGb: 64, totalGb: 102.9 }], containers: Array.from({ length: 12 }, (_, i) => ({ name: 'c' + i, status: 'running', health: 'healthy' })), scheduledTasks: [], diskAlert: 'ok', storage: [], pushers: [pusher('hermes-graph'), pusher('hermes-usage'), pusher('hermes-ideas')], diskForecast: { basedOnDays: 7, insufficient: false, growthGbPerDay: 0.5, daysUntilFull: 80 }, ...over })
 const usage = (fc = {}) => ({ available: true, today: tpDate(), days: [], last7Days: {}, balance: { enteredAt: iso(), balanceUsd: 29.3, capUsd: 60, refillAt: tpDate(14), monthUsedUsd: 50 }, entries: [],
@@ -457,16 +457,17 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
   check('架構頁：L1～L5 有健康燈（解鎖後取即時狀態）', (await page.locator('.ar-lamp--corner').count()) === 5)
   await page.locator('.ar-node', { hasText: 'L2 消歧' }).click()
   const flow = await page.locator('.ar-detail').innerText()
-  check('架構頁：點 L2 → 上游有 L1、L4、任務系統，下游有 L3', /上游[\s\S]*L1 快掃[\s\S]*L4 文件[\s\S]*任務系統/.test(flow) && /下游[\s\S]*L3 入庫/.test(flow), flow.replace(/\n/g, '|').slice(0, 200))
+  check('架構頁：點 L2 → 上游有 L1、L4、任務系統，下游有 L3', (() => { const [up, down] = flow.split('下游（它餵誰）'); return ['L1 快掃', 'L4 文件', '任務系統'].every((n) => up.includes(n)) && down.includes('L3 入庫') && !down.includes('L1 快掃') })(), flow.replace(/\n/g, '|').slice(0, 200))
   check('架構頁：選取後無關節點淡化（data-rel="none"），上下游有標記', (await page.locator('.ar-node[data-rel="none"]').count()) > 5 && (await page.locator('.ar-node[data-rel="up"]').count()) === 3 && (await page.locator('.ar-node[data-rel="down"]').count()) === 1)
   await page.locator('.ar-node', { hasText: 'LightRAG' }).click()
   const lr = await page.locator('.ar-detail').innerText()
-  check('架構頁：LightRAG 標「試驗中」，明講沒有任何下游、手動執行', /試驗中/.test(lr) && /沒有任何下游/.test(lr) && /手動執行/.test(lr), lr.replace(/\n/g, '|').slice(0, 200))
+  check('架構頁：LightRAG 標「試驗中」，明講手動執行、沒排 cron、沒接任何下游', /試驗中/.test(lr) && /沒接任何下游/.test(lr) && /手動執行/.test(lr) && /沒排 cron/.test(lr), lr.replace(/\n/g, '|').slice(0, 200))
   await page.locator('.ar-chip', { hasText: 'Obsidian vault' }).click()
   check('架構頁：點上游晶片可跳到該節點', /Obsidian vault/.test(await page.locator('.ar-detail h2').innerText()))
   check('架構頁：L3 班表來自即時資料（不是手寫）', await (async () => { await page.locator('.ar-node', { hasText: 'L3 入庫' }).click(); return /班表：/.test(await page.locator('.ar-detail').innerText()) })())
   await page.screenshot({ path: path.join(SHOTS, 'architecture-1440x900.png') })
   await page.locator('.ar-back').click()
+  await page.waitForSelector('.hm-root', { timeout: 10000 })
   check('架構頁：返回 → 回到首頁（hash 清空）', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-root').count()) === 1)
   await ctx.close()
 }
