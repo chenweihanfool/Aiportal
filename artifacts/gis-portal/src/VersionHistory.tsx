@@ -17,7 +17,7 @@ export function VersionHistory() {
   const latest = VERSION_HISTORY[0]!
   return (
     <>
-      <button type="button" className="tb-ver" onClick={() => setExpanded(true)} title="版本歷程" style={{
+      <button type="button" className="tb-ver" onClick={() => setExpanded(true)} title="版本歷程" aria-label={`版本歷程 v${latest.version}`} style={{
         display: 'inline-flex', alignItems: 'center', gap: '6px', background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
         padding: '0.3rem 0.6rem', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steel, whiteSpace: 'nowrap', lineHeight: 1.2,
       }}>
