@@ -168,6 +168,16 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
       if (S.fail.has(key)) return json({ message: 'boom' }, 500)
       return json(k === 'history30' ? (S.history30 ?? S.history) : S[key])
     }
+    if (p === '/api/feed/kb-arch-stats') {
+      calls.push(p)
+      if (S.fail.has('arch-stats')) return json({ message: 'boom' }, 500)
+      if (S.archStatsEmpty) return json({ available: false, name: 'kb-arch-stats', schemaVersion: 1, payload: null, generatedAt: null, receivedAt: null })
+      return json({ available: true, name: 'kb-arch-stats', schemaVersion: 1, generatedAt: tpDate(0), receivedAt: iso(), payload: { computedAt: iso(120e3), nodes: {
+        L1: { metrics: [{ label: '候選事件（累計）', value: 4321, hint: '佇列內所有天的候選事件' }, { label: '今日新增', value: 12 }, { label: '近 7 天', value: 90 }] },
+        L2: { metrics: [{ label: '待正規化', value: 7, hint: '已有候選、還沒被 L2 正規化的候選數' }, { label: '已正規化', value: 3900 }] },
+        L4: { error: 'RuntimeError: 找不到收件夾' },
+      } } })
+    }
     if (p === '/api/paid-services') return json({ deepseek: { status: 'ok', data: { available: true, balances: [{ currency: 'CNY', total: 88.5, granted: 0, toppedUp: 88.5 }] } }, tavily: { status: 'no-key' }, fetchedAt: iso() })
     if (p === '/api/github/repos') {
       if (S.fail.has('repos')) return json({ message: 'boom' }, 502)
@@ -461,6 +471,16 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
   check('架構頁：選取後無關節點淡化（data-rel="none"），上下游有標記', (await page.locator('.ar-node[data-rel="none"]').count()) > 5 && (await page.locator('.ar-node[data-rel="up"]').count()) === 3 && (await page.locator('.ar-node[data-rel="down"]').count()) === 1)
   const retired = await page.locator('[data-testid="ar-retired"]').innerText()
   check('架構頁：LightRAG＋Neo4j 不再是節點，改以「已擱置並移除」說明（含重啟條件）', (await page.locator('.ar-node', { hasText: 'LightRAG' }).count()) === 0 && /已擱置並移除：LightRAG/.test(retired) && /重啟條件/.test(retired) && /embedding/.test(retired))
+  check('架構頁：節點卡片顯示真實數字（L1 候選 4,321）', /候選事件（累計）\s*4,321/.test(await page.locator('.ar-node', { hasText: 'L1 快掃' }).innerText()))
+  await page.locator('.ar-node', { hasText: 'L1 快掃' }).click()
+  check('架構頁：詳情列出 L1 完整數字（近 7 天 90）', /近 7 天\s*90/.test(await page.locator('[data-testid="ar-stats"]').innerText()))
+  await page.locator('.ar-node', { hasText: 'L2 消歧' }).click()
+  const st = await page.locator('[data-testid="ar-stats"]').innerText()
+  check('架構頁：詳情列出完整數字與說明（待正規化 7、已正規化 3,900、怎麼算）', /待正規化\s*7/.test(st) && /已正規化\s*3,900/.test(st) && /還沒被 L2 正規化/.test(st) && !/已過期/.test(st), st)
+  await page.locator('.ar-node', { hasText: 'RAW 文件' }).click()
+  check('架構頁：沒資料的節點寫「沒有可量的處理數字」', /沒有可量的處理數字/.test(await page.locator('[data-testid="ar-stats"]').innerText()))
+  await page.locator('.ar-node', { hasText: 'L4' }).first().click()
+  check('架構頁：單一節點算不出來只標該節點（其他數字照常）', /算不出來：RuntimeError/.test(await page.locator('[data-testid="ar-stats"]').innerText()))
   await page.locator('.ar-node', { hasText: 'kb-ledger' }).click()
   check('架構頁：kb-ledger 備註寫明「沒有任何一個 primary」', /沒有任何一個 primary/.test(await page.locator('.ar-detail').innerText()))
   await page.locator('.ar-chip', { hasText: 'Obsidian vault' }).click()

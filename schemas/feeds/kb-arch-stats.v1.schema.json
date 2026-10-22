@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "kb-arch-stats feed v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "computedAt",
+    "nodes"
+  ],
+  "properties": {
+    "computedAt": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 40
+    },
+    "nodes": {
+      "type": "object",
+      "maxProperties": 40,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "metrics": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "value"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "value": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "maxLength": 80
+                },
+                "hint": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "tone": {
+                  "enum": [
+                    "warn",
+                    "crit"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

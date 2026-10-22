@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { apiFetchHermesPipeline, type HermesPipelineLayerData } from './portalApi'
 import { BANDS, NODES, RETIRED, ROLE_LABEL, neighbors, nodeById, nodesInBand, relationTo, type ArchNode } from './architectureData'
+import { apiFetchArchStats, ageMinutes, cardMetrics, formatValue, isStale } from './archStats'
 import { formatMinutesAgo } from './format'
-import { useAsync } from './homeHooks'
+import { useAsync, useNow } from './homeHooks'
 import { scheduleLine, shortSchedule } from './pipelineSchedule'
 
 // 知識庫架構頁（#architecture，2026-10-22）：分層畫出「來源 → 萃取管線 → 權威儲存 → 衍生索引 → 入口網」，
@@ -28,11 +29,16 @@ function LayerStatus({ layer, unlocked, loading, failed }: { layer: HermesPipeli
 export function ArchitectureView({ unlockedPassword, onBack, onRequestUnlock }: { unlockedPassword: string | null; onBack: () => void; onRequestUnlock: () => void }) {
   const [selected, setSelected] = useState<string | null>('L3')
   const pipeline = useAsync(unlockedPassword, apiFetchHermesPipeline)
+  const stats = useAsync(unlockedPassword, apiFetchArchStats)
+  const now = useNow()
   const unlocked = !!unlockedPassword
   const layers = pipeline.data?.layers ?? null
   const sel = selected ? nodeById(selected) ?? null : null
   const rel = useMemo(() => (selected ? neighbors(selected) : null), [selected])
   const selLayer = sel?.layer && layers ? layers[sel.layer] : null
+  const statsData = stats.data
+  const statsStale = statsData ? isStale(statsData.computedAt, now) : false
+  const selStats = sel && statsData ? statsData.nodes[sel.id] : undefined
 
   const card = (n: ArchNode) => {
     const layer = n.layer && layers ? layers[n.layer] : null
@@ -45,6 +51,11 @@ export function ArchitectureView({ unlockedPassword, onBack, onRequestUnlock }: 
             <span className="ar-badge" data-role={n.role}>{ROLE_LABEL[n.role]}</span>
           </span>
           <span className="ar-node-sub">{n.layer ? shortSchedule(layer?.schedule, n.sub) : n.sub}</span>
+          {cardMetrics(statsData?.nodes[n.id]).length > 0 && (
+            <span className="ar-nums" data-stale={statsStale || undefined}>
+              {cardMetrics(statsData?.nodes[n.id]).map((m) => <span key={m.label} className="ar-num" data-tone={m.tone}>{m.label} <b>{formatValue(m.value)}</b></span>)}
+            </span>
+          )}
           {n.layer && unlocked && layer && <i className="ar-lamp ar-lamp--corner" style={{ background: LAMP[layer.health] ?? LAMP['unknown'] }} aria-label={`健康：${layer.health}`} />}
         </button>
       </li>
@@ -94,6 +105,30 @@ export function ArchitectureView({ unlockedPassword, onBack, onRequestUnlock }: 
                   <LayerStatus layer={selLayer} unlocked={unlocked} loading={pipeline.loading} failed={pipeline.error} />
                   {unlocked && selLayer && scheduleLine(selLayer.schedule, undefined) && <span className="ar-muted">　班表：{scheduleLine(selLayer.schedule, undefined)}</span>}
                 </p>
+              )}
+              {unlocked && (
+                <div className="ar-stats" data-testid="ar-stats">
+                  <div className="ar-label">
+                    真實處理數字
+                    {statsData && <span className="ar-muted">　{formatMinutesAgo(statsData.computedAt)}算的{statsStale ? '（已過期，推送可能停了）' : ''}</span>}
+                  </div>
+                  {stats.loading ? <span className="ar-muted">載入中</span>
+                    : stats.error ? <span className="ar-muted">暫時無法取得</span>
+                    : !statsData ? <span className="ar-muted">尚未收到推送（HERMES 部署後約 10 分鐘內出現）</span>
+                    : !selStats ? <span className="ar-muted">這個節點沒有可量的處理數字</span>
+                    : selStats.error ? <span className="ar-muted">這個節點算不出來：{selStats.error}</span>
+                    : (
+                      <dl className="ar-metrics">
+                        {selStats.metrics.map((m) => (
+                          <div key={m.label} className="ar-metric" data-tone={m.tone}>
+                            <dt>{m.label}</dt>
+                            <dd>{formatValue(m.value)}</dd>
+                            {m.hint && <dd className="ar-hint">{m.hint}</dd>}
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                </div>
               )}
               {sel.note && <p className="ar-note">{sel.note}</p>}
               {sel.scripts && sel.scripts.length > 0 && (

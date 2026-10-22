@@ -15,6 +15,48 @@ export const FEED_NAME = /^[a-z][a-z0-9-]{1,39}$/;
 export const DEFAULT_MAX_BYTES = 1024 * 1024;
 
 export const FEED_REGISTRY: Record<string, FeedDef> = {
+  // 知識庫架構頁（#architecture）各節點的真實處理數字；推送端 kb-pipeline scripts/arch-stats-pusher.py（每 10 分鐘，只讀計算）。
+  "kb-arch-stats": {
+    version: 1,
+    description: "知識庫架構頁各節點的處理數字：候選、已處理、待處理等（節點 id 對應 architectureData.ts）",
+    maxBytes: 64 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "kb-arch-stats feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "nodes"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        nodes: {
+          type: "object",
+          maxProperties: 40,
+          additionalProperties: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              error: { type: "string", maxLength: 300 },
+              metrics: {
+                type: "array",
+                maxItems: 12,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["label", "value"],
+                  properties: {
+                    label: { type: "string", minLength: 1, maxLength: 40 },
+                    value: { type: ["number", "string"], maxLength: 80 },
+                    hint: { type: "string", maxLength: 200 },
+                    tone: { enum: ["warn", "crit"] },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,

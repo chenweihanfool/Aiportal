@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FEED_NAME, FEED_REGISTRY } from "./registry";
+import { validateFeedRequest } from "../lib/feedValidate";
 
 // 推送端用的 JSON 檔：<repo>/schemas/feeds/<name>.v<version>.schema.json，必須與登記表一致。
 // 改了登記表：UPDATE_SCHEMAS=1 pnpm --filter @workspace/api-server test 重新輸出。
@@ -27,5 +28,17 @@ describe("feed registry", () => {
       expect(existsSync(file), `缺 ${file}（跑 UPDATE_SCHEMAS=1 重新輸出）`).toBe(true);
       expect(readFileSync(file, "utf8"), file).toBe(want);
     }
+  });
+
+  it("kb-arch-stats：推送端實際產出的形狀通過、缺欄位或多餘欄位被擋", () => {
+    const body = (payload: unknown) => ({ schemaVersion: 1, generatedAt: "2026-10-22", payload });
+    const ok = { computedAt: "2026-10-22T10:00:00+08:00", nodes: {
+      L1: { metrics: [{ label: "候選事件（累計）", value: 5, hint: "x" }, { label: "待處理", value: "1 / 2", tone: "warn" }] },
+      L4: { error: "RuntimeError: 找不到收件夾" },
+    } };
+    expect(validateFeedRequest("kb-arch-stats", body(ok)).ok).toBe(true);
+    expect(validateFeedRequest("kb-arch-stats", body({ nodes: {} })).ok).toBe(false);
+    expect(validateFeedRequest("kb-arch-stats", body({ ...ok, extra: 1 })).ok).toBe(false);
+    expect(validateFeedRequest("kb-arch-stats", body({ computedAt: ok.computedAt, nodes: { L1: { metrics: [{ label: "x" }] } } })).ok).toBe(false);
   });
 });
