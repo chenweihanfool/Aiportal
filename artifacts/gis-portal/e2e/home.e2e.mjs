@@ -448,6 +448,52 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
   await ctx.close()
 }
 
+// ═══ 3c. 知識庫架構頁（#architecture，2026-10-22）═══
+{
+  const { ctx, page, errors, calls } = await open({ width: 1440, height: 900 }, 'normal', { hash: '#architecture', wait: false })
+  await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page)
+  check('架構頁：五個分層（資料來源、萃取管線、權威儲存、衍生索引、入口網）', (await page.locator('.ar-band').count()) === 5)
+  check('架構頁：17 個節點、沒有頁面錯誤', (await page.locator('.ar-node').count()) === 17 && errors.length === 0, errors.join('|'))
+  check('架構頁：L1～L5 有健康燈（解鎖後取即時狀態）', (await page.locator('.ar-lamp--corner').count()) === 5)
+  await page.locator('.ar-node', { hasText: 'L2 消歧' }).click()
+  const flow = await page.locator('.ar-detail').innerText()
+  check('架構頁：點 L2 → 上游有 L1、L4、任務系統，下游有 L3', /上游[\s\S]*L1 快掃[\s\S]*L4 文件[\s\S]*任務系統/.test(flow) && /下游[\s\S]*L3 入庫/.test(flow), flow.replace(/\n/g, '|').slice(0, 200))
+  check('架構頁：選取後無關節點淡化（data-rel="none"），上下游有標記', (await page.locator('.ar-node[data-rel="none"]').count()) > 5 && (await page.locator('.ar-node[data-rel="up"]').count()) === 3 && (await page.locator('.ar-node[data-rel="down"]').count()) === 1)
+  await page.locator('.ar-node', { hasText: 'LightRAG' }).click()
+  const lr = await page.locator('.ar-detail').innerText()
+  check('架構頁：LightRAG 標「試驗中」，明講沒有任何下游、手動執行', /試驗中/.test(lr) && /沒有任何下游/.test(lr) && /手動執行/.test(lr), lr.replace(/\n/g, '|').slice(0, 200))
+  await page.locator('.ar-chip', { hasText: 'Obsidian vault' }).click()
+  check('架構頁：點上游晶片可跳到該節點', /Obsidian vault/.test(await page.locator('.ar-detail h2').innerText()))
+  check('架構頁：L3 班表來自即時資料（不是手寫）', await (async () => { await page.locator('.ar-node', { hasText: 'L3 入庫' }).click(); return /班表：/.test(await page.locator('.ar-detail').innerText()) })())
+  await page.screenshot({ path: path.join(SHOTS, 'architecture-1440x900.png') })
+  await page.locator('.ar-back').click()
+  check('架構頁：返回 → 回到首頁（hash 清空）', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-root').count()) === 1)
+  await ctx.close()
+}
+{
+  const { ctx, page, calls } = await open({ width: 1440, height: 900 }, 'normal', { unlocked: false, hash: '#architecture', wait: false })
+  await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page, 600)
+  check('架構頁（未解鎖）：結構照樣顯示，狀態寫「🔒 解鎖後顯示」，不發管線請求、沒有健康燈', (await page.locator('.ar-node').count()) === 17 && (await page.locator('.ar-unlock').count()) === 1 && (await page.locator('.ar-lamp--corner').count()) === 0 && !calls.some((c) => /hermes-pipeline/.test(c)), calls.join(','))
+  await ctx.close()
+}
+{
+  const { ctx, page, errors } = await open({ width: 390, height: 844 }, 'normal', { hash: '#architecture', wait: false })
+  await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page, 600)
+  const g = await page.evaluate(() => { const r = document.querySelector('.ar-root'); return { sw: r.scrollWidth, cw: r.clientWidth } })
+  check(`架構頁（手機）：不橫向捲動（${g.sw}/${g.cw}）、沒有頁面錯誤`, g.sw <= g.cw + 1 && errors.length === 0, errors.join('|'))
+  await page.locator('.ar-node', { hasText: 'L3 入庫' }).click()
+  check('架構頁（手機）：點節點後詳情在下方可見', await page.locator('.ar-detail').isVisible())
+  await ctx.close()
+}
+{
+  const { ctx, page } = await open({ width: 1440, height: 900 }, 'normal')
+  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
+  await page.locator('[data-testid="hm-arch-link"]').click()
+  await page.waitForSelector('.ar-node', { timeout: 10000 })
+  check('首頁「成長軌跡 → 知識庫架構」連結可進架構頁', (await page.evaluate(() => location.hash)) === '#architecture')
+  await ctx.close()
+}
+
 // ═══ 4. 手機：順序與橫向捲動 ═══
 for (const [w, h] of [[390, 844], [360, 740]]) {
   for (const scn of ['normal', 'alert', 'spark']) {

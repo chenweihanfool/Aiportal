@@ -203,7 +203,7 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
   const tiles: Array<[string, number | null, number | null]> = [['人物', kb.people, kb.newPeopleThisWeek], ['事件', kb.events, kb.newEventsThisWeek], ['概念', kb.concepts, null], ['方法', kb.methods, null]]
   return (
     <section id="sec-growth" className="hm-card hm-growth" aria-label="成長軌跡">
-      <Head title="成長軌跡" right={<><a href="#year" className="hm-link" data-testid="hm-year-link">年度回顧 →</a><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a></>} />
+      <Head title="成長軌跡" right={<><a href="#year" className="hm-link" data-testid="hm-year-link">年度回顧 →</a><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a><a href="#architecture" className="hm-link" data-testid="hm-arch-link">知識庫架構 →</a></>} />
       <div className="hm-growth-body">
         <StateFrame status={histSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={onRetryHistory}
           pendingText={heatPending} className="hm-heat-frame">

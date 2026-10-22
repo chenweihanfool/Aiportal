@@ -938,3 +938,58 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .hm-dim-cell > .hm-dim { flex: 1 1 auto; }
 .hm-dim-open { align-self: flex-end; font-size: 0.64rem; color: #f5a623; text-decoration: none; padding: 1px 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .hm-dim-open:hover { text-decoration: underline; }
+
+/* ─── 知識庫架構頁（#architecture，2026-10-22）─── */
+.ar-root { position: fixed; inset: 0; z-index: 200; overflow-y: auto; background: #121319; color: #ece9e2; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 0 1rem 3rem; }
+.ar-head { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 1rem; padding: 0.7rem 0; background: #121319; border-bottom: 1px solid #3a3d47; }
+.ar-head h1 { margin: 0; font-size: 1rem; font-weight: 700; }
+.ar-back, .ar-unlock { font: inherit; font-size: 0.72rem; color: #f5a623; background: none; border: 0; padding: 0; cursor: pointer; }
+.ar-unlock { margin-left: auto; border: 1px solid #f5a623; border-radius: 999px; padding: 2px 10px; }
+.ar-legend { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; }
+.ar-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 1rem; align-items: start; }
+.ar-bands { display: grid; gap: 0.2rem; min-width: 0; }
+.ar-band { background: #1a1c22; border: 1px solid #3a3d47; border-radius: 10px; padding: 0.6rem 0.8rem 0.7rem; }
+.ar-band-head { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.45rem; }
+.ar-band-head b { font-size: 0.82rem; }
+.ar-band-head span { font-size: 0.66rem; color: #5b6270; }
+.ar-nodes { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); }
+.ar-down { text-align: center; color: #5b6270; font-size: 1rem; line-height: 1; margin: 0.35rem 0 -0.9rem; position: relative; top: 0.55rem; }
+.ar-node { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; gap: 0.2rem; text-align: left; font: inherit; color: inherit; cursor: pointer; padding: 0.5rem 0.65rem; background: #24262e; border: 1px solid transparent; border-left: 3px solid var(--role, #5b6270); border-radius: 8px; transition: opacity 0.15s ease, border-color 0.15s ease; }
+.ar-node:hover { border-color: #565a68; border-left-color: var(--role, #5b6270); }
+.ar-node:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+.ar-node[data-rel="self"] { border-color: #f5a623; background: #2a2820; }
+.ar-node[data-rel="up"] { border-color: #5f9bf0; }
+.ar-node[data-rel="down"] { border-color: #5fbf7a; }
+.ar-node[data-rel="none"] { opacity: 0.38; }
+.ar-node-top { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; min-width: 0; }
+.ar-node-top b { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-node-sub { font-size: 0.64rem; color: #9aa4b6; line-height: 1.4; }
+.ar-node[data-role="source"], .ar-badge[data-role="source"] { --role: #9aa4b6; }
+.ar-node[data-role="pipeline"], .ar-badge[data-role="pipeline"] { --role: #5f9bf0; }
+.ar-node[data-role="authority"], .ar-badge[data-role="authority"] { --role: #d9b44a; }
+.ar-node[data-role="derived"], .ar-badge[data-role="derived"] { --role: #3fb6a8; }
+.ar-node[data-role="experimental"], .ar-badge[data-role="experimental"] { --role: #ee7a6e; }
+.ar-node[data-role="portal"], .ar-badge[data-role="portal"] { --role: #9b8cf0; }
+.ar-badge { flex: 0 0 auto; font-size: 0.56rem; letter-spacing: 0.04em; padding: 1px 6px; border: 1px solid var(--role, #5b6270); color: var(--role, #9aa4b6); border-radius: 4px; white-space: nowrap; }
+.ar-lamp { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 0.3rem; }
+.ar-lamp--corner { position: absolute; right: 0.5rem; bottom: 0.5rem; margin: 0; }
+.ar-detail { background: #1a1c22; border: 1px solid #3a3d47; border-radius: 10px; padding: 0.8rem 1rem; font-size: 0.78rem; line-height: 1.6; min-width: 0; }
+.ar-detail h2 { margin: 0; font-size: 0.95rem; }
+.ar-detail-top { display: flex; align-items: center; gap: 0.6rem; }
+.ar-detail p { margin: 0.4rem 0; }
+.ar-sub, .ar-muted { color: #9aa4b6; font-size: 0.7rem; }
+.ar-note { color: #e8b23d; font-size: 0.72rem; background: rgba(232,178,61,0.08); border-radius: 6px; padding: 0.4rem 0.55rem; }
+.ar-label { font-size: 0.62rem; color: #5b6270; letter-spacing: 0.08em; margin: 0.6rem 0 0.2rem; }
+.ar-scripts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+.ar-scripts code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.66rem; color: #c7ccd4; word-break: break-all; }
+.ar-flow { display: grid; gap: 0.2rem; }
+.ar-chip { font: inherit; font-size: 0.68rem; color: #ece9e2; background: #24262e; border: 1px solid #3a3d47; border-radius: 999px; padding: 1px 9px; margin: 0 0.3rem 0.3rem 0; cursor: pointer; }
+.ar-chip:hover { border-color: #f5a623; }
+.ar-live { font-size: 0.7rem; color: #c7ccd4; }
+.ar-live--off { color: #5b6270; } .ar-live--bad { color: #e8b23d; }
+.ar-foot { margin: 0.6rem 0 0; font-size: 0.64rem; color: #5b6270; }
+@media (min-width: 1000px) {
+  .ar-layout { grid-template-columns: minmax(0, 1fr) 22rem; }
+  .ar-detail { position: sticky; top: 3.6rem; }
+}
+@media (prefers-reduced-motion: reduce) { .ar-node { transition: none; } }
