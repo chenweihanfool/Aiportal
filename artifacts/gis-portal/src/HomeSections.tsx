@@ -45,7 +45,7 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
   const tone = breakdown ? toneOf(breakdown.displayed) : null
   const d = trend?.delta ?? null
   return (
-    <section className="hm-card hm-today" data-part={part} aria-label="今天">
+    <section id="sec-today" className="hm-card hm-today" data-part={part} aria-label="今天">
       <div className="hm-today-main">
         <div className="hm-hello"><b>{greetingText}，翰翰</b><span>{dateLabel}</span></div>
         <StateFrame status={st} source="幸福指數" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={2} />}
@@ -127,7 +127,7 @@ export function DimensionsSection({ st, breakdown, series, onOpen, onRequestUnlo
   const anySpark = !!series && Object.values(series).some((x) => x !== null)
   const ghost = <div className="hm-dims">{Array.from({ length: 6 }, (_, i) => <div key={i} className="hm-dim hm-dim--ghost"><Skeleton lines={2} /></div>)}</div>
   return (
-    <section className="hm-card hm-dimsec" aria-label="六個面向">
+    <section id="sec-dims" className="hm-card hm-dimsec" aria-label="六個面向">
       <Head title="六個面向" right={anySpark ? <span className="hm-hide-sm">細線＝近 30 天</span> : undefined} />
       <StateFrame status={st} source="幸福指數" skeleton={ghost} onRequestUnlock={onRequestUnlock} empty="六個面向還沒有資料。">
         <div className="hm-dims">
@@ -196,7 +196,7 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
 }) {
   const tiles: Array<[string, number | null, number | null]> = [['人物', kb.people, kb.newPeopleThisWeek], ['事件', kb.events, kb.newEventsThisWeek], ['概念', kb.concepts, null], ['方法', kb.methods, null]]
   return (
-    <section className="hm-card hm-growth" aria-label="成長軌跡">
+    <section id="sec-growth" className="hm-card hm-growth" aria-label="成長軌跡">
       <Head title="成長軌跡" right={<><a href="#year" className="hm-link" data-testid="hm-year-link">年度回顧 →</a><a href="#graph/timeline" className="hm-link">時間軸 →</a><a href="#graph" className="hm-link">關係宇宙 →</a></>} />
       <div className="hm-growth-body">
         <StateFrame status={histSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={onRetryHistory}
@@ -258,7 +258,7 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
   onRetryTrips: () => void
 }) {
   return (
-    <section className="hm-card hm-fun" aria-label="好玩的">
+    <section id="sec-fun" className="hm-card hm-fun" aria-label="好玩的">
       <Head title="好玩的" right={<button type="button" className="hm-link" onClick={onOpenIdeas}>全部想法 →</button>} />
       <div className="hm-fun-body">
         <div className="hm-sub">💡 想法庫前三名</div>
@@ -332,7 +332,7 @@ export function SystemSection({ st, light, onOpen, onRequestUnlock }: {
   const alert = light.level === 'warn' || light.level === 'crit'
   const color = LAMP[light.level]
   return (
-    <section className={`hm-card hm-sys${alert ? ' is-alert' : ''}`} data-level={light.level} style={alert ? { borderColor: color } : undefined} aria-label="系統">
+    <section id="sec-sys" className={`hm-card hm-sys${alert ? ' is-alert' : ''}`} data-level={light.level} style={alert ? { borderColor: color } : undefined} aria-label="系統">
       <StateFrame status={st} source="系統狀態" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={1} />} className="hm-sys-frame">
         <button type="button" className="hm-sys-bar" onClick={onOpen} aria-haspopup="dialog" aria-label={`系統：${light.headline}。點開看戰情室`}>
           <i className="hm-lamp" style={{ background: color, boxShadow: `0 0 8px ${color}` }} aria-hidden />

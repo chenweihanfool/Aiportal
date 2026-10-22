@@ -1,5 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { apiFetchHermesGraph } from './hermesGraphApi'
+import { apiFetchRepos } from './repoApi'
+import { HomeNav } from './HomeNav'
+import { ReposSection } from './RepoSection'
 import { apiFetchPaidServices, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchIdeas, apiFetchUsage } from './boardApi'
 import { apiFetchFood } from './foodApi'
 import { apiFetchTrips } from './tripsApi'
@@ -60,6 +63,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const pushers = status.data?.pushers
   const usage = useAsync(pw, apiFetchUsage)
   const paid = useAsync(pw, apiFetchPaidServices)
+  const repos = useAsync(pw, apiFetchRepos)
 
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
   const histData = history.data ?? []
@@ -148,6 +152,11 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const sysSt = blockState({ unlocked: on, loading: sysLoading, error: false, hasData: !sysLoading, nowMs })
   // ⑥ 付費服務：Ollama 用量與額度端點任一回來就顯示；兩邊都還沒回來才是載入中（付費端點失敗不影響首頁，該列自己顯示原因）
   const svcSt = blockState({ unlocked: on, loading: usage.loading && paid.loading, error: false, hasData: !(usage.loading && paid.loading), nowMs })
+  // 倉庫索引：伺服器 30 分鐘更新一次，所以 30 分鐘是預期間隔；GitHub 抓不到時伺服器會回舊快取，這裡依 fetchedAt 判斷新舊
+  const reposSt = blockState({
+    unlocked: on, loading: repos.loading, error: repos.error, hasData: !!repos.data, empty: !!repos.data && repos.data.repos.length === 0, nowMs,
+    updatedAtMs: repos.data ? Date.parse(repos.data.fetchedAt) : null, expectedEveryMin: 30,
+  })
   const alert = on && (light.level === 'warn' || light.level === 'crit')
 
   const g = greeting(now)
@@ -155,6 +164,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const closeDrawer = () => setDrawer(null)
 
   return (
+    <div className="hm-layout">
+    <HomeNav />
     <div className="hm-root" data-sys={alert ? 'alert' : 'ok'}>
       <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence}
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock} />
@@ -167,10 +178,12 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         foodSt={foodSt} food={{ wantEat: wantEat ? { name: wantEat.place.name, kind: wantEat.place.kind, area: wantEat.place.area, days: wantEat.days } : null, wantGo: wantGo ? { name: wantGo.place.name, kind: wantGo.place.kind, area: wantGo.place.area, days: wantGo.days } : null, been: placesBeenCount(places), total: places.length }}
         tripsSt={tripsSt} trip={trip} onOpenIdeas={() => setDrawer('ideas')} onRequestUnlock={onRequestUnlock}
         onRetryIdeas={ideas.reload} onRetryFood={food.reload} onRetryTrips={trips.reload} />
+      <ReposSection st={reposSt} data={repos.data} now={now} onRequestUnlock={onRequestUnlock} onRetry={repos.reload} />
       {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={closeDrawer}>{hhiDetail}</Drawer>}
       {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} /></Drawer>}
       {drawer === 'svc' && pw && <Drawer title="付費服務：用量與連結・Ollama 更新餘額" onClose={() => { closeDrawer(); usage.reload() }}><PaidServicesPanel pw={pw} usage={usage.data} paid={paid.data} /></Drawer>}
       {drawer === 'ops' && pw && <Drawer title="HERMES 戰情室：推送健康・關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={closeDrawer}><PusherHealthPanel pw={pw} />{opsDetail}</Drawer>}
+    </div>
     </div>
   )
 }

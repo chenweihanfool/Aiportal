@@ -11,7 +11,7 @@ import { HermesWarRoomSection } from './WarRoom'
 import { hhiTone } from './format'
 import { SubLabel } from './panelUi'
 import { type DashboardSummary, type SiteData } from './portalApi'
-import { BOARD_QUERY, HOME_QUERY, useMedia } from './useMedia'
+import { BOARD_QUERY, useMedia } from './useMedia'
 
 // ─────────────────────────────────────────────
 // Instrument Panel View — top-level layout
@@ -47,7 +47,8 @@ export function InstrumentPanelView({
   richSites.sort((a, b) => (HHI_SITE_PRIORITY[a.subsystemId ?? ''] ?? 99) - (HHI_SITE_PRIORITY[b.subsystemId ?? ''] ?? 99))
   const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
   // 電腦版儀表板要一個畫面放得下，頁尾只在手機、窄／矮視窗（頁面本來就要捲動）顯示
-  const boardOn = useMedia(legacy ? BOARD_QUERY : HOME_QUERY)
+  // 新首頁改成可捲動（2026-10-22），頁尾一律顯示；只有舊版 #legacy 仍是一個畫面不捲動
+  const boardOn = useMedia(BOARD_QUERY) && legacy
 
   const dimsGrid = (
     <div className="ip-dim-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>

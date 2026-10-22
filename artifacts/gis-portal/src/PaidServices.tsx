@@ -19,7 +19,7 @@ export function PaidServicesSection({ st, usage, paid, onOpen, onRequestUnlock }
 }) {
   const rows = buildServiceRows({ usage, paid })
   return (
-    <section className="hm-card hm-svc" aria-label="付費服務">
+    <section id="sec-svc" className="hm-card hm-svc" aria-label="付費服務">
       <StateFrame status={st} source="付費服務" onRequestUnlock={onRequestUnlock} skeleton={<Skeleton lines={1} />} className="hm-svc-frame">
         <button type="button" className="hm-svc-bar" onClick={onOpen} aria-haspopup="dialog" aria-label="付費服務用量與連結">
           <b className="hm-sys-name">付費服務</b>
