@@ -7,6 +7,7 @@ import {
 } from './boardApi'
 import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, absorbBadges, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
+import { IdeaLifeSummary, IdeaLifeline, IdeaLineage, IdeaScatter } from './IdeaViz'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
 
@@ -505,6 +506,7 @@ export function IdeasPanel({ pw }: { pw: string }) {
   const cats = useMemo(() => categoryCounts(data?.ideas ?? []), [data])
   const list = useMemo(() => sortForList(filterIdeas(data?.ideas ?? [], cat, st)), [data, cat, st])
   const topSet = new Set(data?.top ?? [])
+  const nowMs = useMemo(() => Date.now(), [data])
   if (error) return <Muted>暫時無法取得想法庫</Muted>
   if (data === null) return <Muted>載入中…</Muted>
   const pill = (active: boolean, color: string = COLOR.amber): CSSProperties => ({
@@ -529,6 +531,11 @@ export function IdeasPanel({ pw }: { pw: string }) {
           <button key={c} type="button" style={pill(cat === c, categoryColor(c === '未分類' ? null : c))} onClick={() => setCat(cat === c ? null : c)}>{c} {n}</button>
         ))}
       </div>
+      <IdeaLifeSummary ideas={data.ideas} nowMs={nowMs} />
+      <details className="bd-idea-item" data-testid="idea-scatter-box">
+        <summary style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}><span style={{ color: COLOR.ink, fontWeight: 600 }}>價值 × 難度：該先做哪個（目前篩選的 {list.length} 個）</span></summary>
+        <div className="bd-idea-detail" style={{ paddingLeft: 12 }}><IdeaScatter ideas={list} /></div>
+      </details>
       {list.length === 0 ? <Muted>沒有符合的想法</Muted> : (
         <div className="bd-idea-list">
           {list.map((it: IdeaItem) => (
@@ -555,6 +562,8 @@ export function IdeasPanel({ pw }: { pw: string }) {
               <div className="bd-idea-detail">
                 {it.why && <p><b>為什麼想做：</b>{it.why}</p>}
                 {it.scoreWhy.length > 0 && <p><b>優先分：</b>{it.scoreWhy.join(' × ')}</p>}
+                <IdeaLifeline idea={it} nowMs={nowMs} />
+                <IdeaLineage ideas={data.ideas} id={it.id} />
                 <p><b>出現在日記：</b>{it.days.join('、') || '—'}</p>
                 <p><b>狀態歷程：</b>{it.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${STATUS_LABEL[h.status as keyof typeof STATUS_LABEL] ?? h.status}`).join(' → ')}</p>
                 <CopyToHermes idea={it} />
