@@ -340,10 +340,7 @@ for (const [w, h, tag] of [[390, 844, 'mobile'], [360, 740, 'mobile-small'], [82
   await page.screenshot({ path: path.join(SHOTS, `board-${tag}.png`), fullPage: false })
   // 整頁長截圖：把捲動容器撐開
   await page.evaluate(() => { const s = document.querySelector('.ip-scroll'); s.scrollTop = s.scrollHeight })
-  const tools = page.locator('.ip-tools')
-  if (await tools.getByText('展開連結列表').count()) await tools.getByText('展開連結列表').click()
-  const toolsTxt = await tools.innerText()
-  check(`${tag} ${w}×${h}：工具連結列出全部私領域（含有摘要的子系統）`, /私領域/.test(toolsTxt) && ['人生進度管理系統', '健身追蹤', '任務追蹤系統', '旅遊生活'].every((n) => toolsTxt.includes(n)))
+  check(`${tag} ${w}×${h}：工具連結區已拿掉（2026-10-22，改由倉庫索引取代）`, (await page.locator('.ip-tools, .ip-aside').count()) === 0)
   await page.screenshot({ path: path.join(SHOTS, `board-${tag}-tools.png`) })
   await page.evaluate(() => { document.querySelector('.ip-scroll').scrollTop = 0 })
   await page.locator('.bd-hhi .bd-more').click()

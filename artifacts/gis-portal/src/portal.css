@@ -99,10 +99,7 @@ body,
   display: flex;
   flex-direction: column;
 }
-.ip-aside { order: 2; }
 .ip-main { order: 1; }
-/* flex 項目內的 margin 不會與外層折疊；歸零，保持手機版與改版前逐像素相同 */
-.ip-aside .ip-tools { margin-bottom: 0 !important; }
 
 /* 美食及旅遊地圖入口：只有手機有頁首膠囊（電腦版從好玩的／⌘K 進；2.45.0 起左側欄的入口卡拿掉）。 */
 @media (min-width: 1100px) {
@@ -115,30 +112,9 @@ body,
   }
   .ip-layout {
     display: grid;
-    grid-template-columns: clamp(240px, 17vw, 320px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.2rem;
     align-items: start;
-  }
-  .ip-aside {
-    order: 0;
-    position: sticky;
-    top: 0;
-    max-height: calc(100vh - 8.5rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-  }
-  .ip-aside .ip-tools {
-    margin-bottom: 0 !important;
-    padding: 1.1rem 1rem 1rem !important;
-  }
-  .ip-tools .ip-switch-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
-    gap: 0.3rem !important;
-  }
-  .ip-tools .ip-switch-grid > div {
-    padding: 0.5rem 0.8rem !important;
-    min-width: 0;
   }
   .ip-main {
     order: 0;
@@ -376,7 +352,6 @@ button.bd-hrow:hover, button.bd-hrow:focus-visible { background: rgba(255,255,25
   .bd-sys { grid-column: span 4; }
   /* 不必捲動：主畫面（含上下留白）剛好等於視窗高 */
   .ip-scroll { padding-bottom: 0.6rem !important; }
-  .ip-aside { max-height: calc(100vh - 9.4rem) !important; }
 }
 /* 手機、窄／矮視窗：卡片上下堆疊、高度隨內容（電腦版那組「平分高度」的 grid 列在這裡全部改回 auto），頁面往下捲 */
 @media (max-width: 1099px), (max-height: 639px) {
@@ -590,15 +565,15 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
 
 /* ─── 新首頁（HomeBoard，2.36.0 起是預設首頁；舊版在 #legacy）───
    五段式（審計報告 §2.6）：① 今天、② 六個面向、③ 成長軌跡、④ 好玩的、⑤ 系統一顆燈；全部用 hm- 前綴，不改既有類別。
-   電腦版（≥1300px 寬且 ≥640px 高，含左側欄）：一個畫面放得下，不捲動（高度沿用 .ip-board-wrap 的 100vh − 9.4rem）；1100–1299px 寬時主區太窄，同手機改上下堆疊、頁面往下捲；
+   電腦版（≥1300px 寬，含左側欄）：2026-10-22 起不再鎖一個畫面，頁面可往下捲、區塊高度隨內容（以前是一個畫面放得下）；1100–1299px 寬時主區太窄，同手機改上下堆疊、頁面往下捲；
    手機、窄／矮視窗：上下堆疊，順序 ① → ⑤（只在異常時）→ ② 兩欄 → ④ → ③，頁面往下捲。
    ⑤ 平常是最下面一條細列；有警告／異常時（.hm-root[data-sys="alert"]）改排到 ① 下方。 */
 @keyframes hm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes hm-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes hm-lamp { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "fun" "growth" "sys" "svc"; }
-.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "fun" "growth" "svc"; }
-.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; } .hm-svc { grid-area: svc; }
+.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "fun" "growth" "repos" "sys" "svc"; }
+.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "fun" "growth" "repos" "svc"; }
+.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; } .hm-svc { grid-area: svc; } .hm-repos { grid-area: repos; }
 
 .hm-card {
   position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.4rem; overflow: hidden;
@@ -738,11 +713,14 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .hm-svc-line { flex: 1 1 14rem; min-width: 0; font-size: 0.72rem; color: #9aa4b6; }
 .hm-reasons { list-style: none; margin: 0; padding: 0 0 0.2rem 1.45rem; display: grid; gap: 1px; font-size: 0.7rem; }
 
-/* 電腦版：一個畫面放得下 */
-@media (min-width: 1300px) and (min-height: 640px) {
-  .hm-root { height: 100%; gap: 0.6rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 0.78fr) minmax(0, 1fr); grid-template-areas: "today today" "dims dims" "growth fun" "sys svc"; }
-  .hm-root[data-sys="alert"] { grid-template-rows: auto auto minmax(0, 0.78fr) minmax(0, 1fr); grid-template-areas: "today today" "sys svc" "dims dims" "growth fun"; }
+/* 電腦版（2026-10-22 起可捲動）：不再把高度鎖在一個畫面；兩欄排法，區塊高度隨內容，新增區塊往下長。 */
+@media (min-width: 1300px) {
+  .ip-board-wrap.hm-wrap { height: auto; min-height: 0; margin-bottom: 1.4rem; }
+  .hm-root { gap: 0.8rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "today today" "dims dims" "growth fun" "repos repos" "sys svc"; }
+  .hm-root[data-sys="alert"] { grid-template-rows: none; grid-template-areas: "today today" "sys svc" "dims dims" "growth fun" "repos repos"; }
   .hm-root[data-sys="alert"] .hm-svc { align-self: start; }
+  .hm-dims { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; }
+  .hm-ideas { grid-auto-rows: auto; }
 }
 /* 手機、窄／矮視窗、1100–1299px 的窄桌面：上下堆疊（.ip-board-wrap 的固定高度在這裡改回隨內容，頁面往下捲） */
 @media (max-width: 1299px), (max-height: 639px) {
@@ -802,7 +780,7 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .hm-legacy-badge { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.1em; color: #121319; background: #f5a623; padding: 1px 8px; border-radius: 999px; }
 .hm-titlerow { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
 /* 電腦版一個畫面：⑤ 右端的「戰情室 →」會被右下角的 ⚙ 管理按鈕（固定在視窗右下）蓋住，右側多留一顆按鈕的寬度 */
-@media (min-width: 1300px) and (min-height: 640px) {
+@media (min-width: 1300px) {
   .hm-wrap .hm-sys { padding-right: 4.2rem; }
 }
 
@@ -911,3 +889,52 @@ button.hm-lock:hover { border-color: #e8b23d; }
 .yr-areas { font-size: 0.85rem !important; }
 .dp-heat-frame { min-height: 6rem; }
 @media (max-width: 479px) { .yr-dim { grid-template-columns: 5rem minmax(0, 1fr) 2.2rem; } .yr-dim .hm-chip { grid-column: 1 / -1; justify-self: start; } }
+
+/* ─── 首頁左側錨點導覽與倉庫索引（2026-10-22）─── */
+.hm-layout { display: block; }
+.hm-nav { position: sticky; top: 0; z-index: 20; display: flex; gap: 0.35rem; overflow-x: auto; padding: 0.4rem 0; margin-bottom: 0.6rem; background: #121319; scrollbar-width: none; }
+.hm-nav::-webkit-scrollbar { display: none; }
+.hm-nav-item { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.35rem; font: inherit; font-size: 0.72rem; color: #9aa4b6; background: #1a1c22; border: 1px solid #3a3d47; border-radius: 999px; padding: 3px 11px; cursor: pointer; white-space: nowrap; }
+.hm-nav-item:hover { color: #ece9e2; border-color: #565a68; }
+.hm-nav-item[data-active="true"] { color: #121319; background: #f5a623; border-color: #f5a623; font-weight: 700; }
+.hm-nav-item:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+.hm-layout section[id^="sec-"] { scroll-margin-top: 3.2rem; }
+@media (min-width: 1300px) {
+  .hm-layout { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 0.9rem; align-items: start; }
+  .hm-nav { flex-direction: column; overflow: visible; top: 0.4rem; margin: 0; padding: 0; background: transparent; gap: 0.3rem; }
+  .hm-nav-item { border-radius: 8px; padding: 6px 10px; justify-content: flex-start; }
+  .hm-layout section[id^="sec-"] { scroll-margin-top: 0.6rem; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+.hm-repos-body { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
+.hm-repos-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; }
+.hm-repos-q { flex: 1 1 14rem; min-width: 0; font: inherit; font-size: 0.78rem; color: #ece9e2; background: #24262e; border: 1px solid #3a3d47; border-radius: 7px; padding: 5px 10px; }
+.hm-repos-q:focus-visible { outline: 2px solid #f5a623; outline-offset: 1px; }
+.hm-check { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; color: #9aa4b6; cursor: pointer; white-space: nowrap; }
+.hm-repos-langs { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.hm-pill { font: inherit; font-size: 0.66rem; color: #9aa4b6; background: #24262e; border: 1px solid #3a3d47; border-radius: 999px; padding: 1px 9px; cursor: pointer; }
+.hm-pill i { font-style: normal; font-family: "IBM Plex Mono", ui-monospace, monospace; color: #5b6270; margin-left: 2px; }
+.hm-pill[data-on="true"] { color: #f5a623; border-color: #f5a623; }
+.hm-pill:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+.hm-repo-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+.hm-repo { display: flex; flex-direction: column; gap: 0.2rem; height: 100%; min-width: 0; padding: 0.55rem 0.7rem; background: #24262e; border: 1px solid transparent; border-radius: 8px; }
+.hm-repo:hover { border-color: #565a68; }
+.hm-repo-main { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; color: inherit; text-decoration: none; }
+.hm-repo-main:focus-visible, .hm-repo-site:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; border-radius: 4px; }
+.hm-repo-site { color: #f5a623; text-decoration: none; }
+.hm-repo-site:hover { text-decoration: underline; }
+.hm-repo-name { font-size: 0.82rem; font-weight: 700; color: #ece9e2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-repo-desc { font-size: 0.7rem; color: #9aa4b6; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hm-repo-meta { margin-top: auto; display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; font-size: 0.62rem; color: #5b6270; }
+.hm-repos-more { align-self: flex-start; }
+/* 電腦版左側多了錨點導覽、主區變窄：知識庫累積的四格數字用寬度算字級（以前用視窗高度），「1,156」才不會擠出格子 */
+@media (min-width: 1300px) {
+  .hm-wrap .hm-kb-n { font-size: clamp(0.85rem, 1.15vw, 1.2rem); white-space: nowrap; }
+}
+
+/* 面向小卡下方的子系統連結（2026-10-22：工具連結區拿掉後，人生進度／健身追蹤／任務追蹤的入口放在對應的面向卡） */
+.hm-dim-cell { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.hm-dim-cell > .hm-dim { flex: 1 1 auto; }
+.hm-dim-open { align-self: flex-end; font-size: 0.64rem; color: #f5a623; text-decoration: none; padding: 1px 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.hm-dim-open:hover { text-decoration: underline; }

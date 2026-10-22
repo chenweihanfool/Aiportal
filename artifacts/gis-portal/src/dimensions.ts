@@ -87,3 +87,19 @@ export const dimensionBySubsystem = (id: string): DimensionDef | null => BY_SUBS
 
 /** 中性識別色（未知面向用） */
 export const DIMENSION_FALLBACK_COLOR = '#9aa4b6'
+
+/**
+ * 面向卡上的「開啟子系統」連結：取該面向來源子系統（人生進度、健身追蹤、任務追蹤）的第一個連結。
+ * 旅遊面向不給外部連結（AdventureLog 已退場，旅遊改走遊記與美食地圖，面向頁裡有入口）；心智、社交沒有外部系統。
+ * 只收 http(s) 網址（資料來自資料庫，不讓 javascript: 之類的字串變成連結）。
+ */
+export function dimensionSiteLinks(sites: ReadonlyArray<{ name: string; subsystemId: string | null; links: ReadonlyArray<{ url: string }> }>): Record<string, { name: string; url: string }> {
+  const out: Record<string, { name: string; url: string }> = {}
+  for (const d of DIMENSIONS) {
+    if (d.detail !== 'subsystem' || d.key === 'travel') continue
+    const site = sites.find((s) => s.subsystemId === d.subsystemId)
+    const url = site?.links[0]?.url
+    if (site && url && /^https?:\/\//i.test(url)) out[d.key] = { name: site.name, url }
+  }
+  return out
+}

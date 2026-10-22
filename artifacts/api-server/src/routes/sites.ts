@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { db, portalSitesTable } from "@workspace/db";
-import { eq, asc } from "drizzle-orm";
+import { isNotNull, asc } from "drizzle-orm";
 import { ADMIN_PASSWORD } from "../lib/adminPassword";
 import { createSession, isAuthorized } from "../lib/adminSession";
 
@@ -21,60 +21,6 @@ interface ApiSite {
   subsystemId: string | null;
 }
 
-const DEFAULT_SITES: Omit<ApiSite, "id">[] = [
-  {
-    name: "人生進度管理系統",
-    subtitle: "Life Progress Management",
-    links: [
-      { label: "進入系統", url: "https://pf-cwh.replit.app/" },
-      { label: "再平衡計算器", url: "https://pf-cwh.replit.app/rebalancer" },
-    ],
-    worldXZ: [4.0, 1.5],
-    isPrivate: true,
-    subsystemId: "pf-cwh",
-  },
-  {
-    name: "健身追蹤",
-    subtitle: "Fitness Tracking",
-    links: [{ label: "進入系統", url: "https://fitness-forge-chenweihanfool.replit.app/" }],
-    worldXZ: [5.5, 3.5],
-    isPrivate: true,
-    subsystemId: "fitnessforge",
-  },
-  {
-    name: "扭曲的夢境",
-    subtitle: "Twisted Dreams — Art",
-    links: [{ label: "進入系統", url: "https://art-mart--chenweihanfool.replit.app/" }],
-    worldXZ: [3.5, -1.0],
-    isPrivate: true,
-    subsystemId: null,
-  },
-  {
-    name: "圖根點管理系統",
-    subtitle: "Survey Control Points",
-    links: [{ label: "進入系統", url: "https://kc2-cwh.replit.app/" }],
-    worldXZ: [-3.0, -1.5],
-    isPrivate: false,
-    subsystemId: null,
-  },
-  {
-    name: "土地移轉分析系統",
-    subtitle: "Land Transfer Analysis",
-    links: [{ label: "進入系統", url: "https://land-transfer-visualizer.replit.app/" }],
-    worldXZ: [-5.0, 1.0],
-    isPrivate: false,
-    subsystemId: null,
-  },
-  {
-    name: "案件排程系統",
-    subtitle: "Case Scheduling",
-    links: [{ label: "進入系統", url: "https://map-scheduler.replit.app/" }],
-    worldXZ: [-3.5, 3.5],
-    isPrivate: false,
-    subsystemId: null,
-  },
-];
-
 function toApiSite(row: typeof portalSitesTable.$inferSelect): ApiSite {
   return {
     id: String(row.id),
@@ -87,16 +33,8 @@ function toApiSite(row: typeof portalSitesTable.$inferSelect): ApiSite {
   };
 }
 
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  if (!isAuthorized(req.headers["x-admin-password"])) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
-
 // 缺 body（沒帶 Content-Type: application/json，Express 會給 undefined）或 body 不是物件時回 400，
-// 而不是在解構時丟 TypeError 變成 500。放在 requireAdmin 之後：未授權者永遠先得到 401。
+// 而不是在解構時丟 TypeError 變成 500。
 function requireJsonObjectBody(req: Request, res: Response, next: NextFunction): void {
   const b: unknown = req.body;
   if (typeof b !== "object" || b === null || Array.isArray(b)) {
@@ -122,134 +60,23 @@ router.post("/auth/verify", requireJsonObjectBody, (req: Request, res: Response)
   }
 });
 
+// 2026-10-22：手動維護的「工具連結」（公領域／私領域）拿掉，入口改由 GitHub 倉庫索引（/api/github/repos）取代。
+// portal_sites 只剩一個用途：六個面向對應的子系統連結（有 subsystem_id 的列，例如人生進度、健身追蹤、任務追蹤），
+// 顯示在首頁面向卡與面向頁。所以：
+//   ・只回有 subsystem_id 的列；
+//   ・要解鎖才給（以前不用解鎖就能讀到私領域子系統的網址）；未解鎖回空清單（不是 403，前端照常載入）；
+//   ・新增／編輯／刪除端點（/sites*、/admin/sites*）與預設資料灌入都已移除，資料表與既有資料原封不動（不需 schema 同步）。
 router.get("/sites", async (req: Request, res: Response) => {
+  if (!isAuthorized(req.headers["x-admin-password"])) {
+    res.json({ sites: [] });
+    return;
+  }
   const rows = await db
     .select()
     .from(portalSitesTable)
+    .where(isNotNull(portalSitesTable.subsystemId))
     .orderBy(asc(portalSitesTable.sortOrder), asc(portalSitesTable.id));
-
-  if (rows.length === 0) {
-    const insertValues = DEFAULT_SITES.map((s, i) => ({
-      name: s.name,
-      subtitle: s.subtitle,
-      links: s.links,
-      worldX: s.worldXZ[0],
-      worldZ: s.worldXZ[1],
-      isPrivate: s.isPrivate,
-      subsystemId: s.subsystemId,
-      sortOrder: i,
-    }));
-    await db.insert(portalSitesTable).values(insertValues);
-    const seeded = await db
-      .select()
-      .from(portalSitesTable)
-      .orderBy(asc(portalSitesTable.sortOrder), asc(portalSitesTable.id));
-    res.json({ sites: seeded.map(toApiSite) });
-    return;
-  }
-
   res.json({ sites: rows.map(toApiSite) });
-});
-
-// 寫入端點同時開在 `/sites*` 與 `/admin/sites*` 兩種前綴：前端（gis-portal App.tsx）實際打的是
-// `/api/admin/sites*`（POST／PATCH／DELETE），舊版只註冊 `/sites*` 且沒有 PATCH，於是「新增／編輯／刪除網站」
-// 全部 404（部署機曾靠未提交的熱修撐著，任何一次重建都會復發）。保留 `/sites*` 是為了相容既有呼叫端。
-// GET `/sites` 維持公開讀取，不加 admin 前綴。
-const SITES_WRITE_PATHS = ["/sites", "/admin/sites"];
-const SITES_ITEM_PATHS = ["/sites/:id", "/admin/sites/:id"];
-
-router.post(SITES_WRITE_PATHS, requireAdmin, requireJsonObjectBody, async (req: Request, res: Response) => {
-  const { name, subtitle, links, worldXZ, isPrivate, subsystemId } = req.body as {
-    name: string;
-    subtitle?: string;
-    links: SiteLink[];
-    worldXZ: [number, number];
-    isPrivate: boolean;
-    subsystemId?: string | null;
-  };
-
-  // 必填欄位（對應 NOT NULL、無預設值的欄位）缺漏或型別不對 → 400，而不是在 name.trim()／worldXZ[0] 或 DB 層炸成 500。
-  // isPrivate／subtitle／subsystemId 有預設或可省略，不在此要求。
-  const validWorld = Array.isArray(worldXZ) && worldXZ.length === 2 && worldXZ.every((n) => typeof n === "number" && Number.isFinite(n));
-  if (typeof name !== "string" || name.trim() === "" || !Array.isArray(links) || !validWorld) {
-    res.status(400).json({ error: "name, links and worldXZ are required" });
-    return;
-  }
-
-  const [inserted] = await db
-    .insert(portalSitesTable)
-    .values({
-      name: name.trim(),
-      subtitle: (subtitle ?? "").trim(),
-      links,
-      worldX: worldXZ[0],
-      worldZ: worldXZ[1],
-      isPrivate,
-      subsystemId: subsystemId?.trim() || null,
-      sortOrder: 999,
-    })
-    .returning();
-
-  res.status(201).json({ site: toApiSite(inserted) });
-});
-
-// PUT 與 PATCH 共用同一個處理器：body 只帶要改的欄位（部分更新），前端用 PATCH，舊呼叫端用 PUT。
-const updateSite = async (req: Request, res: Response) => {
-  const id = parseInt(String(req.params["id"] ?? ""), 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
-
-  const { name, subtitle, links, worldXZ, isPrivate, subsystemId } = req.body as {
-    name?: string;
-    subtitle?: string;
-    links?: SiteLink[];
-    worldXZ?: [number, number];
-    isPrivate?: boolean;
-    subsystemId?: string | null;
-  };
-
-  const updates: Partial<typeof portalSitesTable.$inferInsert> = {};
-  if (name !== undefined) updates.name = name.trim();
-  if (subtitle !== undefined) updates.subtitle = subtitle.trim();
-  if (links !== undefined) updates.links = links;
-  if (worldXZ !== undefined) { updates.worldX = worldXZ[0]; updates.worldZ = worldXZ[1]; }
-  if (isPrivate !== undefined) updates.isPrivate = isPrivate;
-  if (subsystemId !== undefined) updates.subsystemId = subsystemId?.trim() || null;
-
-  // 合法但沒有任何可更新欄位（例如 `{}`）：drizzle 的 .set({}) 會丟 "No values to set" → 500，改回 400。
-  if (Object.keys(updates).length === 0) {
-    res.status(400).json({ error: "No fields to update" });
-    return;
-  }
-
-  const [updated] = await db
-    .update(portalSitesTable)
-    .set(updates)
-    .where(eq(portalSitesTable.id, id))
-    .returning();
-
-  if (!updated) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  res.json({ site: toApiSite(updated) });
-};
-
-router.put(SITES_ITEM_PATHS, requireAdmin, requireJsonObjectBody, updateSite);
-router.patch(SITES_ITEM_PATHS, requireAdmin, requireJsonObjectBody, updateSite);
-
-router.delete(SITES_ITEM_PATHS, requireAdmin, async (req: Request, res: Response) => {
-  const id = parseInt(String(req.params["id"] ?? ""), 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
-
-  await db.delete(portalSitesTable).where(eq(portalSitesTable.id, id));
-  res.json({ ok: true });
 });
 
 export default router;
