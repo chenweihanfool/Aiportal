@@ -168,6 +168,16 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
       if (S.fail.has(key)) return json({ message: 'boom' }, 500)
       return json(k === 'history30' ? (S.history30 ?? S.history) : S[key])
     }
+    if (p === '/api/feed/kb-arch-stats') {
+      calls.push(p)
+      if (S.fail.has('arch-stats')) return json({ message: 'boom' }, 500)
+      if (S.archStatsEmpty) return json({ available: false, name: 'kb-arch-stats', schemaVersion: 1, payload: null, generatedAt: null, receivedAt: null })
+      return json({ available: true, name: 'kb-arch-stats', schemaVersion: 1, generatedAt: tpDate(0), receivedAt: iso(), payload: { computedAt: iso(120e3), nodes: {
+        L1: { metrics: [{ label: '候選事件（累計）', value: 4321, hint: '佇列內所有天的候選事件' }, { label: '今日新增', value: 12 }, { label: '近 7 天', value: 90 }] },
+        L2: { metrics: [{ label: '待正規化', value: 7, hint: '已有候選、還沒被 L2 正規化的候選數' }, { label: '已正規化', value: 3900 }] },
+        L4: { error: 'RuntimeError: 找不到收件夾' },
+      } } })
+    }
     if (p === '/api/paid-services') return json({ deepseek: { status: 'ok', data: { available: true, balances: [{ currency: 'CNY', total: 88.5, granted: 0, toppedUp: 88.5 }] } }, tavily: { status: 'no-key' }, fetchedAt: iso() })
     if (p === '/api/github/repos') {
       if (S.fail.has('repos')) return json({ message: 'boom' }, 502)
@@ -453,15 +463,26 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
   const { ctx, page, errors, calls } = await open({ width: 1440, height: 900 }, 'normal', { hash: '#architecture', wait: false })
   await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page)
   check('架構頁：五個分層（資料來源、萃取管線、權威儲存、衍生索引、入口網）', (await page.locator('.ar-band').count()) === 5)
-  check('架構頁：17 個節點、沒有頁面錯誤', (await page.locator('.ar-node').count()) === 17 && errors.length === 0, errors.join('|'))
+  check('架構頁：15 個節點、沒有頁面錯誤', (await page.locator('.ar-node').count()) === 15 && errors.length === 0, errors.join('|'))
   check('架構頁：L1～L5 有健康燈（解鎖後取即時狀態）', (await page.locator('.ar-lamp--corner').count()) === 5)
   await page.locator('.ar-node', { hasText: 'L2 消歧' }).click()
   const flow = await page.locator('.ar-detail').innerText()
   check('架構頁：點 L2 → 上游有 L1、L4、任務系統，下游有 L3', (() => { const [up, down] = flow.split('下游（它餵誰）'); return ['L1 快掃', 'L4 文件', '任務系統'].every((n) => up.includes(n)) && down.includes('L3 入庫') && !down.includes('L1 快掃') })(), flow.replace(/\n/g, '|').slice(0, 200))
   check('架構頁：選取後無關節點淡化（data-rel="none"），上下游有標記', (await page.locator('.ar-node[data-rel="none"]').count()) > 5 && (await page.locator('.ar-node[data-rel="up"]').count()) === 3 && (await page.locator('.ar-node[data-rel="down"]').count()) === 1)
-  await page.locator('.ar-node', { hasText: 'LightRAG' }).click()
-  const lr = await page.locator('.ar-detail').innerText()
-  check('架構頁：LightRAG 標「試驗中」，明講手動執行、沒排 cron、沒接任何下游', /試驗中/.test(lr) && /沒接任何下游/.test(lr) && /手動執行/.test(lr) && /沒排 cron/.test(lr), lr.replace(/\n/g, '|').slice(0, 200))
+  const retired = await page.locator('[data-testid="ar-retired"]').innerText()
+  check('架構頁：LightRAG＋Neo4j 不再是節點，改以「已擱置並移除」說明（含重啟條件）', (await page.locator('.ar-node', { hasText: 'LightRAG' }).count()) === 0 && /已擱置並移除：LightRAG/.test(retired) && /重啟條件/.test(retired) && /embedding/.test(retired))
+  check('架構頁：節點卡片顯示真實數字（L1 候選 4,321）', /候選事件（累計）\s*4,321/.test(await page.locator('.ar-node', { hasText: 'L1 快掃' }).innerText()))
+  await page.locator('.ar-node', { hasText: 'L1 快掃' }).click()
+  check('架構頁：詳情列出 L1 完整數字（近 7 天 90）', /近 7 天\s*90/.test(await page.locator('[data-testid="ar-stats"]').innerText()))
+  await page.locator('.ar-node', { hasText: 'L2 消歧' }).click()
+  const st = await page.locator('[data-testid="ar-stats"]').innerText()
+  check('架構頁：詳情列出完整數字與說明（待正規化 7、已正規化 3,900、怎麼算）', /待正規化\s*7/.test(st) && /已正規化\s*3,900/.test(st) && /還沒被 L2 正規化/.test(st) && !/已過期/.test(st), st)
+  await page.locator('.ar-node', { hasText: 'RAW 文件' }).click()
+  check('架構頁：沒資料的節點寫「沒有可量的處理數字」', /沒有可量的處理數字/.test(await page.locator('[data-testid="ar-stats"]').innerText()))
+  await page.locator('.ar-node', { hasText: 'L4' }).first().click()
+  check('架構頁：單一節點算不出來只標該節點（其他數字照常）', /算不出來：RuntimeError/.test(await page.locator('[data-testid="ar-stats"]').innerText()))
+  await page.locator('.ar-node', { hasText: 'kb-ledger' }).click()
+  check('架構頁：kb-ledger 備註寫明「沒有任何一個 primary」', /沒有任何一個 primary/.test(await page.locator('.ar-detail').innerText()))
   await page.locator('.ar-chip', { hasText: 'Obsidian vault' }).click()
   check('架構頁：點上游晶片可跳到該節點', /Obsidian vault/.test(await page.locator('.ar-detail h2').innerText()))
   check('架構頁：L3 班表來自即時資料（不是手寫）', await (async () => { await page.locator('.ar-node', { hasText: 'L3 入庫' }).click(); return /班表：/.test(await page.locator('.ar-detail').innerText()) })())
@@ -474,7 +495,7 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
 {
   const { ctx, page, calls } = await open({ width: 1440, height: 900 }, 'normal', { unlocked: false, hash: '#architecture', wait: false })
   await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page, 600)
-  check('架構頁（未解鎖）：結構照樣顯示，狀態寫「🔒 解鎖後顯示」，不發管線請求、沒有健康燈', (await page.locator('.ar-node').count()) === 17 && (await page.locator('.ar-unlock').count()) === 1 && (await page.locator('.ar-lamp--corner').count()) === 0 && !calls.some((c) => /hermes-pipeline/.test(c)), calls.join(','))
+  check('架構頁（未解鎖）：結構照樣顯示，狀態寫「🔒 解鎖後顯示」，不發管線請求、沒有健康燈', (await page.locator('.ar-node').count()) === 15 && (await page.locator('.ar-unlock').count()) === 1 && (await page.locator('.ar-lamp--corner').count()) === 0 && !calls.some((c) => /hermes-pipeline/.test(c)), calls.join(','))
   await ctx.close()
 }
 {

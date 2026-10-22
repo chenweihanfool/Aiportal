@@ -23,6 +23,16 @@ export interface ArchNode {
   note?: string
 }
 
+/** 已擱置並移除的元件：不畫成節點（畫面只放一段說明），但留下決策紀錄與重啟條件，避免日後有人以為漏畫。 */
+export const RETIRED: ReadonlyArray<{ name: string; date: string; why: string; restart: string }> = [
+  {
+    name: 'LightRAG ＋ Neo4j',
+    date: '2026-10-22',
+    why: '終身使用的知識庫以 L1–L5 ＋ SQLite 為基底；LightRAG 的 embedding 在 Gemini 免費層每日 1000 次，59 篇就用完，且要把日記與人物內容送到兩個外部服務；Neo4j 多佔 1.3 GB 記憶體與一個備份排程。第一輪對照試驗因額度作廢，沒有取得抽取品質數據。已從 VPS 刪除容器、資料與腳本。',
+    restart: 'embedding 來源已解決（付費或本機模型），且查詢紀錄顯示語意落差確實是問題。程式與評估文件保留在 kb-pipeline 的 docs/graphrag。',
+  },
+]
+
 export const BANDS: ReadonlyArray<{ id: BandId; title: string; hint: string }> = [
   { id: 'source', title: '資料來源', hint: '進來的原料' },
   { id: 'pipeline', title: '萃取管線', hint: 'cron 喚起 LLM agent，wrapper 只做掃描、組裝、心跳' },
@@ -70,20 +80,12 @@ export const NODES: readonly ArchNode[] = [
   { id: 'ledger', band: 'store', title: 'kb-ledger', sub: 'SQLite（佇列、實體、有型別的邊）', role: 'authority',
     what: '把「佇列、去重、實體、邊、出處」收進資料庫；邊有 8 種型別（participant／case／object／concept／method／source／see_also／body_link）。',
     scripts: ['kbcore/ledger_schema.py', 'kbcore/ledger_sync.py'],
-    note: '各模組旗標 off／shadow／primary，預設全部 off；實機目前切到哪一階段：未驗證。' },
+    note: '10 個模組旗標全是 off 或 shadow，沒有任何一個 primary（HERMES 2026-10-22 實測）：交接的正本仍是 YAML 佇列與 JSON，帳本是影子雙寫。' },
 
   { id: 'kbindex', band: 'derived', title: 'kb-index', sub: 'SQLite FTS5 全文索引', role: 'derived',
     what: '每晚從 vault 重建；回答「誰、何時、哪案」與全文搜尋（kb.py query／about／today）。',
     scripts: ['kb.py', 'kbcore/kb_index.py'],
     note: '關係只有不分型別的 wikilink 邊（links 表）。' },
-  { id: 'lightrag', band: 'derived', title: 'LightRAG', sub: 'LLM 抽取 + 向量檢索', role: 'experimental',
-    what: '把 vault 的文字交給 LLM 抽出實體與關係，建向量索引與圖；能做語意檢索。',
-    scripts: ['scripts/graphrag/pipeline_graphrag.py（kb-pipeline#208，draft）'],
-    note: '手動執行、沒排 cron、沒接任何下游；只索引過 2 篇（2026-10-21，HERMES 回報，非即時）。沒有人名逐字閘；腳本目前會索引日記全文並送到外部模型（程式碼推定，實機未驗證）。' },
-  { id: 'neo4j', band: 'derived', title: 'Neo4j 5 CE', sub: '容器 neo4j-kg', role: 'experimental',
-    what: 'LightRAG 的圖儲存（選了 Neo4JStorage 才需要）；限 1280 MB 記憶體，每日 03:20 備份。',
-    note: '10 個節點、10 條關聯（2026-10-21，非即時）。入口網目前沒有任何地方讀它。' },
-
   { id: 'pushers', band: 'portal', title: 'HERMES 推送', sub: '11 種 feed', role: 'portal',
     what: '每種資料一支 pusher → 一個 /admin 端點 → 一張快照表；關係圖每 10 分鐘推一次。',
     scripts: ['hermes-graph-pusher.py', 'hermes-timeline-pusher.py', 'hermes-status-pusher.py', 'hermes-usage-pusher.py'],
@@ -110,8 +112,6 @@ export const EDGES: readonly ArchEdge[] = [
   { from: 'L3', to: 'ledger', label: 'shadow 寫入' },
   { from: 'vault', to: 'ledger', label: '同步實體與邊' },
   { from: 'vault', to: 'kbindex', label: '每晚重建' },
-  { from: 'vault', to: 'lightrag', label: '手動' },
-  { from: 'lightrag', to: 'neo4j' },
   { from: 'vault', to: 'pushers' },
   { from: 'sidecar', to: 'pushers' },
   { from: 'pushers', to: 'portal' },
