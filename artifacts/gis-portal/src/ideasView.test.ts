@@ -67,3 +67,64 @@ describe('🔀 absorbed ideas', () => {
     expect(absorbBadges({})).toEqual({ mergedInto: null, absorbed: null })   // 舊 API 沒有新欄位
   })
 })
+
+import { buildLifeline, buildLineage, buildScatter, lifeStats, quadrantOf, scaleTime } from './ideasView'
+
+describe('idea provenance (來龍去脈)', () => {
+  const NOW = Date.parse('2026-10-22T12:00:00+08:00')
+  it('builds a lifeline for a finished idea', () => {
+    const lf = buildLifeline(idea('A', {
+      status: 'done', bornAt: '2026-10-01T10:00:00+08:00', mentions: 3, days: ['2026-10-01', '2026-10-05', '2026-10-05', '2026-10-09'],
+      history: [{ status: 'doing', at: '2026-10-12T09:00:00+08:00' }, { status: 'done', at: '2026-10-20T09:00:00+08:00' }],
+    }), NOW)!
+    expect(lf.ongoing).toBe(false)
+    expect(lf.recalls.map((r) => r.date)).toEqual(['2026-10-01', '2026-10-05', '2026-10-09'])
+    expect(lf.steps.map((s) => s.status)).toEqual(['new', 'doing', 'done'])
+    expect(lf.daysAlive).toBe(19)
+    expect(lf.summary).toBe('10/1 誕生 → 想起 3 次 → 10/12 進行中 → 10/20 已實行（歷時 19 天）')
+  })
+  it('runs an open idea up to now, and survives bad data', () => {
+    const lf = buildLifeline(idea('B', { history: [{ status: 'nonsense', at: 'x' }] }), NOW)!
+    expect(lf.ongoing).toBe(true)
+    expect(lf.endMs).toBe(NOW)
+    expect(lf.steps).toHaveLength(1)
+    expect(buildLifeline(idea('C', { bornAt: 'bad' }), NOW)).toBeNull()
+  })
+  it('scales time and tolerates a zero-length span', () => {
+    expect(scaleTime(5, 0, 10, 0, 100)).toBe(50)
+    expect(scaleTime(99, 0, 10, 0, 100)).toBe(100)
+    expect(scaleTime(5, 5, 5, 0, 100)).toBe(50)
+  })
+  it('builds lineage from either side and ignores cycles', () => {
+    const list = [
+      idea('A', { absorbed: ['B', 'C'] }),
+      idea('B', { status: 'absorbed', mergedInto: 'A' }),
+      idea('C', { status: 'absorbed' }), // 只有承接者那邊記了
+      idea('D'),
+    ]
+    const t = buildLineage(list, 'B')!
+    expect(t.root.id).toBe('A')
+    expect(t.root.children.map((c) => c.id)).toEqual(['B', 'C'])
+    expect(t.size).toBe(3)
+    expect(buildLineage(list, 'D')).toBeNull()
+    const loop = [idea('X', { mergedInto: 'Y' }), idea('Y', { mergedInto: 'X', absorbed: ['X'] })]
+    expect(buildLineage(loop, 'X')!.size).toBe(2)
+  })
+  it('scatters value × effort and counts the unrated', () => {
+    const { points, skipped } = buildScatter([idea('A', { value: 5, effort: 1, mentions: 4 }), idea('B', { value: null })])
+    expect(skipped).toBe(1)
+    expect(points[0]).toMatchObject({ x: 1, y: 5, r: 7, open: true })
+    expect(quadrantOf(5, 1)).toBe('quickWin')
+    expect(quadrantOf(5, 4)).toBe('bigBet')
+    expect(quadrantOf(2, 1)).toBe('chore')
+    expect(quadrantOf(2, 5)).toBe('avoid')
+  })
+  it('summarises life stats', () => {
+    const s = lifeStats([
+      idea('A', { status: 'done', mentions: 3, history: [{ status: 'done', at: '2026-10-11T10:00:00+08:00' }] }),
+      idea('B', { status: 'shelved', history: [{ status: 'shelved', at: '2026-10-21T10:00:00+08:00' }] }),
+      idea('C'),
+    ], NOW)
+    expect(s).toEqual({ total: 3, closed: 2, medianDaysToClose: 15, recurring: 1 })
+  })
+})
