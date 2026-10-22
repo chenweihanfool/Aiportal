@@ -80,7 +80,7 @@ const trips = (list) => ({ available: (list?.length ?? 1) > 0, receivedAt: iso(7
   { id: 'taichung-2608', name: '台中兩天一夜', start: tpDate(-70), end: tpDate(-69), status: 'done', area: '台中', summary: null, cover: null, placeIds: [], days: [] },
 ] })
 const layer = (h = 'ok', err = null) => ({ status: 'success', lastRun: '', lastRunTs: Date.now() - 14 * 3600e3, processed: 1, committed: 1, failed: 0, backlog: 0, errorSummary: err, durationSeconds: 60, health: h })
-const pipeline = (over = {}) => ({ available: true, computedAt: iso(), layers: { L1: layer(), L2: layer(), L3: layer(), L4: layer(), L5: layer(), ...over } })
+const pipeline = (over = {}) => ({ available: true, computedAt: iso(), layers: { L1: layer(), L2: layer(), L3: { ...layer(), schedule: ['每日 00:10'] }, L4: layer(), L5: layer(), ...over } })
 const pusher = (feed, level = 'ok', err = null) => ({ feed, path: null, lastOk: iso(60e3), lastFail: null, lastError: err, ageMin: 3, expectedEveryMin: 10, bytes: 1, okCount: 5, failCount: level === 'ok' ? 0 : 2, level })
 const status = (over = {}) => ({ available: true, stale: false, computedAt: iso(), cpuPercent: 5, memPercent: 32, disks: [{ drive: '/opt/data', percentUsed: 38, freeGb: 64, totalGb: 102.9 }], containers: Array.from({ length: 12 }, (_, i) => ({ name: 'c' + i, status: 'running', health: 'healthy' })), scheduledTasks: [], diskAlert: 'ok', storage: [], pushers: [pusher('hermes-graph'), pusher('hermes-usage'), pusher('hermes-ideas')], diskForecast: { basedOnDays: 7, insufficient: false, growthGbPerDay: 0.5, daysUntilFull: 80 }, ...over })
 const usage = (fc = {}) => ({ available: true, today: tpDate(), days: [], last7Days: {}, balance: { enteredAt: iso(), balanceUsd: 29.3, capUsd: 60, refillAt: tpDate(14), monthUsedUsd: 50 }, entries: [],
@@ -445,6 +445,53 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
   check('手機：導覽是頂部橫排（寬 > 高），可橫向滑動', await page.evaluate(() => { const n = document.querySelector('.hm-nav').getBoundingClientRect(); return n.height < 80 && n.width > 300 }))
   const g = await geom(page)
   check('手機：倉庫卡片沒有造成橫向捲動', g.docW <= g.innerW && g.scW <= g.scCW + 1)
+  await ctx.close()
+}
+
+// ═══ 3c. 知識庫架構頁（#architecture，2026-10-22）═══
+{
+  const { ctx, page, errors, calls } = await open({ width: 1440, height: 900 }, 'normal', { hash: '#architecture', wait: false })
+  await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page)
+  check('架構頁：五個分層（資料來源、萃取管線、權威儲存、衍生索引、入口網）', (await page.locator('.ar-band').count()) === 5)
+  check('架構頁：17 個節點、沒有頁面錯誤', (await page.locator('.ar-node').count()) === 17 && errors.length === 0, errors.join('|'))
+  check('架構頁：L1～L5 有健康燈（解鎖後取即時狀態）', (await page.locator('.ar-lamp--corner').count()) === 5)
+  await page.locator('.ar-node', { hasText: 'L2 消歧' }).click()
+  const flow = await page.locator('.ar-detail').innerText()
+  check('架構頁：點 L2 → 上游有 L1、L4、任務系統，下游有 L3', (() => { const [up, down] = flow.split('下游（它餵誰）'); return ['L1 快掃', 'L4 文件', '任務系統'].every((n) => up.includes(n)) && down.includes('L3 入庫') && !down.includes('L1 快掃') })(), flow.replace(/\n/g, '|').slice(0, 200))
+  check('架構頁：選取後無關節點淡化（data-rel="none"），上下游有標記', (await page.locator('.ar-node[data-rel="none"]').count()) > 5 && (await page.locator('.ar-node[data-rel="up"]').count()) === 3 && (await page.locator('.ar-node[data-rel="down"]').count()) === 1)
+  await page.locator('.ar-node', { hasText: 'LightRAG' }).click()
+  const lr = await page.locator('.ar-detail').innerText()
+  check('架構頁：LightRAG 標「試驗中」，明講手動執行、沒排 cron、沒接任何下游', /試驗中/.test(lr) && /沒接任何下游/.test(lr) && /手動執行/.test(lr) && /沒排 cron/.test(lr), lr.replace(/\n/g, '|').slice(0, 200))
+  await page.locator('.ar-chip', { hasText: 'Obsidian vault' }).click()
+  check('架構頁：點上游晶片可跳到該節點', /Obsidian vault/.test(await page.locator('.ar-detail h2').innerText()))
+  check('架構頁：L3 班表來自即時資料（不是手寫）', await (async () => { await page.locator('.ar-node', { hasText: 'L3 入庫' }).click(); return /班表：/.test(await page.locator('.ar-detail').innerText()) })())
+  await page.screenshot({ path: path.join(SHOTS, 'architecture-1440x900.png') })
+  await page.locator('.ar-back').click()
+  await page.waitForSelector('.hm-root', { timeout: 10000 })
+  check('架構頁：返回 → 回到首頁（hash 清空）', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-root').count()) === 1)
+  await ctx.close()
+}
+{
+  const { ctx, page, calls } = await open({ width: 1440, height: 900 }, 'normal', { unlocked: false, hash: '#architecture', wait: false })
+  await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page, 600)
+  check('架構頁（未解鎖）：結構照樣顯示，狀態寫「🔒 解鎖後顯示」，不發管線請求、沒有健康燈', (await page.locator('.ar-node').count()) === 17 && (await page.locator('.ar-unlock').count()) === 1 && (await page.locator('.ar-lamp--corner').count()) === 0 && !calls.some((c) => /hermes-pipeline/.test(c)), calls.join(','))
+  await ctx.close()
+}
+{
+  const { ctx, page, errors } = await open({ width: 390, height: 844 }, 'normal', { hash: '#architecture', wait: false })
+  await page.waitForSelector('.ar-node', { timeout: 15000 }); await settle(page, 600)
+  const g = await page.evaluate(() => { const r = document.querySelector('.ar-root'); return { sw: r.scrollWidth, cw: r.clientWidth } })
+  check(`架構頁（手機）：不橫向捲動（${g.sw}/${g.cw}）、沒有頁面錯誤`, g.sw <= g.cw + 1 && errors.length === 0, errors.join('|'))
+  await page.locator('.ar-node', { hasText: 'L3 入庫' }).click()
+  check('架構頁（手機）：點節點後詳情在下方可見', await page.locator('.ar-detail').isVisible())
+  await ctx.close()
+}
+{
+  const { ctx, page } = await open({ width: 1440, height: 900 }, 'normal')
+  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
+  await page.locator('[data-testid="hm-arch-link"]').click()
+  await page.waitForSelector('.ar-node', { timeout: 10000 })
+  check('首頁「成長軌跡 → 知識庫架構」連結可進架構頁', (await page.evaluate(() => location.hash)) === '#architecture')
   await ctx.close()
 }
 

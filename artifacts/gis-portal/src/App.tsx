@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
 import { RelationshipUniverse } from './RelationshipUniverse'
+import { ArchitectureView } from './ArchitectureView'
 import { TimelineView } from './TimelineView'
 import { TripsView } from './TripsView'
 import { dimKeyFromHash } from './dimensionPage'
@@ -106,6 +107,10 @@ export default function App() {
   }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
+  }
+  // 知識庫架構頁（2026-10-22）：分層架構圖＋L1～L5 即時狀態；入口在首頁「成長軌跡」與戰情室旁
+  if (hashRoute === '#architecture') {
+    return <ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />
   }
   if (hashRoute === '#graph/timeline') {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
