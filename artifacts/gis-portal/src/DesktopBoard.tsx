@@ -5,7 +5,7 @@ import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
   type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type PusherHealth, type IdeaItem, type IdeasData, type IdeasMind, type MindCombined, type UsageData,
 } from './boardApi'
-import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, absorbBadges, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
+import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, absorbBadges, categoryColor, categoryCounts, filterIdeas, hasMerge, nextStatuses, pips, sortForList, sortMergedGroups, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
 import { UsedChart } from './HermesDiskPanel'
 import { IdeaLifeSummary, IdeaLifeline, IdeaLineage, IdeaScatter } from './IdeaViz'
 import { describeForecast, formatBytes, storageShares } from './diskView'
@@ -503,8 +503,13 @@ export function IdeasPanel({ pw }: { pw: string }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
   const [cat, setCat] = useState<string | null>(null)
   const [st, setSt] = useState<StatusFilter>('open')
+  const [q, setQ] = useState('')
   const cats = useMemo(() => categoryCounts(data?.ideas ?? []), [data])
-  const list = useMemo(() => sortForList(filterIdeas(data?.ideas ?? [], cat, st)), [data, cat, st])
+  const list = useMemo(() => {
+    const f = filterIdeas(data?.ideas ?? [], cat, st, q)
+    return st === 'merged' ? sortMergedGroups(f) : sortForList(f)
+  }, [data, cat, st, q])
+  const mergedCount = useMemo(() => (data?.ideas ?? []).filter(hasMerge).length, [data])
   const topSet = new Set(data?.top ?? [])
   const nowMs = useMemo(() => Date.now(), [data])
   if (error) return <Muted>暫時無法取得想法庫</Muted>
@@ -520,8 +525,10 @@ export function IdeasPanel({ pw }: { pw: string }) {
         入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕複製一句話，貼到 Telegram 給 HERMES，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
         {data.receivedAt && <> · 最後更新 {minutesAgo(Date.parse(data.receivedAt))}</>}
       </div>
+      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋想法：標題、編號、原因、類別（空白分隔多個詞）" aria-label="搜尋想法" data-testid="idea-search"
+        style={{ width: '100%', boxSizing: 'border-box', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: 6, color: COLOR.ink, padding: '8px 10px', fontFamily: FONT.body, fontSize: '0.84rem' }} />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {([['open', '開放中'], ['done', '已實行'], ['closed', '擱置／放棄'], ['all', '全部']] as Array<[StatusFilter, string]>).map(([k, l]) => (
+        {([['open', '開放中'], ['done', '已實行'], ['closed', '擱置／放棄'], ['merged', `🔀 有合併過 ${mergedCount}`], ['all', '全部']] as Array<[StatusFilter, string]>).map(([k, l]) => (
           <button key={k} type="button" style={pill(st === k)} onClick={() => setSt(k)}>{l}</button>
         ))}
       </div>
@@ -536,7 +543,7 @@ export function IdeasPanel({ pw }: { pw: string }) {
         <summary style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}><span style={{ color: COLOR.ink, fontWeight: 600 }}>價值 × 難度：該先做哪個（目前篩選的 {list.length} 個）</span></summary>
         <div className="bd-idea-detail" style={{ paddingLeft: 12 }}><IdeaScatter ideas={list} /></div>
       </details>
-      {list.length === 0 ? <Muted>沒有符合的想法</Muted> : (
+      {list.length === 0 ? <Muted>{q.trim() ? `沒有符合「${q.trim()}」的想法（目前篩選：${st === 'all' ? '全部' : st}）` : '沒有符合的想法'}</Muted> : (
         <div className="bd-idea-list">
           {list.map((it: IdeaItem) => (
             <details key={it.id} className="bd-idea-item">
