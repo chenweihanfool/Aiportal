@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BANDS, EDGES, NODES, nodeById, neighbors, nodesInBand, relationTo } from './architectureData'
+import { BANDS, EDGES, NODES, RETIRED, nodeById, neighbors, nodesInBand, relationTo } from './architectureData'
 
 describe('架構拓撲資料', () => {
   it('節點 id 不重複，且每個節點都屬於已宣告的分層', () => {
@@ -30,11 +30,21 @@ describe('架構拓撲資料', () => {
   it('L1～L5 都有對應節點，且 layer 欄位與 id 一致', () => {
     for (const k of ['L1', 'L2', 'L3', 'L4', 'L5'] as const) expect(nodeById(k)?.layer).toBe(k)
   })
-  it('試驗中的節點不連到入口網（目前沒有任何下游）', () => {
+  it('試驗中的節點不連到入口網（目前沒有任何下游；現在沒有試驗中的節點，這條只在將來新增時才有意義）', () => {
     for (const n of NODES.filter((x) => x.role === 'experimental')) {
       const down = neighbors(n.id).down.map((d) => d.id)
       expect(down.includes('portal') || down.includes('pushers'), n.id).toBe(false)
     }
+  })
+  it('LightRAG 與 Neo4j 已移除：不在節點與連線裡，改記在 RETIRED（含重啟條件）', () => {
+    expect(nodeById('lightrag')).toBeUndefined()
+    expect(nodeById('neo4j')).toBeUndefined()
+    expect(EDGES.some((e) => /lightrag|neo4j/.test(e.from + e.to))).toBe(false)
+    expect(RETIRED).toHaveLength(1)
+    expect(RETIRED[0]!.restart).toMatch(/embedding/)
+  })
+  it('kb-ledger 的備註如實寫「沒有 primary」', () => {
+    expect(nodeById('ledger')?.note).toMatch(/沒有任何一個 primary/)
   })
   it('只有 L3 與 L5 與確定性萃取器會寫進 vault（權威來源的寫入者清楚）', () => {
     expect(neighbors('vault').up.map((n) => n.id).sort()).toEqual(['L3', 'L5', 'sidecar'])
@@ -57,6 +67,6 @@ describe('neighbors／relationTo', () => {
     expect(relationTo('L2', 'L2')).toBe('self')
     expect(relationTo('L2', 'L1')).toBe('up')
     expect(relationTo('L2', 'L3')).toBe('down')
-    expect(relationTo('L2', 'neo4j')).toBe('none')
+    expect(relationTo('L2', 'kbindex')).toBe('none')
   })
 })

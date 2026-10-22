@@ -5,6 +5,15 @@
 // ─────────────────────────────────────────────
 export const VERSION_HISTORY = [
   {
+    version: '2.49.0',
+    date: '2026-10-22',
+    summary: '知識庫架構頁：LightRAG 與 Neo4j 改為「已擱置並移除」，ledger 備註改成實機事實',
+    changes: [
+      '使用者 2026-10-22 裁定以 L1–L5 ＋ SQLite 為基底，擱置並刪除 LightRAG 與 Neo4j（HERMES 已從 VPS 移除容器、資料與腳本）。架構頁不再把它們畫成節點，改在頁尾寫明擱置原因與重啟條件（embedding 來源已解決，且查詢紀錄顯示語意落差確實是問題）。',
+      'kb-ledger 節點的備註改成實機實測：10 個模組旗標全是 off 或 shadow，沒有任何一個 primary，交接的正本仍是 YAML 佇列與 JSON。',
+    ],
+  },
+  {
     version: '2.48.0',
     date: '2026-10-22',
     summary: '新增「知識庫架構」頁：分層畫出來源、萃取管線、權威儲存、衍生索引、入口網，L1～L5 帶即時狀態',

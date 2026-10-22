@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { apiFetchHermesPipeline, type HermesPipelineLayerData } from './portalApi'
-import { BANDS, NODES, ROLE_LABEL, neighbors, nodeById, nodesInBand, relationTo, type ArchNode } from './architectureData'
+import { BANDS, NODES, RETIRED, ROLE_LABEL, neighbors, nodeById, nodesInBand, relationTo, type ArchNode } from './architectureData'
 import { formatMinutesAgo } from './format'
 import { useAsync } from './homeHooks'
 import { scheduleLine, shortSchedule } from './pipelineSchedule'
@@ -72,6 +72,13 @@ export function ArchitectureView({ unlockedPassword, onBack, onRequestUnlock }: 
             </section>
           ))}
           <p className="ar-foot">節點總數 {NODES.length}。L1～L5 的班表與健康狀態取自 jobs.json 與心跳，其餘為結構說明；「非即時」的數字是當時回報的快照。</p>
+          {RETIRED.map((r) => (
+            <div key={r.name} className="ar-retired" data-testid="ar-retired">
+              <b>已擱置並移除：{r.name}</b><span>（{r.date}）</span>
+              <p>{r.why}</p>
+              <p><b>重啟條件：</b>{r.restart}</p>
+            </div>
+          ))}
         </div>
 
         <aside className="ar-detail" aria-live="polite">
