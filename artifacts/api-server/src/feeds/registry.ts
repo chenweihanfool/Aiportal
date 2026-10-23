@@ -57,43 +57,6 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
-  // 日／週／月／季／年報的視覺化統計（想法・美食・旅遊）；推送端 kb-pipeline scripts/report-stats-pusher.py（併在推送總管，自己節流成約每小時一次）。
-  // 設計見 kb-pipeline docs/report-visual-design.md。目前只推最近 8 週＋6 個月；每份報告的內層欄位由推送端的 kbcore/period_stats.py 定義，
-  // 這裡只驗外層形狀（內層由前端 reportsApi.ts 逐欄防呆），之後加欄位不必升 version。
-  "kb-report-stats": {
-    version: 1,
-    description: "週期統計：最近幾週與幾個月的想法、美食、旅遊數字與逐日資料（給報表頁畫圖）",
-    maxBytes: 512 * 1024,
-    schema: {
-      $schema: "http://json-schema.org/draft-07/schema#",
-      title: "kb-report-stats feed v1",
-      type: "object",
-      additionalProperties: false,
-      required: ["computedAt", "reports"],
-      properties: {
-        computedAt: { type: "string", minLength: 10, maxLength: 40 },
-        warnings: { type: "array", maxItems: 10, items: { type: "string", maxLength: 300 } },
-        reports: {
-          type: "array",
-          maxItems: 40,
-          items: {
-            type: "object",
-            required: ["period", "range"],
-            properties: {
-              period: { enum: ["day", "week", "month", "quarter", "year"] },
-              range: { type: "array", minItems: 2, maxItems: 2, items: { type: "string", minLength: 10, maxLength: 10 } },
-              ideas: { type: "object" },
-              food: { type: "object" },
-              travel: { type: "object" },
-              prev: { type: "object" },
-              series: { type: "array", maxItems: 366, items: { type: "object" } },
-              meta: { type: "object" },
-            },
-          },
-        },
-      },
-    },
-  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,
