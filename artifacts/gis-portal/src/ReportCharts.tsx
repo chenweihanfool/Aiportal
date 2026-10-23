@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 import { COLOR } from './theme'
 import type { PeriodReport } from './periodStats'
+import type { ReportScore } from './timelineApi'
 import {
-  FUNNEL_STEPS, SERIES_ROWS, cellLevel, dayOfMonth, delta, funnelRows, ganttBars, isEmptyReport, pinPositions, topCounts, type Delta,
+  FUNNEL_STEPS, SERIES_ROWS, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, levelOf, pinPositions, rhythmCells, topCounts,
+  type Delta, type RhythmLevel,
 } from './reportsView'
 
 // 週報／月報的圖表帶（時間軸報告對話框的上半部）。圖全是 SVG／CSS，不引入圖表套件。
@@ -33,21 +35,28 @@ function Bars({ rows, label }: { rows: Array<{ label: string; value: number; pct
   )
 }
 
-function Rhythm({ r }: { r: PeriodReport }) {
-  const dense = r.series.length > 10
+function Rhythm({ r, level }: { r: PeriodReport; level: RhythmLevel }) {
+  const { cells, aggregated } = useMemo(() => rhythmCells(r.series, level), [r.series, level])
+  if (cells.length === 0) return null
+  const dense = !aggregated && cells.length > 10
+  const hint = level === 'quarter' ? '每格一週，越深越多' : level === 'year' ? '每格一個月，越深越多' : '每格一天，越深越多'
   return (
     <section className="hm-card rp-rhythm" aria-label="活動節奏" data-testid="rp-rhythm">
-      <h2 className="hm-h">活動節奏<span className="hm-h-right rp-hint">每格一天，越深越多</span></h2>
-      {r.series.length === 0 ? <p className="hm-note">沒有逐日資料。</p> : SERIES_ROWS.map((row) => (
-        <div key={row.key} className="rp-row" role="img" aria-label={`${row.label}：${r.series.filter((s) => s[row.key] > 0).length} 天有紀錄`}>
-          <span className="rp-row-l">{row.label}</span>
-          <div className="rp-cells" data-dense={dense ? 'true' : undefined} style={{ gridTemplateColumns: `repeat(${r.series.length}, minmax(0, 1fr))` }}>
-            {r.series.map((s) => (
-              <i key={s.date} className="rp-cell" data-lv={cellLevel(s[row.key])} data-k={row.key} title={`${s.date.slice(5)}：${s[row.key]}`}>{!dense ? dayOfMonth(s) : ''}</i>
-            ))}
+      <h2 className="hm-h">活動節奏<span className="hm-h-right rp-hint">{hint}；滑過格子看是哪些</span></h2>
+      {SERIES_ROWS.map((row) => {
+        const max = Math.max(0, ...cells.map((c) => c[row.key]))
+        return (
+          <div key={row.key} className="rp-row" role="img" aria-label={`${row.label}：${cells.filter((c) => c[row.key] > 0).length} 格有紀錄`}>
+            <span className="rp-row-l">{row.label}</span>
+            <div className="rp-cells" data-dense={dense ? 'true' : undefined} style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}>
+              {cells.map((c, i) => (
+                <i key={i} className="rp-cell" tabIndex={c[row.key] > 0 ? 0 : -1} data-lv={aggregated ? levelOf(c[row.key], max) : cellLevel(c[row.key])} data-k={row.key}
+                  title={c.tips[row.key]} aria-label={c.tips[row.key].replace(/\n/g, '；')}>{dense ? '' : c.label}</i>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </section>
   )
 }
@@ -142,14 +151,75 @@ function TravelCard({ r }: { r: PeriodReport }) {
   )
 }
 
-/** 圖表帶：三個數字卡（附與上期的差）、活動節奏、想法／美食／旅遊三張卡。整期沒有紀錄就直接說沒有。 */
-export function ReportCharts({ r, unit, missing }: { r: PeriodReport; unit: '週' | '月'; missing: string[] }) {
+const STATUS_TAG: Record<'visited' | 'favorite' | 'want', string> = { visited: '吃過', favorite: '愛店', want: '想吃' }
+
+/** 日報的每日分數：五項各 0–4（總分×5＝0–100），一項一條 */
+export function ScoreBars({ score }: { score: ReportScore }) {
   return (
-    <div className="rp-band" data-testid="rp-band">
-      {r.partial && <p className="hm-note" data-testid="rp-partial">這{unit === '週' ? '週' : '個月'}還沒結束，數字會繼續變。</p>}
+    <section className="hm-card" aria-label="每日報告分數" data-testid="rp-score">
+      <h2 className="hm-h">📊 每日報告分數<span className="hm-h-right"><b>{score.total * 5}</b> / 100</span></h2>
+      <ul className="rp-bars rp-score-bars">
+        {score.parts.map((p) => (
+          <li key={p.key} title={p.note || undefined}>
+            <span className="rp-bar-l">{p.label}</span>
+            <span className="rp-bar-track" aria-hidden><i style={{ width: `${Math.round((p.value / 4) * 100)}%` }} /></span>
+            <b>{p.value}</b>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/** 日報：這一天的想法、美食、旅程（清單，不畫漏斗與長條） */
+function DayBand({ r }: { r: PeriodReport }) {
+  const trips = r.travel.trips
+  return (
+    <div className="rp-grid" data-testid="rp-day">
+      <section className="hm-card" aria-label="想法" data-testid="rp-ideas">
+        <h2 className="hm-h">💡 想法</h2>
+        {r.ideas.bornList.length + r.ideas.doneList.length === 0 ? <p className="hm-note">這天沒有新想法。</p> : (
+          <ul className="rp-day-list">
+            {r.ideas.bornList.map((i) => <li key={`b${i.id}`}><span>{i.title}</span>{i.category && <small>{i.category}</small>}</li>)}
+            {r.ideas.doneList.map((i) => <li key={`d${i.id}`}><span>✅ {i.title}</span><small>實行</small></li>)}
+          </ul>
+        )}
+      </section>
+      <section className="hm-card" aria-label="美食" data-testid="rp-food">
+        <h2 className="hm-h">🍜 美食<span className="hm-h-right"><a href="#food" className="hm-link">美食地圖 →</a></span></h2>
+        {r.food.touched.length === 0 ? <p className="hm-note">這天沒有美食紀錄。</p> : (
+          <ul className="rp-day-list">
+            {r.food.touched.map((p, i) => <li key={i}><span>{p.name}</span><small>{STATUS_TAG[p.status]}</small></li>)}
+          </ul>
+        )}
+      </section>
+      <section className="hm-card" aria-label="旅遊" data-testid="rp-travel">
+        <h2 className="hm-h">🧭 旅遊<span className="hm-h-right"><a href="#trips" className="hm-link">遊記 →</a></span></h2>
+        {trips.length === 0 ? <p className="hm-note">這天沒有旅程。</p> : (
+          <ul className="rp-day-list">
+            {trips.map((t) => <li key={t.id}><a href={`#trips/${encodeURIComponent(t.id)}`} className="hm-link">{t.title}</a><small>{t.photos > 0 ? `相片 ${t.photos}` : t.area ?? ''}</small></li>)}
+          </ul>
+        )}
+      </section>
+    </div>
+  )
+}
+
+const UNIT: Record<RhythmLevel, { word: string; period: string }> = {
+  day: { word: '日', period: '這一天' }, week: { word: '週', period: '這週' }, month: { word: '月', period: '這個月' },
+  quarter: { word: '季', period: '這一季' }, year: { word: '年', period: '這一年' },
+}
+const PREV_WORD: Record<RhythmLevel, string> = { day: '前一天', week: '上週', month: '上個月', quarter: '上一季', year: '去年' }
+
+/** 圖表帶：三個數字卡（附與上期的差）、活動節奏、想法／美食／旅遊。整期沒有紀錄就直接說沒有。 */
+export function ReportCharts({ r, level, missing }: { r: PeriodReport; level: RhythmLevel; missing: string[] }) {
+  const u = UNIT[level]
+  return (
+    <div className="rp-band" data-testid="rp-band" data-level={level}>
+      {r.partial && <p className="hm-note" data-testid="rp-partial">{u.period}還沒結束，數字會繼續變。</p>}
       {missing.length > 0 && <p className="hm-note" role="status" data-testid="rp-missing">圖表資料暫時讀不到：{missing.join('、')}（該主題以沒有資料計）。</p>}
       {isEmptyReport(r) ? (
-        <section className="hm-card" data-testid="rp-none"><p className="hm-note">這{unit === '週' ? '週' : '個月'}沒有想法、美食或旅程的紀錄。</p></section>
+        <section className="hm-card" data-testid="rp-none"><p className="hm-note">{u.period}沒有想法、美食或旅程的紀錄。</p></section>
       ) : (
         <>
           <section className="rp-stats" aria-label="三個主題的數字">
@@ -157,15 +227,19 @@ export function ReportCharts({ r, unit, missing }: { r: PeriodReport; unit: '週
             <Stat icon="🍜" title="新增想吃" value={r.food.added} unit="間" d={delta(r.food.added, r.prev.food.added)} sub={`吃過 ${r.food.visited}`} />
             <Stat icon="🧭" title="出門天數" value={r.travel.tripDays} unit="天" d={delta(r.travel.tripDays, r.prev.travel.tripDays)} sub={`${r.travel.trips.length} 趟`} />
           </section>
-          <Rhythm r={r} />
-          <div className="rp-grid">
-            <IdeasCard r={r} />
-            <FoodCard r={r} />
-            <TravelCard r={r} />
-          </div>
+          {level === 'day' ? <DayBand r={r} /> : (
+            <>
+              <Rhythm r={r} level={level} />
+              <div className="rp-grid">
+                <IdeasCard r={r} />
+                <FoodCard r={r} />
+                <TravelCard r={r} />
+              </div>
+            </>
+          )}
         </>
       )}
-      <p className="hm-note rp-foot">與「{r.prev.range[0].slice(5)}～{r.prev.range[1].slice(5)}」比較；圖表依想法庫、地點、遊記資料現算。</p>
+      <p className="hm-note rp-foot">與{PREV_WORD[level]}（{r.prev.range[0].slice(5)}～{r.prev.range[1].slice(5)}）比較；圖表依想法庫、地點、遊記資料現算。</p>
     </div>
   )
 }

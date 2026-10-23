@@ -37,7 +37,7 @@ describe('parseReportSections', () => {
   })
   it('舊世代：粗體單行當標題、首段是前言', () => {
     const q = parseReportSections('📅 **週報 2026-06-21 ~ 2026-06-27**\n\n**📊 本週重點**\n這週重心在檢核表。\n')
-    expect(q.intro).toContain('週報')       // 首行不是「整行粗體」，歸前言；內容不會遺失
+    expect(q.title).toContain('週報')       // 首行「📅 **週報 …**」是報告標題，不是段落
     expect(q.sections).toHaveLength(1)
     expect(q.sections[0]).toMatchObject({ icon: '📊', title: '本週重點', kind: 'hero', body: '這週重心在檢核表。' })
   })
@@ -83,5 +83,35 @@ describe('splitEntries', () => {
   })
   it('沒有這種結構回 null（例如「本週以獨立作業為主」一句話）', () => {
     expect(splitEntries('本週以獨立作業與常規流程為主，無新增顯著人物協同模式。')).toBeNull()
+  })
+})
+
+describe('日報格式', () => {
+  it('第三代：emoji 在粗體外的標題（⚡ **狀態與決策**）也算段落', () => {
+    const p = parseReportSections('# 🌙 每日精煉洞察 2026-09-28\n\n⚡ **狀態與決策**\n今天主要在整理管線。\n\n🔦 **盲點與懸浮**\n有一件事沒有歸屬。\n')
+    expect(p.sections.map((s) => [s.icon, s.title, s.kind])).toEqual([['⚡', '狀態與決策', 'generic'], ['🔦', '盲點與懸浮', 'warn']])
+  })
+  it('條列模組：- 📝 當日總結（約 90 字）：內容', () => {
+    const md = `🌙 每日精煉洞察 2026-10-20
+- 📝 當日總結（約 90 字）：上午整理檢核表，下午收斂路徑設定。
+- ⚡ 狀態與決策（約 50 字）：偏獨立機制。
+- 🔦 盲點與懸浮（約 90 字）：補件通知連日被點名卻無痕滑過。
+  第二行延續。
+- 🎯 高槓桿行動（約 70 字）：明天先補一份備援清單。
+- 🕰️ 歷史共鳴（約 90 字）：一年前同一天也在整理設定。`
+    const p = parseReportSections(md)
+    expect(p.sections.map((s) => [s.title, s.kind])).toEqual([
+      ['當日總結', 'hero'], ['狀態與決策', 'generic'], ['盲點與懸浮', 'warn'], ['高槓桿行動', 'action'], ['歷史共鳴', 'generic'],
+    ])
+    expect(p.sections[2]!.body).toContain('第二行延續')
+    expect(p.sections[0]!.body).toContain('上午整理檢核表')
+    expect(p.intro).toContain('每日精煉洞察')
+  })
+  it('只有兩個條列不當作模組（避免把一般清單拆成卡片）', () => {
+    expect(parseReportSections('- 📝 甲：一\n- ⚡ 乙：二\n').sections).toEqual([])
+  })
+  it('季報／年報標題分類', () => {
+    expect(['季度主題', '成長軌跡', '價值觀變化', '核心矛盾', '下季策略方向'].map(kindOf)).toEqual(['hero', 'generic', 'generic', 'warn', 'next'])
+    expect(['年度敘事', '關鍵轉折', '身份變化', '年度矛盾', '來年方向'].map(kindOf)).toEqual(['hero', 'generic', 'generic', 'warn', 'next'])
   })
 })

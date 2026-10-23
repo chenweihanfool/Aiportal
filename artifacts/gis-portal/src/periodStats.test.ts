@@ -46,6 +46,11 @@ describe('區間運算', () => {
     expect(prevRange(WEEK)).toEqual(['2026-10-12', '2026-10-18'])
     expect(prevRange(['2026-10-01', '2026-10-31'])).toEqual(['2026-09-01', '2026-09-30'])   // 長度相同、緊接在前
     expect(prevRange(['2026-03-01', '2026-03-31'])).toEqual(['2026-02-01', '2026-02-28'])
+    expect(prevRange(['2026-10-01', '2026-12-31'])).toEqual(['2026-07-01', '2026-09-30'])    // 季：上一季（不是往前推 92 天）
+    expect(prevRange(['2026-01-01', '2026-03-31'])).toEqual(['2025-10-01', '2025-12-31'])
+    expect(prevRange(['2026-01-01', '2026-12-31'])).toEqual(['2025-01-01', '2025-12-31'])    // 年：去年
+    expect(prevRange(['2026-10-22', '2026-10-22'])).toEqual(['2026-10-21', '2026-10-21'])    // 日：前一天
+    expect(prevRange(['2026-02-01', '2026-02-28'])).toEqual(['2026-01-01', '2026-01-31'])
     expect(prevRange(['2026-01-01', '2026-01-31'])).toEqual(['2025-12-01', '2025-12-31'])
     expect(eachDay(['2026-10-30', '2026-11-02'])).toEqual(['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'])
   })
@@ -85,9 +90,22 @@ describe('buildPeriodReport', () => {
     expect(r.prev.range).toEqual(['2026-10-12', '2026-10-18'])
     expect([r.prev.ideas.new, r.prev.travel.tripDays, r.prev.travel.trips]).toEqual([1, 3, 1])
     expect(r.series).toHaveLength(7)
-    expect(r.series.find((s) => s.date === '2026-10-20')).toEqual({ date: '2026-10-20', ideas: 1, food: 1, travel: 0 })
+    expect(r.series.find((s) => s.date === '2026-10-20')).toEqual({
+      date: '2026-10-20', ideas: 1, food: 1, travel: 0, ideaTitles: ['想法2'], foodNames: ['老王（吃過）'], tripNames: [],
+    })
     expect(r.partial).toBe(true)
     expect(buildPeriodReport(INPUT, ['2026-10-12', '2026-10-18'], TODAY)!.partial).toBe(false)
+  })
+  it('日報用清單：新增想法、實行、美食（含沒座標的）', () => {
+    const d = buildPeriodReport(INPUT, ['2026-10-20', '2026-10-20'], TODAY)!
+    expect(d.ideas.bornList.map((i) => i.id)).toEqual(['IDEA-0002'])
+    const e = buildPeriodReport(INPUT, ['2026-10-21', '2026-10-21'], TODAY)!
+    expect(e.ideas.doneList.map((i) => i.id)).toEqual(['IDEA-0002'])
+    expect(e.food.touched).toEqual([{ name: '新店', status: 'want' }])
+  })
+  it('季／年區間逐日列數', () => {
+    expect(buildPeriodReport(INPUT, ['2026-10-01', '2026-12-31'], TODAY)!.series).toHaveLength(92)
+    expect(buildPeriodReport(INPUT, ['2026-01-01', '2026-12-31'], TODAY)!.series).toHaveLength(365)
   })
   it('月區間：逐日 31 列', () => {
     expect(buildPeriodReport(INPUT, ['2026-10-01', '2026-10-31'], TODAY)!.series).toHaveLength(31)

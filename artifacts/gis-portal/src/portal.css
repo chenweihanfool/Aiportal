@@ -1177,6 +1177,10 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 /* ── 週／月報視覺化頁（#reports，ReportsView.tsx） ── */
 /* 圖表帶放在時間軸報告對話框裡（ReportBody／ReportCharts）；對話框背景是 panel，卡片用 raised 區隔 */
 .rp-band, .rb-sections, .rb-toggle { font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+/* 文字顏色：對話框底色沒有指定前景色，圖表帶與段落卡片自己指定（避免繼承成偏暗的灰） */
+.rp-band, .rb-sections { color: var(--c-ink); }
+.rp-band .hm-note, .rb-intro { color: var(--c-ink-2); font-size: 0.82rem; }
+.rp-bars b, .rp-line b { color: var(--c-ink); }
 .rp-band { display: flex; flex-direction: column; gap: 0.8rem; margin: 0.4rem 0 1rem; }
 .rp-band .hm-card { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 12px; padding: 0.8rem 0.9rem; }
 .rb-toggle { display: flex; gap: 0.4rem; margin: 0.6rem 0; }
@@ -1198,32 +1202,32 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .rb-entry-b { margin-top: 0.3rem; color: var(--c-ink-2); }
 .rp-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .rp-stat { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.7rem 0.8rem; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 12px; }
-.rp-stat-t { font-size: 0.8rem; color: var(--c-ink-2); }
+.rp-stat-t { font-size: 0.82rem; color: var(--c-ink); }
 .rp-stat-v { font-size: 1.8rem; font-weight: 700; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
 .rp-stat-v small { font-size: 0.75rem; font-weight: 400; color: var(--c-ink-2); margin-left: 0.2rem; }
-.rp-stat-d, .rp-stat-s { font-size: 0.75rem; color: var(--c-ink-2); }
+.rp-stat-d, .rp-stat-s { font-size: 0.78rem; color: var(--c-ink-2); }
 .rp-stat[data-tone='up'] .rp-stat-d { color: var(--c-ok); }
 .rp-stat[data-tone='down'] .rp-stat-d { color: var(--c-warn); }
 .rp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.8rem; align-items: start; }
 .rp-hint { font-size: 0.72rem; font-weight: 400; color: var(--c-ink-2); }
 .rp-row { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr); align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
-.rp-row-l { font-size: 0.78rem; color: var(--c-ink-2); }
+.rp-row-l { font-size: 0.8rem; color: var(--c-ink); }
 .rp-cells { display: grid; gap: 3px; }
-.rp-cell { display: flex; align-items: center; justify-content: center; min-height: 1.5rem; border-radius: 4px; background: var(--c-raised); font-style: normal; font-size: 0.65rem; color: var(--c-ink-3); }
+.rp-cell { cursor: default; display: flex; align-items: center; justify-content: center; min-height: 1.5rem; border-radius: 4px; background: var(--c-raised); font-style: normal; font-size: 0.65rem; color: var(--c-ink-3); }
 .rp-cells[data-dense='true'] .rp-cell { min-height: 1rem; }
 .rp-cell[data-lv='1'] { background: color-mix(in srgb, var(--c-accent) 30%, var(--c-raised)); color: var(--c-ink); }
 .rp-cell[data-lv='2'] { background: color-mix(in srgb, var(--c-accent) 60%, var(--c-raised)); color: var(--c-ink); }
 .rp-cell[data-lv='3'] { background: var(--c-accent); color: var(--c-bg); }
-.rp-sub { margin: 0.7rem 0 0.3rem; font-size: 0.78rem; font-weight: 600; color: var(--c-ink-2); }
-.rp-line { margin: 0.4rem 0; font-size: 0.85rem; line-height: 1.5; }
+.rp-sub { margin: 0.7rem 0 0.3rem; font-size: 0.8rem; font-weight: 600; color: var(--c-ink-2); }
+.rp-line { margin: 0.4rem 0; font-size: 0.88rem; line-height: 1.55; color: var(--c-ink); }
 .rp-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
-.rp-bars li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) 2rem; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
-.rp-bar-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-ink-2); }
+.rp-bars li { display: grid; grid-template-columns: 7rem minmax(0, 1fr) 2rem; align-items: center; gap: 0.5rem; font-size: 0.82rem; }
+.rp-bar-l { color: var(--c-ink); line-height: 1.3; overflow-wrap: anywhere; }   /* 菜系名稱常很長：換行顯示，不再用「…」截掉 */
 .rp-bar-track { height: 0.6rem; background: var(--c-raised); border-radius: 999px; overflow: hidden; }
 .rp-bar-track i { display: block; height: 100%; background: var(--c-accent); border-radius: 999px; }
 .rp-bars b { text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; }
 .rp-top3 { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; }
-.rp-top3 small { display: block; color: var(--c-ink-2); font-size: 0.72rem; }
+.rp-top3 small { display: block; color: var(--c-ink-2); font-size: 0.75rem; }
 .rp-map { width: 100%; height: auto; display: block; }
 .rp-legend { display: flex; gap: 0.8rem; margin: 0.3rem 0 0; font-size: 0.72rem; color: var(--c-ink-2); }
 .rp-legend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.3rem; }
@@ -1236,3 +1240,8 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
   .rp-stats { grid-template-columns: 1fr; }
   .rp-bars li { grid-template-columns: 4.2rem minmax(0, 1fr) 1.8rem; }
 }
+.rp-cell:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.rp-score-bars li { grid-template-columns: 5rem minmax(0, 1fr) 1.4rem; }
+.rp-day-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.9rem; }
+.rp-day-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; color: var(--c-ink); }
+.rp-day-list small { flex: none; color: var(--c-ink-2); font-size: 0.75rem; }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PeriodReport } from './periodStats'
-import { barPct, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, pinPositions, topCounts } from './reportsView'
+import { barPct, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, levelOf, pinPositions, rhythmCells, tipText, topCounts } from './reportsView'
+import type { SeriesRow } from './periodStats'
 
 const mkReport = (over: Partial<PeriodReport> = {}): PeriodReport => ({
   range: ['2026-10-19', '2026-10-25'], partial: false,
@@ -52,5 +53,50 @@ describe('reportsView（圖表純函式）', () => {
   it('isEmptyReport', () => {
     expect(isEmptyReport(mkReport())).toBe(true)
     expect(isEmptyReport(mkReport({ travel: { trips: [], tripDays: 2, photos: 0, areas: [] } }))).toBe(false)
+  })
+  it('levelOf：以最大值為基準分三階', () => {
+    expect([0, 1, 5, 10].map((n) => levelOf(n, 10))).toEqual([0, 1, 2, 3])
+    expect(levelOf(3, 0)).toBe(0)
+  })
+  it('tipText：逐項列出、超過 8 項寫「另 N 項」、沒有就寫沒有紀錄', () => {
+    expect(tipText('10/20 想法 2', ['甲', '乙'])).toBe('10/20 想法 2\n• 甲\n• 乙')
+    expect(tipText('10/20 美食 0', [])).toBe('10/20 美食 0：沒有紀錄')
+    const many = Array.from({ length: 11 }, (_, i) => `想法${i}`)
+    expect(tipText('x', many).split('\n').slice(-1)[0]).toBe('…另 3 項')
+  })
+})
+
+describe('rhythmCells（活動節奏的格子與提示）', () => {
+  const row = (date: string, over: Partial<SeriesRow> = {}): SeriesRow => ({ date, ideas: 0, food: 0, travel: 0, ideaTitles: [], foodNames: [], tripNames: [], ...over })
+  const days = Array.from({ length: 14 }, (_, i) => row(`2026-10-${String(i + 1).padStart(2, '0')}`))
+  it('日報不畫節奏；沒資料不畫', () => {
+    expect(rhythmCells(days, 'day').cells).toEqual([])
+    expect(rhythmCells([], 'week').cells).toEqual([])
+  })
+  it('週／月：一天一格，提示列出當天具體是哪些想法', () => {
+    const s = [row('2026-10-19', { ideas: 2, ideaTitles: ['想法甲', '想法乙'] }), row('2026-10-20')]
+    const { cells, aggregated } = rhythmCells(s, 'week')
+    expect(aggregated).toBe(false)
+    expect(cells[0]!.label).toBe('19')
+    expect(cells[0]!.tips.ideas).toBe('10-19 想法 2\n• 想法甲\n• 想法乙')
+    expect(cells[1]!.tips.ideas).toBe('10-20 想法 0：沒有紀錄')
+  })
+  it('季：每 7 天一格並合併名稱；年：每月一格', () => {
+    const q = rhythmCells(days, 'quarter')
+    expect(q.aggregated).toBe(true)
+    expect(q.cells).toHaveLength(2)
+    expect(q.cells[0]!.label).toBe('10/01')
+    const withIdea = days.map((d, i) => (i === 2 || i === 4 ? { ...d, ideas: 1, ideaTitles: [`想法${i}`] } : d))
+    const c = rhythmCells(withIdea, 'quarter').cells[0]!
+    expect(c.ideas).toBe(2)
+    expect(c.tips.ideas).toContain('• 想法2')
+    expect(c.tips.ideas).toContain('• 想法4')
+    const y = rhythmCells([row('2026-01-31'), row('2026-02-01', { food: 1, foodNames: ['老王（吃過）'] })], 'year')
+    expect(y.cells.map((x) => x.label)).toEqual(['1月', '2月'])
+    expect(y.cells[1]!.tips.food).toContain('老王（吃過）')
+  })
+  it('旅程提示的趟次名稱不重複', () => {
+    const s = [row('2026-10-01', { travel: 1, tripNames: ['台南旅遊'] }), row('2026-10-02', { travel: 1, tripNames: ['台南旅遊'] })]
+    expect(rhythmCells(s, 'quarter').cells[0]!.tips.travel).toBe('10-01～10-02 旅程\n• 台南旅遊')
   })
 })
