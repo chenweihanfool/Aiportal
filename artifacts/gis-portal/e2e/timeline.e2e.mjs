@@ -66,12 +66,40 @@ const BODY = `# 🌙 每日精煉洞察 2026-09-28
 [安全連結](https://example.com/ok) 與 [壞連結](javascript:window.__xss=1) 與 <img src=x onerror="window.__xss=2"> 與 <script>window.__xss=3</script>
 
 > 引用一句話`
+const WEEK_BODY = `# 📅 週報 2026-09-22 ~ 2026-09-28（第40週）
+
+### 📊 本週概覽
+這週把路徑設定收斂完，遷移進入尾聲。
+
+### 🔄 模式辨識
+連續三天都在處理遷移，決策風格偏保守。
+
+### 📋 任務進度
+- 補件通知（逾期 2026-09-20）
+- 公文送審 (到期 2026-09-30)
+- 整理檢核表
+
+### 👥 人事協同與業務畫像
+- **王小明**（本週角色/頻率）：
+  - 協同觀察：常在補件案件互動。
+- **李大華**（偶爾）：
+  - 協同觀察：代書。
+
+### 💡 下週觀察重點
+觀察遷移是否收尾。`
+const IDEAS = { available: true, generatedAt: '2026-09-28', receivedAt: null, weakest: null, top: [], weeks: [], mind: null, mindShadow: [],
+  ideas: [{ id: 'IDEA-0001', title: '把關係宇宙做成年度回顧影片', category: '創作', dimension: null, source: null, why: null, value: 4, effort: 2, status: 'new', bornAt: '2026-09-23T10:00', lastMentioned: '2026-09-23T10:00',
+    mentions: 1, backfill: false, days: ['2026-09-23'], history: [], score: null, scoreWhy: [], weakBoost: false }] }
+const PLACES = { available: true, receivedAt: null, places: [{ id: 'FOOD-1', name: '老王牛肉麵', area: '大安區', address: null, lat: 25.03, lng: 121.54, cuisine: '牛肉麵', tags: [], status: 'visited', priceLevel: null, why: null, source: null,
+  mustTry: [], rating: 4, addedAt: '2026-09-24', visitedAt: '2026-09-26', days: ['2026-09-24', '2026-09-26'], mapUrl: null, kind: 'food', photos: [] }] }
+const TRIPS = { available: true, receivedAt: null, trips: [{ id: 'TRIP-1', name: '台南旅遊', start: '2026-09-25', end: '2026-09-27', status: 'done', area: '台南', summary: null, cover: null, placeIds: [],
+  days: [{ date: '2026-09-26', title: null, placeIds: [], entries: [{ time: '10:00', text: '赤崁樓', photos: [], photosPending: 2 }] }] }] }
 const detail = (level, key) => {
   const list = { day: days, week: weeks, quarter: quarters, month: [], year: [] }[level]
   const it = list.find(x => x.periodKey === key)
   if (!it) return null
   const children = level === 'week' ? days.filter(d => d.startDate >= it.startDate && d.startDate <= it.endDate && d.hasReport).reverse().map(d => ({ level: 'day', periodKey: d.periodKey, startDate: d.startDate, title: d.title, summary: d.summary })) : []
-  return { ...it, bodyMd: it.hasReport ? BODY : '', children }
+  return { ...it, bodyMd: it.hasReport ? (level === 'week' ? WEEK_BODY : BODY) : '', children }
 }
 const graph = {
   available: true, computedAt: '2026-09-29T00:00:00Z',
@@ -103,6 +131,10 @@ const server = http.createServer((req, res) => {
       const d = detail(decodeURIComponent(m[1]), decodeURIComponent(m[2]))
       return d ? json(d) : json({ message: 'nf' }, 404)
     }
+    if (u.pathname === '/api/hermes-ideas' || u.pathname === '/api/hermes-places' || u.pathname === '/api/hermes-trips') {
+      if (req.headers['x-admin-password'] !== PWD) return json({ message: 'no' }, 403)
+      return json(u.pathname === '/api/hermes-ideas' ? IDEAS : u.pathname === '/api/hermes-places' ? PLACES : TRIPS)
+    }
     return json({}, 404)
   }
   let p = path.join(DIST, u.pathname === '/' ? 'index.html' : u.pathname)
@@ -124,7 +156,8 @@ async function newPage(viewport, unlocked = true) {
   const errors = []
   page.on('pageerror', e => errors.push(String(e)))
   page.on('requestfailed', r => { failedReqs.push(r.url()) })
-  page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT_AUTHORITY_INVALID/.test(m.text())) errors.push(m.text()) })
+  page.on('response', r => { if (r.status() >= 400) console.log('  [HTTP ' + r.status() + '] ' + new URL(r.url()).pathname) })
+  page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT_AUTHORITY_INVALID|Failed to load resource/.test(m.text())) errors.push(m.text()) })
   return { ctx, page, errors }
 }
 
@@ -201,7 +234,7 @@ async function newPage(viewport, unlocked = true) {
   check('聚焦請求已被消費（sessionStorage 清空，不會重複聚焦）', (await page.evaluate(() => sessionStorage.getItem('kb.graph.focus'))) === null)
 
   // 回時間軸分頁；級別記憶
-  await page.locator('button:has-text("時間軸")').click()
+  await page.getByRole('button', { name: '時間軸', exact: true }).click()
   await page.waitForSelector('[data-testid=timeline-row]')
   // Esc 關閉並還原焦點
   const row2 = page.locator('[data-testid=timeline-row]').nth(2)
@@ -239,6 +272,20 @@ async function newPage(viewport, unlocked = true) {
   await page.locator('button:has-text("‹ 返回")').click(); await page.waitForTimeout(250)
   check('返回：回到週對話框', (await page.locator('#timeline-dialog-title').innerText()).startsWith('週報'))
   check('下鑽層級時不顯示同級較舊／較新切換錯亂（週對話框在週列表內可切換）', (await page.locator('button:has-text("較舊")').isDisabled()) === false)
+  await page.keyboard.press('Escape')
+  // 週報視覺化（2026-10-23）：圖表帶＋段落卡片；其他級別維持原文
+  await page.locator('[data-testid=timeline-row]').first().click()
+  await page.waitForSelector('[data-testid="rp-band"]', { timeout: 8000 })
+  check('週報對話框：圖表帶＋段落卡片、可切「原文」', (await page.locator('[data-testid=rb-sections]').count()) === 1 && (await page.locator('[data-testid=rb-mode-raw]').count()) === 1)
+  check('週報圖表：想法／美食／旅遊三卡與活動節奏（7 格）', (await page.locator('[data-testid="rp-ideas"],[data-testid="rp-food"],[data-testid="rp-travel"],[data-testid="rp-rhythm"]').count()) === 4 && (await page.locator('[data-testid=rp-rhythm] .rp-row').first().locator('.rp-cell').count()) === 7)
+  check('週報圖表：依該週資料現算（新想法 1、吃過 1、旅遊 3 天、地圖 1 個釘）', (await page.locator('.rp-stats').innerText()).includes('1') && (await page.locator('.rp-map circle').count()) === 1 && /出門\s*3\s*天/.test(await page.locator('[data-testid=rp-travel]').innerText()))
+  check('週報段落：概覽放大、任務有逾期／到期徽章、人物各一張卡', (await page.locator('[data-testid=rb-section-hero]').count()) === 1 && (await page.locator('.rb-chip[data-kind=overdue]').count()) === 1 && (await page.locator('.rb-chip[data-kind=due]').count()) === 1 && (await page.locator('.rb-entry').count()) === 2)
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: SHOTS + '/5b-week-visual.png', fullPage: false })
+  await page.locator('[data-testid=rb-mode-raw]').click(); await page.waitForTimeout(150)
+  check('切到原文：完整 Markdown、沒有圖表帶', (await page.locator('[data-testid=rp-band]').count()) === 0 && (await page.locator('[role=dialog]').innerText()).includes('觀察遷移是否收尾'))
+  await page.locator('[data-testid=rb-mode-visual]').click(); await page.waitForTimeout(150)
+  check('切回圖表版：圖表帶回來', (await page.locator('[data-testid=rp-band]').count()) === 1)
   await page.keyboard.press('Escape')
   await page.locator('[role=tab]:has-text("季")').click()
   await page.waitForSelector('[data-testid=timeline-row]')

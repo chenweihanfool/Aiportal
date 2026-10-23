@@ -219,7 +219,6 @@ const kbNum = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-U
 /** 成長軌跡標題列的入口（新增一個頁面入口＝加一筆） */
 export const GROWTH_LINKS: ReadonlyArray<{ href: string; label: string; testId?: string }> = [
   { href: '#year', label: '年度回顧', testId: 'hm-year-link' },
-  { href: '#reports', label: '週月報圖表', testId: 'hm-reports-link' },
   { href: '#graph/timeline', label: '時間軸' },
   { href: '#graph', label: '關係宇宙' },
   { href: '#architecture', label: '知識庫架構', testId: 'hm-arch-link' },
