@@ -5,6 +5,15 @@
 // ─────────────────────────────────────────────
 export const VERSION_HISTORY = [
   {
+    version: '2.56.1',
+    date: '2026-10-23',
+    summary: '清理：移除 2.54.0 的統計 feed（kb-report-stats）登記，畫面沒有改變',
+    changes: [
+      '使用者 2026-10-23：「做清理，移除統計推送」。報告的圖表從 2.55.0 起由入口網依既有想法／地點／遊記資料現算，2.54.0 的 feed `kb-report-stats`（登記表與 schemas/feeds 的 JSON）已沒有任何畫面使用，移除；kb-pipeline 的 report-stats-pusher.py 同步移除（kb-pipeline#223）。',
+      '部署：先部署 kb-pipeline#223（讓推送停止），再重建 api-server（它不再認得該 feed）；反過來推送只會被 404 擋下，戰情室短暫顯示推送失敗。gis-portal 的畫面沒有變動、不必重建（版本號改動只在版本歷程）。資料庫裡 kb-report-stats 的最後一份快照留著、不會再被讀。',
+    ],
+  },
+  {
     version: '2.56.0',
     date: '2026-10-23',
     summary: '日報／季報／年報也升級成視覺化；圖表文字顏色改清楚；活動節奏格子滑過可看具體是哪些想法、美食、旅程',
