@@ -4,7 +4,8 @@ import { apiFetchFood } from './foodApi'
 import { apiFetchTrips, taipeiTodayIso } from './tripsApi'
 import { useAsync } from './homeHooks'
 import { MarkdownView } from './MarkdownView'
-import { ReportCharts } from './ReportCharts'
+import { ReportCharts, ScoreBars } from './ReportCharts'
+import type { ReportScore } from './timelineApi'
 import { buildPeriodReport, inputFromData } from './periodStats'
 import { parseReportSections, parseTaskLines, splitEntries, type ReportSection } from './reportSections'
 import { Skeleton } from './StateFrame'
@@ -14,11 +15,14 @@ import { Skeleton } from './StateFrame'
 // 人物與案件各一張卡、其餘段落照 Markdown）。可切到「原文」看完整 Markdown；認不出段落時整份退回原文。
 // 設計：kb-pipeline docs/report-visual-design.md（2026-10-23 修訂）。
 
-export const VISUAL_LEVELS = ['week', 'month'] as const
+export const VISUAL_LEVELS = ['day', 'week', 'month', 'quarter', 'year'] as const
 export type VisualLevel = (typeof VISUAL_LEVELS)[number]
 export const isVisualLevel = (l: string): l is VisualLevel => (VISUAL_LEVELS as readonly string[]).includes(l)
 
-const KIND_TONE: Record<string, string> = { hero: 'var(--c-accent)', tasks: 'var(--c-warn)', people: 'var(--c-ok)', cases: 'var(--c-ink-2)', next: 'var(--c-accent)', generic: 'var(--c-line-strong)' }
+const KIND_TONE: Record<string, string> = {
+  hero: 'var(--c-accent)', tasks: 'var(--c-warn)', people: 'var(--c-ok)', cases: 'var(--c-ink-2)', next: 'var(--c-accent)',
+  warn: 'var(--c-warn)', action: 'var(--c-ok)', generic: 'var(--c-line-strong)',
+}
 
 function SectionCard({ s, md }: { s: ReportSection; md: (text: string, size?: string) => ReactNode }) {
   const tasks = s.kind === 'tasks' ? parseTaskLines(s.body) : null
@@ -49,11 +53,13 @@ function SectionCard({ s, md }: { s: ReportSection; md: (text: string, size?: st
   )
 }
 
-export function ReportBody({ level, startDate, endDate, bodyMd, password, md }: {
+export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, password, md }: {
   level: VisualLevel
   startDate: string
   endDate: string
   bodyMd: string
+  /** 僅日報：每日報告分數（日報 📊 段） */
+  reportScore?: ReportScore | null
   password: string | null
   /** 原本時間軸用的 Markdown 渲染（帶 wikilink 解析與附件預覽），由對話框傳入 */
   md: (text: string, size?: string) => ReactNode
@@ -80,7 +86,8 @@ export function ReportBody({ level, startDate, endDate, bodyMd, password, md }: 
       </div>
       {raw ? md(bodyMd, '1.1rem') : (
         <>
-          {password && (ready ? (report && <ReportCharts r={report} unit={level === 'week' ? '週' : '月'} missing={missing} />) : <Skeleton lines={4} />)}
+          {level === 'day' && reportScore && <div className="rp-band"><ScoreBars score={reportScore} /></div>}
+          {password && (ready ? (report && <ReportCharts r={report} level={level} missing={missing} />) : <Skeleton lines={4} />)}
           {structured ? (
             <div className="rb-sections" data-testid="rb-sections">
               {parsed.intro && <div className="rb-intro">{md(parsed.intro, '1.02rem')}</div>}

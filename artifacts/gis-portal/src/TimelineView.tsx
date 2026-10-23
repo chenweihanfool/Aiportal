@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { COLOR, FONT } from './theme'
 import { GraphShell } from './GraphShell'
 import { MarkdownView } from './MarkdownView'
-import { ReportBody, isVisualLevel } from './ReportBody'
+import { ReportBody } from './ReportBody'
 import { clearTimelineReturn, peekTimelineReturn, requestGraphFocus, saveTimelineReturn } from './graphFocus'
 import { countWithTime, eventDisplayTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
 import {
@@ -269,11 +269,11 @@ function TimelineDialog(props: {
           {detailError && <div style={{ color: COLOR.crit, fontSize: '0.8rem', padding: '0.8rem 0' }}>載入失敗。</div>}
           {!d && !detailError && <div style={{ color: COLOR.steelDim, fontSize: '0.8rem', padding: '0.8rem 0' }}>載入中…</div>}
           {d?.periodNote && <div style={{ margin: '0.6rem 0', padding: '0.4rem 0.7rem', borderLeft: `3px solid ${COLOR.warn}`, color: COLOR.warn, fontSize: '0.95rem' }}>⚠ {d.periodNote}</div>}
-          {d && d.hasReport && (isVisualLevel(d.level)
-            // 週報／月報：圖表帶＋段落卡片（可切「原文」）；其他級別維持原文 Markdown
-            ? <ReportBody level={d.level} startDate={d.startDate} endDate={d.endDate} bodyMd={d.bodyMd} password={password}
-                md={(text, size) => <MarkdownView text={text} fontSize={size ?? '1.1rem'} />} />
-            : <MarkdownView text={d.bodyMd} fontSize="1.1rem" />)}
+          {d && d.hasReport && (
+            // 報告（日／週／月／季／年）：圖表帶＋段落卡片，可切「原文」
+            <ReportBody level={d.level} startDate={d.startDate} endDate={d.endDate} bodyMd={d.bodyMd} reportScore={d.reportScore} password={password}
+              md={(text, size) => <MarkdownView text={text} fontSize={size ?? '1.1rem'} />} />
+          )}
           {d && !d.hasReport && (
             <div style={{ color: COLOR.steelDim, fontSize: '1rem', padding: '0.8rem 0' }}>
               {d.level === 'day' ? '這一天沒有日報。' : '這一期沒有報告。'}{d.eventCount > 0 ? '當日事件如下：' : ''}

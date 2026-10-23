@@ -36,11 +36,61 @@ export function cellLevel(n: number): 0 | 1 | 2 | 3 {
   return n <= 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : 3
 }
 
+/** 彙總格的深淺：以該列最大值為基準分三階（日級仍用 cellLevel） */
+export function levelOf(n: number, max: number): 0 | 1 | 2 | 3 {
+  if (n <= 0 || max <= 0) return 0
+  return Math.min(3, Math.max(1, Math.ceil((3 * n) / max))) as 1 | 2 | 3
+}
+
 export type SeriesKey = 'ideas' | 'food' | 'travel'
 export const SERIES_ROWS: ReadonlyArray<{ key: SeriesKey; label: string }> = [
   { key: 'ideas', label: '💡 想法' }, { key: 'food', label: '🍜 美食' }, { key: 'travel', label: '🧭 旅程' },
 ]
 export const dayOfMonth = (row: SeriesRow) => Number(row.date.slice(8, 10))
+
+export type RhythmLevel = 'day' | 'week' | 'month' | 'quarter' | 'year'
+export interface RhythmCell {
+  label: string
+  /** 滑過格子時的提示：期間＋各主題具體是哪些 */
+  tips: Record<SeriesKey, string>
+  ideas: number; food: number; travel: number
+}
+
+const MAX_TIP_ITEMS = 8
+/** 提示文字：一行標題＋逐項「• 名稱」，超過 8 項寫「…另 N 項」；沒有項目回「沒有紀錄」 */
+export function tipText(head: string, items: readonly string[]): string {
+  if (items.length === 0) return `${head}：沒有紀錄`
+  const shown = items.slice(0, MAX_TIP_ITEMS).map((x) => `• ${x}`)
+  if (items.length > MAX_TIP_ITEMS) shown.push(`…另 ${items.length - MAX_TIP_ITEMS} 項`)
+  return `${head}\n${shown.join('\n')}`
+}
+
+const cellFrom = (label: string, head: string, rows: readonly SeriesRow[]): RhythmCell => {
+  const ideas = rows.flatMap((r) => r.ideaTitles), food = rows.flatMap((r) => r.foodNames), trips = [...new Set(rows.flatMap((r) => r.tripNames))]
+  return {
+    label, ideas: rows.reduce((n, r) => n + r.ideas, 0), food: rows.reduce((n, r) => n + r.food, 0), travel: rows.reduce((n, r) => n + r.travel, 0),
+    tips: { ideas: tipText(`${head} 想法 ${ideas.length}`, ideas), food: tipText(`${head} 美食 ${food.length}`, food), travel: tipText(`${head} 旅程`, trips) },
+  }
+}
+
+/** 活動節奏的格子：週／月＝一天一格；季＝一週（7 天）一格；年＝一個月一格；日＝不畫（只有一天） */
+export function rhythmCells(series: readonly SeriesRow[], level: RhythmLevel): { cells: RhythmCell[]; aggregated: boolean } {
+  if (level === 'day' || series.length === 0) return { cells: [], aggregated: false }
+  if (level === 'week' || level === 'month') {
+    return { aggregated: false, cells: series.map((s) => cellFrom(String(dayOfMonth(s)), s.date.slice(5), [s])) }
+  }
+  const groups = new Map<string, SeriesRow[]>()
+  series.forEach((s, i) => {
+    const key = level === 'year' ? s.date.slice(0, 7) : String(Math.floor(i / 7))
+    groups.set(key, [...(groups.get(key) ?? []), s])
+  })
+  const cells = [...groups.entries()].map(([key, rows]) => cellFrom(
+    level === 'year' ? `${Number(key.slice(5))}月` : rows[0]!.date.slice(5).replace('-', '/'),
+    level === 'year' ? key : `${rows[0]!.date.slice(5)}～${rows[rows.length - 1]!.date.slice(5)}`,
+    rows,
+  ))
+  return { cells, aggregated: true }
+}
 
 /** 地圖釘 → 畫布座標（緯度越大越上方）。只有一個點放正中央；全部同緯／經度時該軸置中。 */
 export function pinPositions(pins: readonly Pin[], w: number, h: number, pad = 14): Array<Pin & { x: number; y: number }> {

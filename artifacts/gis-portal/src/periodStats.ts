@@ -7,7 +7,11 @@ import type { FoodPlace } from './foodMap'
 import type { Trip } from './tripsApi'
 
 export type Range = readonly [string, string]
-export interface SeriesRow { date: string; ideas: number; food: number; travel: number }
+/** 每天一列：數量＋當天具體是哪些（滑過格子時顯示）。ideaTitles／foodNames／tripNames 與 ideas／food／travel 對應 */
+export interface SeriesRow {
+  date: string; ideas: number; food: number; travel: number
+  ideaTitles: string[]; foodNames: string[]; tripNames: string[]
+}
 export interface Pin { name: string; lat: number; lng: number; status: 'visited' | 'favorite' | 'want' }
 export interface TripBar { id: string; title: string; start: string; end: string; daysInPeriod: number; photos: number; area: string | null }
 export type Funnel = Record<'new' | 'evaluating' | 'doing' | 'done', number>
@@ -23,11 +27,16 @@ export interface PeriodReport {
     /** 只在這一期含「今天」時有值：目前最值得先做的前三名（分數由伺服器依幸福指數最弱面向加權） */
     top3: Array<{ id: string; title: string; why: string[] }>
     oldestOpen: { id: string; title: string; days: number } | null
+    /** 本期新增／實行的想法（日報用，最多 12 筆） */
+    bornList: Array<{ id: string; title: string; category: string | null }>
+    doneList: Array<{ id: string; title: string }>
   }
   food: {
     added: number; visited: number; wantBacklog: number; avgRating: number | null
     byCuisine: Record<string, number>; byArea: Record<string, number>
     pins: Pin[]; oldestWant: { name: string; days: number } | null
+    /** 本期寫到的美食（含沒有座標的；日報用，最多 20 筆） */
+    touched: Array<{ name: string; status: Pin['status'] }>
   }
   travel: { trips: TripBar[]; tripDays: number; photos: number; areas: string[] }
   prev: { range: [string, string]; ideas: { new: number; done: number }; food: { added: number; visited: number }; travel: { tripDays: number; trips: number } }
@@ -57,21 +66,36 @@ export function spanDays(r: Range): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-/** 上一期：整個日曆月 → 上一個日曆月（月報不能用「往前推 31 天」，會跨月錯位）；其餘 → 緊接在前、長度相同的一段 */
-export function prevRange(r: Range): [string, string] {
-  const s = dayNum(r[0])
-  if (r[0].slice(8, 10) === '01' && r[1] === fromNum(dayNum(nextMonthStart(r[0])) - 1)) {
-    const end = fromNum(s - 1)
-    return [`${end.slice(0, 8)}01`, end]
+/** 日曆月／季／年的月數（1、3、12）；不是整個日曆期間回 null */
+function calendarMonths(r: Range): 1 | 3 | 12 | null {
+  if (r[0].slice(8, 10) !== '01') return null
+  const y = Number(r[0].slice(0, 4)), m = Number(r[0].slice(5, 7))
+  for (const n of [1, 3, 12] as const) {
+    if (n === 3 && (m - 1) % 3 !== 0) continue
+    if (n === 12 && m !== 1) continue
+    const endMonth = m + n - 1
+    const last = new Date(Date.UTC(y, endMonth, 0)).getUTCDate()
+    const ey = y + Math.floor((endMonth - 1) / 12), em = ((endMonth - 1) % 12) + 1
+    if (r[1] === `${ey}-${String(em).padStart(2, '0')}-${String(last).padStart(2, '0')}`) return n
   }
-  const n = spanDays(r)
-  return [fromNum(s - n), fromNum(s - 1)]
+  return null
 }
 
-/** 下個月 1 號 */
-function nextMonthStart(d: string): string {
-  const y = Number(d.slice(0, 4)), m = Number(d.slice(5, 7))
-  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+/** 上一期：整個日曆月／季／年 → 上一個同類日曆期間（不能用「往前推 N 天」，會跨月錯位）；其餘（日、週）→ 緊接在前、長度相同的一段 */
+export function prevRange(r: Range): [string, string] {
+  const s = dayNum(r[0])
+  const n = calendarMonths(r)
+  if (n !== null && spanDays(r) > 1) {
+    const y = Number(r[0].slice(0, 4)), m = Number(r[0].slice(5, 7))
+    const total = (y * 12 + (m - 1)) - n
+    const py = Math.floor(total / 12), pm = (total % 12) + 1
+    const endTotal = total + n - 1
+    const ey = Math.floor(endTotal / 12), em = (endTotal % 12) + 1
+    const last = new Date(Date.UTC(ey, em, 0)).getUTCDate()
+    return [`${py}-${String(pm).padStart(2, '0')}-01`, `${ey}-${String(em).padStart(2, '0')}-${String(last).padStart(2, '0')}`]
+  }
+  const len = spanDays(r)
+  return [fromNum(s - len), fromNum(s - 1)]
 }
 
 export function eachDay(r: Range): string[] {
@@ -108,6 +132,8 @@ function ideasStats(input: StatsInput, r: Range, today: string): PeriodReport['i
       ? input.top.slice(0, 3).flatMap((id) => { const it = byId.get(id); return it ? [{ id: it.id, title: it.title, why: it.scoreWhy ?? [] }] : [] })
       : [],
     oldestOpen: oldest ? { id: oldest.id, title: oldest.title, days: dayNum(r[1]) - dayNum(oldest.bornAt) } : null,
+    bornList: born.slice(0, 12).map((it) => ({ id: it.id, title: it.title, category: it.category })),
+    doneList: done.slice(0, 12).map((it) => ({ id: it.id, title: it.title })),
   }
 }
 
@@ -131,6 +157,7 @@ function foodStats(places: readonly FoodPlace[], r: Range): PeriodReport['food']
       .map((p): Pin => ({ name: p.name, lat: p.lat as number, lng: p.lng as number, status: visitedSet.has(p) ? 'visited' : p.status === 'favorite' ? 'favorite' : 'want' }))
       .slice(0, MAX_PINS),
     oldestWant: oldest ? { name: oldest.name, days: dayNum(r[1]) - dayNum(oldest.addedAt) } : null,
+    touched: touch.slice(0, 20).map((p) => ({ name: p.name, status: visitedSet.has(p) ? 'visited' : p.status === 'favorite' ? 'favorite' : 'want' })),
   }
 }
 
@@ -151,15 +178,20 @@ function travelStats(trips: readonly Trip[], r: Range): PeriodReport['travel'] {
 }
 
 function series(input: StatsInput, r: Range): SeriesRow[] {
-  const born = count(input.ideas.filter((it) => valid(it.bornAt)).map((it) => it.bornAt.slice(0, 10)))
-  const food: Record<string, number> = {}
+  const ideaBy: Record<string, string[]> = {}
+  for (const it of input.ideas) if (valid(it.bornAt)) (ideaBy[it.bornAt.slice(0, 10)] ??= []).push(it.title)
+  const foodBy: Record<string, string[]> = {}
   for (const p of input.places) {
     if (p.kind !== 'food') continue
-    for (const d of [p.addedAt, p.visitedAt]) if (valid(d)) food[d] = (food[d] ?? 0) + 1
+    if (valid(p.addedAt)) (foodBy[p.addedAt] ??= []).push(`${p.name}（新增想吃）`)
+    if (valid(p.visitedAt)) (foodBy[p.visitedAt] ??= []).push(`${p.name}（吃過）`)
   }
-  const tripDay = new Set<string>()
-  for (const t of input.trips) if (valid(t.start) && valid(t.end)) eachDay([t.start, t.end]).forEach((d) => tripDay.add(d))
-  return eachDay(r).map((date) => ({ date, ideas: born[date] ?? 0, food: food[date] ?? 0, travel: tripDay.has(date) ? 1 : 0 }))
+  const tripBy: Record<string, string[]> = {}
+  for (const t of input.trips) if (valid(t.start) && valid(t.end)) eachDay([t.start, t.end]).forEach((d) => (tripBy[d] ??= []).push(t.name))
+  return eachDay(r).map((date) => ({
+    date, ideas: ideaBy[date]?.length ?? 0, food: foodBy[date]?.length ?? 0, travel: tripBy[date]?.length ? 1 : 0,
+    ideaTitles: ideaBy[date] ?? [], foodNames: foodBy[date] ?? [], tripNames: tripBy[date] ?? [],
+  }))
 }
 
 /** 一期的圖表資料。r＝報告的涵蓋期間（含頭尾）；壞區間（起日晚於迄日、不是日期）回 null。 */
