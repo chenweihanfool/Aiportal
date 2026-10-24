@@ -57,6 +57,62 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 從容面板（#dim/calm）的任務甘特圖；推送端 kb-pipeline scripts/vikunja-gantt-pusher.py（每 10 分鐘，唯讀 Vikunja）。
+  // 日期一律是台北日期 YYYY-MM-DD；選哪些任務見 kb-pipeline kbcore/task_gantt.py。
+  "vikunja-gantt": {
+    version: 1,
+    description: "從容面板的任務甘特圖：Vikunja 未完成與近期完成的任務（開始／結束／到期日）與所屬專案",
+    maxBytes: 512 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "vikunja-gantt feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "baseUrl", "projects", "tasks"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        baseUrl: { type: "string", pattern: "^https?://", maxLength: 200 },
+        doneDays: { type: "integer", minimum: 0, maximum: 366 },
+        undatedOpen: { type: "integer", minimum: 0 },
+        truncated: { type: "integer", minimum: 0 },
+        projects: {
+          type: "array",
+          maxItems: 300,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "title"],
+            properties: {
+              id: { type: "integer", minimum: 1 },
+              title: { type: "string", maxLength: 120 },
+              color: { type: ["string", "null"], pattern: "^#[0-9a-f]{6}$" },
+            },
+          },
+        },
+        tasks: {
+          type: "array",
+          maxItems: 500,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "title", "projectId", "done"],
+            properties: {
+              id: { type: "integer", minimum: 1 },
+              title: { type: "string", maxLength: 120 },
+              projectId: { type: "integer", minimum: 1 },
+              start: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              end: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              due: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              done: { type: "boolean" },
+              doneAt: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              priority: { type: "integer", minimum: 0, maximum: 5 },
+              percentDone: { type: "integer", minimum: 0, maximum: 100 },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,

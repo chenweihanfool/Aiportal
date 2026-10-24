@@ -178,6 +178,25 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
         L4: { error: 'RuntimeError: 找不到收件夾' },
       } } })
     }
+    if (p === '/api/feed/vikunja-gantt') {
+      if (S.fail.has('gantt')) return json({ message: 'boom' }, 500)
+      const d = (n) => tpDate(n)   // 正＝往後幾天、負＝幾天前
+      const t = (id, projectId, o) => ({ id, title: `任務 ${id}`, projectId, start: null, end: null, due: null, done: false, doneAt: null, priority: 0, percentDone: 0, ...o })
+      return json({ available: true, name: 'vikunja-gantt', schemaVersion: 1, generatedAt: tpDate(0), receivedAt: iso(), payload: {
+        computedAt: iso(120e3), baseUrl: 'https://v.example.test', doneDays: 30, undatedOpen: 4, truncated: 0,
+        projects: [{ id: 1, title: '工作', color: '#e2584f' }, { id: 2, title: '生活', color: null }, { id: 3, title: '進修', color: '#3fb6a8' }],
+        tasks: [
+          t(1, 1, { title: '季報資料整理', start: d(-3), end: d(10), percentDone: 40 }),
+          t(2, 1, { title: '回覆客戶合約修改意見（很長的標題測試截斷）', due: d(-5), priority: 4 }),
+          t(3, 1, { title: '早就逾期的報帳', due: d(-40) }),
+          t(4, 2, { title: '牙醫回診', due: d(3) }),
+          t(5, 2, { title: '整理書櫃', start: d(1), end: d(20) }),
+          t(6, 2, { title: '繳房屋稅', due: d(-2), done: true, doneAt: d(-2) }),
+          t(7, 3, { title: '線上課程第三單元', start: d(-10), due: d(60) }),
+          t(8, 3, { title: '明年的事', start: d(200) }),
+        ],
+      } })
+    }
     if (p === '/api/paid-services') return json({ deepseek: { status: 'ok', data: { available: true, balances: [{ currency: 'CNY', total: 88.5, granted: 0, toppedUp: 88.5 }] } }, tavily: { status: 'no-key' }, fetchedAt: iso() })
     if (p === '/api/github/repos') {
       if (S.fail.has('repos')) return json({ message: 'boom' }, 502)
@@ -864,6 +883,44 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   check('年度回顧 手機 390：不橫向捲動', mm.docW <= mm.innerW, JSON.stringify(mm))
   await e.page.screenshot({ path: path.join(SHOTS, 'year-mobile.png') })
   await e.ctx.close()
+}
+
+{
+  // 7e 從容面板的任務甘特圖（feed vikunja-gantt）：依專案分組、狀態上色、點列連到 Vikunja、手機不撐開整頁、失敗與未解鎖
+  const { ctx, page, errors, calls } = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/calm', wait: false })
+  await page.waitForSelector('[data-testid="gt-row"]', { timeout: 8000 })
+  const rows = await page.locator('[data-testid="gt-row"]').count()
+  check(`甘特圖：畫出未完成且在視窗內的任務（${rows} 列；已完成與太遠的不畫）`, rows === 6, String(rows))
+  check('甘特圖：摘要數字（進行中 7、逾期 2、7 天內到期 1、沒排日期 4）', /7\s*項進行中/.test(await page.locator('[data-testid="gt-sum"]').innerText()) && /2\s*項逾期/.test(await page.locator('[data-testid="gt-sum"]').innerText()) && /4\s*項沒排日期/.test(await page.locator('[data-testid="gt-sum"]').innerText()))
+  check('甘特圖：有逾期的專案（工作）排第一、逾期列是紅色狀態', (await page.locator('.gt-proj-t').first().innerText()) === '工作' && (await page.locator('.gt-row.is-overdue').count()) === 2)
+  check('甘特圖：點列連到 Vikunja 任務頁（新分頁）', (await page.locator('[data-testid="gt-row"]').first().getAttribute('href'))?.startsWith('https://v.example.test/tasks/') && (await page.locator('[data-testid="gt-row"]').first().getAttribute('target')) === '_blank')
+  await page.locator('[data-testid="dp-gantt"]').scrollIntoViewIfNeeded()
+  await page.locator('[data-testid="dp-gantt"]').screenshot({ path: path.join(SHOTS, 'dim-calm-gantt.png') })
+  await page.locator('[data-testid="dp-gantt"] .hm-check input').check(); await page.waitForTimeout(200)
+  check('甘特圖：勾「含近 30 天完成」多出已完成的那一列', (await page.locator('.gt-row.is-done').count()) === 1)
+  await page.locator('.gt-proj').first().click(); await page.waitForTimeout(150)
+  check('甘特圖：點專案標頭收合', (await page.locator('.gt-proj').first().getAttribute('aria-expanded')) === 'false' && (await page.locator('[data-testid="gt-row"]').count()) === 4)
+  await page.locator('[data-testid="dp-gantt"] .dp-range').nth(1).click(); await page.waitForTimeout(150)
+  check('甘特圖：切到「近 3 個月」時間軸變長', (await page.locator('.gt-tick').count()) >= 12)
+  check('甘特圖：有發 /api/feed/vikunja-gantt、沒有頁面錯誤', calls.includes('/api/feed/vikunja-gantt') && errors.length === 0, errors.join(' | ').slice(0, 300))
+  await ctx.close()
+  const m = await open({ width: 390, height: 844 }, 'spark', { hash: '#dim/calm', wait: false })
+  await m.page.waitForSelector('[data-testid="gt-row"]', { timeout: 8000 })
+  const g = await m.page.evaluate(() => { const b = document.querySelector('.dp-body'); const sc = document.querySelector('.gt-scroll'); const t = document.querySelector('.gt-today').getBoundingClientRect(), r = sc.getBoundingClientRect(); return { docW: document.documentElement.scrollWidth, innerW: window.innerWidth, bodyW: b.scrollWidth, bodyCW: b.clientWidth, scW: sc.scrollWidth, scCW: sc.clientWidth, todayX: Math.round(t.left - r.left), scLeft: sc.scrollLeft } })
+  check('甘特圖 手機 390：時間軸在卡片內左右滑，不撐開整頁', g.docW <= g.innerW && g.bodyW <= g.bodyCW + 1 && g.scW > g.scCW, JSON.stringify(g))
+  check('甘特圖 手機 390：一打開就捲到今天附近（今天線在卡片可見範圍內）', g.scLeft > 0 && g.todayX > 0 && g.todayX < g.scCW, JSON.stringify(g))
+  await m.page.locator('[data-testid="dp-gantt"]').scrollIntoViewIfNeeded()
+  await m.page.locator('[data-testid="dp-gantt"]').screenshot({ path: path.join(SHOTS, 'dim-calm-gantt-mobile.png') })
+  await m.ctx.close()
+  const f = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/calm', wait: false })
+  await f.page.route('**/api/feed/vikunja-gantt', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{}' }))
+  await f.page.reload(); await f.page.waitForSelector('[data-testid="dp-gantt"] .hm-frame[data-state="error"]', { timeout: 8000 }).catch(() => {})
+  check('甘特圖：接口失敗 → 卡片顯示錯誤狀態，其他區塊照常', (await f.page.locator('[data-testid="dp-gantt"] .hm-frame[data-state="error"]').count()) === 1 && (await f.page.locator('[data-testid="dp-chart"]').count()) === 1)
+  await f.ctx.close()
+  const u = await open({ width: 1440, height: 900 }, 'spark', { unlocked: false, hash: '#dim/calm', wait: false })
+  await u.page.waitForSelector('[data-testid="dp-gantt"]'); await u.page.waitForTimeout(600)
+  check('甘特圖：未解鎖 → 🔒、不發甘特圖請求', (await u.page.locator('[data-testid="dp-gantt"] .hm-lock').count()) === 1 && !u.calls.includes('/api/feed/vikunja-gantt'))
+  await u.ctx.close()
 }
 
 await browser.close()

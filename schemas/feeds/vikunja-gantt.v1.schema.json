@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "vikunja-gantt feed v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "computedAt",
+    "baseUrl",
+    "projects",
+    "tasks"
+  ],
+  "properties": {
+    "computedAt": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 40
+    },
+    "baseUrl": {
+      "type": "string",
+      "pattern": "^https?://",
+      "maxLength": 200
+    },
+    "doneDays": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 366
+    },
+    "undatedOpen": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "truncated": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "projects": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^#[0-9a-f]{6}$"
+          }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "projectId",
+          "done"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "projectId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "start": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "end": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "doneAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "percentDone": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    }
+  }
+}

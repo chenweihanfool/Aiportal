@@ -41,4 +41,15 @@ describe("feed registry", () => {
     expect(validateFeedRequest("kb-arch-stats", body({ ...ok, extra: 1 })).ok).toBe(false);
     expect(validateFeedRequest("kb-arch-stats", body({ computedAt: ok.computedAt, nodes: { L1: { metrics: [{ label: "x" }] } } })).ok).toBe(false);
   });
+
+  it("vikunja-gantt：推送端實際產出的形狀通過、日期格式或多餘欄位被擋", () => {
+    const body = (payload: unknown) => ({ schemaVersion: 1, generatedAt: "2026-10-24", payload });
+    const task = { id: 8, title: "T8", projectId: 2, start: null, end: null, due: "2026-11-02", done: false, doneAt: null, priority: 5, percentDone: 46 };
+    const ok = { computedAt: "2026-10-24T10:00:00+08:00", baseUrl: "https://v.example", doneDays: 30,
+      projects: [{ id: 2, title: "生活", color: null }, { id: 1, title: "工作", color: "#e2584f" }], tasks: [task], undatedOpen: 1, truncated: 0 };
+    expect(validateFeedRequest("vikunja-gantt", body(ok)).ok).toBe(true);
+    expect(validateFeedRequest("vikunja-gantt", body({ ...ok, tasks: [{ ...task, due: "2026-11-02T10:00:00Z" }] })).ok).toBe(false);
+    expect(validateFeedRequest("vikunja-gantt", body({ ...ok, tasks: [{ ...task, extra: 1 }] })).ok).toBe(false);
+    expect(validateFeedRequest("vikunja-gantt", body({ ...ok, baseUrl: "javascript:alert(1)" })).ok).toBe(false);
+  });
 });
