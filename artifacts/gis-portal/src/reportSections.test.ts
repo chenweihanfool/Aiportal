@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { kindOf, parseReportSections, parseTaskLines, splitEntries, splitTitle } from './reportSections'
+import { agoLabel, kindOf, linkifyDates, parseEcho, parseReportSections, parseTaskLines, splitEntries, splitTitle } from './reportSections'
 
 const WEEK = `# 📅 週報 2026-09-22 ~ 2026-09-28（第40週）
 
@@ -101,7 +101,7 @@ describe('日報格式', () => {
 - 🕰️ 歷史共鳴（約 90 字）：一年前同一天也在整理設定。`
     const p = parseReportSections(md)
     expect(p.sections.map((s) => [s.title, s.kind])).toEqual([
-      ['當日總結', 'hero'], ['狀態與決策', 'generic'], ['盲點與懸浮', 'warn'], ['高槓桿行動', 'action'], ['歷史共鳴', 'generic'],
+      ['當日總結', 'hero'], ['狀態與決策', 'generic'], ['盲點與懸浮', 'warn'], ['高槓桿行動', 'action'], ['歷史共鳴', 'echo'],
     ])
     expect(p.sections[2]!.body).toContain('第二行延續')
     expect(p.sections[0]!.body).toContain('上午整理檢核表')
@@ -113,5 +113,60 @@ describe('日報格式', () => {
   it('季報／年報標題分類', () => {
     expect(['季度主題', '成長軌跡', '價值觀變化', '核心矛盾', '下季策略方向'].map(kindOf)).toEqual(['hero', 'generic', 'generic', 'warn', 'next'])
     expect(['年度敘事', '關鍵轉折', '身份變化', '年度矛盾', '來年方向'].map(kindOf)).toEqual(['hero', 'generic', 'generic', 'warn', 'next'])
+  })
+})
+
+describe('日報 🕰️ 歷史共鳴（時間線＋脈絡線）', () => {
+  const DAILY = `🌙 每日精煉洞察 2026-10-24
+- 📝 當日總結（約 90 字）：上午外業，下午整理。
+- ⚡ 狀態與決策（約 50 字）：先收斂。
+- 🔦 盲點與懸浮（約 90 字）：無。
+- 🕰️ 歷史共鳴（約 40 字）：同一個案子又卡在同一關。
+  - [[2026-09-01]]（53 天前）那天和王小明跑北港案 → 今天換成等縣府回文
+  - [[2025-10-24]]（365 天前）去年也在月底趕報差 → 今天提早一週做完
+  - 〔北港測量案〕□□■□□■□□□□□■（近 12 週出現 3 週）每隔三週冒出來一次
+- 💭 靈魂一問（約 50 字）：為什麼？`
+
+  it('子項不會被當成新模組，整段歸在 echo 卡片', () => {
+    const { sections } = parseReportSections(DAILY)
+    expect(sections.map((s) => s.kind)).toEqual(['hero', 'generic', 'warn', 'echo', 'generic'])
+    const echo = sections[3]!
+    expect(echo.body.split('\n')).toHaveLength(4)
+  })
+
+  it('拆出一句話、過去的日子與脈絡線', () => {
+    const echo = parseReportSections(DAILY).sections[3]!
+    const { lead, items } = parseEcho(echo.body)
+    expect(lead).toBe('同一個案子又卡在同一關。')
+    expect(items).toEqual([
+      { kind: 'day', date: '2026-09-01', text: '那天和王小明跑北港案 → 今天換成等縣府回文' },
+      { kind: 'day', date: '2025-10-24', text: '去年也在月底趕報差 → 今天提早一週做完' },
+      { kind: 'thread', name: '北港測量案', cells: [...'□□■□□■□□□□□■'].map((c) => c === '■'), text: '（近 12 週出現 3 週）每隔三週冒出來一次' },
+    ])
+  })
+
+  it('舊日報沒有子項：純文字日期包成連結，原本已是連結的不重包', () => {
+    const { lead, items } = parseEcho('2025-10-24 那天也在趕報差；參見 [[2026-01-02]]。')
+    expect(items).toEqual([])
+    expect(lead).toBe('[[2025-10-24]] 那天也在趕報差；參見 [[2026-01-02]]。')
+    expect(linkifyDates('無日期')).toBe('無日期')
+  })
+
+  it('距離標籤以報告日期計算', () => {
+    expect(agoLabel('2025-10-24', '2026-10-24')).toBe('一年前')
+    expect(agoLabel('2024-10-20', '2026-10-24')).toBe('2 年前')
+    expect(agoLabel('2026-04-27', '2026-10-24')).toBe('6 個月前')
+    expect(agoLabel('2026-09-01', '2026-10-24')).toBe('53 天前')
+    expect(agoLabel('壞日期', '2026-10-24')).toBe('')
+  })
+})
+
+describe('日報尾端的 📊 今日評分', () => {
+  it('自成一段，不黏在最後一個模組裡', () => {
+    const md = `- 📝 當日總結：甲。\n- ⚡ 狀態與決策：乙。\n- 😄 當日段子：丙。\n\n📊 今日評分：60\n- 推進 3：外業完成\n- 決策 2：一般`
+    const { sections } = parseReportSections(md)
+    expect(sections.map((s) => s.title)).toEqual(['當日總結', '狀態與決策', '當日段子', '今日評分'])
+    expect(sections[2]!.body).toBe('丙。')
+    expect(sections[3]!.body).toBe('60\n- 推進 3：外業完成\n- 決策 2：一般')
   })
 })
