@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agoLabel, kindOf, linkifyDates, parseEcho, parseReportSections, parseTaskLines, splitEntries, splitTitle } from './reportSections'
+import { agoLabel, kindOf, linkifyDates, parseCaseFlow, parseEcho, parseReportSections, parseScoreSection, parseTaskLines, parseViz, parseVizLine, splitEntries, splitTitle } from './reportSections'
 
 const WEEK = `# 📅 週報 2026-09-22 ~ 2026-09-28（第40週）
 
@@ -129,7 +129,7 @@ describe('日報 🕰️ 歷史共鳴（時間線＋脈絡線）', () => {
 
   it('子項不會被當成新模組，整段歸在 echo 卡片', () => {
     const { sections } = parseReportSections(DAILY)
-    expect(sections.map((s) => s.kind)).toEqual(['hero', 'generic', 'warn', 'echo', 'generic'])
+    expect(sections.map((s) => s.kind)).toEqual(['hero', 'generic', 'warn', 'echo', 'question'])
     const echo = sections[3]!
     expect(echo.body.split('\n')).toHaveLength(4)
   })
@@ -195,8 +195,74 @@ describe('實際日報格式：模組行沒有開頭的「- 」', () => {
     const { intro, sections } = parseReportSections(md)
     expect(intro).toBe('🌙 每日精煉洞察 2026-10-23')
     expect(sections.map((s) => s.title)).toEqual(['當日總結', '狀態與決策', '盲點與懸浮', '高槓桿行動', '歷史共鳴', '靈魂一問', '當日段子', '今日評分'])
-    expect(sections.map((s) => s.kind)).toEqual(['hero', 'generic', 'warn', 'action', 'echo', 'generic', 'generic', 'generic'])
+    expect(sections.map((s) => s.kind)).toEqual(['hero', 'generic', 'warn', 'action', 'echo', 'question', 'joke', 'score'])
     expect(parseEcho(sections[4]!.body).lead).toBe('[[2025-10-23]] 陪老婆和朋友吃牛排；今天多了媽媽同席。')
     expect(sections[7]!.body).toBe('75\n- 推進 3：外業完成\n- 能量 3：午睡')
+  })
+})
+
+describe('視覺化子項（docs/report-visual-modules.md）', () => {
+  it('每種固定格式各認成一種', () => {
+    expect(parseVizLine('上午｜外業｜北港段界址測量')).toEqual({ kind: 'slot', slot: '上午', tag: '外業', text: '北港段界址測量' })
+    expect(parseVizLine('7 天｜PR#14 loadKg 驗收待實測')).toEqual({ kind: 'stuck', days: 7, text: 'PR#14 loadKg 驗收待實測' })
+    expect(parseVizLine('獨立機制↔深度人際｜2｜今天偏機制')).toEqual({ kind: 'spectrum', left: '獨立機制', right: '深度人際', values: [2], text: '今天偏機制' })
+    expect(parseVizLine('完美主義↔行動力｜2→3→4')).toEqual({ kind: 'spectrum', left: '完美主義', right: '行動力', values: [2, 3, 4], text: '' })
+    expect(parseVizLine('斷裂｜週記中斷')).toEqual({ kind: 'lane', lane: '斷裂', text: '週記中斷' })
+    expect(parseVizLine('第 2 週｜收斂路徑')).toEqual({ kind: 'phase', label: '第2週', text: '收斂路徑' })
+    expect(parseVizLine('Q3｜轉向系統')).toEqual({ kind: 'phase', label: 'Q3', text: '轉向系統' })
+    expect(parseVizLine('2026-10-27｜總點數呈報')).toEqual({ kind: 'day', date: '2026-10-27', text: '總點數呈報' })
+    expect(parseVizLine('[[2026-10-26]]（2 天後）剔除多餘界址點')).toEqual({ kind: 'day', date: '2026-10-26', text: '剔除多餘界址點' })
+  })
+  it('一般清單、人物與任務行不會被誤認', () => {
+    for (const t of ['協同觀察：常在補件案件互動', '補件通知（逾期 2026-09-20）', '**[[王小明]]**（本週角色）', '推進 3：外業完成', '上午去外業']) {
+      expect(parseVizLine(t)).toBeNull()
+    }
+  })
+  it('日報模組的子項：一句話留在 lead，子項另列', () => {
+    const md = `🌙 每日精煉洞察 2026-10-24
+
+📝 當日總結：颱風假後補班。
+  - 上午｜外業｜北港段界址測量
+  - 晚上｜家庭｜陪媽媽吃飯
+
+⚡ 狀態與決策：先收斂再擴張。
+  - 獨立機制↔深度人際｜2
+
+🎯 高槓桿行動：週一先清 2.2。
+  - 2026-10-26｜剔除多餘界址點
+  - 2026-10-27｜總點數呈報
+
+💭 靈魂一問：你是怕閒下來嗎？`
+    const { sections } = parseReportSections(md)
+    expect(sections.map((s) => s.kind)).toEqual(['hero', 'generic', 'action', 'question'])
+    const sum = parseViz(sections[0]!.body)
+    expect(sum.lead).toBe('颱風假後補班。')
+    expect(sum.items.map((i) => i.kind)).toEqual(['slot', 'slot'])
+    expect(parseViz(sections[1]!.body).items[0]).toMatchObject({ kind: 'spectrum', values: [2] })
+    expect(parseViz(sections[2]!.body).items.map((i) => i.kind === 'day' && i.date)).toEqual(['2026-10-26', '2026-10-27'])
+  })
+  it('🕰️ 只認日期與脈絡線，其他格式留在 lead', () => {
+    const { items, lead } = parseEcho('一句話。\n  - 推進｜不該在這\n  - [[2026-09-01]]（53 天前）那天')
+    expect(items.map((i) => i.kind)).toEqual(['day'])
+    expect(lead).toContain('推進｜不該在這')
+  })
+  it('📊 評分段 → 總分與五項；不像評分回 null', () => {
+    expect(parseScoreSection('75\n- 推進 3：外業完成\n- 決策 3：有取捨\n- 卡點 4\n- 覺察 3：反思\n- 能量 2：平常')).toEqual({
+      total: 75,
+      parts: [
+        { label: '推進', value: 3, note: '外業完成' }, { label: '決策', value: 3, note: '有取捨' }, { label: '卡點', value: 4, note: '' },
+        { label: '覺察', value: 3, note: '反思' }, { label: '能量', value: 2, note: '平常' },
+      ],
+    })
+    expect(parseScoreSection('60\n- 推進 3：甲')).toBeNull()
+  })
+  it('案件卡的進展／卡關／下一步 → 三格流程', () => {
+    expect(parseCaseFlow('- 進展摘要：補件送出\n- 卡關點：無明顯卡關\n- 下一步：等核定')).toEqual([
+      { label: '進展', text: '補件送出' }, { label: '卡關', text: '無明顯卡關' }, { label: '下一步', text: '等核定' },
+    ])
+    expect(parseCaseFlow('- 協同觀察：甲\n- 業務指南：乙')).toBeNull()
+  })
+  it('agoLabel：未來的日期標幾天後', () => {
+    expect(agoLabel('2026-10-27', '2026-10-24')).toBe('3 天後')
   })
 })
