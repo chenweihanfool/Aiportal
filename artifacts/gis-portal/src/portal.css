@@ -1245,3 +1245,43 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .rp-day-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.9rem; }
 .rp-day-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; color: var(--c-ink); }
 .rp-day-list small { flex: none; color: var(--c-ink-2); font-size: 0.75rem; }
+/* 日報 🕰️ 歷史共鳴：過去那天 → 今天的小時間線、對象近 12 週的脈絡格；📈 近 14 天分數走勢（2.57.0） */
+.rb-echo-lead { color: var(--c-ink); line-height: 1.6; margin-bottom: 0.5rem; }
+.rb-echo { list-style: none; margin: 0; padding: 0 0 0 0.9rem; border-left: 2px solid var(--c-line-strong); display: flex; flex-direction: column; gap: 0.7rem; }
+.rb-echo li { position: relative; display: flex; gap: 0.7rem; align-items: flex-start; }
+.rb-echo li::before { content: ""; position: absolute; left: calc(-0.9rem - 6px); top: 0.3rem; width: 10px; height: 10px; border-radius: 50%; background: var(--c-surface); border: 2px solid var(--c-accent); }
+.rb-echo li.rb-echo-now::before { background: var(--c-accent); }
+.rb-echo-date { flex: 0 0 6.6rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; padding: 0; background: none; border: none; text-align: left; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-accent); cursor: pointer; }
+.rb-echo-date b { font-size: 0.88rem; font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; }
+.rb-echo-date small { font-size: 0.72rem; color: var(--c-ink-2); }
+.rb-echo-date:disabled { cursor: default; }
+.rb-echo-date:disabled b, .rb-echo-now .rb-echo-date b { text-decoration: none; }
+.rb-echo-date:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.rb-echo-t { flex: 1; min-width: 0; color: var(--c-ink); overflow-wrap: anywhere; }
+.rb-threads { margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.rb-thread { display: grid; grid-template-columns: 6.6rem minmax(7rem, 12rem) minmax(0, 1fr); gap: 0.6rem; align-items: center; }
+.rb-thread-n { font-weight: 600; color: var(--c-ink); overflow-wrap: anywhere; }
+.rb-thread-cells { display: grid; gap: 2px; height: 0.9rem; }
+.rb-thread-cells i { border-radius: 2px; background: var(--c-raised-2); }
+.rb-thread-cells i[data-on='true'] { background: var(--c-accent); }
+.rb-thread-cells i[data-last='true'] { outline: 1px solid var(--c-ink-2); outline-offset: 1px; }
+.rb-thread-t { color: var(--c-ink-2); }
+.rb-thread-hint { margin: 0.1rem 0 0; font-size: 0.72rem; color: var(--c-ink-3); }
+.rp-trend { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; height: 6.5rem; }
+.rp-trend-col { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; padding: 0; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; color: var(--c-ink-2); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.rp-trend-col:disabled { cursor: default; }
+.rp-trend-col[data-current='true'] { border-color: var(--c-accent); color: var(--c-ink); }
+.rp-trend-col:not(:disabled):hover, .rp-trend-col:focus-visible { border-color: var(--c-line-strong); outline: none; }
+.rp-trend-v { font-size: 0.66rem; text-align: center; }
+.rp-trend-track { flex: 1; display: flex; align-items: flex-end; }
+.rp-trend-track i { width: 100%; border-radius: 2px 2px 0 0; background: var(--c-ok); }
+.rp-trend-track i[data-tone='great'] { background: var(--c-accent); }
+.rp-trend-track i[data-tone='warn'] { background: var(--c-warn); }
+.rp-trend-track i[data-tone='concern'] { background: var(--c-concern); }
+.rp-trend-track i[data-tone='crit'] { background: var(--c-crit); }
+.rp-trend-d { font-size: 0.66rem; text-align: center; }
+@media (max-width: 640px) {
+  .rb-echo-date { flex-basis: 5.6rem; }
+  .rb-thread { grid-template-columns: 1fr; gap: 0.2rem; }
+  .rp-trend-v { display: none; }
+}

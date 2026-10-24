@@ -2,7 +2,7 @@
 // 舊世代有 `**📊 本週重點**` 粗體單行當標題、或完全沒有標題。認不出段落時回空陣列，呼叫端退回整份 Markdown，內容不會少。
 // 時間軸設計：kb-pipeline docs/timeline-design.md。
 
-export type SectionKind = 'hero' | 'tasks' | 'people' | 'cases' | 'next' | 'warn' | 'action' | 'generic'
+export type SectionKind = 'hero' | 'tasks' | 'people' | 'cases' | 'next' | 'warn' | 'action' | 'echo' | 'generic'
 export interface ReportSection { icon: string | null; title: string; kind: SectionKind; body: string }
 export interface ParsedReport { title: string | null; intro: string; sections: ReportSection[] }
 
@@ -13,6 +13,7 @@ const EMOJI_BOLD_LINE = /^((?:\p{Extended_Pictographic}[\uFE0E\uFE0F\u200D]*)+)\
 // 日報條列模組：`- 📝 當日總結（約 90 字）：內容`
 const DAILY_MODULE = /^[-*]\s*((?:\p{Extended_Pictographic}[\uFE0E\uFE0F\u200D]*)+)\s*([^：:（(]{1,30}?)\s*(?:[（(][^）)]*[）)])?\s*[：:]\s*(.*)$/u
 const FENCE = /^\s*(```|~~~)/
+const SCORE_HEAD = /^\s*📊\s*今日評分\s*[：:]\s*(.*)$/u
 // 開頭的 emoji（含變體選擇符、ZWJ 組合）
 const LEAD_ICON = /^((?:\p{Extended_Pictographic}[︎️‍]*)+)\s*/u
 
@@ -23,6 +24,7 @@ export function splitTitle(raw: string): { icon: string | null; title: string } 
 }
 
 export function kindOf(title: string): SectionKind {
+  if (/共鳴|呼應/.test(title)) return 'echo'
   if (/觀察|策略|方向|下週|下月|下季|來年/.test(title)) return 'next'      // 先判斷：「下週觀察重點」不能被「重點」吃掉
   if (/盲點|懸浮|卡點|風險|矛盾/.test(title)) return 'warn'
   if (/高槓桿|行動/.test(title)) return 'action'
@@ -71,6 +73,9 @@ function parseDailyModules(lines: string[]): { intro: string; sections: ReportSe
   const mods: Array<{ raw: string; icon: string; head: string; body: string[] }> = []
   const intro: string[] = []
   for (const line of lines) {
+    // 尾端的「📊 今日評分：60」與五行依據自成一段，不要黏在最後一個模組（😄／💭）裡
+    const score = SCORE_HEAD.exec(line)
+    if (score && mods.length > 0) { mods.push({ raw: line, icon: '📊', head: '今日評分', body: [score[1]!.trim()] }); continue }
     const m = DAILY_MODULE.exec(line)
     if (m) { mods.push({ raw: line, icon: m[1]!, head: m[2]!.trim(), body: m[3] ? [m[3]] : [] }); continue }
     if (mods.length === 0) intro.push(line)
@@ -114,4 +119,52 @@ export function splitEntries(body: string): CardEntry[] | null {
   }
   if (entries.length === 0) return null
   return entries.map((e) => ({ head: e.head, body: e.rest.map((l) => l.replace(/^ {2,4}/, '')).join('\n').trim() }))
+}
+
+// 日報 🕰️ 歷史共鳴（kb-pipeline docs/daily-insight-echo.md）：一句話總結＋子項
+//   `- [[2025-10-24]]（365 天前）那天… → 今天…`
+//   `- 〔王小明〕□□■□■□□□■□□■（近 12 週出現 4 週）這條線的走向`
+// 舊日報沒有子項，只有一段含 YYYY-MM-DD 的文字：日期改包成 [[日期]]，讓 Markdown 渲染成可點連結。
+export type EchoItem =
+  | { kind: 'day'; date: string; text: string }
+  | { kind: 'thread'; name: string; cells: boolean[]; text: string }
+export interface EchoBlock { lead: string; items: EchoItem[] }
+
+const ISO_DATE = /\d{4}-\d{2}-\d{2}/
+const ECHO_DAY = /^\[?\[?(\d{4}-\d{2}-\d{2})\]?\]?\s*(?:[（(][^）)]*天前[）)])?\s*[：:]?\s*(.*)$/
+const ECHO_THREAD = /^[〔[]([^〕\]]{1,30})[〕\]]\s*([■□]{2,})\s*(.*)$/
+
+/** 不在 [[ ]] 裡的 YYYY-MM-DD 包成 [[YYYY-MM-DD]] */
+export function linkifyDates(text: string): string {
+  return text.replace(/(\[\[[^\]]*\]\])|(\d{4}-\d{2}-\d{2})/g, (m, link: string | undefined) => (link ? m : `[[${m}]]`))
+}
+
+export function parseEcho(body: string): EchoBlock {
+  const lead: string[] = []
+  const items: EchoItem[] = []
+  for (const raw of body.split('\n')) {
+    const li = /^\s*[-*•]\s+(.+?)\s*$/.exec(raw)
+    const day = li ? ECHO_DAY.exec(li[1]!) : null
+    const thread = li && !day ? ECHO_THREAD.exec(li[1]!) : null
+    if (day) items.push({ kind: 'day', date: day[1]!, text: day[2]!.trim() })
+    else if (thread) items.push({ kind: 'thread', name: thread[1]!.trim(), cells: [...thread[2]!].map((c) => c === '■'), text: thread[3]!.trim() })
+    else lead.push(raw)
+  }
+  return { lead: linkifyDates(lead.join('\n').trim()), items }
+}
+
+/** 兩個 YYYY-MM-DD 相差幾天（a − b） */
+function dayDiff(a: string, b: string): number {
+  return Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000)
+}
+
+/** 「一年前」「3 個月前」「43 天前」：以報告日期為準，不信任文字裡模型寫的天數 */
+export function agoLabel(date: string, reportDate: string): string {
+  if (!ISO_DATE.test(date) || !ISO_DATE.test(reportDate)) return ''
+  const n = dayDiff(reportDate, date)
+  if (n <= 0) return n === 0 ? '當天' : `${-n} 天後`
+  const years = Math.round(n / 365)
+  if (n >= 330 && Math.abs(n - years * 365) <= 10) return years === 1 ? '一年前' : `${years} 年前`
+  if (n >= 60) return `${Math.round(n / 30)} 個月前`
+  return `${n} 天前`
 }

@@ -87,6 +87,25 @@ const WEEK_BODY = `# 📅 週報 2026-09-22 ~ 2026-09-28（第40週）
 
 ### 💡 下週觀察重點
 觀察遷移是否收尾。`
+// 新格式日報（2.57.0）：🕰️ 子項是過去日記的 [[日期]] 與〔對象〕脈絡線
+const ECHO_DAY = '2026-09-22'
+const DAILY_BODY = `🌙 每日精煉洞察 2026-09-22
+- 📝 當日總結（約 90 字）：上午外業，下午整理檢核表。
+- ⚡ 狀態與決策（約 50 字）：先收斂設定再擴充。
+- 🔦 盲點與懸浮（約 90 字）：補件通知仍未處理。
+- 🎯 高槓桿行動（約 70 字）：明早先回補件。
+- 🕰️ 歷史共鳴（約 40 字）：同一個案子又卡在同一關，見 2026-09-01 那篇。
+  - [[2026-09-10]]（12 天前）那天和王小明跑北港案 → 今天換成等縣府回文
+  - [[2025-09-22]]（365 天前）去年也在月底趕報差 → 今天提早一週做完
+  - 〔北港測量案〕□□■□□■□□□□□■（近 12 週出現 3 週）每隔三週冒出來一次
+- 💭 靈魂一問（約 50 字）：為什麼總是等到最後？
+
+📊 今日評分：60
+- 推進 3：外業完成
+- 決策 2：一般
+- 卡點 2：補件未動
+- 覺察 3：有反思
+- 能量 2：平常`
 const IDEAS = { available: true, generatedAt: '2026-09-28', receivedAt: null, weakest: null, top: [], weeks: [], mind: null, mindShadow: [],
   ideas: [{ id: 'IDEA-0001', title: '把關係宇宙做成年度回顧影片', category: '創作', dimension: null, source: null, why: null, value: 4, effort: 2, status: 'new', bornAt: '2026-09-23T10:00', lastMentioned: '2026-09-23T10:00',
     mentions: 1, backfill: false, days: ['2026-09-23'], history: [], score: null, scoreWhy: [], weakBoost: false }] }
@@ -99,7 +118,7 @@ const detail = (level, key) => {
   const it = list.find(x => x.periodKey === key)
   if (!it) return null
   const children = level === 'week' ? days.filter(d => d.startDate >= it.startDate && d.startDate <= it.endDate && d.hasReport).reverse().map(d => ({ level: 'day', periodKey: d.periodKey, startDate: d.startDate, title: d.title, summary: d.summary })) : []
-  return { ...it, bodyMd: it.hasReport ? (level === 'week' ? WEEK_BODY : BODY) : '', children }
+  return { ...it, bodyMd: it.hasReport ? (level === 'week' ? WEEK_BODY : level === 'day' && key === ECHO_DAY ? DAILY_BODY : BODY) : '', children }
 }
 const graph = {
   available: true, computedAt: '2026-09-29T00:00:00Z',
@@ -315,6 +334,44 @@ async function newPage(viewport, unlocked = true) {
   check('手機：對話框內容無橫向溢出', await page.evaluate(() => { const d = document.querySelector('[role=dialog]'); return d.scrollWidth <= d.clientWidth + 1 }))
   await page.screenshot({ path: SHOTS + '/8-dialog-mobile.png' })
   check('手機：無 console error', errors.length === 0, errors.slice(0, 2).join(' | '))
+  await ctx.close()
+}
+
+// ───────── 日報 🕰️ 歷史共鳴時間線與分數走勢（2.57.0） ─────────
+{
+  const { ctx, page, errors } = await newPage({ width: 1100, height: 900 })
+  await page.goto(base + '/#graph/timeline')
+  await page.waitForSelector('[data-testid=timeline-row]')
+  await page.locator('[data-testid=timeline-row]', { hasText: '09-22' }).first().click()
+  await page.waitForSelector('[data-testid=rb-section-echo]')
+  const dates = await page.locator('[data-testid=rb-echo-date]').allInnerTexts()
+  check('🕰️：子項畫成時間線，日期附距離', dates.length === 2 && dates[0].includes('2026-09-10') && dates[0].includes('12 天前') && dates[1].includes('一年前'), dates.join(' | '))
+  check('🕰️：脈絡線 12 格、3 格亮', (await page.locator('.rb-thread-cells i').count()) === 12 && (await page.locator('.rb-thread-cells i[data-on=true]').count()) === 3)
+  check('🕰️：一句話裡的純文字日期也可點', (await page.locator('.rb-echo-lead [role=link]', { hasText: '2026-09-01' }).count()) === 1)
+  const bars = await page.locator('[data-testid=rp-trend] .rp-trend-col').count()
+  check('📈：近期分數走勢有柱、這天加框', bars >= 2 && (await page.locator('.rp-trend-col[data-current=true]').count()) === 1, `${bars} 柱`)
+  check('📊：總分不再 ×5（假資料這天 59 分）', (await page.locator('[data-testid=rp-score] .hm-h-right b').innerText()) === '59')
+  await page.locator('[data-testid=rp-trend]').screenshot({ path: SHOTS + '/9-trend.png' })
+  await page.locator('[data-testid=rb-section-echo]').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: SHOTS + '/9-echo.png', fullPage: false })
+  await page.locator('[data-testid=rb-section-echo]').screenshot({ path: SHOTS + '/9-echo-card.png' })
+  await page.locator('[data-testid=rb-echo-date]').first().click()
+  await page.waitForFunction(() => document.querySelector('#timeline-dialog-title')?.textContent?.includes('09-10'))
+  check('🕰️：點日期疊一層打開那天', true)
+  await page.locator('button', { hasText: '返回' }).first().click()
+  await page.waitForSelector('[data-testid=rb-section-echo]')
+  check('🕰️：返回回到原本那天', (await page.locator('#timeline-dialog-title').innerText()).includes('09-22'))
+  check('🕰️：無 console error', errors.length === 0, errors.slice(0, 2).join(' | '))
+  await ctx.close()
+}
+{
+  const { ctx, page } = await newPage({ width: 390, height: 800 })
+  await page.goto(base + '/#graph/timeline')
+  await page.waitForSelector('[data-testid=timeline-row]')
+  await page.locator('[data-testid=timeline-row]', { hasText: '09-22' }).first().click()
+  await page.waitForSelector('[data-testid=rb-section-echo]')
+  check('🕰️ 手機：對話框內容無橫向溢出', await page.evaluate(() => { const d = document.querySelector('[role=dialog]'); return d.scrollWidth <= d.clientWidth + 1 }))
+  await page.locator('[data-testid=rb-section-echo]').screenshot({ path: SHOTS + '/9-echo-mobile.png' })
   await ctx.close()
 }
 

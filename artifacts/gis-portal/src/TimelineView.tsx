@@ -10,10 +10,12 @@ import {
   type TimelineDetail, type TimelineItem, type TimelineLevel,
 } from './timelineApi'
 import {
-  LEVELS, LEVEL_LABEL, groupItems, itemKey, mergePages, neighbors, oneLine, reportBadge, reportScoreLine, rowDateLabel,
+  LEVELS, LEVEL_LABEL, groupItems, itemKey, mergePages, neighbors, oneLine, reportBadge, reportScoreLine, rowDateLabel, scoreTrend,
+  type TrendPoint,
 } from './timelineLogic'
 
 const LEVEL_KEY = 'kb.timeline.level'
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
 const SCORE_TONE: Record<'great' | 'ok' | 'warn' | 'concern' | 'crit', string> = {
   great: COLOR.amber, ok: COLOR.ok, warn: COLOR.warn, concern: COLOR.concern, crit: COLOR.crit,
 }
@@ -210,6 +212,7 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
         <TimelineDialog
           detail={detail} detailError={detailError} ref_={top} isMobile={isMobile} canBack={stack.length > 1} password={unlockedPassword}
           older={nav.older} newer={nav.newer}
+          trend={top.level === 'day' && loadedLevel === 'day' ? scoreTrend(items, top.periodKey) : []}
           onClose={closeDialog} onBack={back} onGo={goTo} onDrill={drill} onEvent={jumpToEvent}
         />
       )}
@@ -219,10 +222,13 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
 
 function TimelineDialog(props: {
   detail: TimelineDetail | null; detailError: boolean; ref_: Ref; isMobile: boolean; canBack: boolean; password: string | null
-  older: TimelineItem | null; newer: TimelineItem | null
+  older: TimelineItem | null; newer: TimelineItem | null; trend: TrendPoint[]
   onClose: () => void; onBack: () => void; onGo: (r: Ref) => void; onDrill: (r: Ref) => void; onEvent: (id: string) => void
 }) {
-  const { detail: d, detailError, ref_, isMobile, canBack, password, older, newer, onClose, onBack, onGo, onDrill, onEvent } = props
+  const { detail: d, detailError, ref_, isMobile, canBack, password, older, newer, trend, onClose, onBack, onGo, onDrill, onEvent } = props
+  // 報告裡的日期（🕰️ 的 [[YYYY-MM-DD]]、走勢柱）→ 疊一層打開那天的日報，「返回」回到這一天
+  const openDay = (date: string) => onDrill({ level: 'day', periodKey: date })
+  const resolveDay = (target: string) => (DAY_KEY.test(target.trim()) ? target.trim() : null)
   const boxRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => { closeRef.current?.focus() }, [])
@@ -266,13 +272,14 @@ function TimelineDialog(props: {
           <button ref={closeRef} type="button" onClick={onClose} aria-label="關閉" style={btn(false)}>關閉 ✕</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '0.4rem 1.1rem 1rem' }}>
-          {detailError && <div style={{ color: COLOR.crit, fontSize: '0.8rem', padding: '0.8rem 0' }}>載入失敗。</div>}
+          {detailError && <div style={{ color: COLOR.crit, fontSize: '0.8rem', padding: '0.8rem 0' }}>載入失敗（入口網可能沒有這一期的報告或事件）。</div>}
           {!d && !detailError && <div style={{ color: COLOR.steelDim, fontSize: '0.8rem', padding: '0.8rem 0' }}>載入中…</div>}
           {d?.periodNote && <div style={{ margin: '0.6rem 0', padding: '0.4rem 0.7rem', borderLeft: `3px solid ${COLOR.warn}`, color: COLOR.warn, fontSize: '0.95rem' }}>⚠ {d.periodNote}</div>}
           {d && d.hasReport && (
             // 報告（日／週／月／季／年）：圖表帶＋段落卡片，可切「原文」
             <ReportBody level={d.level} startDate={d.startDate} endDate={d.endDate} bodyMd={d.bodyMd} reportScore={d.reportScore} password={password}
-              md={(text, size) => <MarkdownView text={text} fontSize={size ?? '1.1rem'} />} />
+              trend={trend} onOpenDay={openDay}
+              md={(text, size) => <MarkdownView text={text} fontSize={size ?? '1.1rem'} resolveWikilink={resolveDay} onNavigate={openDay} />} />
           )}
           {d && !d.hasReport && (
             <div style={{ color: COLOR.steelDim, fontSize: '1rem', padding: '0.8rem 0' }}>

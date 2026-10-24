@@ -84,3 +84,17 @@ export function reportScoreLine(score: { total: number; parts: Array<{ label: st
   if (!score) return null
   return `${Math.round(score.total)}（${score.parts.map(p => `${p.label} ${p.value}`).join('・')}）`
 }
+
+export interface TrendPoint { date: string; total: number; current: boolean }
+
+/** 日報對話框的近 N 天分數走勢：取已載入的日列表裡，日期 ≤ date 且有分數的最近 n 天，由舊到新。
+ *  列表不是日級（從週報鑽進來）或這天本身不在列表裡時回空陣列，畫面不顯示走勢。 */
+export function scoreTrend(items: TimelineItem[], date: string, n = 14): TrendPoint[] {
+  const days = items.filter(it => it.level === 'day' && it.reportScore && it.periodKey <= date)
+  if (!days.some(it => it.periodKey === date)) return []
+  return days
+    .sort((a, b) => (a.periodKey < b.periodKey ? 1 : -1))
+    .slice(0, n)
+    .reverse()
+    .map(it => ({ date: it.periodKey, total: Math.round(it.reportScore!.total), current: it.periodKey === date }))
+}
