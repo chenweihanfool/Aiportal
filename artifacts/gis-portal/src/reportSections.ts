@@ -10,8 +10,8 @@ const HEAD = /^(#{1,3})\s+(.+?)\s*#*\s*$/
 const BOLD_LINE = /^\*\*(.{1,40}?)\*\*\s*$/
 // 「⚡ **狀態與決策**」：emoji 在粗體外面（日報第三代格式的段落標題）
 const EMOJI_BOLD_LINE = /^((?:\p{Extended_Pictographic}[\uFE0E\uFE0F\u200D]*)+)\s*\*\*(.{1,40}?)\*\*\s*$/u
-// 日報條列模組：`- 📝 當日總結（約 90 字）：內容`
-const DAILY_MODULE = /^[-*]\s*((?:\p{Extended_Pictographic}[\uFE0E\uFE0F\u200D]*)+)\s*([^：:（(]{1,30}?)\s*(?:[（(][^）)]*[）)])?\s*[：:]\s*(.*)$/u
+// 日報條列模組：`- 📝 當日總結（約 90 字）：內容`；實際日報多半沒有開頭的「- 」：`🎯 高槓桿行動：內容`
+const DAILY_MODULE = /^(?:[-*]\s*)?((?:\p{Extended_Pictographic}[\uFE0E\uFE0F\u200D]*)+)\s*([^：:（(]{1,30}?)\s*(?:[（(][^）)]*[）)])?\s*[：:]\s*(.*)$/u
 const FENCE = /^\s*(```|~~~)/
 const SCORE_HEAD = /^\s*📊\s*今日評分\s*[：:]\s*(.*)$/u
 // 開頭的 emoji（含變體選擇符、ZWJ 組合）

@@ -170,3 +170,33 @@ describe('日報尾端的 📊 今日評分', () => {
     expect(sections[3]!.body).toBe('60\n- 推進 3：外業完成\n- 決策 2：一般')
   })
 })
+
+describe('實際日報格式：模組行沒有開頭的「- 」', () => {
+  const md = `🌙 每日精煉洞察 2026-10-23
+
+📝 當日總結：颱風假，中午載媽媽和老婆吃飯。
+
+⚡ 狀態與決策：放假仍在補規則。
+
+🔦 盲點與懸浮：2.2 剔除多餘界址點未做。
+
+🎯 高槓桿行動：下週一先做 2.2。
+
+🕰️ 歷史共鳴：2025-10-23 陪老婆和朋友吃牛排；今天多了媽媽同席。
+
+💭 靈魂一問：你是怕閒下來嗎？
+
+😄 當日段子：NAS 對 VPS 永遠 99%。
+
+📊 今日評分：75
+- 推進 3：外業完成
+- 能量 3：午睡`
+  it('拆成各模組卡片，🕰️ 的日期變成連結，📊 自成一段', () => {
+    const { intro, sections } = parseReportSections(md)
+    expect(intro).toBe('🌙 每日精煉洞察 2026-10-23')
+    expect(sections.map((s) => s.title)).toEqual(['當日總結', '狀態與決策', '盲點與懸浮', '高槓桿行動', '歷史共鳴', '靈魂一問', '當日段子', '今日評分'])
+    expect(sections.map((s) => s.kind)).toEqual(['hero', 'generic', 'warn', 'action', 'echo', 'generic', 'generic', 'generic'])
+    expect(parseEcho(sections[4]!.body).lead).toBe('[[2025-10-23]] 陪老婆和朋友吃牛排；今天多了媽媽同席。')
+    expect(sections[7]!.body).toBe('75\n- 推進 3：外業完成\n- 能量 3：午睡')
+  })
+})
