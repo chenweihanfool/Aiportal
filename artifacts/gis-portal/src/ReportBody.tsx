@@ -8,12 +8,13 @@ import { ReportCharts, ScoreBars, ScoreTrend } from './ReportCharts'
 import type { ReportScore } from './timelineApi'
 import type { TrendPoint } from './timelineLogic'
 import { buildPeriodReport, inputFromData } from './periodStats'
-import { agoLabel, parseEcho, parseReportSections, parseTaskLines, splitEntries, type ReportSection } from './reportSections'
+import { parseCaseFlow, parseEcho, parseReportSections, parseScoreSection, parseTaskLines, parseViz, splitEntries, type ReportSection } from './reportSections'
+import { ScoreRadar, VizItems } from './ReportViz'
 import { Skeleton } from './StateFrame'
 
 // 週報／月報的視覺化版面（時間軸報告對話框裡，取代原本整篇 Markdown）：
 // 上方圖表帶（想法・美食・旅遊・活動節奏，依報告期間現算）＋ 下方依原文段落拆成的卡片（概覽放大、任務清單帶到期日、
-// 人物與案件各一張卡、其餘段落照 Markdown）。可切到「原文」看完整 Markdown；認不出段落時整份退回原文。
+// 人物與案件各一張卡、其餘段落的固定格式子項畫成小圖，見 ReportViz.tsx）。可切到「原文」看完整 Markdown；認不出段落時整份退回原文。
 // 設計：kb-pipeline docs/report-visual-design.md（2026-10-23 修訂）。
 
 export const VISUAL_LEVELS = ['day', 'week', 'month', 'quarter', 'year'] as const
@@ -22,60 +23,55 @@ export const isVisualLevel = (l: string): l is VisualLevel => (VISUAL_LEVELS as 
 
 const KIND_TONE: Record<string, string> = {
   hero: 'var(--c-accent)', tasks: 'var(--c-warn)', people: 'var(--c-ok)', cases: 'var(--c-ink-2)', next: 'var(--c-accent)',
-  warn: 'var(--c-warn)', action: 'var(--c-ok)', echo: 'var(--c-accent)', generic: 'var(--c-line-strong)',
+  warn: 'var(--c-warn)', action: 'var(--c-ok)', echo: 'var(--c-accent)', question: 'var(--c-accent)', joke: 'var(--c-ok)',
+  score: 'var(--c-accent)', generic: 'var(--c-line-strong)',
 }
 
 type Md = (text: string, size?: string) => ReactNode
 
-/** 🕰️ 歷史共鳴：一句話＋小時間線（過去那天 → 今天，日期可點）＋對象近 12 週的脈絡格。沒有子項時照 Markdown（日期已包成連結）。 */
-function EchoBody({ body, reportDate, md, onOpenDay }: { body: string; reportDate: string; md: Md; onOpenDay?: (date: string) => void }) {
-  const { lead, items } = parseEcho(body)
-  const days = items.filter((i) => i.kind === 'day')
-  const threads = items.filter((i) => i.kind === 'thread')
+/** 一個段落：先畫一句話（lead），再畫固定格式子項的小圖（ReportViz.tsx）。🕰️ 只認日期與脈絡線，lead 裡的日期包成連結。 */
+function VizBody({ s, level, refDate, md, onOpenDay }: { s: ReportSection; level: VisualLevel; refDate: string; md: Md; onOpenDay?: (date: string) => void }) {
+  const { lead, items } = s.kind === 'echo' ? parseEcho(s.body) : parseViz(s.body)
+  if (items.length === 0) return s.kind === 'hero' ? <div className="rb-hero">{md(lead, '1.2rem')}</div> : <>{md(lead)}</>
   return (
     <>
-      {lead && <div className="rb-echo-lead">{md(lead, '1.05rem')}</div>}
-      {days.length > 0 && (
-        <ol className="rb-echo" aria-label="過去的日記">
-          {days.map((d, i) => (
-            <li key={i}>
-              <button type="button" className="rb-echo-date" disabled={!onOpenDay} onClick={() => onOpenDay?.(d.date)}
-                title={onOpenDay ? `打開 ${d.date} 的日報` : d.date} data-testid="rb-echo-date">
-                <b>{d.date}</b><small>{agoLabel(d.date, reportDate)}</small>
-              </button>
-              <div className="rb-echo-t">{md(d.text, '1rem')}</div>
-            </li>
-          ))}
-          <li className="rb-echo-now" aria-label="今天"><span className="rb-echo-date"><b>今天</b><small>{reportDate.slice(5)}</small></span></li>
-        </ol>
-      )}
-      {threads.length > 0 && (
-        <div className="rb-threads" aria-label="近 12 週脈絡線">
-          {threads.map((t, i) => (
-            <div key={i} className="rb-thread">
-              <span className="rb-thread-n">{t.name}</span>
-              <span className="rb-thread-cells" role="img" aria-label={`${t.name}：近 ${t.cells.length} 週有 ${t.cells.filter(Boolean).length} 週出現`}
-                style={{ gridTemplateColumns: `repeat(${t.cells.length}, 1fr)` }}>
-                {t.cells.map((on, j) => <i key={j} data-on={on ? 'true' : undefined} data-last={j === t.cells.length - 1 ? 'true' : undefined} />)}
-              </span>
-              {t.text && <span className="rb-thread-t">{md(t.text, '0.95rem')}</span>}
-            </div>
-          ))}
-          <p className="rb-thread-hint">一格一週，由舊到新；最後一格是這週</p>
-        </div>
-      )}
+      {lead && <div className={s.kind === 'hero' ? 'rb-hero' : 'rb-echo-lead'}>{md(lead, s.kind === 'hero' ? '1.2rem' : '1.05rem')}</div>}
+      <VizItems items={items} level={level} refDate={refDate} md={md} onOpenDay={onOpenDay} />
     </>
   )
 }
 
-function SectionCard({ s, md, reportDate, onOpenDay }: { s: ReportSection; md: Md; reportDate: string; onOpenDay?: (date: string) => void }) {
+/** 人物／案件卡；案件的「進展摘要／卡關點／下一步」畫成三格流程 */
+function Entry({ head, body, md }: { head: string; body: string; md: Md }) {
+  const flow = parseCaseFlow(body)
+  return (
+    <div className="rb-entry">
+      <div className="rb-entry-h">{md(head)}</div>
+      {flow ? (
+        <ol className="rb-flow">
+          {flow.map((f, i) => (
+            <li key={i} data-step={f.label} data-clear={f.label === '卡關' && /^無/.test(f.text) ? 'true' : undefined}>
+              <span className="rb-flow-h">{f.label}</span>
+              <span className="rb-flow-t">{md(f.text, '0.95rem')}</span>
+            </li>
+          ))}
+        </ol>
+      ) : body && <div className="rb-entry-b">{md(body, '1rem')}</div>}
+    </div>
+  )
+}
+
+function SectionCard({ s, md, level, refDate, onOpenDay }: { s: ReportSection; md: Md; level: VisualLevel; refDate: string; onOpenDay?: (date: string) => void }) {
   const tasks = s.kind === 'tasks' ? parseTaskLines(s.body) : null
   const entries = s.kind === 'people' || s.kind === 'cases' ? splitEntries(s.body) : null
+  const score = s.kind === 'score' ? parseScoreSection(s.body) : null
   return (
     <section className="rb-card" data-kind={s.kind} data-testid={`rb-section-${s.kind}`} style={{ ['--rb-tone' as string]: KIND_TONE[s.kind] }}>
       <h3 className="rb-h">{s.icon && <span aria-hidden>{s.icon}</span>}{s.title}</h3>
-      {s.kind === 'hero' ? <div className="rb-hero">{md(s.body, '1.2rem')}</div> : s.kind === 'echo' ? (
-        <EchoBody body={s.body} reportDate={reportDate} md={md} onOpenDay={onOpenDay} />
+      {score ? <ScoreRadar total={score.total} parts={score.parts} /> : s.kind === 'question' ? (
+        <blockquote className="rb-quote">{md(s.body, '1.15rem')}</blockquote>
+      ) : s.kind === 'joke' ? (
+        <div className="rb-bubble">{md(s.body, '1rem')}</div>
       ) : tasks ? (
         <ul className="rb-tasks" aria-label={s.title}>
           {tasks.map((t, i) => (
@@ -87,14 +83,9 @@ function SectionCard({ s, md, reportDate, onOpenDay }: { s: ReportSection; md: M
         </ul>
       ) : entries ? (
         <div className="rb-entries">
-          {entries.map((e, i) => (
-            <div key={i} className="rb-entry">
-              <div className="rb-entry-h">{md(e.head)}</div>
-              {e.body && <div className="rb-entry-b">{md(e.body, '1rem')}</div>}
-            </div>
-          ))}
+          {entries.map((e, i) => <Entry key={i} head={e.head} body={e.body} md={md} />)}
         </div>
-      ) : md(s.body)}
+      ) : <VizBody s={s} level={level} refDate={refDate} md={md} onOpenDay={onOpenDay} />}
     </section>
   )
 }
@@ -127,6 +118,8 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
     [ready, ideas.data, food.data, trips.data, startDate, endDate],
   )
   const structured = parsed.sections.length > 0
+  // 📊 段畫成雷達（含每項依據）時，上方的分數條就重複了，只留走勢
+  const radar = structured && parsed.sections.some((s) => s.kind === 'score' && parseScoreSection(s.body))
 
   return (
     <div data-testid="report-body" data-level={level}>
@@ -136,9 +129,9 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
       </div>
       {raw ? md(bodyMd, '1.1rem') : (
         <>
-          {level === 'day' && (reportScore || (trend && trend.length > 1)) && (
+          {level === 'day' && ((reportScore && !radar) || (trend && trend.length > 1)) && (
             <div className="rp-band">
-              {reportScore && <ScoreBars score={reportScore} />}
+              {reportScore && !radar && <ScoreBars score={reportScore} />}
               {trend && <ScoreTrend points={trend} onOpenDay={onOpenDay} />}
             </div>
           )}
@@ -146,7 +139,7 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
           {structured ? (
             <div className="rb-sections" data-testid="rb-sections">
               {parsed.intro && <div className="rb-intro">{md(parsed.intro, '1.02rem')}</div>}
-              {parsed.sections.map((s, i) => <SectionCard key={i} s={s} md={md} reportDate={startDate} onOpenDay={onOpenDay} />)}
+              {parsed.sections.map((s, i) => <SectionCard key={i} s={s} md={md} level={level} refDate={endDate} onOpenDay={onOpenDay} />)}
             </div>
           ) : md(bodyMd, '1.1rem')}
         </>
