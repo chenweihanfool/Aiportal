@@ -7,12 +7,14 @@ import { useAsync, useNow } from './homeHooks'
 import { EXPECTED_EVERY_MIN, blockState, buildDimensionHeatmap, dimensionSeries, historyUpdatedAtMs, sparkGeometry, taipeiDate, type DimSeries } from './homeView'
 import { YearHeat } from './HomeSections'
 import { Skeleton, StateFrame } from './StateFrame'
+import { TaskGantt } from './TaskGantt'
 import { COLOR, FONT } from './theme'
 
 // 面向頁（#dim/<key>）：從首頁點某個面向進來，看這一個面向自己的東西——
 // 現在的分數與權重、近 30／90 天走勢與統計、這個分數怎麼來（原始數據與算法）、相關連結。
 // 資料全部來自既有接口：/api/dashboard 的 hhi 摘要（分數、權重）、/api/happiness/history（每面向的 components）、
-// 各子系統摘要（由 App.tsx 組成 detail 傳進來）。沒有新後端。
+// 各子系統摘要（由 App.tsx 組成 detail 傳進來）。
+// 從容（calm）另外在下方放任務甘特圖（泛用 feed vikunja-gantt，見 TaskGantt.tsx）。
 
 // 365 天：走勢圖只取近 30／90 天（dimensionSeries 依視窗過濾），年熱圖用整整一年
 const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
@@ -162,6 +164,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
               )}
             </div>
           </div>
+          {dimKey === 'calm' && <TaskGantt pw={pw} now={now} color={color} onRequestUnlock={onRequestUnlock} />}
           {nb && (
             <nav className="dp-pager" aria-label="切換面向">
               <a href={`#${dimHash(nb.prev)}`} data-testid="dp-prev" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.prev) }}>← {dimensionOf(nb.prev)?.label}</a>

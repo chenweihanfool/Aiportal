@@ -1355,3 +1355,55 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
   .rb-thread { grid-template-columns: 1fr; gap: 0.2rem; }
   .rp-trend-v { display: none; }
 }
+
+/* ── 從容面板的任務甘特圖（#dim/calm，feed vikunja-gantt；2.59.0）── */
+.dp-gantt { margin-top: 0.8rem; padding: 0.85rem 1rem; gap: 0.6rem; }
+.dp-gantt-frame { min-height: 8rem; }
+.gt-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; font-size: 0.74rem; color: var(--c-ink-2); margin-bottom: 0.5rem; }
+.gt-sum b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1rem; color: var(--c-ink); margin-right: 0.15rem; }
+.gt-sum .is-crit b { color: var(--c-crit); }
+.gt-sum .is-warn b { color: var(--c-warn); }
+.gt-open { margin-left: auto; color: var(--c-accent); text-decoration: none; font-size: 0.72rem; }
+.gt-open:hover, .gt-open:focus-visible { text-decoration: underline; }
+.gt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--c-hover); border-radius: 8px; background: #15171c; margin-bottom: 0.45rem; }
+.gt-grid { --lw: 11.5rem; position: relative; width: calc(var(--lw) + var(--days) * var(--dw)); min-width: 100%; padding-bottom: 0.3rem; }
+@media (max-width: 560px) { .gt-grid { --lw: 7.5rem; } }
+.gt-axis, .gt-row { display: grid; grid-template-columns: var(--lw) calc(var(--days) * var(--dw)); align-items: center; }
+.gt-axis { position: sticky; top: 0; z-index: 3; height: 1.6rem; background: #15171c; border-bottom: 1px solid var(--c-line); }
+.gt-label { position: sticky; left: 0; z-index: 2; display: flex; align-items: center; gap: 0.3rem; min-width: 0; height: 100%; padding: 0 0.6rem 0 1.4rem; background: #15171c; border-right: 1px solid var(--c-hover); font-size: 0.72rem; color: var(--c-ink); }
+.gt-axis-l { padding-left: 0.6rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.62rem; color: var(--c-ink-3); }
+.gt-label-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gt-pri { flex: 0 0 auto; color: var(--c-crit); font-weight: 700; }
+.gt-track { position: relative; height: 100%; overflow: hidden; }
+.gt-tick { position: absolute; top: 0.4rem; padding-left: 3px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.6rem; color: var(--c-ink-3); white-space: nowrap; }
+.gt-tick.is-month { color: var(--c-ink-2); font-weight: 600; }
+.gt-bg { position: absolute; top: 1.6rem; bottom: 0; left: var(--lw); right: 0; pointer-events: none; }
+.gt-bg i { position: absolute; top: 0; bottom: 0; width: var(--dw); background: rgba(255, 255, 255, 0.025); }
+.gt-bg b { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--c-hover); }
+.gt-bg b.is-month { background: var(--c-line); }
+.gt-today { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px solid var(--c-accent); z-index: 1; pointer-events: none; }
+.gt-today span { position: absolute; top: 1.7rem; left: 3px; font-size: 0.56rem; color: var(--c-accent); background: #15171c; padding: 0 2px; border-radius: 3px; white-space: nowrap; }
+.gt-group + .gt-group { border-top: 1px solid var(--c-hover); }
+.gt-proj { display: block; width: 100%; font: inherit; text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; color: var(--c-ink); }
+.gt-proj-in { position: sticky; left: 0; z-index: 2; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.6rem 0.25rem; font-size: 0.76rem; font-weight: 700; }
+.gt-proj:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.gt-caret { width: 0.7rem; color: var(--c-ink-3); font-size: 0.7rem; }
+.gt-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; }
+.gt-proj-n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; font-size: 0.66rem; color: var(--c-ink-3); }
+.gt-proj-n em { font-style: normal; color: var(--c-crit); }
+.gt-row { height: 1.65rem; color: inherit; text-decoration: none; --bar: var(--dim); }
+.gt-row:hover .gt-label, .gt-row:focus-visible .gt-label { background: #1d2027; color: var(--c-accent); }
+.gt-row:hover .gt-track, .gt-row:focus-visible .gt-track { background: rgba(255, 255, 255, 0.03); }
+.gt-row:focus-visible { outline: none; }
+.gt-row.is-overdue { --bar: var(--c-crit); }
+.gt-row.is-soon { --bar: var(--c-warn); }
+.gt-row.is-done { --bar: var(--c-ink-3); }
+.gt-row.is-done .gt-label-t { color: var(--c-ink-3); text-decoration: line-through; }
+.gt-bar { position: absolute; top: 50%; height: 0.8rem; transform: translateY(-50%); border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--bar) 35%, transparent); border: 1px solid var(--bar); box-sizing: border-box; min-width: 4px; }
+.gt-bar.cut-l { border-left-style: dashed; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.gt-bar.cut-r { border-right-style: dashed; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.gt-pct { display: block; height: 100%; background: var(--bar); opacity: 0.7; }
+.gt-ms { position: absolute; top: 50%; width: 0.62rem; height: 0.62rem; background: var(--bar); transform: translate(-50%, -50%) rotate(45deg); border-radius: 2px; }
+.gt-ms.cut-l { left: 0.45rem !important; }
+.gt-when { position: absolute; top: 50%; transform: translateY(-50%); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.58rem; color: var(--c-ink-3); white-space: nowrap; pointer-events: none; }
+.gt-row.is-overdue .gt-when { color: var(--c-crit); }
