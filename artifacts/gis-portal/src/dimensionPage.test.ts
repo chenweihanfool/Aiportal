@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deltaText, dimHash, dimKeyFromHash, dimNeighbors, rangeStats } from './dimensionPage'
+import { deltaText, dimHash, dimKeyFromHash, dimNeighbors, dimOverview, rangeStats, recentDigest } from './dimensionPage'
 import { dimensionSeries } from './homeView'
 
 const hist = (vals: Array<number | null>, end = '2026-10-16') => {
@@ -52,5 +52,55 @@ describe('hash helpers', () => {
     expect(deltaText(-2)).toBe('▼ 2')
     expect(deltaText(0)).toBe('— 持平')
     expect(deltaText(null)).toBeNull()
+  })
+})
+
+describe('dimOverview', () => {
+  const rows = [
+    { key: 'calm', label: '從容', value: 60, weightPct: 15, points: 9 },
+    { key: 'mind', label: '心智', value: null, weightPct: 15, points: null },
+  ]
+  it('gap = weight × (100 − value); gain10 for the current dimension', () => {
+    const o = dimOverview(rows, 'calm')
+    expect(o.rows[0]!.gap).toBe(6)
+    expect(o.rows[1]!.gap).toBeNull()
+    expect(o.gain10).toBe(1.5)
+  })
+  it('unknown key → gain10 null', () => {
+    expect(dimOverview(rows, 'nope').gain10).toBeNull()
+  })
+})
+
+describe('recentDigest', () => {
+  it('last7 vs prev7, rank, streak above the 90-day average', () => {
+    // 14 天：前 7 天都 40、近 7 天都 80（今天 2026-10-16）
+    const r = recentDigest(hist([40, 40, 40, 40, 40, 40, 40, 80, 80, 80, 80, 80, 80, 80]), 'calm', '2026-10-16')!
+    expect(r.last7).toBe(80)
+    expect(r.prev7).toBe(40)
+    expect(r.weekChange).toBe(40)
+    expect(r.avg90).toBe(60)
+    expect(r.rank).toEqual({ pos: 1, of: 14, date: '2026-10-16', value: 80 })
+    expect(r.streak).toEqual({ side: 'above', days: 7 })
+  })
+  it('a gap breaks the streak; ties share the rank', () => {
+    const r = recentDigest(hist([90, 10, null, 20, 20]), 'calm', '2026-10-16')!
+    expect(r.streak).toEqual({ side: 'below', days: 2 })
+    expect(r.rank.pos).toBe(2)
+    expect(r.prev7).toBeNull()
+    expect(r.weekChange).toBeNull()
+  })
+  it('weekday pattern needs ≥4 weekdays with ≥2 points', () => {
+    expect(recentDigest(hist([50, 60, 70]), 'calm', '2026-10-16')!.weekday).toBeNull()
+    // 2026-10-16 是週五；21 天，每個星期幾 3 筆，值＝星期幾 × 10（週日 0、週六 60）
+    const vals = Array.from({ length: 21 }, (_, i) => new Date(Date.UTC(2026, 9, 16 - 20 + i)).getUTCDay() * 10)
+    const w = recentDigest(hist(vals), 'calm', '2026-10-16')!.weekday!
+    expect(w.best).toEqual({ day: '六', avg: 60 })
+    expect(w.worst).toEqual({ day: '日', avg: 0 })
+  })
+  it('ignores dates outside 90 days and needs 2 points', () => {
+    expect(recentDigest(hist([50]), 'calm', '2026-10-16')).toBeNull()
+    expect(recentDigest(null, 'calm', '2026-10-16')).toBeNull()
+    const old = [{ date: '2026-01-01', components: { calm: 100 } }, ...hist([30, 50])]
+    expect(recentDigest(old, 'calm', '2026-10-16')!.rank.of).toBe(2)
   })
 })
