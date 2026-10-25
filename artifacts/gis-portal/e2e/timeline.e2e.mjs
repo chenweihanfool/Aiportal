@@ -119,6 +119,11 @@ const PLACES = { available: true, receivedAt: null, places: [{ id: 'FOOD-1', nam
   mustTry: [], rating: 4, addedAt: '2026-09-24', visitedAt: '2026-09-26', days: ['2026-09-24', '2026-09-26'], mapUrl: null, kind: 'food', photos: [] }] }
 const TRIPS = { available: true, receivedAt: null, trips: [{ id: 'TRIP-1', name: '台南旅遊', start: '2026-09-25', end: '2026-09-27', status: 'done', area: '台南', summary: null, cover: null, placeIds: [],
   days: [{ date: '2026-09-26', title: null, placeIds: [], entries: [{ time: '10:00', text: '赤崁樓', photos: [], photosPending: 2 }] }] }] }
+// 每天完成幾項任務（feed tasks-done）：9/15～9/22 連續 8 天有完成、9/22 那天 4 項
+const TASKS_DONE = { available: true, name: 'tasks-done', schemaVersion: 1, generatedAt: '2026-09-28', receivedAt: null,
+  payload: { computedAt: '2026-09-28T10:00:00+08:00', since: '2026-09-01', days: [
+    { date: '2026-09-01', count: 2 }, { date: '2026-09-10', count: 1 },
+    ...['15', '16', '17', '18', '19', '20', '21'].map(d => ({ date: `2026-09-${d}`, count: 1 })), { date: '2026-09-22', count: 4 }] } }
 const detail = (level, key) => {
   const list = { day: days, week: weeks, quarter: quarters, month: [], year: [] }[level]
   const it = list.find(x => x.periodKey === key)
@@ -156,6 +161,7 @@ const server = http.createServer((req, res) => {
       const d = detail(decodeURIComponent(m[1]), decodeURIComponent(m[2]))
       return d ? json(d) : json({ message: 'nf' }, 404)
     }
+    if (u.pathname === '/api/feed/tasks-done') return req.headers['x-admin-password'] === PWD ? json(TASKS_DONE) : json({ message: 'no' }, 403)
     if (u.pathname === '/api/hermes-ideas' || u.pathname === '/api/hermes-places' || u.pathname === '/api/hermes-trips') {
       if (req.headers['x-admin-password'] !== PWD) return json({ message: 'no' }, 403)
       return json(u.pathname === '/api/hermes-ideas' ? IDEAS : u.pathname === '/api/hermes-places' ? PLACES : TRIPS)
@@ -305,6 +311,9 @@ async function newPage(viewport, unlocked = true) {
   check('週報對話框：圖表帶＋段落卡片、可切「原文」', (await page.locator('[data-testid=rb-sections]').count()) === 1 && (await page.locator('[data-testid=rb-mode-raw]').count()) === 1)
   check('週報圖表：想法／美食／旅遊三卡與活動節奏（7 格）', (await page.locator('[data-testid="rp-ideas"],[data-testid="rp-food"],[data-testid="rp-travel"],[data-testid="rp-rhythm"]').count()) === 4 && (await page.locator('[data-testid=rp-rhythm] .rp-row').first().locator('.rp-cell').count()) === 7)
   check('週報圖表：依該週資料現算（新想法 1、吃過 1、旅遊 3 天、地圖 1 個釘）', (await page.locator('.rp-stats').innerText()).includes('1') && (await page.locator('.rp-map circle').count()) === 1 && /出門\s*3\s*天/.test(await page.locator('[data-testid=rp-travel]').innerText()))
+  await page.waitForSelector('[data-testid=ms-card]', { timeout: 8000 })
+  check('週報里程碑：近 12 週、本週成果 5（任務 4＋新想法 1）', (await page.locator('[data-testid=ms-trend] .ms-col').count()) === 12 && (await page.locator('[data-testid=ms-total] b').innerText()) === '5')
+  await page.locator('[data-testid=ms-card]').screenshot({ path: SHOTS + '/9-milestones-week.png' })
   check('週報段落：概覽放大、任務有逾期／到期徽章、人物各一張卡', (await page.locator('[data-testid=rb-section-hero]').count()) === 1 && (await page.locator('.rb-chip[data-kind=overdue]').count()) === 1 && (await page.locator('.rb-chip[data-kind=due]').count()) === 1 && (await page.locator('.rb-entry').count()) === 2)
   await page.waitForTimeout(900)
   check('想法格子：滑過顯示具體是哪個想法（不只數量）', ((await page.locator('.rp-cell[data-k=ideas]').evaluateAll(els => els.map(e => e.getAttribute('title') || ''))).join('|')).includes('• 把關係宇宙做成年度回顧影片'))
@@ -354,10 +363,20 @@ async function newPage(viewport, unlocked = true) {
   check('🕰️：子項畫成時間線，日期附距離', dates.length === 2 && dates[0].includes('2026-09-10') && dates[0].includes('12 天前') && dates[1].includes('一年前'), dates.join(' | '))
   check('🕰️：脈絡線 12 格、3 格亮', (await page.locator('.rb-thread-cells i').count()) === 12 && (await page.locator('.rb-thread-cells i[data-on=true]').count()) === 3)
   check('🕰️：一句話裡的純文字日期也可點', (await page.locator('.rb-echo-lead [role=link]', { hasText: '2026-09-01' }).count()) === 1)
-  const bars = await page.locator('[data-testid=rp-trend] .rp-trend-col').count()
-  check('📈：近期分數走勢有柱、這天加框', bars >= 2 && (await page.locator('.rp-trend-col[data-current=true]').count()) === 1, `${bars} 柱`)
+  const bars = await page.locator('[data-testid=ms-trend] .ms-col').count()
+  check('🏁：里程碑近 14 天有柱、這天加框', bars === 14 && (await page.locator('.ms-col[data-current=true]').count()) === 1, `${bars} 柱`)
+  check('🏁：這天完成任務 4、成果 4', (await page.locator('[data-testid=ms-part-tasks] b').innerText()).startsWith('4') && (await page.locator('[data-testid=ms-total] b').innerText()) === '4')
+  const badgeText = await page.locator('[data-testid=ms-badges]').innerText()
+  check('🏁：徽章有連續天數與新高', badgeText.includes('連續 8 天') && badgeText.includes('近 14 天最多'), badgeText.replace(/\n/g, ' | '))
+  check('🏁：年度累計三列', (await page.locator('[data-testid=ms-road] li').count()) === 3)
+  check('📈：舊的 AI 分數走勢已移除', (await page.locator('[data-testid=rp-trend]').count()) === 0)
+  await page.locator('[data-testid=ms-card]').screenshot({ path: SHOTS + '/9-milestones.png' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.waitForTimeout(300)
+  check('🏁：手機寬度里程碑卡無橫向溢出', await page.evaluate(() => { const c = document.querySelector('[data-testid=ms-card]'); return c.scrollWidth <= c.clientWidth + 1 }))
+  await page.locator('[data-testid=ms-card]').screenshot({ path: SHOTS + '/9-milestones-mobile.png' })
+  await page.setViewportSize({ width: 1100, height: 900 })
   check('📊：總分不再 ×5（假資料這天 59 分）', (await page.locator('[data-testid=rp-score] .hm-h-right b').innerText()) === '59')
-  await page.locator('[data-testid=rp-trend]').screenshot({ path: SHOTS + '/9-trend.png' })
   await page.locator('[data-testid=rb-section-echo]').scrollIntoViewIfNeeded()
   await page.screenshot({ path: SHOTS + '/9-echo.png', fullPage: false })
   await page.locator('[data-testid=rb-section-echo]').screenshot({ path: SHOTS + '/9-echo-card.png' })

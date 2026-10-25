@@ -4,16 +4,17 @@ import { apiFetchFood } from './foodApi'
 import { apiFetchTrips, taipeiTodayIso } from './tripsApi'
 import { useAsync } from './homeHooks'
 import { MarkdownView } from './MarkdownView'
-import { ReportCharts, ScoreBars, ScoreTrend } from './ReportCharts'
+import { ReportCharts, ScoreBars } from './ReportCharts'
+import { MilestoneCard } from './ReportMilestones'
+import { apiFetchTasksDone, buildMilestones } from './milestones'
 import type { ReportScore } from './timelineApi'
-import type { TrendPoint } from './timelineLogic'
 import { buildPeriodReport, inputFromData } from './periodStats'
 import { parseCaseFlow, parseEcho, parseReportSections, parseScoreSection, parseTaskLines, parseViz, splitEntries, type ReportSection } from './reportSections'
 import { ScoreRadar, VizItems } from './ReportViz'
 import { Skeleton } from './StateFrame'
 
 // 週報／月報的視覺化版面（時間軸報告對話框裡，取代原本整篇 Markdown）：
-// 上方圖表帶（想法・美食・旅遊・活動節奏，依報告期間現算）＋ 下方依原文段落拆成的卡片（概覽放大、任務清單帶到期日、
+// 最上面 🏁 里程碑卡（完成任務＋新想法＋想法實行，近 N 期走勢與年度關卡，見 ReportMilestones.tsx）＋ 圖表帶（想法・美食・旅遊・活動節奏，依報告期間現算）＋ 下方依原文段落拆成的卡片（概覽放大、任務清單帶到期日、
 // 人物與案件各一張卡、其餘段落的固定格式子項畫成小圖，見 ReportViz.tsx）。可切到「原文」看完整 Markdown；認不出段落時整份退回原文。
 // 設計：kb-pipeline docs/report-visual-design.md（2026-10-23 修訂）。
 
@@ -90,7 +91,7 @@ function SectionCard({ s, md, level, refDate, onOpenDay }: { s: ReportSection; m
   )
 }
 
-export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, password, md, trend, onOpenDay }: {
+export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, password, md, onOpenDay }: {
   level: VisualLevel
   startDate: string
   endDate: string
@@ -100,15 +101,14 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
   password: string | null
   /** 原本時間軸用的 Markdown 渲染（帶 wikilink 解析與附件預覽），由對話框傳入 */
   md: Md
-  /** 僅日報：近 14 天分數走勢（由舊到新）；空陣列不顯示 */
-  trend?: TrendPoint[]
-  /** 點過去的日期 → 打開那天的日報（🕰️ 時間線、走勢柱） */
+  /** 點過去的日期 → 打開那天的日報（🕰️ 時間線、里程碑的日柱） */
   onOpenDay?: (date: string) => void
 }) {
   const [raw, setRaw] = useState(false)
   const ideas = useAsync(password, apiFetchIdeas)
   const food = useAsync(password, apiFetchFood)
   const trips = useAsync(password, apiFetchTrips)
+  const tasksDone = useAsync(password, apiFetchTasksDone)
   const parsed = useMemo(() => parseReportSections(bodyMd), [bodyMd])
   const settled = (a: { data: unknown; error: boolean }) => a.data !== null || a.error
   const ready = !!password && settled(ideas) && settled(food) && settled(trips)
@@ -117,8 +117,15 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
     () => (ready ? buildPeriodReport(inputFromData(ideas.data, food.data?.places ?? null, trips.data?.trips ?? null), [startDate, endDate], taipeiTodayIso()) : null),
     [ready, ideas.data, food.data, trips.data, startDate, endDate],
   )
+  // 里程碑只等想法庫與完成任務；完成任務讀不到（或還沒部署）時照樣畫，任務格標「—」
+  const msReady = !!password && settled(ideas) && settled(tasksDone)
+  const tasksMissing = tasksDone.data === null
+  const milestones = useMemo(
+    () => (msReady ? buildMilestones(ideas.data?.ideas ?? [], tasksDone.data, level, [startDate, endDate], taipeiTodayIso()) : null),
+    [msReady, ideas.data, tasksDone.data, level, startDate, endDate],
+  )
   const structured = parsed.sections.length > 0
-  // 📊 段畫成雷達（含每項依據）時，上方的分數條就重複了，只留走勢
+  // 📊 段畫成雷達（含每項依據）時，上方的分數條就重複了
   const radar = structured && parsed.sections.some((s) => s.kind === 'score' && parseScoreSection(s.body))
 
   return (
@@ -129,12 +136,9 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
       </div>
       {raw ? md(bodyMd, '1.1rem') : (
         <>
-          {level === 'day' && ((reportScore && !radar) || (trend && trend.length > 1)) && (
-            <div className="rp-band">
-              {reportScore && !radar && <ScoreBars score={reportScore} />}
-              {trend && <ScoreTrend points={trend} onOpenDay={onOpenDay} />}
-            </div>
-          )}
+          {password && (milestones ? <div className="rp-band"><MilestoneCard m={milestones} tasksMissing={tasksMissing} onOpenDay={onOpenDay} /></div>
+            : !msReady && <Skeleton lines={3} />)}
+          {level === 'day' && reportScore && !radar && <div className="rp-band"><ScoreBars score={reportScore} /></div>}
           {password && (ready ? (report && <ReportCharts r={report} level={level} missing={missing} />) : <Skeleton lines={4} />)}
           {structured ? (
             <div className="rb-sections" data-testid="rb-sections">

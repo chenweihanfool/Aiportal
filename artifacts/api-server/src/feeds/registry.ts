@@ -113,6 +113,37 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 日／週／月／季／年報的里程碑（#timeline 報告的 🏁 卡）：每天完成幾項任務。推送端同一支 vikunja-gantt-pusher.py
+  // （每 10 分鐘，唯讀 Vikunja；計數規則見 kb-pipeline kbcore/task_gantt.done_by_day）。只送有完成的日子；since＝最早一筆完成日。
+  "tasks-done": {
+    version: 1,
+    description: "每天完成幾項 Vikunja 任務（台北日期，只列有完成的日子），報告里程碑用",
+    maxBytes: 256 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "tasks-done feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "since", "days"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        since: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        days: {
+          type: "array",
+          maxItems: 4000,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["date", "count"],
+            properties: {
+              date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              count: { type: "integer", minimum: 1, maximum: 10000 },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,

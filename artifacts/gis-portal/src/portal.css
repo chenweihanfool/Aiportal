@@ -1267,19 +1267,56 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .rb-thread-cells i[data-last='true'] { outline: 1px solid var(--c-ink-2); outline-offset: 1px; }
 .rb-thread-t { color: var(--c-ink-2); }
 .rb-thread-hint { margin: 0.1rem 0 0; font-size: 0.72rem; color: var(--c-ink-3); }
-.rp-trend { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; height: 6.5rem; }
-.rp-trend-col { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; padding: 0; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; color: var(--c-ink-2); font-family: "IBM Plex Mono", ui-monospace, monospace; }
-.rp-trend-col:disabled { cursor: default; }
-.rp-trend-col[data-current='true'] { border-color: var(--c-accent); color: var(--c-ink); }
-.rp-trend-col:not(:disabled):hover, .rp-trend-col:focus-visible { border-color: var(--c-line-strong); outline: none; }
-.rp-trend-v { font-size: 0.66rem; text-align: center; }
-.rp-trend-track { flex: 1; display: flex; align-items: flex-end; }
-.rp-trend-track i { width: 100%; border-radius: 2px 2px 0 0; background: var(--c-ok); }
-.rp-trend-track i[data-tone='great'] { background: var(--c-accent); }
-.rp-trend-track i[data-tone='warn'] { background: var(--c-warn); }
-.rp-trend-track i[data-tone='concern'] { background: var(--c-concern); }
-.rp-trend-track i[data-tone='crit'] { background: var(--c-crit); }
-.rp-trend-d { font-size: 0.66rem; text-align: center; }
+/* 🏁 里程碑卡（ReportMilestones.tsx，2.61.0；取代日報的 AI 分數走勢）：三色＝完成任務／新想法／想法實行 */
+.ms-card { --ms-tasks: var(--c-ok); --ms-new: var(--c-accent); --ms-done: var(--c-ink-2); --ms-track: 6.5rem; --ms-lab: 1.15rem; }
+.ms-now { display: grid; grid-template-columns: minmax(8rem, 1.4fr) repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.ms-total, .ms-part { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.55rem 0.7rem; border: 1px solid var(--c-line); border-radius: 8px; background: var(--c-raised); min-width: 0; }
+.ms-total { border-color: var(--c-accent-dim); }
+.ms-total-t, .ms-part-t { font-size: 0.74rem; color: var(--c-ink-2); display: flex; gap: 0.3rem; align-items: center; }
+.ms-total b { font-size: 2rem; line-height: 1.1; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
+.ms-total-d { font-size: 0.72rem; color: var(--c-ink-2); }
+.ms-total-d[data-tone='up'] { color: var(--c-ok); }
+.ms-part { border-left: 3px solid var(--ms-k); }
+.ms-part b { font-size: 1.4rem; line-height: 1.15; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
+.ms-part b small { font-size: 0.7rem; margin-left: 0.2rem; color: var(--c-ink-2); font-family: inherit; }
+.ms-card [data-k='tasks'] { --ms-k: var(--ms-tasks); }
+.ms-card [data-k='ideasNew'] { --ms-k: var(--ms-new); }
+.ms-card [data-k='ideasDone'] { --ms-k: var(--ms-done); }
+.ms-badges { list-style: none; margin: 0.6rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.ms-badges li { display: inline-flex; gap: 0.3rem; align-items: center; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.78rem; border: 1px solid var(--c-line-strong); color: var(--c-ink); background: var(--c-surface); }
+.ms-badges li[data-kind='record'], .ms-badges li[data-kind='tier'] { border-color: var(--c-accent); }
+.ms-badges li[data-kind='next'] { border-style: dashed; color: var(--c-ink-2); }
+.ms-chart { position: relative; display: grid; gap: 4px; }
+.ms-col { display: grid; grid-template-rows: var(--ms-lab) var(--ms-track) var(--ms-lab); min-width: 0; padding: 0; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--c-ink-2); font: inherit; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
+button.ms-col { cursor: pointer; }
+.ms-col[data-current='true'] { border-color: var(--c-accent); color: var(--c-ink); }
+.ms-col:hover, .ms-col:focus-visible { border-color: var(--c-line-strong); outline: none; }
+.ms-col[data-current='true']:hover, .ms-col[data-current='true']:focus-visible { border-color: var(--c-accent); }
+.ms-col-v, .ms-col-d { font-size: 0.64rem; line-height: var(--ms-lab); white-space: nowrap; overflow: hidden; }
+.ms-col-track { display: flex; flex-direction: column-reverse; justify-content: flex-start; padding: 0 2px; }
+.ms-col-track i { display: block; width: 100%; min-height: 3px; background: var(--ms-k); }
+.ms-col-track i:last-child { border-radius: 2px 2px 0 0; }
+.ms-col[data-partial='true'] .ms-col-track i { opacity: 0.55; }
+.ms-avg { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--c-ink-3); pointer-events: none; z-index: 1; }
+.ms-avg em { position: absolute; left: 0; top: -1.05rem; font-style: normal; font-size: 0.62rem; color: var(--c-ink-2); background: var(--c-surface); padding: 0 0.2rem; }
+.ms-legend { flex-wrap: wrap; }
+.ms-legend i { background: var(--ms-k); }
+.ms-legend i.ms-legend-avg { width: 0.9rem; height: 0; border-radius: 0; border-top: 1px dashed var(--c-ink-3); background: none; vertical-align: middle; }
+.ms-road { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.ms-road li { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr) 5.2rem; gap: 0.5rem; align-items: center; font-size: 0.8rem; }
+.ms-road-l { display: flex; gap: 0.3rem; color: var(--c-ink-2); }
+.ms-road-track { height: 0.55rem; border-radius: 999px; background: var(--c-raised-2); overflow: hidden; }
+.ms-road-track i { display: block; height: 100%; background: var(--ms-k); border-radius: 999px; }
+.ms-road-v { text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.ms-road-v small { color: var(--c-ink-2); }
+.ms-card > .hm-note { margin-top: 0.5rem; }
+@media (max-width: 640px) {
+  .ms-now { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ms-total { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; }
+  .ms-col-v { visibility: hidden; }
+  .ms-card { --ms-track: 5.5rem; }
+  .ms-road li { grid-template-columns: 5.6rem minmax(0, 1fr) 4.6rem; }
+}
 /* 報告段落的視覺化子項（ReportViz.tsx，2.58.0）：時間線未來節點、時段帶、懸浮天數、光譜、分欄、階段、雷達、案件流程 */
 .rb-viz { display: flex; flex-direction: column; gap: 0.8rem; }
 .rb-viz > .rb-threads { margin-top: 0; }
@@ -1353,7 +1390,6 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
   .rb-radar svg { max-width: 15rem; margin: 0 auto; }
   .rb-echo-date { flex-basis: 5.6rem; }
   .rb-thread { grid-template-columns: 1fr; gap: 0.2rem; }
-  .rp-trend-v { display: none; }
 }
 
 /* ── 從容面板的任務甘特圖（#dim/calm，feed vikunja-gantt；2.59.0）── */

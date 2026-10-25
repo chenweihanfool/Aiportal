@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { COLOR } from './theme'
 import type { PeriodReport } from './periodStats'
 import type { ReportScore } from './timelineApi'
-import { reportBadge, type TrendPoint } from './timelineLogic'
 import {
   FUNNEL_STEPS, SERIES_ROWS, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, levelOf, pinPositions, rhythmCells, topCounts,
   type Delta, type RhythmLevel,
@@ -168,31 +167,6 @@ export function ScoreBars({ score }: { score: ReportScore }) {
           </li>
         ))}
       </ul>
-    </section>
-  )
-}
-
-/** 日報：近 14 天的每日分數（每根柱一天，今天這根加框；點柱子跳到那天） */
-export function ScoreTrend({ points, onOpenDay }: { points: TrendPoint[]; onOpenDay?: (date: string) => void }) {
-  if (points.length < 2) return null
-  const avg = Math.round(points.reduce((s, p) => s + p.total, 0) / points.length)
-  return (
-    <section className="hm-card" aria-label="近期分數走勢" data-testid="rp-trend">
-      <h2 className="hm-h">📈 近 {points.length} 天走勢<span className="hm-h-right rp-hint">平均 {avg}</span></h2>
-      <div className="rp-trend" role="list">
-        {points.map((p) => {
-          const tone = reportBadge({ total: p.total })?.tone ?? 'ok'
-          const label = `${p.date} 分數 ${p.total}`
-          return (
-            <button key={p.date} type="button" role="listitem" className="rp-trend-col" data-current={p.current ? 'true' : undefined}
-              title={label} aria-label={label} disabled={p.current || !onOpenDay} onClick={() => onOpenDay?.(p.date)}>
-              <span className="rp-trend-v">{p.total}</span>
-              <span className="rp-trend-track"><i data-tone={tone} style={{ height: `${Math.max(4, p.total)}%` }} /></span>
-              <span className="rp-trend-d">{p.date.slice(8)}</span>
-            </button>
-          )
-        })}
-      </div>
     </section>
   )
 }
