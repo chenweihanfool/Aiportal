@@ -52,4 +52,13 @@ describe("feed registry", () => {
     expect(validateFeedRequest("vikunja-gantt", body({ ...ok, tasks: [{ ...task, extra: 1 }] })).ok).toBe(false);
     expect(validateFeedRequest("vikunja-gantt", body({ ...ok, baseUrl: "javascript:alert(1)" })).ok).toBe(false);
   });
+
+  it("tasks-done：推送端實際產出的形狀通過、0 筆或壞日期被擋", () => {
+    const body = (payload: unknown) => ({ schemaVersion: 1, generatedAt: "2026-10-25", payload });
+    const ok = { computedAt: "2026-10-25T10:00:00+08:00", since: "2026-10-24", days: [{ date: "2026-10-24", count: 1 }, { date: "2026-10-25", count: 2 }] };
+    expect(validateFeedRequest("tasks-done", body(ok)).ok).toBe(true);
+    expect(validateFeedRequest("tasks-done", body({ ...ok, since: null, days: [] })).ok).toBe(true);
+    expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "2026-10-24", count: 0 }] })).ok).toBe(false);
+    expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "10/24", count: 1 }] })).ok).toBe(false);
+  });
 });

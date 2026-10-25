@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TimelineItem } from './timelineApi'
-import { groupHeader, groupItems, itemKey, mergePages, neighbors, oneLine, reportBadge, reportScoreLine, rowDateLabel, scoreTrend } from './timelineLogic'
+import { groupHeader, groupItems, itemKey, mergePages, neighbors, oneLine, reportBadge, reportScoreLine, rowDateLabel } from './timelineLogic'
 
 const item = (level: TimelineItem['level'], key: string, start: string, end = start, over: Partial<TimelineItem> = {}): TimelineItem => ({
   level, periodKey: key, startDate: start, endDate: end, title: key, summary: `摘要${key}`, hasReport: true,
@@ -85,28 +85,5 @@ describe('reportScoreLine', () => {
     const parts = [['推進', 3], ['決策', 2], ['卡點', 3], ['覺察', 2], ['能量', 3]].map(([label, value]) => ({ label: label as string, value: value as number }))
     expect(reportScoreLine({ total: 65, parts })).toBe('65（推進 3・決策 2・卡點 3・覺察 2・能量 3）')
     expect(reportScoreLine(null)).toBeNull()
-  })
-})
-
-describe('scoreTrend', () => {
-  const sc = (total: number) => ({ reportScore: { total, parts: [] } })
-  const days = [
-    item('day', '2026-10-24', '2026-10-24', undefined, sc(70)),
-    item('day', '2026-10-23', '2026-10-23', undefined, sc(55)),
-    item('day', '2026-10-22', '2026-10-22'),                    // 沒分數：略過
-    item('day', '2026-10-21', '2026-10-21', undefined, sc(60.4)),
-    item('day', '2026-10-20', '2026-10-20', undefined, sc(80)),
-  ]
-  it('取這天（含）以前有分數的最近 n 天，由舊到新，標出這天', () => {
-    expect(scoreTrend(days, '2026-10-23', 2)).toEqual([
-      { date: '2026-10-21', total: 60, current: false },
-      { date: '2026-10-23', total: 55, current: true },
-    ])
-    expect(scoreTrend(days, '2026-10-24').map(p => p.date)).toEqual(['2026-10-20', '2026-10-21', '2026-10-23', '2026-10-24'])
-  })
-  it('這天不在列表（或沒分數、或不是日級）就不畫', () => {
-    expect(scoreTrend(days, '2026-10-22')).toEqual([])
-    expect(scoreTrend(days, '2026-09-01')).toEqual([])
-    expect(scoreTrend([item('week', '2026-W43', '2026-10-19', '2026-10-25', sc(70))], '2026-W43')).toEqual([])
   })
 })
