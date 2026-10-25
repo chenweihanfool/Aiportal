@@ -126,12 +126,17 @@ export interface GanttView {
   winFrom: string
   days: number
   groups: GanttGroup[]
+  /** 依到期日排序時的單一清單（不分專案）；分組模式時是空的 */
+  flat: GanttRow[]
   /** 開始日在視窗之後、這次沒畫的 */
   later: number
   counts: { open: number; overdue: number; soon: number; done: number }
 }
 
-export function buildGanttView(data: GanttData, today: string, weeks: number, showDone: boolean): GanttView {
+/** 到期日排序用的日期：到期 → 結束 → 開始（都沒有的不會進甘特圖） */
+export const sortDate = (t: GanttTask): string => t.due ?? t.end ?? t.start ?? '9999-12-31'
+
+export function buildGanttView(data: GanttData, today: string, weeks: number, showDone: boolean, byDue = false): GanttView {
   const winFrom = addDays(today, -LOOKBACK_DAYS)
   const days = weeks * 7
   const counts = { open: 0, overdue: 0, soon: 0, done: 0 }
@@ -158,6 +163,12 @@ export function buildGanttView(data: GanttData, today: string, weeks: number, sh
     list.push({ task: t, layout })
     byProject.set(t.projectId, list)
   }
+  if (byDue) {
+    // 不分專案、整份依到期日由近到遠（逾期的自然在最上面）；已完成的放最後
+    const flat = [...byProject.values()].flat()
+      .sort((x, y) => Number(x.task.done) - Number(y.task.done) || sortDate(x.task).localeCompare(sortDate(y.task)) || x.task.id - y.task.id)
+    return { winFrom, days, groups: [], flat, later, counts }
+  }
   const groups: GanttGroup[] = []
   for (const project of data.projects) {
     const rows = byProject.get(project.id)
@@ -168,7 +179,7 @@ export function buildGanttView(data: GanttData, today: string, weeks: number, sh
   }
   // 有逾期的專案排前面，其餘照專案名稱（推送端已排好）
   groups.sort((x, y) => Number(y.overdue > 0) - Number(x.overdue > 0))
-  return { winFrom, days, groups, later, counts }
+  return { winFrom, days, groups, flat: [], later, counts }
 }
 
 export interface GanttTick { idx: number; label: string; month: boolean }
@@ -196,3 +207,5 @@ export function rangeLabel(t: GanttTask): string {
 }
 
 export const taskUrl = (data: GanttData, id: number): string | null => (data.baseUrl ? `${data.baseUrl}/tasks/${id}` : null)
+/** 「在 Vikunja 開啟」：使用者 2026-10-25 習慣直接看「即將到期」清單（含逾期與沒排日期的） */
+export const upcomingUrl = (data: GanttData): string | null => (data.baseUrl ? `${data.baseUrl}/tasks/by/upcoming?showOverdue=true&showNulls=true` : null)

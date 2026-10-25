@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, buildGanttView, dayDiff, ganttTicks, layoutTask, parseGantt, rangeLabel, taskStatus, taskUrl, type GanttData, type GanttTask } from './taskGantt'
+import { addDays, buildGanttView, dayDiff, ganttTicks, layoutTask, parseGantt, rangeLabel, taskStatus, taskUrl, upcomingUrl, type GanttData, type GanttTask } from './taskGantt'
 
 const TODAY = '2026-10-24' // 週六
 const task = (id: number, o: Partial<GanttTask> = {}): GanttTask => ({
@@ -64,6 +64,13 @@ describe('buildGanttView', () => {
     const withDone = buildGanttView(d, TODAY, 5, true)
     expect(withDone.groups[1]!.rows.map((r) => r.task.id)).toEqual([1, 3, 4])
   })
+  it('byDue: one flat list across projects, nearest due first, done last', () => {
+    const v = buildGanttView(d, TODAY, 5, true, true)
+    expect(v.groups).toEqual([])
+    expect(v.flat.map((r) => r.task.id)).toEqual([2, 3, 1, 4])   // 10/22 逾期、10/28、11/10（結束日）、已完成
+    expect(v.counts.open).toBe(4)
+    expect(buildGanttView(d, TODAY, 5, false, false).flat).toEqual([])
+  })
 })
 
 describe('parseGantt', () => {
@@ -75,6 +82,8 @@ describe('parseGantt', () => {
     expect(p.tasks[0]!.due).toBeNull()
     expect(taskUrl(p, 1)).toBeNull()
     expect(taskUrl(data([]), 7)).toBe('https://v.example/tasks/7')
+    expect(upcomingUrl(data([]))).toBe('https://v.example/tasks/by/upcoming?showOverdue=true&showNulls=true')
+    expect(upcomingUrl(p)).toBeNull()
   })
 })
 

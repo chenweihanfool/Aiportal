@@ -3,12 +3,13 @@ import { useAsync } from './homeHooks'
 import { blockState, taipeiDate } from './homeView'
 import { Skeleton, StateFrame } from './StateFrame'
 import {
-  GANTT_EVERY_MIN, LOOKBACK_DAYS, addDays, apiFetchGantt, buildGanttView, ganttTicks, isWeekend, rangeLabel, taskUrl,
-  type GanttData, type GanttRow, type GanttStatus,
+  GANTT_EVERY_MIN, LOOKBACK_DAYS, addDays, apiFetchGantt, buildGanttView, ganttTicks, isWeekend, rangeLabel, taskUrl, upcomingUrl,
+  type GanttData, type GanttProject, type GanttRow, type GanttStatus,
 } from './taskGantt'
 
 // 從容面板的任務甘特圖（#dim/calm）：Vikunja 任務依專案分組，橫軸是「上週到未來幾週」的每一天。
-// 不照搬 Vikunja 的樣式：狀態用顏色講（逾期紅、7 天內到期黃、已完成灰），專案色只用在分組標頭的圓點；
+// 不照搬 Vikunja 的樣式：狀態用顏色講（逾期紅、7 天內到期黃、已完成灰），專案色只用在分組標頭（或依到期日排序時列前）的圓點；
+// 「依到期日排序」預設開（使用者 2026-10-25）：不分專案、整份由近到遠；關掉回到依專案分組。
 // 只有一個日期的任務畫成菱形里程碑。點任一列在新分頁打開 Vikunja 的那個任務。
 
 const SPANS = [
@@ -27,18 +28,19 @@ export function TaskGantt({ pw, now, color, onRequestUnlock }: {
   const res = useAsync(pw, apiFetchGantt)
   const [spanIdx, setSpanIdx] = useState(0)
   const [showDone, setShowDone] = useState(false)
+  const [byDue, setByDue] = useState(true)
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set())
   const today = taipeiDate(now)
   const span = SPANS[spanIdx]!
   const data = res.data
-  const view = useMemo(() => (data ? buildGanttView(data, today, span.weeks, showDone) : null), [data, today, span.weeks, showDone])
+  const view = useMemo(() => (data ? buildGanttView(data, today, span.weeks, showDone, byDue) : null), [data, today, span.weeks, showDone, byDue])
   const st = blockState({
     unlocked: !!pw, loading: res.loading, error: res.error, hasData: !!data, nowMs: now.getTime(),
     updatedAtMs: data ? Date.parse(data.computedAt) : null, expectedEveryMin: GANTT_EVERY_MIN,
   })
   // 窄螢幕時間軸放不下：一打開就捲到「今天」前兩天，不必先滑過上週
   const scrollRef = useRef<HTMLDivElement>(null)
-  const hasRows = !!view && view.groups.length > 0
+  const hasRows = !!view && (view.groups.length > 0 || view.flat.length > 0)
   useEffect(() => {
     const el = scrollRef.current
     if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = (LOOKBACK_DAYS - 2) * span.dayW
@@ -51,7 +53,8 @@ export function TaskGantt({ pw, now, color, onRequestUnlock }: {
         {SPANS.map((s, i) => (
           <button key={s.weeks} type="button" className={`dp-range${spanIdx === i ? ' is-on' : ''}`} aria-pressed={spanIdx === i} onClick={() => setSpanIdx(i)}>{s.label}</button>
         ))}
-        <label className="hm-check"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />含近 {data?.doneDays || 30} 天完成</label>
+        <label className="hm-check"><input type="checkbox" checked={byDue} onChange={(e) => setByDue(e.target.checked)} data-testid="gt-bydue" />依到期日排序</label>
+        <label className="hm-check"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} data-testid="gt-done" />含近 {data?.doneDays || 30} 天完成</label>
       </span></h2>
       <StateFrame status={st} source="任務追蹤（Vikunja）" onRequestUnlock={onRequestUnlock} onRetry={res.reload} skeleton={<Skeleton lines={4} />}
         empty="還沒收到甘特圖資料（等 HERMES 的推送上線後約 10 分鐘內出現）。" className="dp-gantt-frame">
@@ -62,14 +65,19 @@ export function TaskGantt({ pw, now, color, onRequestUnlock }: {
               <span className={view.counts.overdue ? 'is-crit' : ''}><b>{view.counts.overdue}</b> 項逾期</span>
               <span className={view.counts.soon ? 'is-warn' : ''}><b>{view.counts.soon}</b> 項 7 天內到期</span>
               {data.undatedOpen > 0 && <span title="沒有開始、結束或到期日，甘特圖畫不出來"><b>{data.undatedOpen}</b> 項沒排日期</span>}
-              {data.baseUrl && <a className="gt-open" href={data.baseUrl} target="_blank" rel="noopener noreferrer">在 Vikunja 開啟 ↗</a>}
+              {upcomingUrl(data) && <a className="gt-open" href={upcomingUrl(data)!} target="_blank" rel="noopener noreferrer" data-testid="gt-open">在 Vikunja 開啟 ↗</a>}
             </div>
-            {view.groups.length === 0 ? (
+            {!hasRows ? (
               <p className="hm-note">這段期間沒有排了日期的任務。</p>
             ) : (
               <div className="gt-scroll" ref={scrollRef}>
                 <div className="gt-grid" style={{ ['--dw' as string]: `${span.dayW}px`, ['--days' as string]: view.days, ['--dim' as string]: color } as CSSProperties}>
                   <Axis winFrom={view.winFrom} days={view.days} today={today} />
+                  {byDue && (
+                    <div className="gt-group gt-flat" role="group" aria-label="依到期日排序">
+                      {view.flat.map((r) => <Row key={r.task.id} row={r} data={data} dot={projectOf(data, r.task.projectId)?.color ?? color} project={projectOf(data, r.task.projectId)} />)}
+                    </div>
+                  )}
                   {view.groups.map((g) => {
                     const closed = collapsed.has(g.project.id)
                     return (
@@ -126,17 +134,20 @@ function TodayLine({ winFrom, today }: { winFrom: string; today: string }) {
   return <div className="gt-today" aria-hidden style={{ left: `calc(var(--lw) + ${i} * var(--dw) + var(--dw) / 2)` }}><span>今天</span></div>
 }
 
-function Row({ row, data }: { row: GanttRow; data: GanttData }) {
+const projectOf = (data: GanttData, id: number): GanttProject | undefined => data.projects.find((p) => p.id === id)
+
+function Row({ row, data, dot, project }: { row: GanttRow; data: GanttData; dot?: string; project?: GanttProject }) {
   const { task: t, layout: l } = row
   const url = taskUrl(data, t.id)
   const when = rangeLabel(t)
   const extra = l.status === 'overdue' ? `逾期 ${l.overdueDays} 天` : t.done && t.doneAt ? `${Number(t.doneAt.slice(5, 7))}/${Number(t.doneAt.slice(8, 10))} 完成` : STATUS_TEXT[l.status]
-  const tip = `${t.title}｜${when}｜${extra}${t.percentDone > 0 && !t.done ? `｜完成 ${t.percentDone}%` : ''}`
+  const tip = `${project ? `${project.title}｜` : ''}${t.title}｜${when}｜${extra}${t.percentDone > 0 && !t.done ? `｜完成 ${t.percentDone}%` : ''}`
   const left = `calc(${l.from} * var(--dw))`
   const width = `calc(${l.to - l.from + 1} * var(--dw))`
   const body = (
     <>
       <span className="gt-label" title={t.title}>
+        {dot && <i className="gt-dot" style={{ background: dot }} aria-hidden />}
         {t.priority >= 4 && !t.done && <span className="gt-pri" title="高優先">!</span>}
         <span className="gt-label-t">{t.title}</span>
       </span>
