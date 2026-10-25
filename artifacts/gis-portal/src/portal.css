@@ -1407,3 +1407,16 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .gt-ms.cut-l { left: 0.45rem !important; }
 .gt-when { position: absolute; top: 50%; transform: translateY(-50%); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.58rem; color: var(--c-ink-3); white-space: nowrap; pointer-events: none; }
 .gt-row.is-overdue .gt-when { color: var(--c-crit); }
+.gt-flat .gt-label { padding-left: 0.6rem; }
+.gt-flat { padding-top: 0.25rem; }
+/* 手機（單欄）：甘特圖拉到分數卡正下方，不必先捲過走勢、年熱圖與「分數怎麼來」（使用者 2026-10-25）。
+   做法：單欄時把兩欄容器攤平（display: contents），整頁變一條 flex 欄，再用 order 排序；電腦版雙欄不受影響。 */
+@media (max-width: 959px) {
+  .dp-wrap:has(> .dp-gantt) { display: flex; flex-direction: column; gap: 0.8rem; }
+  .dp-wrap:has(> .dp-gantt) > .dp-grid, .dp-wrap:has(> .dp-gantt) .dp-col { display: contents; }
+  .dp-wrap:has(> .dp-gantt) .dp-col > * { order: 2; }
+  .dp-wrap:has(> .dp-gantt) .dp-col > .dp-hero { order: 0; }
+  .dp-wrap > .dp-gantt { order: 1; margin-top: 0; }
+  .dp-wrap > .dp-pager { order: 3; margin-top: 0.2rem; }
+}
+.gt-row.is-overdue .gt-label-t { color: var(--c-crit); }   /* 手機會自動捲到今天，左緣的逾期標記可能在畫面外：名稱也標紅 */
