@@ -41,10 +41,21 @@ export function TaskGantt({ pw, now, color, onRequestUnlock }: {
   // 窄螢幕時間軸放不下：一打開就捲到「今天」前兩天，不必先滑過上週
   const scrollRef = useRef<HTMLDivElement>(null)
   const hasRows = !!view && (view.groups.length > 0 || view.flat.length > 0)
+  // 寬螢幕：每天的寬度拉開填滿卡片（不低於該區間的預設寬），右邊不留一大片空白（2.62.0）
+  const [boxW, setBoxW] = useState(0)
   useEffect(() => {
     const el = scrollRef.current
-    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = (LOOKBACK_DAYS - 2) * span.dayW
-  }, [hasRows, span.dayW])
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setBoxW(Math.round(e!.contentRect.width)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [hasRows])
+  const labelW = boxW > 560 ? 184 : 120   // 與 portal.css 的 .gt-grid --lw（11.5rem／7.5rem）一致
+  const dayW = view && boxW > 0 ? Math.max(span.dayW, Math.floor(((boxW - labelW - 2) / view.days) * 10) / 10) : span.dayW
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = (LOOKBACK_DAYS - 2) * dayW
+  }, [hasRows, dayW])
   const toggle = (id: number) => setCollapsed((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   return (
@@ -71,7 +82,7 @@ export function TaskGantt({ pw, now, color, onRequestUnlock }: {
               <p className="hm-note">這段期間沒有排了日期的任務。</p>
             ) : (
               <div className="gt-scroll" ref={scrollRef}>
-                <div className="gt-grid" style={{ ['--dw' as string]: `${span.dayW}px`, ['--days' as string]: view.days, ['--dim' as string]: color } as CSSProperties}>
+                <div className="gt-grid" style={{ ['--dw' as string]: `${dayW}px`, ['--days' as string]: view.days, ['--dim' as string]: color } as CSSProperties}>
                   <Axis winFrom={view.winFrom} days={view.days} today={today} />
                   {byDue && (
                     <div className="gt-group gt-flat" role="group" aria-label="依到期日排序">

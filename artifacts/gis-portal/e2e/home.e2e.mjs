@@ -774,12 +774,12 @@ const DIM_EXPECT = {
 for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'spark', { hash: `#dim/${key}`, wait: false })
   await page.waitForSelector('[data-testid="dim-page"]', { timeout: 8000 })
-  await page.waitForSelector('[data-testid="dp-detail"]', { timeout: 8000 })
+  await page.waitForSelector('[data-testid="dp-detail"]', { timeout: 8000, state: 'attached' })
   // 旅遊在假資料裡只有最後一天有值（有效點不到 2 個）：走勢區應說明原因，而不是畫一條假線
   const noTrend = key === 'travel'
   await page.waitForSelector(noTrend ? '[data-testid="dp-trend-pending"]' : '[data-testid="dp-chart"]', { timeout: 8000 })
   const hero = await page.locator('.dp-hero').innerText()
-  const det = await page.locator('[data-testid="dp-detail"]').innerText()
+  const det = await page.locator('[data-testid="dp-detail"]').textContent()
   const T = `面向頁 ${ex.name}`
   check(`${T}：標題、分數 ${ex.score}、權重與貢獻`, hero.includes(ex.name) && new RegExp(`\\b${ex.score}\\b`).test(hero) && /權重 \d+%・貢獻/.test(hero), hero.replace(/\n/g, '|').slice(0, 120))
   check(`${T}：「分數怎麼來」是這個面向自己的數據（${ex.detail.join('、')}）`, ex.detail.every((t) => det.includes(t)), det.replace(/\n/g, '|').slice(0, 140))
@@ -803,6 +803,9 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/calm', wait: false })
   await page.waitForSelector('[data-testid="dp-chart"]')
   check('面向頁：頁首六顆切換鈕，目前的是 aria-current', (await page.locator('.dp-nav .dp-chip').count()) === 6 && (await page.locator('.dp-chip[aria-current="page"]').getAttribute('data-testid')) === 'dp-nav-calm')
+  check('面向頁：「分數怎麼來」預設收起', (await page.locator('details.dp-detail').getAttribute('open')) === null)
+  await page.locator('[data-testid="dp-detail-toggle"]').click(); await page.waitForTimeout(150)
+  check('面向頁：點「分數怎麼來」展開', await page.locator('[data-testid="dp-detail"]').isVisible())
   { const t = await page.locator('[data-testid="dp-detail"]').innerText(); check('面向頁（從容）：顯示「今天要做什麼」四個數字', /今天要做什麼/.test(t) && /已逾期\s*3/.test(t) && /今天到期\s*2/.test(t) && /7 天內到期\s*5/.test(t) && /近 7 天完成\s*7/.test(t)) }
   await page.locator('[data-testid="dp-nav-social"]').click(); await page.waitForTimeout(300)
   check('面向頁：點頁首「社交」→ #dim/social，內容換成社交的', (await page.evaluate(() => location.hash)) === '#dim/social' && /廣度/.test(await page.locator('[data-testid="dp-detail"]').innerText()))
@@ -816,6 +819,27 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   await page.locator('[data-testid="dp-back"]').click(); await page.waitForTimeout(400)
   check('面向頁：「← 首頁」回首頁', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-root').count()) === 1)
   check('面向頁：切換與返回沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))
+  await ctx.close()
+}
+{
+  // 7b2 寬螢幕版面（2.62.0）：1920 三欄（左一覽｜主｜右近況），1200 兩欄；從容的甘特圖在主欄分數卡正下方、「分數怎麼來」在主欄最後
+  const { ctx, page, errors } = await open({ width: 1920, height: 1080 }, 'spark', { hash: '#dim/calm', wait: false })
+  await page.waitForSelector('[data-testid="dp-chart"]'); await page.waitForSelector('[data-testid="dp-overview"] .dp-ov-row'); await page.waitForTimeout(400)
+  const box = async (sel) => page.locator(sel).first().boundingBox()
+  const [ov, hero, rec, gantt, trend, det] = await Promise.all(['[data-testid="dp-overview"]', '.dp-hero', '[data-testid="dp-recent"]', '[data-testid="dp-gantt"]', '.dp-trend', 'details.dp-detail'].map(box))
+  check('面向頁 1920：三欄——一覽在左、主內容在中、近況在右，同一列起頭', ov.x + ov.width < hero.x && hero.x + hero.width < rec.x && Math.abs(ov.y - hero.y) < 4 && Math.abs(rec.y - hero.y) < 4, JSON.stringify({ ov, hero, rec }))
+  check('面向頁 1920：主欄夠寬（≥ 1000px）、兩旁沒有大片空白', hero.width >= 1000 && ov.x < 60, `${Math.round(hero.width)} / ${Math.round(ov.x)}`)
+  check('面向頁 1920：甘特圖緊接分數卡、在走勢之前；「分數怎麼來」在最後', gantt.y > hero.y && gantt.y < trend.y && det.y > trend.y)
+  check('面向頁 1920：一覽六列、目前面向標示 aria-current', (await page.locator('.dp-ov-row').count()) === 6 && (await page.locator('.dp-ov-row[aria-current="page"]').count()) === 1)
+  check('面向頁 1920：近況卡有近 7 天平均與名次', /近 7 天平均/.test(await page.locator('[data-testid="dp-recent"]').innerText()) && /第 \d+ 高/.test(await page.locator('[data-testid="dp-recent"]').innerText()))
+  const chartH = (await box('[data-testid="dp-chart"]')).height
+  check(`面向頁 1920：走勢圖不因寬度被等比放大（高 ${Math.round(chartH)}px ≤ 260）`, chartH <= 260)
+  await page.screenshot({ path: path.join(SHOTS, 'dim-calm-1920.png') })
+  await page.setViewportSize({ width: 1200, height: 900 }); await page.waitForTimeout(400)
+  const [ov2, hero2, rec2] = await Promise.all(['[data-testid="dp-overview"]', '.dp-hero', '[data-testid="dp-recent"]'].map(box))
+  check('面向頁 1200：兩欄——主欄在左，近況與一覽疊在右欄', hero2.x + hero2.width < rec2.x && Math.abs(rec2.x - ov2.x) < 2 && ov2.y > rec2.y, JSON.stringify({ hero2, rec2, ov2 }))
+  await page.screenshot({ path: path.join(SHOTS, 'dim-calm-1200.png') })
+  check('面向頁 寬螢幕：沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))
   await ctx.close()
 }
 {
@@ -917,11 +941,11 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   await m.page.locator('[data-testid="dp-gantt"]').scrollIntoViewIfNeeded()
   await m.page.locator('[data-testid="dp-gantt"]').screenshot({ path: path.join(SHOTS, 'dim-calm-gantt-mobile.png') })
   await m.ctx.close()
-  { // 電腦版雙欄不受手機排序影響：甘特圖仍在兩欄下方
+  { // 電腦版（2.62.0 起）：甘特圖同樣緊接分數卡、在走勢之前（使用者 2026-10-25「甘特圖才是會常看的」）
     const w = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/calm', wait: false })
     await w.page.waitForSelector('[data-testid="gt-row"]', { timeout: 8000 })
-    const o = await w.page.evaluate(() => ({ heat: Math.round(document.querySelector('.dp-heat').getBoundingClientRect().bottom), gantt: Math.round(document.querySelector('[data-testid="dp-gantt"]').getBoundingClientRect().top) }))
-    check('甘特圖 電腦版：仍在兩欄內容之下', o.gantt > o.heat, JSON.stringify(o))
+    const o = await w.page.evaluate(() => ({ hero: Math.round(document.querySelector('.dp-hero').getBoundingClientRect().bottom), trend: Math.round(document.querySelector('.dp-trend').getBoundingClientRect().top), gantt: Math.round(document.querySelector('[data-testid="dp-gantt"]').getBoundingClientRect().top) }))
+    check('甘特圖 電腦版：緊接分數卡、在走勢之前', o.gantt > o.hero && o.gantt < o.trend, JSON.stringify(o))
     await w.ctx.close()
   }
   const f = await open({ width: 1440, height: 900 }, 'spark', { hash: '#dim/calm', wait: false })
