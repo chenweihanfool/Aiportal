@@ -3,6 +3,7 @@ import { type DimLink } from './DimensionPage'
 import { COLOR, FONT } from './theme'
 import { MindDetailBody, SUMMARY_BODIES, SocialDetailBody } from './DimensionCards'
 import { dimensionOf } from './dimensions'
+import { rawToScoreText } from './dimensionPage'
 import { formatMinutesAgo } from './format'
 import { type DashboardSummary, type SiteData } from './portalApi'
 
@@ -25,7 +26,7 @@ export function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboa
     return (
       <div>
         <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steelDim, marginBottom: '0.6rem', lineHeight: 1.6 }}>
-          原始分數（未正規化）：{raw !== null ? raw : '—'}　→　對照近 90 天百分位 = {normalized ?? '—'}
+          {rawToScoreText(raw, normalized, def.absolute)}
         </div>
         {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: COLOR.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
         <Body data={data} />
@@ -47,12 +48,12 @@ export function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboa
     if (!summary || !data) return null
     const observed = typeof data['observedDayCount'] === 'number' ? data['observedDayCount'] as number : null
     const names = Array.isArray(data['personNames']) ? (data['personNames'] as unknown[]).filter((v): v is string => typeof v === 'string') : []
-    if (observed === null || observed === 0) return <p className="hm-note">近 7 天沒有日記可供觀測，所以還算不出社交分數。</p>
+    if (observed === null || observed === 0) return <p className="hm-note">近 14 天沒有日記可供觀測，所以還算不出社交分數。</p>
     return (
       <div>
         {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: COLOR.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
         {names.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '0.7rem' }} aria-label="近 7 天互動的人">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '0.7rem' }} aria-label="近 14 天互動的家人朋友">
             {names.map(n => <span key={n} style={{ fontSize: '0.68rem', color: COLOR.steel, background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 9px' }}>{n}</span>)}
           </div>
         )}

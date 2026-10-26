@@ -1,15 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { computeSocialIndex } from "./socialIndex";
 
-describe("computeSocialIndex", () => {
+const base = { observedDayCount: 14, distinctPersonCount: 0, weightedInteractionPoints: 0, daysWithInteraction: 0 };
+
+describe("computeSocialIndex（v2：14 天窗口、遞減報酬曲線）", () => {
   it("returns all-null (資料準備中) when there are zero observed days", () => {
-    const result = computeSocialIndex({
-      observedDayCount: 0,
-      distinctPersonCount: 3,
-      weightedInteractionPoints: 10,
-      daysWithInteraction: 2,
-    });
-    expect(result).toEqual({
+    expect(computeSocialIndex({ ...base, observedDayCount: 0, distinctPersonCount: 3, weightedInteractionPoints: 10, daysWithInteraction: 2 })).toEqual({
       breadthScore: null,
       intensityScore: null,
       connectionRateScore: null,
@@ -18,95 +14,37 @@ describe("computeSocialIndex", () => {
   });
 
   it("observedDayCount >= 1 but zero interactions -> socialScore is a real 0, not missing", () => {
-    const result = computeSocialIndex({
-      observedDayCount: 5,
-      distinctPersonCount: 0,
-      weightedInteractionPoints: 0,
-      daysWithInteraction: 0,
+    expect(computeSocialIndex({ ...base, observedDayCount: 5 })).toEqual({
+      breadthScore: 0,
+      intensityScore: 0,
+      connectionRateScore: 0,
+      socialScore: 0,
     });
-    expect(result.breadthScore).toBe(0);
-    expect(result.intensityScore).toBe(0);
-    expect(result.connectionRateScore).toBe(0);
-    expect(result.socialScore).toBe(0);
   });
 
-  it("breadth caps at 5 distinct people (5*20=100), doesn't keep climbing past that", () => {
-    const result = computeSocialIndex({
-      observedDayCount: 7,
-      distinctPersonCount: 8, // more than 5
-      weightedInteractionPoints: 0,
-      daysWithInteraction: 0,
-    });
-    expect(result.breadthScore).toBe(100);
+  it("廣度＝100 × (1 − e^(−人數/4))：不封頂，多一個人還看得出差別", () => {
+    const b = (n: number) => computeSocialIndex({ ...base, distinctPersonCount: n }).breadthScore;
+    expect([b(1), b(2), b(4), b(5), b(8), b(12)]).toEqual([22, 39, 63, 71, 86, 95]);
   });
 
-  it("breadth below the cap scales linearly at 20 points per person", () => {
-    const result = computeSocialIndex({
-      observedDayCount: 7,
-      distinctPersonCount: 3,
-      weightedInteractionPoints: 0,
-      daysWithInteraction: 0,
-    });
-    expect(result.breadthScore).toBe(60);
+  it("強度＝100 × (1 − e^(−點數/20))，點數可以是小數（同事降權後）", () => {
+    const i = (p: number) => computeSocialIndex({ ...base, weightedInteractionPoints: p }).intensityScore;
+    expect([i(0.25), i(10), i(20), i(40)]).toEqual([1, 39, 63, 86]);
   });
 
-  it("intensity weighting: face_to_face=3/call=2/text=1 points, target 15 points = 100", () => {
-    // e.g. 3 face_to_face (9) + 2 call (4) + 2 text (2) = 15 points exactly
-    const result = computeSocialIndex({
-      observedDayCount: 7,
-      distinctPersonCount: 0,
-      weightedInteractionPoints: 15,
-      daysWithInteraction: 0,
-    });
-    expect(result.intensityScore).toBe(100);
+  it("連結率＝有（非同事）互動的天數 ÷ 觀測日數，最多 100", () => {
+    expect(computeSocialIndex({ ...base, observedDayCount: 10, daysWithInteraction: 7 }).connectionRateScore).toBe(70);
+    expect(computeSocialIndex({ ...base, observedDayCount: 3, daysWithInteraction: 5 }).connectionRateScore).toBe(100);
   });
 
-  it("intensity caps at 100 even when weighted points exceed the 15-point target", () => {
-    const result = computeSocialIndex({
-      observedDayCount: 7,
-      distinctPersonCount: 0,
-      weightedInteractionPoints: 30, // double the target
-      daysWithInteraction: 0,
-    });
-    expect(result.intensityScore).toBe(100);
+  it("綜合＝0.35 廣度 + 0.35 強度 + 0.30 連結率，四捨五入", () => {
+    // 廣度 4 人 63、強度 20 點 63、連結率 7/14＝50 → 0.35×63 + 0.35×63 + 0.3×50 = 59.1
+    const r = computeSocialIndex({ observedDayCount: 14, distinctPersonCount: 4, weightedInteractionPoints: 20, daysWithInteraction: 7 });
+    expect(r.socialScore).toBe(59);
   });
 
-  it("intensity below the target rounds half-up (e.g. 5/15*100 = 33.33 -> 33)", () => {
-    const result = computeSocialIndex({
-      observedDayCount: 7,
-      distinctPersonCount: 0,
-      weightedInteractionPoints: 5,
-      daysWithInteraction: 0,
-    });
-    expect(result.intensityScore).toBe(33);
-  });
-
-  it("connection rate = days-with-interaction / observed-days, not / 7", () => {
-    // Only 3 of the 7-day window were actually observed (diary written),
-    // and 2 of those 3 had an interaction -> 2/3 = 66.67 -> 67, NOT 2/7.
-    const result = computeSocialIndex({
-      observedDayCount: 3,
-      distinctPersonCount: 1,
-      weightedInteractionPoints: 3,
-      daysWithInteraction: 2,
-    });
-    expect(result.connectionRateScore).toBe(67);
-  });
-
-  it("matches a worked example combining all three sub-scores: 0.40/0.40/0.20 weights", () => {
-    // breadth: 4 people * 20 = 80
-    // intensity: 12/15*100 = 80
-    // connectionRate: 5/7*100 = 71.43 -> 71
-    // socialScore = round(0.40*80 + 0.40*80 + 0.20*71) = round(32+32+14.2) = round(78.2) = 78
-    const result = computeSocialIndex({
-      observedDayCount: 7,
-      distinctPersonCount: 4,
-      weightedInteractionPoints: 12,
-      daysWithInteraction: 5,
-    });
-    expect(result.breadthScore).toBe(80);
-    expect(result.intensityScore).toBe(80);
-    expect(result.connectionRateScore).toBe(71);
-    expect(result.socialScore).toBe(78);
+  it("一般忙碌的兩週不會頂到 100（v1 的症狀：5 人＋15 點就滿分）", () => {
+    const r = computeSocialIndex({ observedDayCount: 14, distinctPersonCount: 5, weightedInteractionPoints: 15, daysWithInteraction: 10 });
+    expect(r.socialScore).toBeLessThan(80);
   });
 });

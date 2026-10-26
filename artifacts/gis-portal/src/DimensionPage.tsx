@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { biggestDrag, buildHhiBreakdown } from './boardView'
-import { PERCENTILE_NOTE, deltaText, dimHash, dimNeighbors, dimOverview, rangeStats, recentDigest } from './dimensionPage'
+import { ABSOLUTE_NOTE, PERCENTILE_NOTE, deltaText, dimHash, dimNeighbors, dimOverview, rangeStats, recentDigest } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
 import { DIMENSIONS, DIMENSION_FALLBACK_COLOR, dimensionOf } from './dimensions'
 import { useAsync, useNow } from './homeHooks'
@@ -117,7 +117,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                   </StateFrame>
                   <div className="dp-hero-text">
                     {about && <p className="dp-about"><b>衡量什麼：</b>{about.measures}<span className="dp-src">資料來源：{about.source}</span></p>}
-                    <p className="dp-note">{PERCENTILE_NOTE}</p>
+                    <p className="dp-note">{dimensionOf(dimKey)?.absolute ? ABSOLUTE_NOTE : PERCENTILE_NOTE}</p>
                   </div>
                 </div>
               </section>

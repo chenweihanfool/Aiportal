@@ -32,6 +32,8 @@ export interface DimensionDef {
   /** 子系統摘要裡的「原始分數」欄位（未正規化，只在詳細數據裡對照顯示）；沒有就 null */
   rawField: string | null
   detail: DimensionDetailKind
+  /** true＝不排百分位，面向分數就是原始分數（與 api-server happinessDimensionHistory.ts 的 ABSOLUTE_DIMENSIONS 一致） */
+  absolute?: boolean
   /** 這個面向衡量什麼、資料從哪來（面向頁用） */
   about: { measures: string; source: string }
 }
@@ -66,12 +68,12 @@ export const DIMENSIONS: DimensionDef[] = [
     key: 'social', label: '社交', icon: '👥', color: '#ee7a6e',
     scoreKey: 'socialScore', weightKey: 'socialWeight', defaultWeight: 0.13,
     subsystemId: 'social-index', rawField: null, detail: 'social',
-    about: { measures: '近 7 天的社交廣度、互動強度與連結率；全部從日記被動萃取，不需要另外記錄。', source: '日記（HERMES 萃取）' },
+    about: { measures: '近 14 天和家人朋友來往的廣度、互動強度與規律（同事、業務往來降權）；全部從日記被動萃取，不需要另外記錄。', source: '日記（HERMES 萃取）' },
   },
   {
     key: 'travel', label: '旅遊', icon: '🧳', color: '#f29e4c',
     scoreKey: 'travelScore', weightKey: 'travelWeight', defaultWeight: 0.12,
-    subsystemId: 'travel', rawField: 'travelScore', detail: 'subsystem',
+    subsystemId: 'travel', rawField: 'travelScore', detail: 'subsystem', absolute: true,
     about: { measures: '距上次旅行多久、近 180 天累積的旅行天數、近 90 天吃過幾間美食，有排定的行程再加分。', source: '旅遊生活（遊記＋美食地圖）' },
   },
 ]
