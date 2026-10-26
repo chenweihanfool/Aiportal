@@ -1,8 +1,9 @@
 // 六個面向的摘要內容與卡片（財務／身體／從容／旅遊的 *SummaryBody，心智、社交的明細與卡片）。#dim/<key> 面向頁也用這裡的明細元件。
 import { useState } from 'react'
 import { COLOR, FONT } from './theme'
-import { DIMENSIONS, dimensionOf, type DimensionDef } from './dimensions'
+import { DIMENSIONS, dimensionBySubsystem, dimensionOf, type DimensionDef } from './dimensions'
 import { Gauge } from './Gauge'
+import { rawToScoreText } from './dimensionPage'
 import { MIND_SCORE_BANDS, SOCIAL_SCORE_BANDS, bandTone, formatMinutesAgo, formatPct, formatTWD, heroTone } from './format'
 import { FormulaPanel, FormulaToggle, LabeledRadarChart, LockedGaugeCard, SupportStats } from './panelUi'
 import { type DashboardSummary, type SiteData } from './portalApi'
@@ -245,7 +246,7 @@ export function DimensionGauge({
           {expanded && (
             <div style={{ marginTop: '0.5rem' }}>
               <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-                原始分數（未正規化）：{rawHero !== null ? rawHero : '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+                {rawToScoreText(rawHero, normalizedScore, dimensionBySubsystem(summary.subsystemId)?.absolute)}
               </div>
               <Body data={data} />
             </div>
@@ -363,20 +364,20 @@ export function SocialDetailBody({ summary, hhiSummary }: { summary: DashboardSu
   const stale = data?.['stale'] === true
   const normalizedScore = typeof hhiSummary?.data?.['socialScore'] === 'number' ? hhiSummary.data['socialScore'] as number : null
   const socialItems = [
-    { label: '廣度', value: breadthScore !== null ? String(breadthScore) : '—', formula: 'min(100, 近 7 天不重複互動人數 × 20)——5 人封頂' },
-    { label: '互動強度', value: intensityScore !== null ? String(intensityScore) : '—', formula: 'min(100, round(近 7 天加權互動點數 ÷ 15 × 100))——見面 3 點／通話 2 點／訊息 1 點' },
-    { label: '連結率', value: connectionRateScore !== null ? String(connectionRateScore) : '—', formula: 'round(近 7 天有互動的觀測日數 ÷ 近 7 天觀測日數 × 100)' },
-    { label: '觀測日／互動天數', value: observedDayCount !== null ? `${daysWithInteraction ?? 0} / ${observedDayCount}` : '—', formula: '觀測日＝當天有寫日記（≥1 篇）' },
+    { label: '廣度', value: breadthScore !== null ? String(breadthScore) : '—', formula: '100 × (1 − e^(−人數/4))：近 14 天互動過的不重複家人朋友（不含同事）；4 人 ≈ 63、8 人 ≈ 86，不封頂' },
+    { label: '互動強度', value: intensityScore !== null ? String(intensityScore) : '—', formula: '100 × (1 − e^(−點數/20))：近 14 天見面 3 點／通話 2 點／訊息 1 點，同事與業務往來 × 0.25' },
+    { label: '規律', value: connectionRateScore !== null ? String(connectionRateScore) : '—', formula: 'round(近 14 天有和家人朋友互動的觀測日數 ÷ 觀測日數 × 100)' },
+    { label: '觀測日／互動天數', value: observedDayCount !== null ? `${daysWithInteraction ?? 0} / ${observedDayCount}` : '—', formula: '觀測日＝近 14 天當天有寫日記（≥1 篇）' },
   ]
 
   return (
     <>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-        原始分數（未正規化）：{socialScore ?? '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+        {rawToScoreText(socialScore, normalizedScore, false)}
       </div>
       <SupportStats items={socialItems} />
       <FormulaPanel rows={[
-        { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.40 × 廣度 + 0.40 × 互動強度 + 0.20 × 連結率)' },
+        { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.35 × 廣度 + 0.35 × 互動強度 + 0.30 × 規律)' },
         ...socialItems,
       ]} />
     </>
@@ -411,7 +412,7 @@ export function SocialIndexCard({
   const tone = bandTone(normalizedScore, SOCIAL_SCORE_BANDS)
 
   if (isLocked) {
-    return <LockedGaugeCard label={dimensionOf('social')!.label} sub="近 7 天社交活動" onRequestUnlock={onSelect} />
+    return <LockedGaugeCard label={dimensionOf('social')!.label} sub="近 14 天社交活動" onRequestUnlock={onSelect} />
   }
 
   const showEmpty = observedDayCount === null || observedDayCount === 0 || socialScore === null
@@ -424,11 +425,11 @@ export function SocialIndexCard({
       <Gauge value={normalizedScore} color={tone.color} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>{dimensionOf('social')!.label}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
-        {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 7 天沒有日記可供觀測') : tone.label}
+        {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 14 天沒有日記可供觀測') : tone.label}
       </div>
       {stale && <div style={{ fontSize: '0.62rem', color: COLOR.warn }}>資料已超過 36 小時未更新</div>}
       {distinctPersonCount === 0 && !showEmpty && (
-        <div style={{ fontSize: '0.62rem', color: COLOR.steel, textAlign: 'center' }}>這幾天有寫日記，但沒有社交互動紀錄——真實的 0 分</div>
+        <div style={{ fontSize: '0.62rem', color: COLOR.steel, textAlign: 'center' }}>這兩週有寫日記，但沒有和家人朋友的互動紀錄——真實的 0 分</div>
       )}
       {personNames && personNames.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'center', marginTop: '0.2rem' }}>
