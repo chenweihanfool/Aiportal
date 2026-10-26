@@ -1,5 +1,8 @@
 # Claude session 注意事項
 
+## 語言（鐵律）
+使用者 2026-10-26：「講中文寫入鐵律」。一律用繁體中文回覆使用者（進度、提問、回報、AskUserQuestion 選項）；程式碼、指令、檔名照原文。完整規則見控制頻道 CLAUDE.md §0。
+
 ## 部署與 HERMES 控制頻道
 這個 repo 由 HERMES（VPS 上的代理）部署與測試；Claude 在使用者明確放行後自己合併（規則見控制頻道的 CLAUDE.md §6），不部署，部署只透過控制頻道 [chenweihanfool/hermes-control-channel PR #1](https://github.com/chenweihanfool/hermes-control-channel/pull/1) 留言請 HERMES 部署與測試。
 
