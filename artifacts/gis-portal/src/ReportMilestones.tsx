@@ -1,8 +1,8 @@
-import { PARTS, UNIT_WORD, type Bucket, type Milestones } from './milestones'
+import { PARTS, UNIT_WORD, partTip, type Bucket, type Milestones } from './milestones'
 
 // 🏁 里程碑卡（日／週／月／季／年報共用，取代原本日報的「近 14 天 AI 分數走勢」）。圖全是 CSS，不引入圖表套件。
 // 上：本期三項成果＋合計（與近幾期平均比）；中：徽章（連續天數、新高、年度關卡）；下：近 N 期堆疊柱（虛線＝平均）、年度累計關卡進度。
-// 數字由 milestones.ts 現算；設計見 docs/milestones.md。
+// 數字由 milestones.ts 現算；設計見 docs/milestones.md。三項數字與柱子滑過（或 Tab 聚焦）會列出是哪些任務／想法（2026-10-30）。
 
 const PERIOD: Record<Milestones['level'], string> = { day: '這天', week: '這週', month: '這個月', quarter: '這一季', year: '這一年' }
 
@@ -10,7 +10,7 @@ function Trend({ m, onOpenDay }: { m: Milestones; onOpenDay?: (date: string) => 
   const max = Math.max(1, ...m.trend.map((b) => b.total))
   const tip = (b: Bucket) =>
     `${b.range[0] === b.range[1] ? b.range[0] : `${b.range[0]}～${b.range[1]}`}　成果 ${b.total}\n` +
-    PARTS.map((p) => `${p.icon} ${p.label} ${b.noTasks && p.key === 'tasks' ? '—（還沒有資料）' : b[p.key]}`).join('\n') +
+    PARTS.map((p) => partTip(p.key, b[p.key], b.items[p.key], b.noTasks && p.key === 'tasks')).join('\n') +
     (b.partial ? '\n（還沒結束）' : '')
   return (
     <div className="ms-chart" role="list" aria-label={`近 ${m.trend.length} ${UNIT_WORD[m.level]}的成果`} data-testid="ms-trend"
@@ -50,7 +50,7 @@ export function MilestoneCard({ m, tasksMissing, onOpenDay }: { m: Milestones; t
   const tasksUnknown = tasksMissing || c.noTasks
   return (
     <section className="hm-card ms-card" aria-label="里程碑" data-testid="ms-card" data-level={m.level}>
-      <h2 className="hm-h">🏁 里程碑<span className="hm-h-right rp-hint">成果＝完成任務＋新想法＋想法實行</span></h2>
+      <h2 className="hm-h">🏁 里程碑<span className="hm-h-right rp-hint">成果＝完成任務＋新想法＋想法實行；滑過數字看是哪些</span></h2>
 
       <div className="ms-now" aria-label={`${PERIOD[m.level]}的成果`}>
         <div className="ms-total" data-testid="ms-total">
@@ -63,12 +63,15 @@ export function MilestoneCard({ m, tasksMissing, onOpenDay }: { m: Milestones; t
             </span>
           )}
         </div>
-        {PARTS.map((p) => (
-          <div key={p.key} className="ms-part" data-k={p.key} data-testid={`ms-part-${p.key}`}>
-            <span className="ms-part-t"><span aria-hidden>{p.icon}</span>{p.label}</span>
-            <b>{p.key === 'tasks' && tasksUnknown ? '—' : c[p.key]}<small>{p.unit}</small></b>
-          </div>
-        ))}
+        {PARTS.map((p) => {
+          const tip = partTip(p.key, c[p.key], c.items[p.key], p.key === 'tasks' && tasksUnknown)
+          return (
+            <div key={p.key} className="ms-part" data-k={p.key} data-testid={`ms-part-${p.key}`} tabIndex={0} title={tip} aria-label={tip.replace(/\n/g, '；')}>
+              <span className="ms-part-t"><span aria-hidden>{p.icon}</span>{p.label}</span>
+              <b>{p.key === 'tasks' && tasksUnknown ? '—' : c[p.key]}<small>{p.unit}</small></b>
+            </div>
+          )
+        })}
       </div>
 
       {m.badges.length > 0 && (

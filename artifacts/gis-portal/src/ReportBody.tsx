@@ -4,7 +4,8 @@ import { apiFetchFood } from './foodApi'
 import { apiFetchTrips, taipeiTodayIso } from './tripsApi'
 import { useAsync } from './homeHooks'
 import { MarkdownView } from './MarkdownView'
-import { ReportCharts, ScoreBars } from './ReportCharts'
+import { DailyScoreCard, ReportCharts, ScoreBars } from './ReportCharts'
+import { dailyScore } from './dailyScore'
 import { MilestoneCard } from './ReportMilestones'
 import { apiFetchTasksDone, buildMilestones } from './milestones'
 import type { ReportScore } from './timelineApi'
@@ -96,7 +97,7 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
   startDate: string
   endDate: string
   bodyMd: string
-  /** 僅日報：每日報告分數（日報 📊 段） */
+  /** 僅日報：AI 自評（日報 📊 段）；每日評分＝80% 成果＋20% 這個分數 */
   reportScore?: ReportScore | null
   password: string | null
   /** 原本時間軸用的 Markdown 渲染（帶 wikilink 解析與附件預覽），由對話框傳入 */
@@ -124,6 +125,11 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
     () => (msReady ? buildMilestones(ideas.data?.ideas ?? [], tasksDone.data, level, [startDate, endDate], taipeiTodayIso()) : null),
     [msReady, ideas.data, tasksDone.data, level, startDate, endDate],
   )
+  // 日報的每日評分：80% 這天成果（里程碑本期＝這一天）＋20% AI 自評；完成任務讀不到時只算 AI 自評
+  const score = useMemo(
+    () => (level === 'day' && msReady ? dailyScore(reportScore?.total, milestones && !tasksMissing ? milestones.current : null) : null),
+    [level, msReady, reportScore, milestones, tasksMissing],
+  )
   const structured = parsed.sections.length > 0
   // 📊 段畫成雷達（含每項依據）時，上方的分數條就重複了
   const radar = structured && parsed.sections.some((s) => s.kind === 'score' && parseScoreSection(s.body))
@@ -138,6 +144,7 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
         <>
           {password && (milestones ? <div className="rp-band"><MilestoneCard m={milestones} tasksMissing={tasksMissing} onOpenDay={onOpenDay} /></div>
             : !msReady && <Skeleton lines={3} />)}
+          {score && <div className="rp-band"><DailyScoreCard s={score} /></div>}
           {level === 'day' && reportScore && !radar && <div className="rp-band"><ScoreBars score={reportScore} /></div>}
           {password && (ready ? (report && <ReportCharts r={report} level={level} missing={missing} />) : <Skeleton lines={4} />)}
           {structured ? (

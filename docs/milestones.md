@@ -41,7 +41,8 @@
 ## 資料：feed `tasks-done` v1
 
 - 推送端：kb-pipeline `scripts/vikunja-gantt-pusher.py`。甘特圖本來就逐頁抓全部任務，同一批資料用 `kbcore/task_gantt.done_by_day` 再算一份，每 10 分鐘推送。不多打 Vikunja。
-- payload：`{ computedAt, since, days: [{ date, count }] }`，只列有完成的日子（由舊到新，最多 4000 天）。`since` 是最早一筆完成日；在它之前的期，任務數標「還沒有資料」。
+- payload：`{ computedAt, since, days: [{ date, count, titles? }] }`，只列有完成的日子（由舊到新，最多 4000 天）。`since` 是最早一筆完成日；在它之前的期，任務數標「還沒有資料」。
+- `titles`（2026-10-30 起，選填）：最近 400 個有完成的日子附任務標題（依完成時間，每天最多 30 筆，標題最長 120 字），卡片三項數字與柱子的提示窗逐條列出；沒有標題的日子只寫數量。想法的標題直接取自想法庫。
 - 不沿用 `mind_index_history.tasks_completed_count`：`daily-life-score.py` 在 04:00 算，只算到當天 0～4 點，數字幾乎都是 0。
 - 限制：Vikunja 的重複任務（repeat）完成後會重設成未完成，算不到。
 - 部署前（feed 不存在），卡片照樣畫：任務格顯示「—」，成果只算想法。
@@ -56,3 +57,12 @@
 ## 部署順序
 
 先重建 api-server（登記 feed），再部署 kb-pipeline 推送腳本，最後重建 gis-portal。順序反過來時，推送會被 404 擋下（推送總管會警報）；前端則照樣顯示「—」。
+
+## 每日評分（2026-10-30 起）
+
+使用者 2026-10-30：「每日評分目前只讓AI自己打分數 應該改成 當天的成果 (完成任務 +新想法 +想法實行) * 80% + AI自己打分數 * 20%」，換算選遞減曲線。
+
+- 成果點數＝完成任務＋新想法＋想法實行×2；成果分＝100×(1−0.5^(點數÷3))（1 點 21、3 點 50、6 點 75、9 點 88）。
+- 每日評分＝0.8×成果分＋0.2×AI 自評（日報 📊 段，五項×5）；沒有日報只算成果，成果讀不到只算 AI 自評。
+- 用在：時間軸的「日」徽章、日報對話框標頭、日報的 ⭐ 每日評分卡。計算在 `artifacts/gis-portal/src/dailyScore.ts`（測試 `dailyScore.test.ts`）。
+- 不用在：幸福指數的心智維度仍是 0.8×想法分數＋0.2×AI 自評（`api-server/src/lib/mindCombined.ts`），想法已在心智的 80% 裡，不重複計。

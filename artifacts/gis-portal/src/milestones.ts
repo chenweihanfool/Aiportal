@@ -2,7 +2,9 @@
 // 使用者 2026-10-25：「日報的14天走勢用AI打的分數沒什麼意義 能否改成里程碑設計 內容幫我設計 例如當日完成任務數 + 新增想法數 + 想法完成數」
 // 「把里程碑設計擴大到 周 月 季 年報 同時顧及視覺化呈現」。設計：docs/milestones.md。
 //   成果＝完成任務（feed tasks-done）＋ 新想法（想法庫 bornAt）＋ 想法實行（想法庫 history 第一次 done），三項各算 1，不加權。
+// 使用者 2026-10-30：「日報也想照同樣方式看到具體案件」→ 每天另記標題（items），卡片與柱子的提示窗逐條列出。
 import type { IdeaItem } from './boardApi'
+import { tipText } from './reportsView'
 import { eachDay, prevRange, type Range } from './periodStats'
 
 const API_BASE = import.meta.env.BASE_URL ?? '/'
@@ -21,7 +23,8 @@ export const UNIT_WORD: Record<MsLevel, string> = { day: '天', week: '週', mon
 export const LADDER = [1, 5, 10, 25, 50, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 10000] as const
 
 // ── 資料：每天完成幾項任務（feed tasks-done v1，推送端 kb-pipeline vikunja-gantt-pusher.py） ──
-export interface TasksDone { since: string | null; byDate: Record<string, number>; computedAt: string }
+/** titlesByDate：推送端 2026-10-30 起才帶（只有近期的日子），沒有的日子提示窗只寫數量 */
+export interface TasksDone { since: string | null; byDate: Record<string, number>; titlesByDate?: Record<string, string[]>; computedAt: string }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 export function parseTasksDone(raw: unknown): TasksDone | null {
@@ -30,10 +33,16 @@ export function parseTasksDone(raw: unknown): TasksDone | null {
   const p = root.payload as { computedAt?: unknown; since?: unknown; days?: unknown } | null
   if (!p || typeof p.computedAt !== 'string' || !Array.isArray(p.days)) return null
   const byDate: Record<string, number> = {}
-  for (const d of p.days as Array<{ date?: unknown; count?: unknown }>) {
-    if (d && typeof d.date === 'string' && DATE.test(d.date) && typeof d.count === 'number' && d.count > 0) byDate[d.date] = d.count
+  const titlesByDate: Record<string, string[]> = {}
+  for (const d of p.days as Array<{ date?: unknown; count?: unknown; titles?: unknown }>) {
+    if (d && typeof d.date === 'string' && DATE.test(d.date) && typeof d.count === 'number' && d.count > 0) {
+      byDate[d.date] = d.count
+      if (Array.isArray(d.titles)) titlesByDate[d.date] = d.titles.filter((t): t is string => typeof t === 'string')
+    }
   }
-  return { since: typeof p.since === 'string' && DATE.test(p.since) ? p.since : null, byDate, computedAt: p.computedAt }
+  const out: TasksDone = { since: typeof p.since === 'string' && DATE.test(p.since) ? p.since : null, byDate, computedAt: p.computedAt }
+  if (Object.keys(titlesByDate).length > 0) out.titlesByDate = titlesByDate
+  return out
 }
 
 /** 還沒部署（feed 不存在／沒資料）回 null；連不上丟錯 */
@@ -46,20 +55,27 @@ export async function apiFetchTasksDone(pw: string): Promise<TasksDone | null> {
 
 // ── 每天的三項計數 ──
 export type Counts = Record<PartKey, number>
-export interface DailyIndex { at: (date: string) => Counts; tasksSince: string | null }
+/** 每項的具體標題（任務名稱、想法標題）；任務標題推送端沒給的日子是空陣列，數量照 Counts */
+export type Items = Record<PartKey, string[]>
+export interface DailyIndex { at: (date: string) => Counts; items: (date: string) => Items; tasksSince: string | null }
 
 /** 想法：bornAt 那天算一個新想法；history 裡第一次 done 那天算一個實行（重開又完成不重算） */
 export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null): DailyIndex {
-  const born: Record<string, number> = {}
-  const done: Record<string, number> = {}
+  const born: Record<string, string[]> = {}
+  const done: Record<string, string[]> = {}
   for (const it of ideas) {
-    if (typeof it.bornAt === 'string' && DATE.test(it.bornAt.slice(0, 10))) born[it.bornAt.slice(0, 10)] = (born[it.bornAt.slice(0, 10)] ?? 0) + 1
+    if (typeof it.bornAt === 'string' && DATE.test(it.bornAt.slice(0, 10))) (born[it.bornAt.slice(0, 10)] ??= []).push(it.title)
     const first = (it.history ?? []).filter((h) => h.status === 'done' && typeof h.at === 'string' && DATE.test(h.at.slice(0, 10)))
       .map((h) => h.at.slice(0, 10)).sort()[0]
-    if (first) done[first] = (done[first] ?? 0) + 1
+    if (first) (done[first] ??= []).push(it.title)
   }
   const byDate = tasks?.byDate ?? {}
-  return { at: (d) => ({ tasks: byDate[d] ?? 0, ideasNew: born[d] ?? 0, ideasDone: done[d] ?? 0 }), tasksSince: tasks?.since ?? null }
+  const titles = tasks?.titlesByDate ?? {}
+  return {
+    at: (d) => ({ tasks: byDate[d] ?? 0, ideasNew: born[d]?.length ?? 0, ideasDone: done[d]?.length ?? 0 }),
+    items: (d) => ({ tasks: titles[d] ?? [], ideasNew: born[d] ?? [], ideasDone: done[d] ?? [] }),
+    tasksSince: tasks?.since ?? null,
+  }
 }
 
 const zero = (): Counts => ({ tasks: 0, ideasNew: 0, ideasDone: 0 })
@@ -75,6 +91,29 @@ export function sumRange(ix: DailyIndex, r: Range, today: string): Counts {
   return eachDay([r[0], end]).reduce((acc, d) => add(acc, ix.at(d)), zero())
 }
 
+/** 區間內每項的標題（由舊到新）；只算到今天 */
+export function itemsRange(ix: DailyIndex, r: Range, today: string): Items {
+  const out: Items = { tasks: [], ideasNew: [], ideasDone: [] }
+  const end = minDate(r[1], today)
+  if (end < r[0]) return out
+  for (const d of eachDay([r[0], end])) {
+    const it = ix.items(d)
+    for (const { key } of PARTS) out[key].push(...it[key])
+  }
+  return out
+}
+
+/** 一項的提示窗：「✅ 完成任務 4」＋逐條標題（超過 8 項寫「另 N 項」）；數量多於標題時補一句（舊資料沒有任務標題） */
+export function partTip(key: PartKey, count: number, titles: readonly string[], unknown = false): string {
+  const p = PARTS.find((x) => x.key === key)!
+  const head = `${p.icon} ${p.label} ${unknown ? '—' : count}`
+  if (unknown) return `${head}（還沒有資料）`
+  if (count === 0) return head
+  if (titles.length === 0) return `${head}（這段時間沒有標題紀錄）`
+  const text = tipText(head, titles)
+  return titles.length < count ? `${text}\n（另 ${count - titles.length} 項沒有標題紀錄）` : text
+}
+
 // ── 走勢：本期往前 N 期 ──
 export interface Bucket extends Counts {
   range: [string, string]
@@ -85,6 +124,8 @@ export interface Bucket extends Counts {
   partial: boolean
   /** 這期整段都在任務資料開始之前（任務數不可信，畫成 0 但標出來） */
   noTasks: boolean
+  /** 這期每項的標題（提示窗用） */
+  items: Items
 }
 
 export function bucketLabel(level: MsLevel, r: Range): string {
@@ -103,7 +144,7 @@ export function buckets(ix: DailyIndex, level: MsLevel, range: Range, today: str
     const c = sumRange(ix, r, today)
     return {
       ...c, range: r, label: bucketLabel(level, r), total: totalOf(c), current: i === ranges.length - 1, partial: r[1] > today,
-      noTasks: ix.tasksSince === null || r[1] < ix.tasksSince,
+      noTasks: ix.tasksSince === null || r[1] < ix.tasksSince, items: itemsRange(ix, r, today),
     }
   })
 }

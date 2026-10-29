@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
 import {
-  averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, longestStreak, parseTasksDone, roads, streakEndingAt, sumRange,
+  averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
   type TasksDone,
 } from './milestones'
 
@@ -20,6 +20,29 @@ describe('parseTasksDone', () => {
     expect(parseTasksDone(raw)).toEqual({ since: '2026-10-01', byDate: { '2026-10-01': 2 }, computedAt: 'x' })
     expect(parseTasksDone({ available: false, payload: null })).toBeNull()
     expect(parseTasksDone(null)).toBeNull()
+  })
+})
+
+describe('任務與想法的標題（提示窗）', () => {
+  it('parseTasksDone 收 titles；沒帶的日子沒有 titlesByDate', () => {
+    const raw = { available: true, payload: { computedAt: 'x', since: '2026-10-01', days: [{ date: '2026-10-01', count: 2, titles: ['甲', 3, '乙'] }, { date: '2026-10-02', count: 1 }] } }
+    expect(parseTasksDone(raw)?.titlesByDate).toEqual({ '2026-10-01': ['甲', '乙'] })
+    expect(parseTasksDone({ available: true, payload: { computedAt: 'x', since: null, days: [{ date: '2026-10-02', count: 1 }] } })?.titlesByDate).toBeUndefined()
+  })
+  it('items 依日期列出任務、新想法、實行的標題；itemsRange 合併區間', () => {
+    const ix = dailyIndex([idea('想法A', '2026-10-20'), idea('想法B', '2026-10-01', [{ status: 'done', at: '2026-10-21' }])],
+      { ...tasks({ '2026-10-20': 2 }), titlesByDate: { '2026-10-20': ['報差', '外業'] } })
+    expect(ix.items('2026-10-20')).toEqual({ tasks: ['報差', '外業'], ideasNew: ['想法A'], ideasDone: [] })
+    expect(itemsRange(ix, ['2026-10-20', '2026-10-31'], '2026-10-21')).toEqual({ tasks: ['報差', '外業'], ideasNew: ['想法A'], ideasDone: ['想法B'] })
+    expect(buckets(ix, 'day', ['2026-10-21', '2026-10-21'], '2026-10-21', 1)[0].items.ideasDone).toEqual(['想法B'])
+  })
+  it('partTip：逐條、超過 8 項寫另 N 項、標題比數量少時補一句、沒資料寫還沒有資料', () => {
+    expect(partTip('tasks', 2, ['報差', '外業'])).toBe('✅ 完成任務 2\n• 報差\n• 外業')
+    expect(partTip('ideasNew', 0, [])).toBe('💡 新想法 0')
+    expect(partTip('tasks', 3, [])).toBe('✅ 完成任務 3（這段時間沒有標題紀錄）')
+    expect(partTip('tasks', 3, ['甲'])).toBe('✅ 完成任務 3\n• 甲\n（另 2 項沒有標題紀錄）')
+    expect(partTip('tasks', 0, [], true)).toBe('✅ 完成任務 —（還沒有資料）')
+    expect(partTip('ideasDone', 10, Array.from({ length: 10 }, (_, i) => `x${i}`)).split('\n').at(-1)).toBe('…另 2 項')
   })
 })
 

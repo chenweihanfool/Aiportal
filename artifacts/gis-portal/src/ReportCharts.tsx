@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { COLOR } from './theme'
 import type { PeriodReport } from './periodStats'
 import type { ReportScore } from './timelineApi'
+import { HALF_POINTS, IDEA_DONE_POINTS, type DailyScore } from './dailyScore'
 import {
   FUNNEL_STEPS, SERIES_ROWS, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, levelOf, pinPositions, rhythmCells, topCounts,
   type Delta, type RhythmLevel,
@@ -153,11 +154,39 @@ function TravelCard({ r }: { r: PeriodReport }) {
 
 const STATUS_TAG: Record<'visited' | 'favorite' | 'want', string> = { visited: '吃過', favorite: '愛店', want: '想吃' }
 
-/** 日報的每日分數：五項各 0–4（總分×5＝0–100），一項一條 */
+/** 日報的每日評分：80% 成果＋20% AI 自評，兩條（見 dailyScore.ts） */
+export function DailyScoreCard({ s }: { s: DailyScore }) {
+  const c = s.counts
+  const rows = [
+    { key: 'ach', label: '成果 ×80%', value: s.achievement },
+    { key: 'ai', label: 'AI 自評 ×20%', value: s.ai === null ? null : Math.round(s.ai) },
+  ]
+  return (
+    <section className="hm-card" aria-label="每日評分" data-testid="rp-daily-score">
+      <h2 className="hm-h">⭐ 每日評分<span className="hm-h-right"><b>{s.total}</b> / 100</span></h2>
+      <ul className="rp-bars rp-score-bars">
+        {rows.map((r) => (
+          <li key={r.key} data-testid={`rp-daily-${r.key}`}>
+            <span className="rp-bar-l">{r.label}</span>
+            <span className="rp-bar-track" aria-hidden><i style={{ width: `${r.value ?? 0}%` }} /></span>
+            <b>{r.value ?? '—'}</b>
+          </li>
+        ))}
+      </ul>
+      <p className="hm-note">
+        {c ? `成果 ${s.points} 點＝任務 ${c.tasks}＋新想法 ${c.ideasNew}＋實行 ${c.ideasDone}×${IDEA_DONE_POINTS}；${HALF_POINTS} 點 50 分、${HALF_POINTS * 2} 點 75 分，越多越高。`
+          : '成果資料讀不到，這天只算 AI 自評。'}
+        {s.ai === null && c ? '這天沒有 AI 自評，只算成果。' : ''}
+      </p>
+    </section>
+  )
+}
+
+/** 日報的 AI 自評：五項各 0–4（總分×5＝0–100），一項一條 */
 export function ScoreBars({ score }: { score: ReportScore }) {
   return (
-    <section className="hm-card" aria-label="每日報告分數" data-testid="rp-score">
-      <h2 className="hm-h">📊 每日報告分數<span className="hm-h-right"><b>{Math.round(score.total)}</b> / 100</span></h2>
+    <section className="hm-card" aria-label="AI 自評" data-testid="rp-score">
+      <h2 className="hm-h">📊 AI 自評<span className="hm-h-right"><b>{Math.round(score.total)}</b> / 100</span></h2>
       <ul className="rp-bars rp-score-bars">
         {score.parts.map((p) => (
           <li key={p.key} title={p.note || undefined}>

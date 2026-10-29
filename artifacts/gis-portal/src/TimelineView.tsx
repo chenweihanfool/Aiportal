@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { COLOR, FONT } from './theme'
 import { GraphShell } from './GraphShell'
 import { MarkdownView } from './MarkdownView'
 import { ReportBody } from './ReportBody'
+import { apiFetchIdeas } from './boardApi'
+import { useAsync } from './homeHooks'
+import { apiFetchTasksDone, dailyIndex } from './milestones'
+import { dailyScore, dailyScoreLine, type DailyScore } from './dailyScore'
 import { clearTimelineReturn, peekTimelineReturn, requestGraphFocus, saveTimelineReturn } from './graphFocus'
 import { countWithTime, eventDisplayTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
 import {
@@ -65,6 +69,14 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
   const listRef = useRef<HTMLDivElement>(null)
   const lastFocusRef = useRef<HTMLElement | null>(null)
   const isMobile = useIsMobile()
+  // 每日評分＝80% 當天成果＋20% AI 自評（dailyScore.ts）；成果要等想法庫與完成任務都載入，避免徽章先顯示 AI 分數再跳
+  const ideasA = useAsync(unlockedPassword, apiFetchIdeas)
+  const tasksA = useAsync(unlockedPassword, apiFetchTasksDone)
+  const settled = (a: { data: unknown; error: boolean }) => a.data !== null || a.error
+  const scoresReady = settled(ideasA) && settled(tasksA)
+  const ix = useMemo(() => (ideasA.data && tasksA.data ? dailyIndex(ideasA.data.ideas, tasksA.data) : null), [ideasA.data, tasksA.data])
+  const scoreOf = useCallback((it: TimelineItem | null): DailyScore | null =>
+    (it && it.level === 'day' && scoresReady ? dailyScore(it.reportScore?.total, ix ? ix.at(it.startDate) : null) : null), [ix, scoresReady])
 
   const loadPage = useCallback(async (lv: TimelineLevel, cursor: string | null, replace: boolean) => {
     if (!unlockedPassword) return
@@ -174,7 +186,8 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
                     fontFamily: FONT.mono, fontSize: '0.88rem', letterSpacing: '0.06em', borderBottom: `1px solid ${COLOR.line}` }}>{g.header}</div>
                 )}
                 {g.items.map(it => {
-                  const badge = reportBadge(it.reportScore)
+                  const score = scoreOf(it)
+                  const badge = reportBadge(score)
                   const dim = !it.hasReport
                   return (
                     <button key={itemKey(it)} type="button" data-testid="timeline-row" onClick={e => openItem(it, e.currentTarget)}
@@ -186,7 +199,7 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
                       </span>
                       {level === 'day' && (
                         <span style={{ flex: '0 0 auto', width: isMobile ? '3.2rem' : '4rem', display: 'flex', justifyContent: 'center' }}>
-                          {badge && <span data-testid="badge-report" title={`每日報告分數（${reportScoreLine(it.reportScore)}）`} style={{ ...BADGE_STYLE, ...(isMobile ? MOBILE_BADGE : {}), color: SCORE_TONE[badge.tone], border: `1px solid ${SCORE_TONE[badge.tone]}` }}>日 {badge.text}</span>}
+                          {badge && score && <span data-testid="badge-report" title={`每日評分 ${dailyScoreLine(score)}${it.reportScore ? `\nAI 自評 ${reportScoreLine(it.reportScore)}` : ''}`} style={{ ...BADGE_STYLE, ...(isMobile ? MOBILE_BADGE : {}), color: SCORE_TONE[badge.tone], border: `1px solid ${SCORE_TONE[badge.tone]}` }}>日 {badge.text}</span>}
                         </span>
                       )}
                       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '1.08rem' }}>
@@ -209,7 +222,7 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
       )}
       {top && (
         <TimelineDialog
-          detail={detail} detailError={detailError} ref_={top} isMobile={isMobile} canBack={stack.length > 1} password={unlockedPassword}
+          detail={detail} detailError={detailError} ref_={top} isMobile={isMobile} canBack={stack.length > 1} password={unlockedPassword} score={scoreOf(detail)}
           older={nav.older} newer={nav.newer}
           onClose={closeDialog} onBack={back} onGo={goTo} onDrill={drill} onEvent={jumpToEvent}
         />
@@ -220,10 +233,12 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
 
 function TimelineDialog(props: {
   detail: TimelineDetail | null; detailError: boolean; ref_: Ref; isMobile: boolean; canBack: boolean; password: string | null
+  /** 僅日報：每日評分（80% 成果＋20% AI 自評） */
+  score: DailyScore | null
   older: TimelineItem | null; newer: TimelineItem | null
   onClose: () => void; onBack: () => void; onGo: (r: Ref) => void; onDrill: (r: Ref) => void; onEvent: (id: string) => void
 }) {
-  const { detail: d, detailError, ref_, isMobile, canBack, password, older, newer, onClose, onBack, onGo, onDrill, onEvent } = props
+  const { detail: d, detailError, ref_, isMobile, canBack, password, score, older, newer, onClose, onBack, onGo, onDrill, onEvent } = props
   // 報告裡的日期（🕰️ 的 [[YYYY-MM-DD]]、里程碑的日柱）→ 疊一層打開那天的日報，「返回」回到這一天
   const openDay = (date: string) => onDrill({ level: 'day', periodKey: date })
   const resolveDay = (target: string) => (DAY_KEY.test(target.trim()) ? target.trim() : null)
@@ -263,7 +278,7 @@ function TimelineDialog(props: {
                 {d.startDate === d.endDate ? d.startDate : `${d.startDate} ~ ${d.endDate}`}
                 {d.rangeInferred && <span style={{ color: COLOR.warn }}>　（涵蓋區間為推算）</span>}
                 {!d.hasReport && <span style={{ color: COLOR.warn }}>　（無報告，以下為降級內容）</span>}
-                {d.reportScore && <span data-testid="detail-report-score">　每日報告分數 {reportScoreLine(d.reportScore)}</span>}
+                {score && <span data-testid="detail-report-score" title={d.reportScore ? `AI 自評 ${reportScoreLine(d.reportScore)}` : undefined}>　每日評分 {dailyScoreLine(score)}</span>}
               </div>
             )}
           </div>
