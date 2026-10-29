@@ -60,5 +60,8 @@ describe("feed registry", () => {
     expect(validateFeedRequest("tasks-done", body({ ...ok, since: null, days: [] })).ok).toBe(true);
     expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "2026-10-24", count: 0 }] })).ok).toBe(false);
     expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "10/24", count: 1 }] })).ok).toBe(false);
+    // titles 選填（2026-10-30 起）：帶了也通過、超過每天 30 筆被擋
+    expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "2026-10-24", count: 2, titles: ["甲", "乙"] }] })).ok).toBe(true);
+    expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "2026-10-24", count: 31, titles: Array(31).fill("x") }] })).ok).toBe(false);
   });
 });

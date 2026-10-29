@@ -1331,6 +1331,8 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .ms-part { border-left: 3px solid var(--ms-k); }
 .ms-part b { font-size: 1.4rem; line-height: 1.15; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
 .ms-part b small { font-size: 0.7rem; margin-left: 0.2rem; color: var(--c-ink-2); font-family: inherit; }
+.ms-part[title] { cursor: help; }
+.ms-part:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .ms-card [data-k='tasks'] { --ms-k: var(--ms-tasks); }
 .ms-card [data-k='ideasNew'] { --ms-k: var(--ms-new); }
 .ms-card [data-k='ideasDone'] { --ms-k: var(--ms-done); }
