@@ -38,3 +38,4 @@
 | `example` | 1 | 範例（示範格式，沒有畫面使用；第一個真的新 feed 進來時可以刪） |
 | `kb-arch-stats` | 1 | 知識庫架構頁各節點的處理數字（kb-pipeline `arch-stats-pusher.py`） |
 | `vikunja-gantt` | 1 | 從容面板的任務甘特圖（kb-pipeline `vikunja-gantt-pusher.py`，每 10 分鐘唯讀 Vikunja） |
+| `companion` | 1 | 首頁陪伴區塊：歷年今天、很久沒聯絡的人、每天的家人朋友互動（kb-pipeline `companion-pusher.py`，每 10 分鐘只讀） |

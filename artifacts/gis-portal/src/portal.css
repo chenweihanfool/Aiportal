@@ -615,9 +615,9 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
 @keyframes hm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes hm-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes hm-lamp { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "fun" "growth" "repos" "sys" "svc"; }
-.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "fun" "growth" "repos" "svc"; }
-.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; } .hm-svc { grid-area: svc; } .hm-repos { grid-area: repos; }
+.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "companion" "fun" "growth" "repos" "sys" "svc"; }
+.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "companion" "fun" "growth" "repos" "svc"; }
+.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; } .hm-svc { grid-area: svc; } .hm-repos { grid-area: repos; } .hm-companion { grid-area: companion; }
 
 .hm-card {
   position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.4rem; overflow: hidden;
@@ -677,6 +677,12 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 .hm-delta { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; }
 .hm-streak { color: var(--c-ink-2); font-size: 0.74rem; }
 .hm-sentence { margin: 0; font-size: clamp(0.8rem, 1.9vh, 0.98rem); line-height: 1.5; color: var(--c-ink); }
+.hm-move { color: var(--c-ink-2); }
+.hm-comp-grid { display: grid; gap: 0.8rem 1.2rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); font-size: 0.8rem; line-height: 1.55; color: var(--c-ink); }
+.hm-comp-grid p { margin: 0; }
+.hm-h3 { margin: 0 0 0.3rem; font-size: 0.78rem; font-weight: 600; color: var(--c-ink-2); }
+.hm-comp-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.2rem; }
+.hm-comp-list li { min-width: 0; overflow-wrap: anywhere; }
 .hm-year { flex: 0 0 clamp(170px, 20vw, 270px); display: flex; flex-direction: column; gap: 0.25rem; }
 .hm-year-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.74rem; color: var(--c-ink-2); }
 .hm-year-top b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.15rem; color: var(--c-ink); font-weight: 600; }
@@ -760,8 +766,8 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 /* 電腦版（2026-10-22 起可捲動）：不再把高度鎖在一個畫面；兩欄排法，區塊高度隨內容，新增區塊往下長。 */
 @media (min-width: 1300px) {
   .ip-board-wrap.hm-wrap { height: auto; min-height: 0; margin-bottom: 1.4rem; }
-  .hm-root { gap: 0.8rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "today today" "dims dims" "growth fun" "repos repos" "sys svc"; }
-  .hm-root[data-sys="alert"] { grid-template-rows: none; grid-template-areas: "today today" "sys svc" "dims dims" "growth fun" "repos repos"; }
+  .hm-root { gap: 0.8rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "today today" "dims dims" "companion companion" "growth fun" "repos repos" "sys svc"; }
+  .hm-root[data-sys="alert"] { grid-template-rows: none; grid-template-areas: "today today" "sys svc" "dims dims" "companion companion" "growth fun" "repos repos"; }
   .hm-root[data-sys="alert"] .hm-svc { align-self: start; }
   .hm-dims { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; }
   .hm-ideas { grid-auto-rows: auto; }

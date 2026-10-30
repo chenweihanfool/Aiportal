@@ -13,6 +13,7 @@ import {
   type SystemLight, type YearProgress,
 } from './homeView'
 import { biggestDrag, dayLinkText } from './boardView'
+import type { ActivityInsight, CompanionData } from './companion'
 import { dimHash } from './dimensionPage'
 import { HomeCard } from './HomeCard'
 
@@ -26,7 +27,7 @@ const LAMP: Record<SystemLight['level'], string> = { ok: COLOR.ok, warn: COLOR.w
 // ── ① 今天 ────────────────────────────────────
 type WantEntry = { name: string; kind: Parameters<typeof statusLabelFor>[0]; area: string | null; days: number }
 
-export function TodaySection({ greetingText, part, dateLabel, st, breakdown, trend, trendNote, sentence, year, toneOf, onOpen, onRequestUnlock, system, onOpenSystem }: {
+export function TodaySection({ greetingText, part, dateLabel, st, breakdown, trend, trendNote, sentence, move, year, toneOf, onOpen, onRequestUnlock, system, onOpenSystem }: {
   greetingText: string
   part: DayPart
   dateLabel: string
@@ -36,6 +37,8 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
   /** 歷史不能用時的說明（載入中、失敗、累積中）；null＝正常顯示差與連續天數 */
   trendNote: string | null
   sentence: string
+  /** 今日最划算的一件事；沒有就不顯示 */
+  move: string | null
   year: YearProgress
   toneOf: Tone
   onOpen: () => void
@@ -81,6 +84,7 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
                   {breakdown.day && <span className="hm-chip" data-testid="day-link" title="每日評分＝80% 當天成果＋20% AI 自評；幸福指數修正＝(今日分−近 28 天平均)×0.15，上下限 ±6，23:55 前只加不扣">{dayLinkText(breakdown.day)}</span>}
                 </div>
                 <p className="hm-sentence">{sentence}</p>
+                {move && <p className="hm-sentence hm-move" data-testid="today-move">👉 {move}</p>}
               </div>
             </div>
           )}
@@ -285,6 +289,46 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
 }
 
 // ── ④ 好玩的 ──────────────────────────────────
+// ── 陪伴：歷年今天、很久沒聯絡、什麼事讓你變好 ──────────
+export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry }: {
+  st: BlockStatus
+  data: CompanionData | null
+  insight: ActivityInsight
+  onRequestUnlock: () => void
+  onRetry: () => void
+}) {
+  return (
+    <HomeCard id="sec-companion" className="hm-companion">
+      <StateFrame status={st} source="陪伴資料" onRequestUnlock={onRequestUnlock} onRetry={onRetry} empty="陪伴資料還沒推上來。">
+        {data && (
+          <div className="hm-comp-grid">
+            <div data-testid="on-this-day">
+              <h3 className="hm-h3">🗓️ 歷年今天</h3>
+              {data.onThisDay.length === 0 ? <p className="hm-muted">往年的今天沒有紀錄。</p> : (
+                <ul className="hm-comp-list">
+                  {data.onThisDay.slice(0, 5).map((e) => <li key={`${e.date}-${e.title}`}><span className="hm-muted">{e.date.slice(0, 4)}</span> {e.title}</li>)}
+                </ul>
+              )}
+            </div>
+            <div data-testid="quiet-people">
+              <h3 className="hm-h3">👋 很久沒聯絡</h3>
+              {data.quietPeople.length === 0 ? <p className="hm-muted">最近都有聯絡。</p> : (
+                <ul className="hm-comp-list">
+                  {data.quietPeople.slice(0, 5).map((p) => <li key={p.name} title={p.lastEvent ?? undefined}>{p.name}<span className="hm-muted">　{p.daysQuiet} 天前</span></li>)}
+                </ul>
+              )}
+            </div>
+            <div data-testid="activity-insight">
+              <h3 className="hm-h3">🔍 什麼事讓你變好</h3>
+              <p className={insight.ready ? '' : 'hm-muted'}>{insight.text}</p>
+            </div>
+          </div>
+        )}
+      </StateFrame>
+    </HomeCard>
+  )
+}
+
 export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsSt, trip, onOpenIdeas, onRequestUnlock, onRetryIdeas, onRetryFood, onRetryTrips }: {
   ideasSt: BlockStatus
   ideasCount: number
