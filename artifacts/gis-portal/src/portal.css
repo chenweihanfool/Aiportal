@@ -615,9 +615,9 @@ button.tr-entry-head:hover { background: rgba(255, 255, 255, 0.03); }
 @keyframes hm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes hm-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes hm-lamp { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "dims" "companion" "fun" "growth" "repos" "sys" "svc"; }
-.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "dims" "companion" "fun" "growth" "repos" "svc"; }
-.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; } .hm-svc { grid-area: svc; } .hm-repos { grid-area: repos; } .hm-companion { grid-area: companion; }
+.hm-root { display: grid; gap: 0.8rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "brief" "dims" "companion" "fun" "growth" "repos" "sys" "svc"; }
+.hm-root[data-sys="alert"] { grid-template-areas: "today" "sys" "brief" "dims" "companion" "fun" "growth" "repos" "svc"; }
+.hm-today { grid-area: today; } .hm-dimsec { grid-area: dims; } .hm-growth { grid-area: growth; } .hm-fun { grid-area: fun; } .hm-sys { grid-area: sys; } .hm-svc { grid-area: svc; } .hm-repos { grid-area: repos; } .hm-companion { grid-area: companion; } .hm-brief { grid-area: brief; }
 
 .hm-card {
   position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.4rem; overflow: hidden;
@@ -766,8 +766,8 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 /* 電腦版（2026-10-22 起可捲動）：不再把高度鎖在一個畫面；兩欄排法，區塊高度隨內容，新增區塊往下長。 */
 @media (min-width: 1300px) {
   .ip-board-wrap.hm-wrap { height: auto; min-height: 0; margin-bottom: 1.4rem; }
-  .hm-root { gap: 0.8rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "today today" "dims dims" "companion companion" "growth fun" "repos repos" "sys svc"; }
-  .hm-root[data-sys="alert"] { grid-template-rows: none; grid-template-areas: "today today" "sys svc" "dims dims" "companion companion" "growth fun" "repos repos"; }
+  .hm-root { gap: 0.8rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "today today" "brief brief" "dims dims" "companion companion" "growth fun" "repos repos" "sys svc"; }
+  .hm-root[data-sys="alert"] { grid-template-rows: none; grid-template-areas: "today today" "sys svc" "brief brief" "dims dims" "companion companion" "growth fun" "repos repos"; }
   .hm-root[data-sys="alert"] .hm-svc { align-self: start; }
   .hm-dims { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; }
   .hm-ideas { grid-auto-rows: auto; }

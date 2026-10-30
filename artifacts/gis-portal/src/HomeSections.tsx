@@ -14,6 +14,8 @@ import {
 } from './homeView'
 import { biggestDrag, dayLinkText } from './boardView'
 import type { ActivityInsight, CompanionData } from './companion'
+import type { Brief } from './briefView'
+import { MarkdownView } from './MarkdownView'
 import { dimHash } from './dimensionPage'
 import { HomeCard } from './HomeCard'
 
@@ -289,6 +291,22 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
 }
 
 // ── ④ 好玩的 ──────────────────────────────────
+// ── 明日報告：前一晚看明天要注意的事 ──────────
+export function BriefSection({ st, brief, onRequestUnlock, onRetry }: {
+  st: BlockStatus
+  brief: Brief | null
+  onRequestUnlock: () => void
+  onRetry: () => void
+}) {
+  return (
+    <HomeCard id="sec-brief" className="hm-brief" right={brief ? <span className="hm-muted">{brief.label}</span> : undefined}>
+      <StateFrame status={st} source="明日報告" onRequestUnlock={onRequestUnlock} onRetry={onRetry} empty="明日報告每晚 21:00 整理，好了就會出現在這裡。">
+        {brief && <div data-testid="brief-body"><MarkdownView text={brief.bodyMd} /></div>}
+      </StateFrame>
+    </HomeCard>
+  )
+}
+
 // ── 陪伴：歷年今天、很久沒聯絡、什麼事讓你變好 ──────────
 export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry }: {
   st: BlockStatus
