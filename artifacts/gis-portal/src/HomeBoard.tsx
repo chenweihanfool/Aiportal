@@ -18,7 +18,8 @@ import { useAsync, useNow } from './homeHooks'
 import { PaidServicesPanel, PaidServicesSection } from './PaidServices'
 import { BriefSection, CompanionSection, DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
 import { activityInsight, apiFetchCompanion, bestMove } from './companion'
-import { apiFetchReports, pickBrief } from './briefView'
+import { apiFetchReports, crowdOf, parseBrief, pickBrief } from './briefView'
+import { apiFetchGantt } from './taskGantt'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
   oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus, type DimSeries,
@@ -72,6 +73,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const repos = useAsync(pw, apiFetchRepos)
   const companion = useAsync(pw, apiFetchCompanion)
   const reports = useAsync(pw, apiFetchReports)
+  const gantt = useAsync(pw, apiFetchGantt)
 
   const dimLinks = useMemo(() => dimensionSiteLinks(sites), [sites])
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
@@ -136,6 +138,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const move = useMemo(() => bestMove(breakdown?.rows ?? [], companion.data), [breakdown, companion.data])
   const insight = useMemo(() => activityInsight(histData, companion.data), [histData, companion.data])
   const brief = useMemo(() => pickBrief(reports.data, todayIso), [reports.data, todayIso])
+  const briefParsed = useMemo(() => (brief ? parseBrief(brief.bodyMd, brief.date) : null), [brief])
+  const briefCrowd = useMemo(() => (brief ? crowdOf(gantt.data, brief.date) : null), [gantt.data, brief])
   const briefSt = blockState({ unlocked: on, loading: reports.loading, error: reports.error, hasData: reports.data !== null, empty: !brief, nowMs })
   const companionSt = blockState({
     unlocked: on, loading: companion.loading, error: companion.error, hasData: !!companion.data, nowMs,
@@ -189,7 +193,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         system={on && sysSt.state === 'fresh' ? light : null} onOpenSystem={() => setDrawer('ops')} />
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
       <PaidServicesSection st={svcSt} usage={usage.data} paid={paid.data} onOpen={() => setDrawer('svc')} onRequestUnlock={onRequestUnlock} />
-      <BriefSection st={briefSt} brief={brief} onRequestUnlock={onRequestUnlock} onRetry={reports.reload} />
+      <BriefSection st={briefSt} brief={brief} parsed={briefParsed} crowd={briefCrowd} onRequestUnlock={onRequestUnlock} onRetry={reports.reload} />
       <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} links={dimLinks} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
       <CompanionSection st={companionSt} data={companion.data} insight={insight} onRequestUnlock={onRequestUnlock} onRetry={companion.reload} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
