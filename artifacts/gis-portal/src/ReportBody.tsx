@@ -7,7 +7,7 @@ import { MarkdownView } from './MarkdownView'
 import { DailyScoreCard, ReportCharts, ScoreBars } from './ReportCharts'
 import { dailyScore } from './dailyScore'
 import { MilestoneCard } from './ReportMilestones'
-import { apiFetchTasksDone, buildMilestones } from './milestones'
+import { apiFetchDailyLife, apiFetchTasksDone, buildMilestones } from './milestones'
 import type { ReportScore } from './timelineApi'
 import { buildPeriodReport, inputFromData } from './periodStats'
 import { parseCaseFlow, parseEcho, parseReportSections, parseScoreSection, parseTaskLines, parseViz, splitEntries, type ReportSection } from './reportSections'
@@ -110,6 +110,7 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
   const food = useAsync(password, apiFetchFood)
   const trips = useAsync(password, apiFetchTrips)
   const tasksDone = useAsync(password, apiFetchTasksDone)
+  const life = useAsync(password, apiFetchDailyLife)
   const parsed = useMemo(() => parseReportSections(bodyMd), [bodyMd])
   const settled = (a: { data: unknown; error: boolean }) => a.data !== null || a.error
   const ready = !!password && settled(ideas) && settled(food) && settled(trips)
@@ -118,12 +119,12 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
     () => (ready ? buildPeriodReport(inputFromData(ideas.data, food.data?.places ?? null, trips.data?.trips ?? null), [startDate, endDate], taipeiTodayIso()) : null),
     [ready, ideas.data, food.data, trips.data, startDate, endDate],
   )
-  // 里程碑只等想法庫與完成任務；完成任務讀不到（或還沒部署）時照樣畫，任務格標「—」
-  const msReady = !!password && settled(ideas) && settled(tasksDone)
+  // 里程碑等想法庫、完成任務與生活項目；完成任務讀不到（或還沒部署）時照樣畫，任務格標「—」；生活項目讀不到時另外註明
+  const msReady = !!password && settled(ideas) && settled(tasksDone) && settled(life)
   const tasksMissing = tasksDone.data === null
   const milestones = useMemo(
-    () => (msReady ? buildMilestones(ideas.data?.ideas ?? [], tasksDone.data, level, [startDate, endDate], taipeiTodayIso()) : null),
-    [msReady, ideas.data, tasksDone.data, level, startDate, endDate],
+    () => (msReady ? buildMilestones(ideas.data?.ideas ?? [], tasksDone.data, level, [startDate, endDate], taipeiTodayIso(), life.data) : null),
+    [msReady, ideas.data, tasksDone.data, life.data, level, startDate, endDate],
   )
   // 日報的每日評分：80% 這天成果（里程碑本期＝這一天）＋20% AI 自評；完成任務讀不到時只算 AI 自評
   const score = useMemo(
@@ -142,7 +143,7 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
       </div>
       {raw ? md(bodyMd, '1.1rem') : (
         <>
-          {password && (milestones ? <div className="rp-band"><MilestoneCard m={milestones} tasksMissing={tasksMissing} onOpenDay={onOpenDay} /></div>
+          {password && (milestones ? <div className="rp-band"><MilestoneCard m={milestones} tasksMissing={tasksMissing} lifeMissing={life.data === null} onOpenDay={onOpenDay} /></div>
             : !msReady && <Skeleton lines={3} />)}
           {score && <div className="rp-band"><DailyScoreCard s={score} /></div>}
           {level === 'day' && reportScore && !radar && <div className="rp-band"><ScoreBars score={reportScore} /></div>}

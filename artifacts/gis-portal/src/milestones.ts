@@ -3,6 +3,7 @@
 // 「把里程碑設計擴大到 周 月 季 年報 同時顧及視覺化呈現」。設計：docs/milestones.md。
 //   成果＝完成任務（feed tasks-done）＋ 新想法（想法庫 bornAt）＋ 想法實行（想法庫 history 第一次 done），三項各算 1，不加權。
 // 使用者 2026-10-30：「日報也想照同樣方式看到具體案件」→ 每天另記標題（items），卡片與柱子的提示窗逐條列出。
+// 2026-10-30 起成果再加四項生活面向（見人、新店、旅行、運動），資料來自 GET /api/daily-life，與日分修正同一份。
 import type { IdeaItem } from './boardApi'
 import { tipText } from './reportsView'
 import { eachDay, prevRange, type Range } from './periodStats'
@@ -10,11 +11,15 @@ import { eachDay, prevRange, type Range } from './periodStats'
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 export type MsLevel = 'day' | 'week' | 'month' | 'quarter' | 'year'
-export type PartKey = 'tasks' | 'ideasNew' | 'ideasDone'
+export type PartKey = 'tasks' | 'ideasNew' | 'ideasDone' | 'social' | 'newPlaces' | 'tripDay' | 'workout'
 export const PARTS: ReadonlyArray<{ key: PartKey; icon: string; label: string; unit: string }> = [
   { key: 'tasks', icon: '✅', label: '完成任務', unit: '項' },
   { key: 'ideasNew', icon: '💡', label: '新想法', unit: '個' },
   { key: 'ideasDone', icon: '🚀', label: '想法實行', unit: '個' },
+  { key: 'social', icon: '🫶', label: '見家人朋友', unit: '天' },
+  { key: 'newPlaces', icon: '🍜', label: '去新店', unit: '間' },
+  { key: 'tripDay', icon: '🧳', label: '旅行', unit: '天' },
+  { key: 'workout', icon: '🏋️', label: '運動', unit: '天' },
 ]
 /** 走勢要畫幾期（含本期） */
 export const TREND_N: Record<MsLevel, number> = { day: 14, week: 12, month: 12, quarter: 8, year: 5 }
@@ -53,14 +58,34 @@ export async function apiFetchTasksDone(pw: string): Promise<TasksDone | null> {
   return parseTasksDone(await r.json())
 }
 
-// ── 每天的三項計數 ──
+// ── 資料：每天的生活項目（GET /api/daily-life，算法見 api-server lib/dailyLife.ts） ──
+export interface LifeDay { date: string; socialPeople: number; newPlaces: string[]; trip: string | null; workouts: string[] }
+export type DailyLife = Record<string, LifeDay>
+
+export function parseDailyLife(raw: unknown): DailyLife | null {
+  const days = (raw as { days?: unknown } | null)?.days
+  if (!Array.isArray(days)) return null
+  const out: DailyLife = {}
+  for (const d of days as LifeDay[]) if (d && typeof d.date === 'string' && DATE.test(d.date)) out[d.date] = d
+  return out
+}
+
+/** 還沒部署回 null；連不上丟錯 */
+export async function apiFetchDailyLife(pw: string): Promise<DailyLife | null> {
+  const r = await fetch(`${API_BASE}api/daily-life`, { headers: { 'x-admin-password': pw } })
+  if (r.status === 404) return null
+  if (!r.ok) throw new Error('Failed to fetch daily-life')
+  return parseDailyLife(await r.json())
+}
+
+// ── 每天的計數 ──
 export type Counts = Record<PartKey, number>
-/** 每項的具體標題（任務名稱、想法標題）；任務標題推送端沒給的日子是空陣列，數量照 Counts */
+/** 每項的具體標題（任務、想法、店名；一天算一次的生活項目帶日期，合併區間時才分得出來）；任務標題推送端沒給的日子是空陣列，數量照 Counts */
 export type Items = Record<PartKey, string[]>
 export interface DailyIndex { at: (date: string) => Counts; items: (date: string) => Items; tasksSince: string | null }
 
 /** 想法：bornAt 那天算一個新想法；history 裡第一次 done 那天算一個實行（重開又完成不重算） */
-export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null): DailyIndex {
+export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null, life: DailyLife | null = null): DailyIndex {
   const born: Record<string, string[]> = {}
   const done: Record<string, string[]> = {}
   for (const it of ideas) {
@@ -73,15 +98,35 @@ export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null):
   const byDate = tasks?.byDate ?? {}
   const titles = tasks?.titlesByDate ?? {}
   return {
-    at: (d) => ({ tasks: byDate[d] ?? 0, ideasNew: born[d]?.length ?? 0, ideasDone: done[d]?.length ?? 0 }),
-    items: (d) => ({ tasks: titles[d] ?? [], ideasNew: born[d] ?? [], ideasDone: done[d] ?? [] }),
+    at: (d) => {
+      const l = life?.[d]
+      return {
+        tasks: byDate[d] ?? 0, ideasNew: born[d]?.length ?? 0, ideasDone: done[d]?.length ?? 0,
+        social: l && l.socialPeople > 0 ? 1 : 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l && l.workouts.length > 0 ? 1 : 0,
+      }
+    },
+    items: (d) => {
+      const l = life?.[d]
+      const md = `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`
+      return {
+        tasks: titles[d] ?? [], ideasNew: born[d] ?? [], ideasDone: done[d] ?? [],
+        social: l && l.socialPeople > 0 ? [`${md} ${l.socialPeople} 位家人朋友`] : [],
+        newPlaces: l?.newPlaces ?? [],
+        tripDay: l?.trip ? [`${md} ${l.trip}`] : [],
+        workout: l && l.workouts.length > 0 ? [`${md} ${l.workouts.join('、')}`] : [],
+      }
+    },
     tasksSince: tasks?.since ?? null,
   }
 }
 
-const zero = (): Counts => ({ tasks: 0, ideasNew: 0, ideasDone: 0 })
-const add = (a: Counts, b: Counts): Counts => ({ tasks: a.tasks + b.tasks, ideasNew: a.ideasNew + b.ideasNew, ideasDone: a.ideasDone + b.ideasDone })
-export const totalOf = (c: Counts) => c.tasks + c.ideasNew + c.ideasDone
+const zero = (): Counts => ({ tasks: 0, ideasNew: 0, ideasDone: 0, social: 0, newPlaces: 0, tripDay: 0, workout: 0 })
+const add = (a: Counts, b: Counts): Counts => {
+  const out = zero()
+  for (const { key } of PARTS) out[key] = a[key] + b[key]
+  return out
+}
+export const totalOf = (c: Counts) => PARTS.reduce((s, p) => s + c[p.key], 0)
 const minDate = (a: string, b: string) => (a < b ? a : b)
 const shift = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)
 
@@ -94,7 +139,7 @@ export function sumRange(ix: DailyIndex, r: Range, today: string): Counts {
 
 /** 區間內每項的標題（由舊到新）；只算到今天 */
 export function itemsRange(ix: DailyIndex, r: Range, today: string): Items {
-  const out: Items = { tasks: [], ideasNew: [], ideasDone: [] }
+  const out: Items = { tasks: [], ideasNew: [], ideasDone: [], social: [], newPlaces: [], tripDay: [], workout: [] }
   const end = minDate(r[1], today)
   if (end < r[0]) return out
   for (const d of eachDay([r[0], end])) {
@@ -237,9 +282,9 @@ export interface Milestones {
   tasksSince: string | null
 }
 
-export function buildMilestones(ideas: readonly IdeaItem[], tasks: TasksDone | null, level: MsLevel, range: Range, today: string): Milestones | null {
+export function buildMilestones(ideas: readonly IdeaItem[], tasks: TasksDone | null, level: MsLevel, range: Range, today: string, life: DailyLife | null = null): Milestones | null {
   if (!(DATE.test(range[0]) && DATE.test(range[1])) || range[0] > range[1]) return null
-  const ix = dailyIndex(ideas, tasks)
+  const ix = dailyIndex(ideas, tasks, life)
   const trend = buckets(ix, level, range, today)
   const streak = streakEndingAt(ix, range[1], today)
   const longest = longestStreak(ix, range, today)

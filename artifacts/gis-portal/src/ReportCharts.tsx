@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { COLOR } from './theme'
 import type { PeriodReport } from './periodStats'
 import type { ReportScore } from './timelineApi'
-import { HALF_POINTS, IDEA_DONE_POINTS, type DailyScore } from './dailyScore'
+import { HALF_POINTS, IDEA_DONE_POINTS, SOCIAL_POINTS, lifeDetail, type DailyScore } from './dailyScore'
 import {
   FUNNEL_STEPS, SERIES_ROWS, cellLevel, delta, funnelRows, ganttBars, isEmptyReport, levelOf, pinPositions, rhythmCells, topCounts,
   type Delta, type RhythmLevel,
@@ -174,7 +174,7 @@ export function DailyScoreCard({ s }: { s: DailyScore }) {
         ))}
       </ul>
       <p className="hm-note">
-        {c ? `成果 ${s.points} 點＝任務 ${c.tasks}＋新想法 ${c.ideasNew}＋實行 ${c.ideasDone}×${IDEA_DONE_POINTS}；${HALF_POINTS} 點 50 分、${HALF_POINTS * 2} 點 75 分，越多越高。`
+        {c ? `成果 ${s.points} 點＝任務 ${c.tasks}＋新想法 ${c.ideasNew}＋實行 ${c.ideasDone}×${IDEA_DONE_POINTS}${lifeDetail(c) ? `＋${lifeDetail(c)}（見人、旅行、運動一次 ${SOCIAL_POINTS} 點，新店每間 1 點）` : ''}；${HALF_POINTS} 點 50 分、${HALF_POINTS * 2} 點 75 分，越多越高。`
           : '成果資料讀不到，這天只算 AI 自評。'}
         {s.ai === null && c ? '這天沒有 AI 自評，只算成果。' : ''}
       </p>

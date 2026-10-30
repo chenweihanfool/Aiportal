@@ -1,7 +1,8 @@
 // 每日評分：80% 當天成果＋20% AI 自評（日報 📊 段）。純函式；資料來自 milestones.ts 的 dailyIndex 與日報的 reportScore。
 // 使用者 2026-10-30：「每日評分目前只讓AI自己打分數 應該改成 當天的成果 (完成任務 +新想法 +想法實行) * 80% + AI自己打分數 * 20%
 // 這樣自己的努力才會反應比較多在分數上」；換算方式選「遞減曲線」。
-//   成果點數＝完成任務＋新想法＋想法實行×2（把想法做出來比完成一般任務少見）
+//   成果點數＝完成任務＋新想法＋想法實行×2（把想法做出來比完成一般任務少見）＋見人×2＋新店＋旅行×2＋運動×2
+//   後四項是生活面向（使用者 2026-10-30 選定點數）：見人、旅行、運動一天算一次，新店每間算一次；旅行或陪家人的日子才不會偏低
 //   成果分＝100×(1−0.5^(點數÷3))：1 點 21、3 點 50、6 點 75、9 點 88，做越多越高但不會一下就滿分
 // 幸福指數的心智維度照舊用 AI 自評（想法已在心智的 80% 裡，不重複計）；2026-10-30 起每日評分另以「日分修正」連到幸福指數，
 // 由 api-server lib/dailyScore.ts 計算（兩邊常數由 dailyScore.test.ts 比對）。
@@ -10,11 +11,16 @@ import type { Counts } from './milestones'
 export const ACHIEVEMENT_WEIGHT = 0.8
 export const AI_WEIGHT = 0.2
 export const IDEA_DONE_POINTS = 2
+export const SOCIAL_POINTS = 2
+export const NEW_PLACE_POINTS = 1
+export const TRIP_DAY_POINTS = 2
+export const WORKOUT_POINTS = 2
 /** 幾點成果拿 50 分 */
 export const HALF_POINTS = 3
 
 export function achievementPoints(c: Counts): number {
   return c.tasks + c.ideasNew + IDEA_DONE_POINTS * c.ideasDone
+    + SOCIAL_POINTS * c.social + NEW_PLACE_POINTS * c.newPlaces + TRIP_DAY_POINTS * c.tripDay + WORKOUT_POINTS * c.workout
 }
 
 export function achievementScore(points: number): number {
@@ -41,10 +47,17 @@ export function dailyScore(ai: number | null | undefined, counts: Counts | null)
   return { total: Math.round(total), achievement, points, counts, ai: aiOk }
 }
 
-/** 一行說明：「72＝成果 75×80%＋AI 60×20%（任務 3・新想法 1・實行 1）」 */
+/** 生活項目裡有發生的部分：「見人 1・新店 2」；都沒有＝空字串 */
+export function lifeDetail(c: Counts): string {
+  return [['見人', c.social], ['新店', c.newPlaces], ['旅行', c.tripDay], ['運動', c.workout]]
+    .filter(([, n]) => Number(n) > 0).map(([label, n]) => `${label} ${n}`).join('・')
+}
+
+/** 一行說明：「72＝成果 75×80%＋AI 60×20%（任務 3・新想法 1・實行 1・見人 1）」 */
 export function dailyScoreLine(s: DailyScore): string {
   const c = s.counts
-  const detail = c ? `（任務 ${c.tasks}・新想法 ${c.ideasNew}・實行 ${c.ideasDone}）` : ''
+  const life = c ? lifeDetail(c) : ''
+  const detail = c ? `（任務 ${c.tasks}・新想法 ${c.ideasNew}・實行 ${c.ideasDone}${life ? `・${life}` : ''}）` : ''
   if (s.achievement !== null && s.ai !== null) return `${s.total}＝成果 ${s.achievement}×80%＋AI ${Math.round(s.ai)}×20%${detail}`
   if (s.achievement !== null) return `${s.total}＝成果 ${s.achievement}（這天沒有 AI 自評）${detail}`
   return `${s.total}＝AI 自評（成果資料讀不到）`

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
 import {
-  averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
+  averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseDailyLife, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
   type TasksDone,
 } from './milestones'
 
@@ -32,8 +32,8 @@ describe('任務與想法的標題（提示窗）', () => {
   it('items 依日期列出任務、新想法、實行的標題；itemsRange 合併區間', () => {
     const ix = dailyIndex([idea('想法A', '2026-10-20'), idea('想法B', '2026-10-01', [{ status: 'done', at: '2026-10-21' }])],
       { ...tasks({ '2026-10-20': 2 }), titlesByDate: { '2026-10-20': ['報差', '外業'] } })
-    expect(ix.items('2026-10-20')).toEqual({ tasks: ['報差', '外業'], ideasNew: ['想法A'], ideasDone: [] })
-    expect(itemsRange(ix, ['2026-10-20', '2026-10-31'], '2026-10-21')).toEqual({ tasks: ['報差', '外業'], ideasNew: ['想法A'], ideasDone: ['想法B'] })
+    expect(ix.items('2026-10-20')).toMatchObject({ tasks: ['報差', '外業'], ideasNew: ['想法A'], ideasDone: [] })
+    expect(itemsRange(ix, ['2026-10-20', '2026-10-31'], '2026-10-21')).toMatchObject({ tasks: ['報差', '外業'], ideasNew: ['想法A'], ideasDone: ['想法B'] })
     expect(buckets(ix, 'day', ['2026-10-21', '2026-10-21'], '2026-10-21', 1)[0].items.ideasDone).toEqual(['想法B'])
   })
   it('partTip：逐條、超過 8 項寫另 N 項、標題比數量少時補一句、沒資料寫還沒有資料', () => {
@@ -46,22 +46,51 @@ describe('任務與想法的標題（提示窗）', () => {
   })
 })
 
+describe('生活項目', () => {
+  const life = parseDailyLife({ days: [
+    { date: '2026-10-20', socialPeople: 3, newPlaces: ['甲店', '乙店'], trip: '花蓮', workouts: ['深蹲', '臥推'] },
+    { date: '2026-10-21', socialPeople: 0, newPlaces: [], trip: '花蓮', workouts: [] },
+    { date: 'x', socialPeople: 1, newPlaces: [], trip: null, workouts: [] },
+  ] })
+  const ix = dailyIndex([], tasks({ '2026-10-20': 1 }), life)
+  it('parseDailyLife：丟壞列；格式不對回 null', () => {
+    expect(Object.keys(life!)).toEqual(['2026-10-20', '2026-10-21'])
+    expect(parseDailyLife({ days: 'x' })).toBeNull()
+  })
+  it('見人、旅行、運動一天算一次，新店每間算一次', () => {
+    expect(ix.at('2026-10-20')).toEqual({ tasks: 1, ideasNew: 0, ideasDone: 0, social: 1, newPlaces: 2, tripDay: 1, workout: 1 })
+    expect(ix.at('2026-10-22')).toMatchObject({ social: 0, newPlaces: 0, tripDay: 0, workout: 0 })
+  })
+  it('提示窗列出具體項目；區間合計與合計數都含生活項目', () => {
+    expect(ix.items('2026-10-20')).toMatchObject({ social: ['10/20 3 位家人朋友'], newPlaces: ['甲店', '乙店'], tripDay: ['10/20 花蓮'], workout: ['10/20 深蹲、臥推'] })
+    expect(itemsRange(ix, ['2026-10-20', '2026-10-21'], TODAY).tripDay).toEqual(['10/20 花蓮', '10/21 花蓮'])
+    expect(partTip('tripDay', 2, ['10/20 花蓮', '10/21 花蓮'])).toBe('🧳 旅行 2\n• 10/20 花蓮\n• 10/21 花蓮')
+    expect(buckets(ix, 'day', ['2026-10-21', '2026-10-21'], TODAY, 1)[0].total).toBe(1)
+  })
+  it('只有生活項目的日子也算連續有成果', () => {
+    expect(streakEndingAt(ix, '2026-10-21', TODAY)).toBe(2)
+  })
+  it('沒有生活資料時維持舊算法', () => {
+    expect(dailyIndex([], tasks({ '2026-10-20': 1 })).at('2026-10-20')).toEqual({ tasks: 1, ideasNew: 0, ideasDone: 0, social: 0, newPlaces: 0, tripDay: 0, workout: 0 })
+  })
+})
+
 describe('dailyIndex', () => {
   it('新想法看 bornAt、實行看第一次 done（重開再完成不重算）、任務看 feed', () => {
     const ix = dailyIndex([
       idea('a', '2026-10-20'),
       idea('b', '2026-10-01', [{ status: 'done', at: '2026-10-20T09:00:00+08:00' }, { status: 'doing', at: '2026-10-21' }, { status: 'done', at: '2026-10-22' }]),
     ], tasks({ '2026-10-20': 3 }))
-    expect(ix.at('2026-10-20')).toEqual({ tasks: 3, ideasNew: 1, ideasDone: 1 })
-    expect(ix.at('2026-10-22')).toEqual({ tasks: 0, ideasNew: 0, ideasDone: 0 })
+    expect(ix.at('2026-10-20')).toMatchObject({ tasks: 3, ideasNew: 1, ideasDone: 1 })
+    expect(ix.at('2026-10-22')).toMatchObject({ tasks: 0, ideasNew: 0, ideasDone: 0 })
   })
 })
 
 describe('sumRange／buckets', () => {
   const ix = dailyIndex([idea('a', '2026-10-24'), idea('b', '2026-10-26')], tasks({ '2026-10-20': 2, '2026-10-25': 1 }))
   it('未來的日子不算', () => {
-    expect(sumRange(ix, ['2026-10-19', '2026-10-31'], TODAY)).toEqual({ tasks: 3, ideasNew: 1, ideasDone: 0 })
-    expect(sumRange(ix, ['2026-11-01', '2026-11-30'], TODAY)).toEqual({ tasks: 0, ideasNew: 0, ideasDone: 0 })
+    expect(sumRange(ix, ['2026-10-19', '2026-10-31'], TODAY)).toMatchObject({ tasks: 3, ideasNew: 1, ideasDone: 0 })
+    expect(sumRange(ix, ['2026-11-01', '2026-11-30'], TODAY)).toMatchObject({ tasks: 0, ideasNew: 0, ideasDone: 0 })
   })
   it('日報 14 根、由舊到新、最後一根是本期', () => {
     const bs = buckets(ix, 'day', ['2026-10-25', '2026-10-25'], TODAY)

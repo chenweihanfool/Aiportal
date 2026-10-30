@@ -65,4 +65,11 @@
 - 成果點數＝完成任務＋新想法＋想法實行×2；成果分＝100×(1−0.5^(點數÷3))（1 點 21、3 點 50、6 點 75、9 點 88）。
 - 每日評分＝0.8×成果分＋0.2×AI 自評（日報 📊 段，五項×5）；沒有日報只算成果，成果讀不到只算 AI 自評。
 - 用在：時間軸的「日」徽章、日報對話框標頭、日報的 ⭐ 每日評分卡。計算在 `artifacts/gis-portal/src/dailyScore.ts`（測試 `dailyScore.test.ts`）。
+- 生活面向（2026-10-30，使用者選「見人 2、新店 1、旅行 2、運動 2」）：成果點數再加 見人×2＋新店＋旅行×2＋運動×2。見人、旅行、運動一天算一次，新店每間算一次；旅行或陪家人的日子才不會因為沒有任務與想法而偏低。
+  - 見人：feed `companion` 的 `socialDays`（已排除同事），只有近 120 天，更早算 0。
+  - 新店：`hermes_places` 裡 `kind=food`、`status=visited／favorite` 的 `visitedAt`；同一間再去、`visitedAt` 更新時算在新日期。
+  - 旅行：`hermes_trips` 非 `planned` 的趟次，`start` 到 `end`（不晚於今天）每一天。
+  - 運動：FitnessForge `/api/public/summary` 的 `workoutDays`，只算手動記錄；步數是週資料，不算。
+  - 逐日資料由 api-server `lib/dailyLife.ts` 算一次，日分修正直接用，前端讀 `GET /api/daily-life`（需解鎖）；任一來源讀不到就那項算 0，當天與基準線一起少，修正不偏。
+  - 🏁 里程碑卡一起多這四項：合計、連續天數、年度關卡都算；提示窗列出店名、趟次、動作。
 - 不用在：幸福指數的心智維度仍是 0.8×想法分數＋0.2×AI 自評（`api-server/src/lib/mindCombined.ts`），想法已在心智的 80% 裡，不重複計。
