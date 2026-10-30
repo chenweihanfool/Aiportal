@@ -207,6 +207,38 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 原本只發 Telegram 的報告（目前是明日報告）。推送端 kb-pipeline scripts/report-publish.py，由報告班次呼叫；每種 key 留最近 7 份。
+  "hermes-reports": {
+    version: 1,
+    description: "原本只發 Telegram 的 HERMES 報告（明日報告等），每種保留最近幾份",
+    maxBytes: 512 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "hermes-reports feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "reports"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        reports: {
+          type: "array",
+          maxItems: 60,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["key", "title", "date", "bodyMd", "createdAt"],
+            properties: {
+              key: { type: "string", pattern: "^[a-z][a-z0-9-]{1,30}$" },
+              title: { type: "string", minLength: 1, maxLength: 80 },
+              date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              bodyMd: { type: "string", minLength: 1, maxLength: 20000 },
+              createdAt: { type: "string", minLength: 10, maxLength: 40 },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,
