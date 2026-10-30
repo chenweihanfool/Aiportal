@@ -27,9 +27,33 @@ export interface HhiBreakdown {
   hasMissing: boolean
   isFinal: boolean
   stale: boolean
+  /** 今天的每日評分與它對幸福指數的修正；讀不到＝null */
+  day: HhiDay | null
+}
+
+export interface HhiDay {
+  total: number
+  /** 自己近 28 天平均；基準不足＝null */
+  baseline: number | null
+  /** 幸福指數修正（分） */
+  adjust: number
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+function hhiDayOf(raw: unknown): HhiDay | null {
+  const d = raw as Record<string, unknown> | null | undefined
+  const total = num(d?.['total'])
+  return d && total !== null ? { total, baseline: num(d['baseline']), adjust: num(d['adjust']) ?? 0 } : null
+}
+
+/** 「今日 72・比平常高 20・幸福指數 +3」；基準不足時只講今日分 */
+export function dayLinkText(d: HhiDay): string {
+  if (d.baseline === null) return `今日 ${d.total}`
+  const diff = Math.round(d.total - d.baseline)
+  const vs = diff === 0 ? '和平常差不多' : `比平常${diff > 0 ? '高' : '低'} ${Math.abs(diff)}`
+  return d.adjust === 0 ? `今日 ${d.total}・${vs}` : `今日 ${d.total}・${vs}・幸福指數 ${d.adjust > 0 ? '+' : ''}${d.adjust}`
+}
 
 export function buildHhiBreakdown(data: Record<string, unknown> | undefined): HhiBreakdown | null {
   if (!data) return null
@@ -53,6 +77,7 @@ export function buildHhiBreakdown(data: Record<string, unknown> | undefined): Hh
     hasMissing: rows.some((r) => r.value === null),
     isFinal: data['isSnapshotFinal'] === true,
     stale: data['usingStaleData'] === true,
+    day: hhiDayOf(data['day']),
   }
 }
 

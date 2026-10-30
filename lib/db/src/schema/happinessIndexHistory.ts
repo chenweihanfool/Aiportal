@@ -14,14 +14,10 @@ export const happinessIndexHistoryTable = pgTable("happiness_index_history", {
   weakestComponent: text("weakest_component").notNull(),
   availableComponents: text("available_components").array().notNull(),
   configVersion: text("config_version").notNull(),
-  // HHI v3 (2026-09-01) 百分位正規化——六個維度各自的公式尺度差很大（有些
-  // 公式正常使用下很難超過 60-70，有些輕鬆就上 90），直接把原始 0-100 分數
-  // 加權平均，「80 分」在六個維度代表完全不同的意義。這六欄存的是「正規化
-  // 之前」的原始分數，只有這支 23:55 快照 job 會寫——用來讓之後的日子可以
-  // 對照「自己過去 90 天的原始分數」排百分位，見 lib/happinessIndex.ts 的
-  // percentileRank()。calmRaw 存的已經是 100-忙碌指數（跟其他五個維度一樣
-  // 「越高越好」的方向），不是原始忙碌指數本身。都是 nullable——那天那個維度
-  // 沒有資料就是 null，不是假的 0。
+  // 六個面向的公式分，只有 23:55 快照 job 會寫。2026-10-30 起這就是面向分數
+  // （之前用它排滾動 90 天百分位，見 lib/happinessDimensionHistory.ts）。
+  // calmRaw 存的已經是 100-忙碌指數（跟其他五個維度一樣「越高越好」的方向），
+  // 不是原始忙碌指數本身。都是 nullable——那天那個維度沒有資料就是 null，不是假的 0。
   lifeFreedomRaw: real("life_freedom_raw"),
   fitnessHabitRaw: real("fitness_habit_raw"),
   calmRaw: real("calm_raw"),
@@ -32,6 +28,11 @@ export const happinessIndexHistoryTable = pgTable("happiness_index_history", {
   // 23:55 快照時由 hermes_ideas_snapshot 現算（lib/ideasMind.ts）。並行兩週後若切換，
   // 心智維度的百分位會改用這一欄的歷史，所以從現在起就每天存。
   mindIdeasRaw: real("mind_ideas_raw"),
+  // 每日評分與日分修正（2026-10-30 起，見 api-server lib/dailyScore.ts）；想法庫或完成任務讀不到＝null
+  dayScore: smallint("day_score"),
+  dayAchievement: smallint("day_achievement"),
+  dayAi: smallint("day_ai"),
+  dayAdjust: real("day_adjust"),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

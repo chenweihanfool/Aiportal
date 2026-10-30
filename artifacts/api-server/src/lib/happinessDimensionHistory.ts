@@ -1,17 +1,16 @@
-// 每面向歷史：把 happiness_index_history 的六個 *_raw（百分位正規化之前）重算成
-// 「當天原本會顯示在面向卡上的正規化分數」。
+// 每面向分數：happiness_index_history 的六個 *_raw 就是面向分數（公式算出的 0–100 絕對分）。
 //
-// 與 /api/dashboard 共用同一套規則（summarySources.ts 的 extractHappinessResult 也走這裡）：
-//   - 視窗＝該列「之前」最近 PERCENTILE_WINDOW_DAYS 列（是「列」不是日曆天：漏快照的日子不會把視窗拉長）
-//   - 視窗內該面向為 null 的列不計入；不足 MIN_HISTORY_DAYS_FOR_PERCENTILE 筆就退回原始分數（clamp 0-100 後四捨五入）
-//   - 心智只取 MIND_COMBINED_SINCE 起的列（之前是日記篇數版，不同一把尺）
-//   - 社交：評估日在 SOCIAL_V2_SINCE 當天或之後時，只取該日起的列（之前是 v1 公式：7 天窗口、封頂制，不同一把尺）
-//   - 旅遊不排百分位，直接用原始分數（ABSOLUTE_DIMENSIONS）：旅遊分數在兩次旅行之間每天遞減，
-//     拿今天跟過去排名幾乎天天是「近 90 天最低」＝0，與實際狀態對不起來（2026-10-26 卡片 0、走勢 74）。
-//     旅遊公式本身就有絕對目標（3 天內回來＝滿分、180 天 20 天行程＝滿分、90 天 6 間美食＝滿分），原始分數即可讀。
+// 2026-10-30 統一標準（使用者：「6大面向分數意義不同 有些是百分比 有些是分數 應該統一標準 我覺得用分數」）：
+// 拿掉滾動 90 天排名，六個面向都直接用公式分，每個分數都有自己的滿分條件，長期進步看得到。
+// 原本想替財務、身體、從容加一條校準線，但實際分布（2026-09-03～10-29，HERMES 回報）是財務 P10 63.5／P50 67／P90 69、
+// 身體 32／56／75、從容 57／63／86：中位數本來就接近，財務的窄幅波動再拉開只會放大雜訊，所以不校準。
+//
+// 不同一把尺的舊列顯示 null，不換算：
+//   - 社交 SOCIAL_V2_SINCE 之前是 v1 公式（7 天窗口、封頂制）
+//   - 心智 MIND_V3_SINCE 之前的想法分數飽和（連續 20 天 100），分數等於只看 AI 自評
 // 這支檔只有純函式、不碰資料庫，方便單元測試。
-import { PERCENTILE_WINDOW_DAYS, clamp, percentileRank, roundHalfUp } from "./happinessIndex";
-import { MIND_COMBINED_SINCE } from "./mindCombined";
+import { clamp, roundHalfUp } from "./happinessIndex";
+import { MIND_V3_SINCE } from "./mindCombined";
 
 /** 社交分數改用 v2 公式（14 天窗口、同事降權、遞減報酬曲線，見 socialIndex.ts）的第一天。 */
 export const SOCIAL_V2_SINCE = "2026-10-27";
@@ -20,13 +19,9 @@ export const SOCIAL_V2_SINCE = "2026-10-27";
 export const DIMENSION_KEYS = ["lifeFreedom", "fitness", "calm", "mind", "social", "travel"] as const;
 export type DimensionKey = (typeof DIMENSION_KEYS)[number];
 
-/** 某天（或某個視窗）六個面向的原始分數；calm 已是「100−忙碌指數」的方向。 */
+/** 某天六個面向的原始分數；calm 已是「100−忙碌指數」的方向。 */
 export type DimensionRaws = Record<DimensionKey, number | null>;
 export type DimensionScores = Record<DimensionKey, number | null>;
-export type DimensionHistory = Record<DimensionKey, number[]>;
-
-/** 不排百分位、直接顯示原始分數（clamp 0-100 後四捨五入）的面向；理由見檔頭。 */
-export const ABSOLUTE_DIMENSIONS: ReadonlySet<DimensionKey> = new Set<DimensionKey>(["travel"]);
 
 /** happiness_index_history 一列裡本模組要用的欄位（欄名對照資料表）。 */
 export interface RawHistoryRow {
@@ -38,15 +33,6 @@ export interface RawHistoryRow {
   travelRaw: number | null;
   socialRaw: number | null;
 }
-
-export const EMPTY_DIMENSION_HISTORY: DimensionHistory = {
-  lifeFreedom: [],
-  fitness: [],
-  calm: [],
-  mind: [],
-  social: [],
-  travel: [],
-};
 
 export function rawsOfRow(row: RawHistoryRow): DimensionRaws {
   return {
@@ -61,59 +47,27 @@ export function rawsOfRow(row: RawHistoryRow): DimensionRaws {
 
 const isNum = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 
-/**
- * 把一個視窗的列（順序不拘）整理成每面向的原始分數陣列。心智只取 MIND_COMBINED_SINCE 起的列。
- * asOfDate＝評估日（不給＝不做社交換尺的過濾）：評估日 ≥ SOCIAL_V2_SINCE 時，社交只取該日起的列。
- */
-export function buildDimensionHistory(windowRows: RawHistoryRow[], asOfDate?: string): DimensionHistory {
-  const socialRescaled = asOfDate !== undefined && String(asOfDate) >= SOCIAL_V2_SINCE;
-  const out: DimensionHistory = { lifeFreedom: [], fitness: [], calm: [], mind: [], social: [], travel: [] };
-  for (const row of windowRows) {
-    const raws = rawsOfRow(row);
-    for (const key of DIMENSION_KEYS) {
-      if (key === "mind" && String(row.date) < MIND_COMBINED_SINCE) continue;
-      if (key === "social" && socialRescaled && String(row.date) < SOCIAL_V2_SINCE) continue;
-      const v = raws[key];
-      if (isNum(v)) out[key].push(v);
-    }
-  }
-  return out;
-}
-
-/** 單日：每個面向的原始分數對視窗排百分位（ABSOLUTE_DIMENSIONS 直接用原始分數）；原始分數為 null＝null。dashboard 與歷史接口共用。 */
-export function normalizeDimensions(raws: DimensionRaws, history: DimensionHistory): DimensionScores {
+/** 原始分數 → 面向分數（clamp 0-100 後四捨五入）；原始分數為 null＝null。dashboard 與歷史接口共用。 */
+export function scoresOfRaws(raws: DimensionRaws): DimensionScores {
   const out = {} as DimensionScores;
   for (const key of DIMENSION_KEYS) {
     const v = raws[key];
-    if (!isNum(v)) out[key] = null;
-    else out[key] = ABSOLUTE_DIMENSIONS.has(key) ? roundHalfUp(clamp(v, 0, 100)) : percentileRank(v, history[key]);
+    out[key] = isNum(v) ? roundHalfUp(clamp(v, 0, 100)) : null;
   }
   return out;
 }
 
-// percentileRank 本身回整數，所以保留一位小數不會改值；留著是為了契約穩定。
-const round1 = (v: number | null): number | null => (v === null ? null : Math.round(v * 10) / 10);
-
-/**
- * 由舊到新排好的列（前面是暖機、後面是要回傳的），算出最後 `returnCount` 列各自的面向正規化分數。
- * 每一列的視窗只看它「之前」的 PERCENTILE_WINDOW_DAYS 列，所以不會偷看未來。
- * 心智在 MIND_COMBINED_SINCE 之前的列＝null（當時的 mind_raw 是不同一把尺，無法在現行規則下重算）。
- */
+/** 由舊到新排好的列，回傳最後 `returnCount` 列的面向分數；不同一把尺的舊列為 null（見檔頭）。 */
 export function computeDimensionSeries(
   rowsAsc: RawHistoryRow[],
-  returnCount: number,
-  windowDays: number = PERCENTILE_WINDOW_DAYS
+  returnCount: number
 ): Array<{ date: string; components: DimensionScores }> {
   const start = Math.max(0, rowsAsc.length - Math.max(0, Math.floor(returnCount)));
-  const result: Array<{ date: string; components: DimensionScores }> = [];
-  for (let i = start; i < rowsAsc.length; i++) {
-    const row = rowsAsc[i]!;
-    const history = buildDimensionHistory(rowsAsc.slice(Math.max(0, i - windowDays), i), String(row.date));
-    const scores = normalizeDimensions(rawsOfRow(row), history);
-    if (String(row.date) < MIND_COMBINED_SINCE) scores.mind = null;
-    const components = {} as DimensionScores;
-    for (const key of DIMENSION_KEYS) components[key] = round1(scores[key]);
-    result.push({ date: row.date, components });
-  }
-  return result;
+  return rowsAsc.slice(start).map((row) => {
+    const date = String(row.date);
+    const components = scoresOfRaws(rawsOfRow(row));
+    if (date < MIND_V3_SINCE) components.mind = null;
+    if (date < SOCIAL_V2_SINCE) components.social = null;
+    return { date: row.date, components };
+  });
 }

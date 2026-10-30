@@ -26,7 +26,7 @@ export function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboa
     return (
       <div>
         <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steelDim, marginBottom: '0.6rem', lineHeight: 1.6 }}>
-          {rawToScoreText(raw, normalized, def.absolute)}
+          {rawToScoreText(raw, normalized)}
         </div>
         {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: COLOR.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
         <Body data={data} />

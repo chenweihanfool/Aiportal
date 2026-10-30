@@ -1,7 +1,7 @@
 // 六個面向的摘要內容與卡片（財務／身體／從容／旅遊的 *SummaryBody，心智、社交的明細與卡片）。#dim/<key> 面向頁也用這裡的明細元件。
 import { useState } from 'react'
 import { COLOR, FONT } from './theme'
-import { DIMENSIONS, dimensionBySubsystem, dimensionOf, type DimensionDef } from './dimensions'
+import { DIMENSIONS, dimensionOf, type DimensionDef } from './dimensions'
 import { Gauge } from './Gauge'
 import { rawToScoreText } from './dimensionPage'
 import { MIND_SCORE_BANDS, SOCIAL_SCORE_BANDS, bandTone, formatMinutesAgo, formatPct, formatTWD, heroTone } from './format'
@@ -173,7 +173,7 @@ export const SUMMARY_BODIES: Record<string, (props: { data: Record<string, unkno
 const subsystemMap = (pick: (d: DimensionDef) => string | null): Record<string, string> =>
   Object.fromEntries(DIMENSIONS.filter(d => d.detail === 'subsystem' && pick(d) !== null).map(d => [d.subsystemId, pick(d)!]))
 
-/** 原始分數欄位（未正規化，只在詳細數據裡對照顯示；vikunja 的 busyIndex 是「越高越忙」） */
+/** 子系統原始值欄位（只在詳細數據裡對照顯示；vikunja 的 busyIndex 是「越高越忙」） */
 export const DIMENSION_HERO_FIELD: Record<string, string> = subsystemMap(d => d.rawField)
 
 // HHI v3 (2026-09-01) — the six dimensions come from four independently
@@ -246,7 +246,7 @@ export function DimensionGauge({
           {expanded && (
             <div style={{ marginTop: '0.5rem' }}>
               <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-                {rawToScoreText(rawHero, normalizedScore, dimensionBySubsystem(summary.subsystemId)?.absolute)}
+                {rawToScoreText(rawHero, normalizedScore)}
               </div>
               <Body data={data} />
             </div>
@@ -277,14 +277,14 @@ export function MindDetailBody({ hhiSummary }: { hhiSummary: DashboardSummary | 
   const normalizedScore = typeof hhiSummary?.data?.['mindScore'] === 'number' ? hhiSummary.data['mindScore'] as number : null
   const rep = mc?.report ?? null
   const items = [
-    { label: '想法分數（80%）', value: mc?.ideas != null ? mc.ideas.toFixed(1) : '—', formula: '產生 40%（近 7 天新想法 ÷ 過去 8 週每週中位數）＋ 實行 60%（近 28 天實行 ÷ 有機會實行的，達 20% 算滿分）；明細見 HERMES 戰情室想法庫' },
+    { label: '想法分數（80%）', value: mc?.ideas != null ? mc.ideas.toFixed(1) : '—', formula: '產生 40%（近 7 天新想法，6 個＝50 分）＋ 實行 60%（近 28 天實行，8 個＝50 分），都是遞減曲線；回補的舊想法不算；明細見 HERMES 戰情室想法庫' },
     { label: rep ? `日報分數（20%，${rep.date.slice(5)}）` : '日報分數（20%）', value: rep ? String(rep.total) : '—', formula: '日報最後的 📊 評分段：推進／決策／卡點／覺察／能量 各 0–4，加總 × 5；取今天或昨天最新的一份（日報每晚 22:00 產出、約 10 分鐘內推上來，所以 22:10 以前用的是昨天那份）' },
   ]
 
   return (
     <>
             <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-              原始分數（未正規化）：{mc?.score != null ? mc.score.toFixed(1) : '—'}　→　對照近 90 天百分位 = {normalizedScore ?? '—'}
+              面向分數 = {normalizedScore ?? '—'}（公式分 {mc?.score != null ? mc.score.toFixed(1) : '—'}）
             </div>
             <SupportStats items={items} />
             {rep && (
@@ -373,7 +373,7 @@ export function SocialDetailBody({ summary, hhiSummary }: { summary: DashboardSu
   return (
     <>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
-        {rawToScoreText(socialScore, normalizedScore, false)}
+        {rawToScoreText(socialScore, normalizedScore)}
       </div>
       <SupportStats items={socialItems} />
       <FormulaPanel rows={[

@@ -1,7 +1,18 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { achievementPoints, achievementScore, dailyScore, dailyScoreLine } from './dailyScore'
+import { ACHIEVEMENT_WEIGHT, AI_WEIGHT, HALF_POINTS, IDEA_DONE_POINTS, achievementPoints, achievementScore, dailyScore, dailyScoreLine } from './dailyScore'
 
 const c = (tasks: number, ideasNew: number, ideasDone: number) => ({ tasks, ideasNew, ideasDone })
+
+describe('前後端公式一致', () => {
+  it('常數與 api-server lib/dailyScore.ts 相同', () => {
+    const src = readFileSync(resolve(__dirname, '../../api-server/src/lib/dailyScore.ts'), 'utf8')
+    for (const [name, v] of Object.entries({ ACHIEVEMENT_WEIGHT, AI_WEIGHT, IDEA_DONE_POINTS, HALF_POINTS })) {
+      expect(src, name).toContain(`export const ${name} = ${v};`)
+    }
+  })
+})
 
 describe('成果分（遞減曲線）', () => {
   it('想法實行算 2 點；3 點 50、6 點 75、0 點 0', () => {

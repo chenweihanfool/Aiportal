@@ -119,7 +119,7 @@ export async function apiFetchBoardDiskHistory(pw: string, days = 30): Promise<B
 export interface HhiHistoryPoint {
   date: string
   displayedScore: number
-  /** 各面向當天的正規化分數（0-100；沒資料＝null）。key 同 /api/dashboard hhi 的面向 id（lifeFreedom／fitness／calm／mind／social／travel）。舊 API 沒有這欄。 */
+  /** 各面向當天的分數（0-100；沒資料＝null）。key 同 /api/dashboard hhi 的面向 id（lifeFreedom／fitness／calm／mind／social／travel）。舊 API 沒有這欄。 */
   components?: Record<string, number | null>
 }
 
@@ -204,8 +204,8 @@ export interface MindCombined {
 }
 export interface IdeasMind {
   score: number
-  birth: { score: number; born7: number; baseline: number; weekly: number[] }
-  action: { score: number; done28: number; eligible: number; rate: number; target: number }
+  birth: { score: number; born7: number; half: number; weekly: number[] }
+  action: { score: number; done28: number; half: number }
   formula: string
 }
 

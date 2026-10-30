@@ -477,7 +477,7 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
         <div data-testid="mind-combined" style={{ color: COLOR.ink, fontWeight: 600 }}>🧮 心智分數<span style={{ fontFamily: FONT.mono, color: COLOR.amber, fontSize: '1.2rem', marginLeft: 8 }}>{combined?.score != null ? combined.score.toFixed(1) : '—'}</span>
           <Chip color={COLOR.ok}>計入幸福指數</Chip></div>
         <div>＝ 想法 {mind.score.toFixed(1)} × 80%{rep ? ` ＋ 日報 ${rep.total} × 20%` : '（還沒有日報分數，只用想法分數）'}</div>
-        <div style={{ color: COLOR.steelDim }}>想法：產生 {mind.birth.score.toFixed(0)} × 40%（近 7 天新想法 <b style={{ color: COLOR.ink }}>{mind.birth.born7}</b> 個 ÷ 過去 8 週每週中位數 <b style={{ color: COLOR.ink }}>{mind.birth.baseline}</b>）＋ 實行 {mind.action.score.toFixed(0)} × 60%（近 28 天實行 <b style={{ color: COLOR.ink }}>{mind.action.done28}</b> ÷ 有機會實行的 <b style={{ color: COLOR.ink }}>{mind.action.eligible}</b>，{(mind.action.rate * 100).toFixed(1)}%，達 {Math.round(mind.action.target * 100)}% 算滿分）</div>
+        <div style={{ color: COLOR.steelDim }}>想法：產生 {mind.birth.score.toFixed(0)} × 40%（近 7 天新想法 <b style={{ color: COLOR.ink }}>{mind.birth.born7}</b> 個，{mind.birth.half} 個＝50 分）＋ 實行 {mind.action.score.toFixed(0)} × 60%（近 28 天實行 <b style={{ color: COLOR.ink }}>{mind.action.done28}</b> 個，{mind.action.half} 個＝50 分）；回補的舊想法不算</div>
         {rep && (
           <div data-testid="mind-report" style={{ color: COLOR.steelDim }} title={rep.parts.map(p => `${p.label} ${p.value}：${p.note}`).join('\n')}>
             📊 日報（{rep.date.slice(5)}）{rep.parts.map(p => `${p.label} ${p.value}`).join('・')}</div>
@@ -672,7 +672,7 @@ function HhiCard({ pw, data, toneOf }: { pw: string; data: Record<string, unknow
           <div className="bd-chain">
             <span title="六個維度 今日值×權重 的加總">加權平均 <b>{b.base !== null ? b.base.toFixed(1) : '—'}</b></span>
             <i>→</i>
-            <span title={`最弱項${b.weakestLabel ? `（${b.weakestLabel}）` : ''} ${b.weakestScore ?? '—'} 分拉低後`}>短板修正 <b>{b.afterPenalty ?? '—'}</b></span>
+            <span title={`最弱項${b.weakestLabel ? `（${b.weakestLabel}）` : ''} ${b.weakestScore ?? '—'} 分拉低後`}>短板修正{b.day && b.day.adjust !== 0 ? `＋日分 ${b.day.adjust}` : ''} <b>{b.afterPenalty ?? '—'}</b></span>
             <i>→</i>
             <span title="與前幾天平滑後的顯示值">顯示 <b style={{ color: tone.color }}>{b.displayed}</b></span>
           </div>

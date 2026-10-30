@@ -15,8 +15,8 @@ const PWD = "integration-test-pwd";
 const DIMS = ["lifeFreedom", "fitness", "calm", "mind", "social", "travel"] as const;
 type Dim = (typeof DIMS)[number];
 
-// 從 2026-10-10（MIND_COMBINED_SINCE）起連續 N 天，讓心智也走百分位路徑
-const dateAt = (i: number) => new Date(Date.UTC(2026, 9, 10 + i)).toISOString().slice(0, 10);
+// 從 2026-10-31（MIND_V3_SINCE）起連續 N 天，六個面向都是同一把尺
+const dateAt = (i: number) => new Date(Date.UTC(2026, 9, 31 + i)).toISOString().slice(0, 10);
 // 決定性的原始分數；社交每 7 天缺一天（null）
 const rawAt = (i: number): Record<Dim, number | null> => ({
   lifeFreedom: (i * 37) % 101,
@@ -31,7 +31,6 @@ describe.skipIf(!enabled)("happiness history API（真實 Postgres）", () => {
   let server: Server;
   let base = "";
   let db: typeof import("@workspace/db");
-  let percentileRank: typeof import("../lib/happinessIndex").percentileRank;
   const N = 130;
 
   const get = (qs = "", pw: string | null = PWD) =>
@@ -61,23 +60,16 @@ describe.skipIf(!enabled)("happiness history API（真實 Postgres）", () => {
     await db.db.insert(db.happinessIndexHistoryTable).values(rows);
   };
 
-  // 獨立算法：直接對「該天之前最近 90 天的非 null 原始分數」呼叫 percentileRank
+  // 面向分數就是公式分
   const expected = (i: number, dim: Dim): number | null => {
     const v = rawAt(i)[dim];
-    if (v === null) return null;
-    const hist: number[] = [];
-    for (let j = Math.max(0, i - 90); j < i; j++) {
-      const x = rawAt(j)[dim];
-      if (x !== null) hist.push(x);
-    }
-    return percentileRank(v, hist);
+    return v === null ? null : Math.floor(Math.min(100, Math.max(0, v)) + 0.5);
   };
 
   beforeAll(async () => {
     process.env["DATABASE_URL"] = TEST_DB;
     process.env["ADMIN_PASSWORD"] = PWD;
     db = await import("@workspace/db");
-    ({ percentileRank } = await import("../lib/happinessIndex"));
     const express = (await import("express")).default;
     const router = (await import("./dashboard")).default;
     const app = express();
@@ -111,7 +103,7 @@ describe.skipIf(!enabled)("happiness history API（真實 Postgres）", () => {
     expect(last).toMatchObject({ date: dateAt(i), finalScore: 50 + (i % 20), displayedScore: 51 + (i % 20), weakestComponent: "生活從容" });
   });
 
-  it("components equal percentileRank over the 90 rows before that day, null stays null", async () => {
+  it("components equal the formula score of that day, null stays null", async () => {
     const { history } = await (await get("?days=40")).json() as { history: Array<{ date: string; components: Record<string, number | null> }> };
     expect(history).toHaveLength(40);
     let nulls = 0;

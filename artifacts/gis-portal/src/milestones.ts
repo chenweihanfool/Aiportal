@@ -65,7 +65,8 @@ export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null):
   const done: Record<string, string[]> = {}
   for (const it of ideas) {
     if (typeof it.bornAt === 'string' && DATE.test(it.bornAt.slice(0, 10))) (born[it.bornAt.slice(0, 10)] ??= []).push(it.title)
-    const first = (it.history ?? []).filter((h) => h.status === 'done' && typeof h.at === 'string' && DATE.test(h.at.slice(0, 10)))
+    // 回補想法的 done 是補登日（10/09 一天 44 筆），不是真的那天實行
+    const first = it.backfill ? undefined : (it.history ?? []).filter((h) => h.status === 'done' && typeof h.at === 'string' && DATE.test(h.at.slice(0, 10)))
       .map((h) => h.at.slice(0, 10)).sort()[0]
     if (first) (done[first] ??= []).push(it.title)
   }

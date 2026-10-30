@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 /**
  * 歷史的一天；後端（2026-10-15 另一個 session 做、尚未部署）會多給選填的 components：
- * key 同 dimensions.ts（lifeFreedom／fitness／calm／mind／social／travel），值＝當天面向卡上的正規化分數（0–100，null＝當天沒資料）。
+ * key 同 dimensions.ts（lifeFreedom／fitness／calm／mind／social／travel），值＝當天面向卡上的分數（0–100，null＝當天沒資料）。
  * 型別先放在這裡（不動 boardApi.ts），之後後端接口上線再收斂。
  */
 export interface HhiHistoryDay extends HhiHistoryPoint {
