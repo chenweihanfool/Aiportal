@@ -4,7 +4,7 @@ import { db, hermesChatStateTable, hermesRestartRequestTable } from "@workspace/
 import { desc, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { logger } from "../lib/logger";
-import { cleanMessage, idleMinutesOf, isRestartMode, isSafeId, needsNewSession, restartBlockReason, transcriptOf } from "../lib/hermesChat";
+import { cleanMessage, idleMinutesOf, isRestartMode, isSafeId, needsNewSession, restartBlockReason, sessionTitle, transcriptOf, upstreamMessage } from "../lib/hermesChat";
 
 const router = Router();
 
@@ -35,7 +35,7 @@ async function hermes(path: string, init: RequestInit = {}, timeoutMs = 15_000):
 
 async function hermesJson(path: string, init: RequestInit = {}): Promise<unknown> {
   const r = await hermes(path, init);
-  if (!r.ok) throw new UpstreamError(r.status === 429 ? 429 : 502, `HERMES 回 ${r.status}`);
+  if (!r.ok) throw new UpstreamError(r.status === 429 ? 429 : 502, upstreamMessage(r.status, await r.text()));
   return r.json();
 }
 
@@ -67,7 +67,7 @@ const saveState = (sessionId: string, at: Date) =>
     .onConflictDoUpdate({ target: hermesChatStateTable.id, set: { sessionId, lastMessageAt: at } });
 
 async function newSession(): Promise<string> {
-  const d = await hermesJson("/api/sessions", { method: "POST", body: JSON.stringify({ title: "入口網對話" }) }) as { session?: { id?: unknown } };
+  const d = await hermesJson("/api/sessions", { method: "POST", body: JSON.stringify({ title: sessionTitle(new Date()) }) }) as { session?: { id?: unknown } };
   if (!isSafeId(d.session?.id)) throw new UpstreamError(502, "HERMES 沒有回 session");
   return d.session.id;
 }
@@ -119,7 +119,7 @@ router.post("/hermes-chat/messages", async (req: Request, res: Response) => {
       sessionId = await newSession();
       r = await startRun(input, sessionId);
     }
-    if (!r.ok) throw new UpstreamError(r.status === 429 ? 429 : 502, r.status === 429 ? "HERMES 忙碌中，稍後再試" : `HERMES 回 ${r.status}`);
+    if (!r.ok) throw new UpstreamError(r.status === 429 ? 429 : 502, r.status === 429 ? "HERMES 忙碌中，稍後再試" : upstreamMessage(r.status, await r.text()));
     const d = await r.json() as { run_id?: unknown };
     if (!isSafeId(d.run_id)) throw new UpstreamError(502, "HERMES 沒有回 run");
     await saveState(sessionId, now);

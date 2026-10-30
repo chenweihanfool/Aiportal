@@ -61,3 +61,18 @@ export function transcriptOf(raw: unknown): ChatMessage[] {
   }
   return out.sort((a, b) => a.at - b.at);
 }
+
+/** HERMES 的 session 標題不能重複，所以帶上台北時間（到秒） */
+export function sessionTitle(now: Date): string {
+  const t = new Date(now.getTime() + 8 * 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+  return `入口網對話 ${t}`;
+}
+
+/** HERMES 錯誤本文 → 給人看的一句話；讀不出來就只寫狀態碼 */
+export function upstreamMessage(status: number, body: string): string {
+  try {
+    const m = (JSON.parse(body) as { error?: { message?: unknown } }).error?.message;
+    if (typeof m === "string" && m) return `HERMES 回 ${status}：${m.slice(0, 200)}`;
+  } catch { /* 不是 JSON */ }
+  return `HERMES 回 ${status}`;
+}
