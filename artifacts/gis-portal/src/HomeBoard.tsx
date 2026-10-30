@@ -15,7 +15,8 @@ import { DIMENSIONS, dimensionSiteLinks } from './dimensions'
 import type { SiteData } from './portalApi'
 import { useAsync, useNow } from './homeHooks'
 import { PaidServicesPanel, PaidServicesSection } from './PaidServices'
-import { DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
+import { CompanionSection, DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
+import { activityInsight, apiFetchCompanion, bestMove } from './companion'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
   oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus, type DimSeries,
@@ -67,6 +68,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const usage = useAsync(pw, apiFetchUsage)
   const paid = useAsync(pw, apiFetchPaidServices)
   const repos = useAsync(pw, apiFetchRepos)
+  const companion = useAsync(pw, apiFetchCompanion)
 
   const dimLinks = useMemo(() => dimensionSiteLinks(sites), [sites])
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
@@ -128,6 +130,12 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     : !historyUsable && histBase.state !== 'pending' ? '趨勢暫時無法取得'
     : null
   const sentence = todaySentence({ trend, rows: breakdown?.rows ?? [], trendKnown: trendNote === null })
+  const move = useMemo(() => bestMove(breakdown?.rows ?? [], companion.data), [breakdown, companion.data])
+  const insight = useMemo(() => activityInsight(histData, companion.data), [histData, companion.data])
+  const companionSt = blockState({
+    unlocked: on, loading: companion.loading, error: companion.error, hasData: !!companion.data, nowMs,
+    updatedAtMs: companion.data ? Date.parse(companion.data.computedAt) : null, expectedEveryMin: 10,
+  })
 
   // ── 里程碑（八組門檻；資料來源不可得的整組略過）──
   const miles = useMemo(() => milestones({
@@ -171,12 +179,13 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     <div className="hm-layout">
     <HomeNav />
     <div className="hm-root" data-sys={alert ? 'alert' : 'ok'}>
-      <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence}
+      <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence} move={move}
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock}
         system={on && sysSt.state === 'fresh' ? light : null} onOpenSystem={() => setDrawer('ops')} />
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
       <PaidServicesSection st={svcSt} usage={usage.data} paid={paid.data} onOpen={() => setDrawer('svc')} onRequestUnlock={onRequestUnlock} />
       <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} links={dimLinks} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
+      <CompanionSection st={companionSt} data={companion.data} insight={insight} onRequestUnlock={onRequestUnlock} onRetry={companion.reload} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
       <FunSection ideasSt={ideasSt} ideasCount={ideasList?.ideas.length ?? 0} topIdeas={ideaTop}

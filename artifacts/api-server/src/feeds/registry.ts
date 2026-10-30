@@ -146,6 +146,67 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 首頁「陪伴」區塊：歷年今天、很久沒聯絡的人、每天有沒有和家人朋友互動。推送端 kb-pipeline scripts/companion-pusher.py
+  // （每 10 分鐘，只讀知識庫索引與社交紀錄）。互動沒有列出同事類；socialDays 只列有互動的日子。
+  companion: {
+    version: 1,
+    description: "首頁陪伴區塊：歷年今天、很久沒聯絡的人、近 120 天每天的家人朋友互動",
+    maxBytes: 128 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "companion feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "date", "onThisDay", "quietPeople", "socialDays"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        onThisDay: {
+          type: "array",
+          maxItems: 20,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["date", "kind", "title"],
+            properties: {
+              date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              kind: { enum: ["event", "report"] },
+              title: { type: "string", minLength: 1, maxLength: 120 },
+            },
+          },
+        },
+        quietPeople: {
+          type: "array",
+          maxItems: 20,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["name", "lastDate", "daysQuiet", "events"],
+            properties: {
+              name: { type: "string", minLength: 1, maxLength: 60 },
+              lastDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              daysQuiet: { type: "integer", minimum: 0 },
+              events: { type: "integer", minimum: 1 },
+              lastEvent: { type: ["string", "null"], maxLength: 120 },
+            },
+          },
+        },
+        socialDays: {
+          type: "array",
+          maxItems: 130,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["date", "people"],
+            properties: {
+              date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              people: { type: "integer", minimum: 1 },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,

@@ -13,6 +13,7 @@ export interface HomeSectionDef {
 export const HOME_SECTIONS: readonly HomeSectionDef[] = [
   { id: 'sec-today', label: '今天', icon: '☀️', title: '今天' },
   { id: 'sec-dims', label: '面向', icon: '🧭', title: '六個面向' },
+  { id: 'sec-companion', label: '陪伴', icon: '🫶', title: '陪伴' },
   { id: 'sec-growth', label: '成長', icon: '🌱', title: '成長軌跡' },
   { id: 'sec-fun', label: '好玩的', icon: '🎲', title: '好玩的' },
   { id: 'sec-repos', label: '倉庫', icon: '📚', title: '倉庫索引' },
