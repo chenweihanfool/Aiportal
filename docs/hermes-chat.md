@@ -5,7 +5,8 @@
 ## 架構
 瀏覽器 → api-server（`routes/hermesChat.ts`）→ HERMES API（`http://hermes:8642`，pgnet）。金鑰 `HERMES_API_KEY` 只在伺服器。
 
-- **走 `/v1/runs`，不走 `/api/sessions/{id}/chat/stream`**：session 串流沒有核准回呼，HERMES 的 `unattended_mode=approve` 會直接放行危險指令；`/v1/runs` 才有 `approval.request`。核准卡只給「允許一次」「拒絕」，60 秒沒回應 HERMES 會自動拒絕。
+- **走 `/v1/runs`**：有中止與狀態查詢，斷線後還能補回結果。
+- **指令不會逐項核准**：`api_server` 在 HERMES 是無人值守平台，`approvals.unattended_mode=approve` 時會在核准檢查前就放行，不會發 `approval.request`（2026-10-30 實機查證：`tools/approval_context.py`、`approval.py`）。`unattended_mode` 只有 approve／deny：改 deny 會連控制頻道部署一起擋；要出核准卡得改 HERMES 程式，碰到它防死鎖的設計。使用者 2026-10-30 裁定「維持並加提醒」，對話框常駐警語。權限和控制頻道派單相同，靠入口網登入解鎖把關。核准路由與前端核准卡留著，HERMES 日後支援時可直接用。
 - **閒置換 session**：`hermes_chat_state` 記目前 session 與最後訊息時間，閒置滿 `HERMES_CHAT_IDLE_MINUTES`（預設 60）分鐘後，下一則訊息開新 session。HERMES 核心沒有閒置重置，只會自動壓縮。實測一句「ok」約 1.6 萬 input tokens（系統提示與記憶），長對話成本更高。
 - **事件流只能讀一次**：HERMES 在訂閱者斷線時就丟掉佇列，再讀回 404。瀏覽器斷線時 api-server 繼續讀完上游，前端改查 `GET /hermes-chat/runs/:id`。
 - **API 沒有 clarify**：HERMES 要反問時會直接回文字，下一則再回答。

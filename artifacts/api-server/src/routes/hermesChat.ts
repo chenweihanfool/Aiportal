@@ -9,8 +9,9 @@ import { cleanMessage, idleMinutesOf, isRestartMode, isSafeId, needsNewSession, 
 const router = Router();
 
 // 入口網內建 HERMES 對話：瀏覽器 → 這裡 → HERMES API（金鑰只在伺服器）。
-// 走 /v1/runs，不走 /api/sessions/{id}/chat/stream：session 串流沒有核准流程，危險指令會直接放行。
 // 這個 API 有完整工具權限（終端機、檔案），所以每個路由都要已解鎖；重啟不經過這個 API，見 POST /hermes-chat/restart。
+// 不會有核准：HERMES 把 api_server 列為無人值守平台，approvals.unattended_mode=approve 時在檢查前就放行，
+// 不會發 approval.request（2026-10-30 實機查證）。使用者裁定「維持並加提醒」；核准路由與前端核准卡留著，HERMES 日後支援時可直接用。
 const API_BASE = (process.env["HERMES_API_BASE"] || "http://hermes:8642").replace(/\/+$/, "");
 const API_KEY = process.env["HERMES_API_KEY"] || "";
 const IDLE_MINUTES = idleMinutesOf(process.env["HERMES_CHAT_IDLE_MINUTES"]);
