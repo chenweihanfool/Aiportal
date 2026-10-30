@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanMessage, idleMinutesOf, isRestartMode, isSafeId, needsNewSession, restartBlockReason, transcriptOf } from "./hermesChat";
+import { cleanMessage, idleMinutesOf, isRestartMode, isSafeId, needsNewSession, restartBlockReason, sessionTitle, transcriptOf, upstreamMessage } from "./hermesChat";
 
 const NOW = new Date("2026-10-30T12:00:00Z");
 const ago = (min: number) => new Date(NOW.getTime() - min * 60_000);
@@ -73,5 +73,19 @@ describe("transcriptOf", () => {
   it("格式不對回空", () => {
     expect(transcriptOf(null)).toEqual([]);
     expect(transcriptOf({ data: "x" })).toEqual([]);
+  });
+});
+
+describe("sessionTitle", () => {
+  it("每次都不同（HERMES 標題不能重複），用台北時間", () => {
+    expect(sessionTitle(new Date("2026-10-30T14:40:05Z"))).toBe("入口網對話 2026-10-30 22:40:05");
+    expect(sessionTitle(new Date("2026-10-30T14:40:06Z"))).not.toBe(sessionTitle(new Date("2026-10-30T14:40:05Z")));
+  });
+});
+
+describe("upstreamMessage", () => {
+  it("帶出 HERMES 的錯誤原文；不是 JSON 就只寫狀態碼", () => {
+    expect(upstreamMessage(400, JSON.stringify({ error: { message: "Title already in use" } }))).toBe("HERMES 回 400：Title already in use");
+    expect(upstreamMessage(500, "oops")).toBe("HERMES 回 500");
   });
 });
