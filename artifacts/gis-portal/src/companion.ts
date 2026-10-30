@@ -31,7 +31,6 @@ export async function apiFetchCompanion(pw: string): Promise<CompanionData | nul
 }
 
 const MOVES: Record<string, string> = {
-  lifeFreedom: '看一下這個月的記帳與休假配速',
   fitness: '今天動一下，排一次訓練',
   calm: '清掉一件逾期或快到期的任務',
   mind: '把一個想法往前推一步，或記下一個新想法',
@@ -39,9 +38,9 @@ const MOVES: Record<string, string> = {
   travel: '排一趟小旅行，或去吃一家想吃的店',
 }
 
-/** 今日最划算的一件事：挑補起來對總分幫助最大的面向；社交優先點名最久沒聯絡的人 */
+/** 今日最划算的一件事：挑補起來對總分幫助最大的面向；社交優先點名最久沒聯絡的人。財務主要看市場、權重又最大，留著會天天推它，不列入 */
 export function bestMove(rows: HhiRow[], c: CompanionData | null): string | null {
-  const r = biggestDrag(rows)
+  const r = biggestDrag(rows.filter((x) => x.key in MOVES))
   if (!r || r.value === null) return null
   const gain = ((10 * r.weightPct) / 100).toFixed(1)
   const who = r.key === 'social' ? c?.quietPeople[0] : undefined

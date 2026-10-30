@@ -19,6 +19,9 @@ describe('bestMove', () => {
   it('挑補起來幫助最大的面向，寫出效益', () => {
     expect(bestMove([row('lifeFreedom', '財務自由', 67, 27), row('fitness', '身體', 20, 18)], null)).toBe('今天最划算：今天動一下，排一次訓練。「身體」每多 10 分，總分約加 1.8 分。')
   })
+  it('財務不列入：今天做不了什麼，權重又大', () => {
+    expect(bestMove([row('lifeFreedom', '財務自由', 40, 27), row('calm', '從容', 90, 15)], null)).toContain('「從容」')
+  })
   it('社交點名最久沒聯絡的人', () => {
     const c = data({ quietPeople: [{ name: '王小明', lastDate: '2026-06-01', daysQuiet: 150, events: 5 }] })
     expect(bestMove([row('social', '社交', 10, 13)], c)).toContain('聯絡一下王小明（150 天沒聯絡了）')
