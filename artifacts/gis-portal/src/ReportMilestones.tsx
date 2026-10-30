@@ -1,8 +1,8 @@
 import { PARTS, UNIT_WORD, partTip, type Bucket, type Milestones } from './milestones'
 
 // 🏁 里程碑卡（日／週／月／季／年報共用，取代原本日報的「近 14 天 AI 分數走勢」）。圖全是 CSS，不引入圖表套件。
-// 上：本期三項成果＋合計（與近幾期平均比）；中：徽章（連續天數、新高、年度關卡）；下：近 N 期堆疊柱（虛線＝平均）、年度累計關卡進度。
-// 數字由 milestones.ts 現算；設計見 docs/milestones.md。三項數字與柱子滑過（或 Tab 聚焦）會列出是哪些任務／想法（2026-10-30）。
+// 上：本期各項成果＋合計（與近幾期平均比）；中：徽章（連續天數、新高、年度關卡）；下：近 N 期堆疊柱（虛線＝平均）、年度累計關卡進度。
+// 數字由 milestones.ts 現算；設計見 docs/milestones.md。各項數字與柱子滑過（或 Tab 聚焦）會列出是哪些任務／想法（2026-10-30）。
 
 const PERIOD: Record<Milestones['level'], string> = { day: '這天', week: '這週', month: '這個月', quarter: '這一季', year: '這一年' }
 
@@ -43,14 +43,14 @@ function Trend({ m, onOpenDay }: { m: Milestones; onOpenDay?: (date: string) => 
   )
 }
 
-export function MilestoneCard({ m, tasksMissing, onOpenDay }: { m: Milestones; tasksMissing: boolean; onOpenDay?: (date: string) => void }) {
+export function MilestoneCard({ m, tasksMissing, lifeMissing, onOpenDay }: { m: Milestones; tasksMissing: boolean; lifeMissing: boolean; onOpenDay?: (date: string) => void }) {
   const c = m.current
   const diff = m.avg === null ? null : Math.round((c.total - m.avg) * 10) / 10
   const prevN = m.trend.length - 1
   const tasksUnknown = tasksMissing || c.noTasks
   return (
     <section className="hm-card ms-card" aria-label="里程碑" data-testid="ms-card" data-level={m.level}>
-      <h2 className="hm-h">🏁 里程碑<span className="hm-h-right rp-hint">成果＝完成任務＋新想法＋想法實行；滑過數字看是哪些</span></h2>
+      <h2 className="hm-h">🏁 里程碑<span className="hm-h-right rp-hint">成果＝任務＋想法＋生活（見人、新店、旅行、運動）；滑過數字看是哪些</span></h2>
 
       <div className="ms-now" aria-label={`${PERIOD[m.level]}的成果`}>
         <div className="ms-total" data-testid="ms-total">
@@ -106,6 +106,7 @@ export function MilestoneCard({ m, tasksMissing, onOpenDay }: { m: Milestones; t
 
       {tasksMissing ? <p className="hm-note" data-testid="ms-tasks-missing">完成任務暫時讀不到（以 — 表示，成果只算想法）。</p>
         : m.tasksSince && m.trend[0].range[0] < m.tasksSince && <p className="hm-note">完成任務的資料從 {m.tasksSince} 起才有，之前的期只算想法。</p>}
+      {lifeMissing && <p className="hm-note" data-testid="ms-life-missing">生活項目暫時讀不到（見人、新店、旅行、運動以 0 計）。</p>}
     </section>
   )
 }

@@ -5,7 +5,7 @@ import { MarkdownView } from './MarkdownView'
 import { ReportBody } from './ReportBody'
 import { apiFetchIdeas } from './boardApi'
 import { useAsync } from './homeHooks'
-import { apiFetchTasksDone, dailyIndex } from './milestones'
+import { apiFetchDailyLife, apiFetchTasksDone, dailyIndex } from './milestones'
 import { dailyScore, dailyScoreLine, type DailyScore } from './dailyScore'
 import { clearTimelineReturn, peekTimelineReturn, requestGraphFocus, saveTimelineReturn } from './graphFocus'
 import { countWithTime, eventDisplayTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
@@ -72,9 +72,10 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
   // 每日評分＝80% 當天成果＋20% AI 自評（dailyScore.ts）；成果要等想法庫與完成任務都載入，避免徽章先顯示 AI 分數再跳
   const ideasA = useAsync(unlockedPassword, apiFetchIdeas)
   const tasksA = useAsync(unlockedPassword, apiFetchTasksDone)
+  const lifeA = useAsync(unlockedPassword, apiFetchDailyLife)
   const settled = (a: { data: unknown; error: boolean }) => a.data !== null || a.error
-  const scoresReady = settled(ideasA) && settled(tasksA)
-  const ix = useMemo(() => (ideasA.data && tasksA.data ? dailyIndex(ideasA.data.ideas, tasksA.data) : null), [ideasA.data, tasksA.data])
+  const scoresReady = settled(ideasA) && settled(tasksA) && settled(lifeA)
+  const ix = useMemo(() => (ideasA.data && tasksA.data ? dailyIndex(ideasA.data.ideas, tasksA.data, lifeA.data) : null), [ideasA.data, tasksA.data, lifeA.data])
   const scoreOf = useCallback((it: TimelineItem | null): DailyScore | null =>
     (it && it.level === 'day' && scoresReady ? dailyScore(it.reportScore?.total, ix ? ix.at(it.startDate) : null) : null), [ix, scoresReady])
 

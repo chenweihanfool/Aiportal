@@ -1327,9 +1327,9 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .rb-thread-hint { margin: 0.1rem 0 0; font-size: 0.72rem; color: var(--c-ink-3); }
 /* 🏁 里程碑卡（ReportMilestones.tsx，2.61.0；取代日報的 AI 分數走勢）：三色＝完成任務／新想法／想法實行 */
 .ms-card { --ms-tasks: var(--c-ok); --ms-new: var(--c-accent); --ms-done: var(--c-ink-2); --ms-track: 6.5rem; --ms-lab: 1.15rem; }
-.ms-now { display: grid; grid-template-columns: minmax(8rem, 1.4fr) repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.ms-now { display: grid; grid-template-columns: minmax(8rem, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
 .ms-total, .ms-part { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.55rem 0.7rem; border: 1px solid var(--c-line); border-radius: 8px; background: var(--c-raised); min-width: 0; }
-.ms-total { border-color: var(--c-accent-dim); }
+.ms-total { border-color: var(--c-accent-dim); grid-row: span 2; }
 .ms-total-t, .ms-part-t { font-size: 0.74rem; color: var(--c-ink-2); display: flex; gap: 0.3rem; align-items: center; }
 .ms-total b { font-size: 2rem; line-height: 1.1; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
 .ms-total-d { font-size: 0.72rem; color: var(--c-ink-2); }
@@ -1342,6 +1342,10 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .ms-card [data-k='tasks'] { --ms-k: var(--ms-tasks); }
 .ms-card [data-k='ideasNew'] { --ms-k: var(--ms-new); }
 .ms-card [data-k='ideasDone'] { --ms-k: var(--ms-done); }
+.ms-card [data-k='social'] { --ms-k: #ee7a6e; }
+.ms-card [data-k='newPlaces'] { --ms-k: var(--c-warn); }
+.ms-card [data-k='tripDay'] { --ms-k: #5f9bf0; }
+.ms-card [data-k='workout'] { --ms-k: #3fb6a8; }
 .ms-badges { list-style: none; margin: 0.6rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .ms-badges li { display: inline-flex; gap: 0.3rem; align-items: center; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.78rem; border: 1px solid var(--c-line-strong); color: var(--c-ink); background: var(--c-surface); }
 .ms-badges li[data-kind='record'], .ms-badges li[data-kind='tier'] { border-color: var(--c-accent); }
@@ -1372,7 +1376,7 @@ button.ms-col { cursor: pointer; }
 .ms-card > .hm-note { margin-top: 0.5rem; }
 @media (max-width: 640px) {
   .ms-now { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ms-total { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; }
+  .ms-total { grid-column: 1 / -1; grid-row: auto; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; }
   .ms-col-v { visibility: hidden; }
   .ms-card { --ms-track: 5.5rem; }
   .ms-road li { grid-template-columns: 5.6rem minmax(0, 1fr) 4.6rem; }

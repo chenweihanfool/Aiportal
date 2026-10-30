@@ -5,18 +5,24 @@
 // 平常的一天等於 0，比平常好就加、比平常差就減。23:55 快照前一天還沒過完，只加不扣（早上分數一定低）。
 //
 // 評分公式與前端 gis-portal/src/dailyScore.ts 相同（時間軸要逐日現算，兩邊各一份）；
-// 常數一致由 gis-portal 的 dailyScore.test.ts 讀這支檔比對。
+// 常數一致由 gis-portal 的 dailyScore.test.ts 讀這支檔比對。生活面向（見人、新店、旅行、運動）的逐日資料見 dailyLife.ts。
 import type { HermesIdea } from "@workspace/db";
 import { HAPPINESS_CONFIG, clamp, type HappinessConfig } from "./happinessIndex";
+import type { LifeDay } from "./dailyLife";
 
 export const ACHIEVEMENT_WEIGHT = 0.8;
 export const AI_WEIGHT = 0.2;
 export const IDEA_DONE_POINTS = 2;
+export const SOCIAL_POINTS = 2;
+export const NEW_PLACE_POINTS = 1;
+export const TRIP_DAY_POINTS = 2;
+export const WORKOUT_POINTS = 2;
 export const HALF_POINTS = 3;
 /** 基準線至少要幾天才修正；不足時修正為 0 */
 export const MIN_BASELINE_DAYS = 7;
 
-export interface DayCounts { tasks: number; ideasNew: number; ideasDone: number }
+/** social、tripDay、workout 一天最多 1；newPlaces 每間算一次 */
+export interface DayCounts { tasks: number; ideasNew: number; ideasDone: number; social: number; newPlaces: number; tripDay: number; workout: number }
 
 export interface DayScore {
   total: number;
@@ -28,7 +34,8 @@ export interface DayScore {
 }
 
 export function dayScoreOf(counts: DayCounts, ai: number | null): DayScore {
-  const points = counts.tasks + counts.ideasNew + IDEA_DONE_POINTS * counts.ideasDone;
+  const points = counts.tasks + counts.ideasNew + IDEA_DONE_POINTS * counts.ideasDone
+    + SOCIAL_POINTS * counts.social + NEW_PLACE_POINTS * counts.newPlaces + TRIP_DAY_POINTS * counts.tripDay + WORKOUT_POINTS * counts.workout;
   const achievement = Math.round(100 * (1 - 0.5 ** (Math.max(0, points) / HALF_POINTS)));
   const total = ai === null ? achievement : ACHIEVEMENT_WEIGHT * achievement + AI_WEIGHT * ai;
   return { total: Math.round(total), achievement, points, counts, ai };
@@ -37,7 +44,7 @@ export function dayScoreOf(counts: DayCounts, ai: number | null): DayScore {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** 計數規則與前端 milestones.dailyIndex 相同：bornAt 那天算新想法，history 第一次 done 那天算實行（回補想法的 done 是補登日，不算） */
-export function dayCounter(ideas: HermesIdea[], tasksByDate: Map<string, number>): (date: string) => DayCounts {
+export function dayCounter(ideas: HermesIdea[], tasksByDate: Map<string, number>, life: ReadonlyMap<string, LifeDay> = new Map()): (date: string) => DayCounts {
   const born = new Map<string, number>();
   const done = new Map<string, number>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
@@ -47,7 +54,13 @@ export function dayCounter(ideas: HermesIdea[], tasksByDate: Map<string, number>
     const first = it.backfill ? undefined : (it.history ?? []).filter((h) => h.status === "done").map((h) => String(h.at ?? "").slice(0, 10)).filter((d) => DATE.test(d)).sort()[0];
     if (first) bump(done, first);
   }
-  return (date) => ({ tasks: tasksByDate.get(date) ?? 0, ideasNew: born.get(date) ?? 0, ideasDone: done.get(date) ?? 0 });
+  return (date) => {
+    const l = life.get(date);
+    return {
+      tasks: tasksByDate.get(date) ?? 0, ideasNew: born.get(date) ?? 0, ideasDone: done.get(date) ?? 0,
+      social: l && l.socialPeople > 0 ? 1 : 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l && l.workouts.length > 0 ? 1 : 0,
+    };
+  };
 }
 
 /** feed tasks-done 的 payload → 日期對完成數；格式不對回 null（當成讀不到，不是 0） */

@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { db, happinessIndexHistoryTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { fetchFreshSummaries } from "../lib/summarySources";
+import { loadLifeDays } from "../lib/dailyScoreSource";
+import { taipeiToday } from "../lib/hermesTrips";
 import { SUMMARY_SOURCES } from "../lib/summarySources";
 import { isAuthorized } from "../lib/adminSession";
 import { computeDimensionSeries } from "../lib/happinessDimensionHistory";
@@ -82,6 +84,16 @@ router.get("/dashboard", async (req: Request, res: Response) => {
 
     res.json({ summaries, unlocked });
   }
+});
+
+// 每日評分的生活項目（見 lib/dailyLife.ts）：時間軸與日報用它逐日算分，與日分修正同一份資料。
+router.get("/daily-life", async (req: Request, res: Response) => {
+  if (!isAuthorized(req.headers["x-admin-password"])) {
+    return res.status(403).json({ message: "需要解鎖私領域才能查看" });
+  }
+  const { value: freshMap } = await summaryCache.get();
+  const life = await loadLifeDays(taipeiToday(new Date()), freshMap.get("fitnessforge")?.data?.workoutDays);
+  return res.json({ days: [...life.values()] });
 });
 
 // Daily HHI history for the trend-line chart on the happiness card — a

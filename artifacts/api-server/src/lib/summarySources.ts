@@ -213,7 +213,7 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
 
   const today = taipeiDateString(new Date());
   // 今天還沒過完，日分修正只加不扣（見 lib/dailyScore.ts）
-  const dayLink = await loadDayLink(today, false).catch((): DayLink | null => null);
+  const dayLink = await loadDayLink(today, false, results.get("fitnessforge")?.data?.workoutDays).catch((): DayLink | null => null);
   const { result, busynessScore, usingStaleData, mindCombined } = await extractHappinessResult(results, today, dayLink?.adjust ?? 0);
   const hhiData = await buildHappinessDisplayData(result, busynessScore, usingStaleData, mindCombined, dayLink);
   const hhiEntry: DashboardSummary = {
@@ -451,7 +451,7 @@ async function buildHappinessDisplayData(
 export async function computeAndPersistDailySnapshot(): Promise<void> {
   const results = await fetchRawSummaryResults();
   const today = taipeiDateString(new Date());
-  const dayLink = await loadDayLink(today, true).catch((): DayLink | null => null);
+  const dayLink = await loadDayLink(today, true, results.get("fitnessforge")?.data?.workoutDays).catch((): DayLink | null => null);
   const { result, rawComponents, mindCombined } = await extractHappinessResult(results, today, dayLink?.adjust ?? 0);
 
   if (result.finalScore === null) return; // 沒東西可存，維持「資料準備中」
