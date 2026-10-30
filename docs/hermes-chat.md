@@ -11,6 +11,8 @@
 - **API 沒有 clarify**：HERMES 要反問時會直接回文字，下一則再回答。
 - **和 Telegram 是兩串**：session key 含平台，長期記憶共用。
 
+- **浮動視窗，不是抽屜**（使用者：「想法庫會蓋掉HERMES對話框」）：開著抽屜也能用；關掉只是隱藏，回覆不中斷。想法的狀態按鈕直接把句子帶進對話框。
+
 ## 重啟 Gateway
 對話 API 跑在 Gateway 裡，卡住時叫不動，所以重啟不經過它：入口網寫一列 `hermes_restart_request`，VPS 主機的 `hermes-restart-watcher`（kb-pipeline `deploy/hermes-restart/`，systemd timer 每 15 秒）認領並執行寫死的指令。api-server 碰不到 Docker。
 

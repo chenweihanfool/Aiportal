@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyEvent, applyStatus, emptyRun, parseSse, restartBusy, restartText, tokenText, type ChatEvent } from './chatView'
+import { applyEvent, applyStatus, emptyRun, parseSse, prefillHermesChat, restartBusy, restartText, setPrefillTarget, tokenText, type ChatEvent } from './chatView'
 
 const run = (...evs: ChatEvent[]) => evs.reduce(applyEvent, emptyRun())
 
@@ -71,6 +71,17 @@ describe('重啟文字', () => {
     expect(restartText(r('timeout', { note: '可改用強制重啟' }), now)).toBe('可改用強制重啟')
     expect(restartText(r('done', { requestedAt: '2026-10-30T10:00:00Z' }), now)).toBeNull()
     expect(restartText(null, now)).toBeNull()
+  })
+})
+
+describe('帶進對話框', () => {
+  it('對話框掛著才帶得過去', () => {
+    const got: string[] = []
+    expect(prefillHermesChat('a')).toBe(false)
+    setPrefillTarget((t) => got.push(t))
+    expect(prefillHermesChat('b')).toBe(true)
+    setPrefillTarget(null)
+    expect(got).toEqual(['b'])
   })
 })
 

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { apiFetchHermesGraph } from './hermesGraphApi'
 import { apiFetchRepos } from './repoApi'
 import { HomeNav } from './HomeNav'
-import { ChatPanel } from './ChatPanel'
+import { ChatDock } from './ChatPanel'
 import { ReposSection } from './RepoSection'
 import { apiFetchPaidServices, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchIdeas, apiFetchUsage } from './boardApi'
 import { apiFetchFood } from './foodApi'
@@ -28,7 +28,7 @@ import {
 // 獨立元件，props 與 DesktopBoard 類似；2.36.0 起是預設首頁的主區（App.tsx 的 InstrumentPanelView，左側欄的工具連結保留），舊版 DesktopBoard 在 #legacy。
 // 資料全部來自既有 API 與既有型別／函式，沒有任何示範值：拿不到就依 StateFrame 的狀態機顯示（未解鎖／載入中／空／過期／失敗）。
 
-type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc' | 'chat'
+type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc'
 
 const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
 // 面向小卡的 30 天迷你線：另外要 days=30（後端的 components 欄位只保證在這個呼叫裡；接口還沒部署時沒有該欄位，就不畫線）
@@ -202,8 +202,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={closeDrawer}>{hhiDetail}</Drawer>}
       {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} /></Drawer>}
       {drawer === 'svc' && pw && <Drawer title="付費服務：用量與連結・Ollama 更新餘額" onClose={() => { closeDrawer(); usage.reload() }}><PaidServicesPanel pw={pw} usage={usage.data} paid={paid.data} /></Drawer>}
-      {on && <button type="button" className="hm-chat-fab" data-testid="chat-open" aria-label="和 HERMES 對話" title="和 HERMES 對話" onClick={() => setDrawer('chat')}>💬</button>}
-      {drawer === 'chat' && pw && <Drawer title="HERMES 對話" onClose={closeDrawer}><ChatPanel pw={pw} /></Drawer>}
+      {pw && <ChatDock pw={pw} />}
       {drawer === 'ops' && pw && <Drawer title="HERMES 戰情室：推送健康・關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={closeDrawer}><PusherHealthPanel pw={pw} />{opsDetail}</Drawer>}
     </div>
     </div>

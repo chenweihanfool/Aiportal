@@ -6,6 +6,7 @@ import {
   type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type PusherHealth, type IdeaItem, type IdeasData, type IdeasMind, type MindCombined, type UsageData,
 } from './boardApi'
 import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, absorbBadges, categoryColor, categoryCounts, filterIdeas, hasMerge, nextStatuses, pips, sortForList, sortMergedGroups, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
+import { prefillHermesChat } from './chatView'
 import { UsedChart } from './HermesDiskPanel'
 import { IdeaLifeSummary, IdeaLifeline, IdeaLineage, IdeaScatter } from './IdeaViz'
 import { describeForecast, formatBytes, storageShares } from './diskView'
@@ -432,17 +433,18 @@ async function copyText(text: string): Promise<boolean> {
   } catch { return false }
 }
 
-/** 「複製給 HERMES」：入口網不改狀態，只把要貼到 Telegram 的那句話複製好，HERMES 再寫進日記 */
+/** 「給 HERMES」：入口網不改狀態，把那句話帶進對話框（舊版首頁沒有對話框時複製），HERMES 再寫進日記 */
 function CopyToHermes({ idea }: { idea: IdeaItem }) {
   const [note, setNote] = useState('')
-  const [copied, setCopied] = useState<{ text: string; ok: boolean } | null>(null)
+  const [copied, setCopied] = useState<{ text: string; ok: boolean; chat: boolean } | null>(null)
   const copy = async (s: Parameters<typeof statusMessage>[1]) => {
     const text = statusMessage(idea, s, note)
-    setCopied({ text, ok: await copyText(text) })
+    if (prefillHermesChat(text)) setCopied({ text, ok: true, chat: true })
+    else setCopied({ text, ok: await copyText(text), chat: false })
   }
   return (
     <div className="bd-idea-copy">
-      <div style={{ color: COLOR.ink, fontWeight: 500 }}>要更新進度？按一下複製，貼到 Telegram 給 HERMES：</div>
+      <div style={{ color: COLOR.ink, fontWeight: 500 }}>要更新進度？按一下帶到 HERMES 對話框：</div>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder="（選填）想補充的話，例如：花了三個晚上，效果不錯" style={{ ...inp, maxWidth: 520 }} aria-label="補充說明" />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {nextStatuses(idea.status).map(s => (
@@ -451,7 +453,7 @@ function CopyToHermes({ idea }: { idea: IdeaItem }) {
       </div>
       {copied && (
         <div role="status" style={{ fontSize: '0.72rem', color: copied.ok ? COLOR.ok : COLOR.warn }}>
-          {copied.ok ? '已複製，貼到 Telegram 給 HERMES 即可：' : '瀏覽器不允許自動複製，請手動選取下面這段：'}
+          {copied.chat ? '已帶到對話框，按送出即可：' : copied.ok ? '已複製，貼給 HERMES 即可：' : '瀏覽器不允許自動複製，請手動選取下面這段：'}
           <pre className="bd-idea-copytext">{copied.text}</pre>
         </div>
       )}
@@ -522,7 +524,7 @@ export function IdeasPanel({ pw }: { pw: string }) {
       {data.mind && <IdeasMindSection mind={data.mind} combined={data.mindCombined ?? null} shadow={data.mindShadow ?? []} />}
       <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
         優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 進行中 1.1。
-        入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕複製一句話，貼到 Telegram 給 HERMES，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
+        入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕，把一句話帶到 HERMES 對話框送出，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
         {data.receivedAt && <> · 最後更新 {minutesAgo(Date.parse(data.receivedAt))}</>}
       </div>
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋想法：標題、編號、原因、類別（空白分隔多個詞）" aria-label="搜尋想法" data-testid="idea-search"
