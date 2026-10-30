@@ -300,7 +300,7 @@ export function BriefSection({ st, brief, onRequestUnlock, onRetry }: {
 }) {
   return (
     <HomeCard id="sec-brief" className="hm-brief" right={brief ? <span className="hm-muted">{brief.label}</span> : undefined}>
-      <StateFrame status={st} source="明日報告" onRequestUnlock={onRequestUnlock} onRetry={onRetry} empty="第一份明日報告會在今晚 21:00 出現。">
+      <StateFrame status={st} source="明日報告" onRequestUnlock={onRequestUnlock} onRetry={onRetry} empty="明日報告每晚 21:00 整理，好了就會出現在這裡。">
         {brief && <div data-testid="brief-body"><MarkdownView text={brief.bodyMd} /></div>}
       </StateFrame>
     </HomeCard>
