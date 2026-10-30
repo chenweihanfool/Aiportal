@@ -5,6 +5,19 @@
 // ─────────────────────────────────────────────
 export const VERSION_HISTORY = [
   {
+    version: '2.68.0',
+    date: '2026-10-30',
+    summary: '入口網內建 HERMES 對話與重啟 Gateway',
+    changes: [
+      '使用者 2026-10-30：「是否可以在入口網內建類似telegram的HERMES交互介面?」「有自動1小時new session的功能嗎? 我怕一個SESSION一直養 吃TOKEN」「還有restart gateway功能 也是比較常用」「開工」。',
+      '首頁右下角 💬 打開對話：串流回覆、顯示工具進度與每次 token 用量、可中止；危險指令會跳出核准卡，只能允許一次或拒絕。',
+      '閒置 60 分鐘後，下一則訊息自動開新 session，畫面標「已開新對話」；舊對話留在 HERMES。也有手動「新對話」按鈕。手機與電腦共用同一串。',
+      '重啟 Gateway 分兩種：優雅重啟（等進行中的工作收尾，最久約 30 分鐘）、強制重啟（中斷進行中的工作，Gateway 卡住時用）。不會自動升級成強制。',
+      '金鑰只在伺服器；每個動作都要已解鎖。入口網對話與 Telegram 是兩串，長期記憶共用。',
+      '部署：db-migrate（migration 0026）→ HERMES 綁定與金鑰（需使用者放行）→ api-server → gis-portal → 主機安裝 hermes-restart-watcher。',
+    ],
+  },
+  {
     version: '2.67.0',
     date: '2026-10-30',
     summary: '每日評分把見人、去新店、旅行、運動算進成果',
