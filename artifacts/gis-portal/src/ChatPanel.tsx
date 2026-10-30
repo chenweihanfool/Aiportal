@@ -156,6 +156,7 @@ export function ChatPanel({ pw, prefill }: { pw: string; prefill: { text: string
         <button type="button" className="ch-btn" data-testid="chat-new" onClick={() => void fresh()} disabled={!!runId}>新對話</button>
         <button type="button" className="ch-btn" data-testid="chat-restart" onClick={() => setConfirming((x) => !x)} disabled={restarting}>重啟 Gateway</button>
       </div>
+      <p className="ch-note ch-risk" data-testid="chat-risk-note" style={{ margin: 0 }}>⚠️ 這裡的指令不會逐項問你確認：HERMES 能直接刪檔、改設定、重啟服務。重要操作請先講清楚範圍。</p>
       {confirming && (
         <div className="ch-card" data-testid="chat-restart-confirm">
           <p style={{ margin: 0 }}>重啟期間 Telegram 與這裡的對話都會中斷，約 40 秒恢復。</p>
