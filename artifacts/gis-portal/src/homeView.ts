@@ -154,7 +154,7 @@ export function buildHeatmap(history: HhiHistoryPoint[], todayIso: string, days 
 }
 
 /**
- * 某一個面向的年熱圖（2026-10-16，P2-1）：值取每天 components[key]（面向卡上的正規化分數，0–100，夾在範圍內）；
+ * 某一個面向的年熱圖（2026-10-16，P2-1）：值取每天 components[key]（面向卡上的分數，0–100，夾在範圍內）；
  * 沒有 components 或那天是 null 就是空格，不是 0。其餘排版與 buildHeatmap 完全相同。
  */
 export function buildDimensionHeatmap(
@@ -299,7 +299,7 @@ export function milestones(i: MilestoneInput): MilestoneSummary {
 }
 
 // ── ② 面向小卡的 30 天迷你線（2026-10-15）──
-// 資料：/api/happiness/history?days=30 每筆選填 components（key 同 dimensions.ts，值＝當天面向卡的正規化分數 0–100，null＝當天沒資料）。
+// 資料：/api/happiness/history?days=30 每筆選填 components（key 同 dimensions.ts，值＝當天面向卡的分數 0–100，null＝當天沒資料）。
 // 後端接口還沒部署：欄位缺、形狀不對、有效點少於 2 個，一律回 null，呼叫端維持原本的數值條，不顯示任何錯誤。
 export const SPARK_DAYS = 30
 export interface DimPoint { date: string; value: number | null }

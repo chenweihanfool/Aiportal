@@ -12,7 +12,7 @@ import {
   dimensionLine, sparkGeometry, type BlockStatus, type DayPart, type DimSeries, type Heatmap, type HhiTrend, type KnowledgeStats, type LatestTrip, type MilestoneSummary,
   type SystemLight, type YearProgress,
 } from './homeView'
-import { biggestDrag } from './boardView'
+import { biggestDrag, dayLinkText } from './boardView'
 import { dimHash } from './dimensionPage'
 import { HomeCard } from './HomeCard'
 
@@ -78,6 +78,7 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
                   )}
                   {!breakdown.isFinal && <span className="hm-chip hm-chip--warn" title="23:55 前是暫定值">今日暫定</span>}
                   {trendNote !== null && <span className="hm-muted">{trendNote}</span>}
+                  {breakdown.day && <span className="hm-chip" data-testid="day-link" title="每日評分＝80% 當天成果＋20% AI 自評；幸福指數修正＝(今日分−近 28 天平均)×0.15，上下限 ±6，23:55 前只加不扣">{dayLinkText(breakdown.day)}</span>}
                 </div>
                 <p className="hm-sentence">{sentence}</p>
               </div>

@@ -92,7 +92,7 @@ ideaItems[1].absorbed = ['IDEA-0012']
 const ideasTop = ideaItems.filter((i) => i.score !== null).sort((a, b) => b.score - a.score).slice(0, 3).map((i) => i.id)
 const ideas = { available: true, generatedAt: today, receivedAt: new Date().toISOString(), weakest: '旅遊生活', ideas: ideaItems, top: ideasTop,
   weeks: Array.from({ length: 8 }, (_, i) => ({ weekStart: dayAt(49 - i * 7), born: [2, 0, 5, 3, 1, 4, 6, 2][i], done: [0, 1, 0, 0, 2, 0, 1, 1][i] })),
-  mind: { score: 62.4, birth: { score: 100, born7: 3, baseline: 2, weekly: [2, 0, 5, 3, 1, 4, 6, 2] }, action: { score: 37.3, done28: 1, eligible: 9, rate: 0.111, target: 0.2 }, formula: '產生 100 × 40% ＋ 實行 37.3 × 60% ＝ 62.4' },
+  mind: { score: 62.4, birth: { score: 29.3, born7: 3, half: 6, weekly: [2, 0, 5, 3, 1, 4, 6, 2] }, action: { score: 8.3, done28: 1, half: 8 }, formula: '產生 100 × 40% ＋ 實行 37.3 × 60% ＝ 62.4' },
   mindShadow: Array.from({ length: 12 }, (_, i) => {
     const ideas = i < 2 ? null : 50 + i * 2
     const report = i >= 9 ? 65 : null

@@ -2,16 +2,12 @@ import { db, pool, busynessIndexHistoryTable, happinessIndexHistoryTable } from 
 import { TASK_ACTIONS_SQL, parseTaskActionsRow } from "./taskActions";
 import { loadCombinedMind } from "./mindCombinedSource";
 import type { CombinedMind } from "./mindCombined";
-import {
-  EMPTY_DIMENSION_HISTORY,
-  buildDimensionHistory,
-  normalizeDimensions,
-  type DimensionHistory,
-} from "./happinessDimensionHistory";
+import { scoresOfRaws } from "./happinessDimensionHistory";
+import { loadDayLink } from "./dailyScoreSource";
+import type { DayLink } from "./dailyScore";
 import { desc, eq, lt } from "drizzle-orm";
 import {
   HAPPINESS_CONFIG,
-  PERCENTILE_WINDOW_DAYS,
   clamp,
   computeDisplayedScore,
   computeHappinessComponents,
@@ -216,9 +212,10 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   const results = await fetchRawSummaryResults();
 
   const today = taipeiDateString(new Date());
-  const history = await fetchDimensionHistory(today);
-  const { result, busynessScore, usingStaleData, mindCombined } = await extractHappinessResult(results, history, today);
-  const hhiData = await buildHappinessDisplayData(result, busynessScore, usingStaleData, mindCombined);
+  // 今天還沒過完，日分修正只加不扣（見 lib/dailyScore.ts）
+  const dayLink = await loadDayLink(today, false).catch((): DayLink | null => null);
+  const { result, busynessScore, usingStaleData, mindCombined } = await extractHappinessResult(results, today, dayLink?.adjust ?? 0);
+  const hhiData = await buildHappinessDisplayData(result, busynessScore, usingStaleData, mindCombined, dayLink);
   const hhiEntry: DashboardSummary = {
     subsystemId: "hhi",
     name: "翰翰仔幸福指數",
@@ -233,47 +230,15 @@ export async function fetchFreshSummaries(): Promise<Map<string, DashboardSummar
   return results;
 }
 
-const EMPTY_HISTORY: DimensionHistory = EMPTY_DIMENSION_HISTORY;
-
-/** Reads each dimension's *raw* (pre-normalization) scores from the trailing
- *  PERCENTILE_WINDOW_DAYS days strictly before `beforeDate`, for
- *  percentileRank() to rank today's raw score against. Only the 23:55
- *  snapshot job ever writes these columns, so a dimension with no history
- *  yet (or one that was null on a given day) simply contributes fewer
- *  entries — percentileRank() itself falls back to the raw score unchanged
- *  below MIN_HISTORY_DAYS_FOR_PERCENTILE. */
-async function fetchDimensionHistory(beforeDate: string): Promise<DimensionHistory> {
-  const rows = await db
-    .select({
-      date: happinessIndexHistoryTable.date,
-      lifeFreedomRaw: happinessIndexHistoryTable.lifeFreedomRaw,
-      fitnessHabitRaw: happinessIndexHistoryTable.fitnessHabitRaw,
-      calmRaw: happinessIndexHistoryTable.calmRaw,
-      mindRaw: happinessIndexHistoryTable.mindRaw,
-      travelRaw: happinessIndexHistoryTable.travelRaw,
-      socialRaw: happinessIndexHistoryTable.socialRaw,
-    })
-    .from(happinessIndexHistoryTable)
-    .where(lt(happinessIndexHistoryTable.date, beforeDate))
-    .orderBy(desc(happinessIndexHistoryTable.date))
-    .limit(PERCENTILE_WINDOW_DAYS);
-
-  // 視窗整理與心智 MIND_COMBINED_SINCE 的過濾共用 happinessDimensionHistory.ts（/api/happiness/history 也走那裡）
-  return buildDimensionHistory(rows, beforeDate);
-}
-
 /** Pure(ish) extraction step shared by the display path (fetchFreshSummaries,
  *  above) and the 23:55 daily-persist path (computeAndPersistDailySnapshot,
- *  below) — pulls each dimension's *raw* score out of the already-fetched
- *  raw results, percentile-ranks it against `history` (HHI v3, see
- *  percentileRank() in happinessIndex.ts), then runs
- *  computeHappinessComponents on the normalized values. No DB write happens
- *  here — `history` itself is a DB read, done by the caller via
- *  fetchDimensionHistory so both callers share one query shape. */
+ *  below) — pulls each dimension's score out of the already-fetched raw
+ *  results (2026-10-30 起面向分數就是公式分，見 happinessDimensionHistory.ts),
+ *  then runs computeHappinessComponents. No DB write happens here. */
 async function extractHappinessResult(
   results: Map<string, DashboardSummary>,
-  history: DimensionHistory = EMPTY_HISTORY,
-  today: string = taipeiDateString(new Date())
+  today: string = taipeiDateString(new Date()),
+  dayAdjust: number = 0
 ): Promise<{
   result: HappinessResult;
   rawComponents: HappinessInputs;
@@ -303,15 +268,9 @@ async function extractHappinessResult(
   const socialStale = si?.status === "ok" ? (si.data)?.stale === true : false;
   const usingStaleData = socialStale;
 
-  // calmRaw is busyness inverted to "higher is better" BEFORE percentile
-  // ranking (percentileRank always ranks "higher is better" raw values —
-  // see its doc comment in happinessIndex.ts).
   const calmRaw = busynessScore === null ? null : clamp(100 - busynessScore, 0, 100);
 
-  const normalized = normalizeDimensions(
-    { lifeFreedom: lifeFreedomRaw, fitness: fitnessHabitRaw, calm: calmRaw, mind: mindRaw, social: socialRaw, travel: travelRaw },
-    history
-  );
+  const normalized = scoresOfRaws({ lifeFreedom: lifeFreedomRaw, fitness: fitnessHabitRaw, calm: calmRaw, mind: mindRaw, social: socialRaw, travel: travelRaw });
   const lifeFreedomScore = normalized.lifeFreedom;
   const fitnessHabitScore = normalized.fitness;
   const calmScore = normalized.calm;
@@ -323,8 +282,7 @@ async function extractHappinessResult(
   // (calmScore = 100 - busynessScore) — it was kept unchanged (and its
   // existing tests with it) rather than reworked to take calmScore
   // directly, so we invert calmScore back here to cancel that internal
-  // inversion out and land on exactly the percentile-normalized calmScore
-  // computed above.
+  // inversion out and land on exactly the calmScore computed above.
   const normalizedBusynessInput = calmScore === null ? null : 100 - calmScore;
 
   const result = computeHappinessComponents({
@@ -334,7 +292,7 @@ async function extractHappinessResult(
     mindScore,
     travelScore,
     socialScore,
-  });
+  }, HAPPINESS_CONFIG, dayAdjust);
 
   const rawComponents: HappinessInputs = {
     lifeFreedomScore: lifeFreedomRaw,
@@ -369,7 +327,8 @@ async function buildHappinessDisplayData(
   result: HappinessResult,
   busynessScore: number | null,
   usingStaleData: boolean,
-  mindCombined: CombinedMind | null = null
+  mindCombined: CombinedMind | null = null,
+  dayLink: DayLink | null = null
 ): Promise<Record<string, unknown>> {
   const configVersion = getHappinessConfigVersion();
 
@@ -394,6 +353,7 @@ async function buildHappinessDisplayData(
       configVersion,
       weights: HAPPINESS_WEIGHTS,
       mindCombined,
+      day: dayLink,
     };
   }
 
@@ -419,6 +379,7 @@ async function buildHappinessDisplayData(
   let weakestScore: number;
   let weakestComponent: string;
   let isSnapshotFinal: boolean;
+  let day: Record<string, unknown> | null = dayLink as unknown as Record<string, unknown> | null;
 
   if (todayRow) {
     // 今天 23:55 已經快照過了——直接凍結用已存的那筆，不要再即時重算，這樣
@@ -430,6 +391,10 @@ async function buildHappinessDisplayData(
     weakestScore = todayRow.weakestScore;
     weakestComponent = todayRow.weakestComponent;
     isSnapshotFinal = true;
+    // 快照後修正已定案（含扣分），以存下的為準
+    if (todayRow.dayScore !== null) {
+      day = { ...dayLink, total: todayRow.dayScore, achievement: todayRow.dayAchievement, ai: todayRow.dayAi, adjust: todayRow.dayAdjust ?? 0 };
+    }
   } else {
     // 今天還沒被快照——這就是「今日暫定」：即時 finalScore，跟「最近一筆已
     // 存在的 displayedScore」平滑（不是嚴格等於「昨天」日期，見
@@ -467,6 +432,7 @@ async function buildHappinessDisplayData(
     configVersion,
     weights: HAPPINESS_WEIGHTS,
     mindCombined,   // 心智維度的原始分數與組成（想法分數、採用的日報分數與日期），給心智卡片顯示
+    day,            // 今天的每日評分與日分修正（total／achievement／ai／baseline／adjust）；讀不到＝null
   };
 }
 
@@ -485,8 +451,8 @@ async function buildHappinessDisplayData(
 export async function computeAndPersistDailySnapshot(): Promise<void> {
   const results = await fetchRawSummaryResults();
   const today = taipeiDateString(new Date());
-  const history = await fetchDimensionHistory(today);
-  const { result, rawComponents, mindCombined } = await extractHappinessResult(results, history, today);
+  const dayLink = await loadDayLink(today, true).catch((): DayLink | null => null);
+  const { result, rawComponents, mindCombined } = await extractHappinessResult(results, today, dayLink?.adjust ?? 0);
 
   if (result.finalScore === null) return; // 沒東西可存，維持「資料準備中」
 
@@ -523,6 +489,10 @@ export async function computeAndPersistDailySnapshot(): Promise<void> {
     travelRaw: rawComponents.travelScore,
     socialRaw: rawComponents.socialScore,
     mindIdeasRaw,
+    dayScore: dayLink?.total ?? null,
+    dayAchievement: dayLink?.achievement ?? null,
+    dayAi: dayLink?.ai ?? null,
+    dayAdjust: dayLink?.adjust ?? null,
   };
 
   await db

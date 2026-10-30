@@ -4,15 +4,12 @@ import type { HhiRow } from './boardView'
 import { DIMENSIONS } from './dimensions'
 import { addDays, type DimSeries } from './homeView'
 
-/** 分數的共同說明：六個面向的分數都是對照「自己近 90 天」的百分位，不是絕對好壞 */
-export const PERCENTILE_NOTE = '面向分數是對照你自己近 90 天的百分位：70 分代表比近三個月 70% 的日子表現更好，不是考試分數。'
-/** absolute 面向（目前只有旅遊）的說明：分數在兩次旅行之間每天遞減，排百分位幾乎天天是 0，所以直接用公式分數 */
-export const ABSOLUTE_NOTE = '這個面向不排百分位，分數就是公式算出的原始分數（滿分條件見下方「分數怎麼來」）；兩次旅行之間分數每天下降，拿今天跟過去排名幾乎天天墊底，反而看不出狀態。'
+/** 分數的共同說明（使用者 2026-10-30：統一用分數）：六個面向都是公式算出的絕對分 */
+export const SCORE_NOTE = '面向分數是公式算出的絕對分（0–100），滿分條件見下方「分數怎麼來」；做得更好分數就會往上，不會因為維持高水準而掉回中間。和自己近 90 天比的名次在「近況」。'
 
-/** 詳細數據裡「原始分數 → 面向分數」那一行 */
-export function rawToScoreText(raw: number | null, normalized: number | null, absolute: boolean | undefined): string {
-  if (absolute) return `原始分數 = 面向分數 = ${normalized ?? raw ?? '—'}（不排百分位）`
-  return `原始分數（未正規化）：${raw ?? '—'}　→　對照近 90 天百分位 = ${normalized ?? '—'}`
+/** 詳細數據裡「面向分數的由來」那一行：raw 是子系統的原始欄位（從容的 busyIndex 方向相反，分開標） */
+export function rawToScoreText(raw: number | null, score: number | null): string {
+  return raw === null || raw === score ? `面向分數 = ${score ?? '—'}（公式分）` : `子系統原始值 ${raw}　→　面向分數 = ${score ?? '—'}`
 }
 
 export interface RangeStats {

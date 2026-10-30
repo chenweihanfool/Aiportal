@@ -31,6 +31,10 @@ export interface HappinessConfig {
   // specifically so old happiness_index_history rows aren't misread as
   // comparable to rows produced under a different scoring meaning.
   scoringMode: string;
+  // 日分修正（2026-10-30，見 lib/dailyScore.ts）：(今日分 − 近 dayBaselineDays 天平均) × dayAdjustFactor，上下限 ±dayAdjustCap
+  dayAdjustFactor: number;
+  dayAdjustCap: number;
+  dayBaselineDays: number;
 }
 
 // 2026-08-09: added mindWeight (心智指標). Existing three weights scaled down
@@ -68,6 +72,10 @@ export interface HappinessConfig {
 // 見 lib/mindCombined.ts），取代近 3 天日記篇數（dailyEngagementScore）。權重不變；
 // scoringMode 加上 mind-combined 讓 configVersion 跟著變，舊列不會被誤當同一把尺。
 // 心智的百分位歷史也只取 2026-10-10 起的列（MIND_COMBINED_SINCE），之前不足 10 天時直接用原始分數。
+//
+// 2026-10-30：統一成固定校準的絕對分，取代 v3 的滾動百分位（見 happinessDimensionHistory.ts 的 calibrateDimension）。
+// 排名的問題：長期維持高水準，分數也會掉回中間，看不出成長；有遞減天性的面向（旅遊）天天墊底；
+// 一跌就大幅跳動，再被短板修正放大。權重不變；另加日分修正，讓當天的成果動得了幸福指數。
 export const HAPPINESS_CONFIG: HappinessConfig = {
   lifeFreedomWeight: 0.27,
   fitnessWeight: 0.18,
@@ -78,7 +86,10 @@ export const HAPPINESS_CONFIG: HappinessConfig = {
   weakestLinkWeight: 0.15,
   smoothingTodayWeight: 0.70,
   smoothingYesterdayWeight: 0.30,
-  scoringMode: "percentile-90d-v1+mind-combined-v1",
+  scoringMode: "calibrated-v1+mind-combined-v1",
+  dayAdjustFactor: 0.15,
+  dayAdjustCap: 6,
+  dayBaselineDays: 28,
 };
 
 if (
@@ -150,6 +161,8 @@ export interface HappinessComponents {
 export interface HappinessResult {
   finalScore: number | null; // null when all inputs are missing — "資料準備中", never a fake score
   finalRaw: number | null;
+  /** 算進 finalRaw 的日分修正（分） */
+  dayAdjust: number;
   baseScore: number | null;
   weakestScore: number | null;
   weakestComponent: string | null; // human label, e.g. "生活從容"
@@ -169,7 +182,8 @@ const DIMENSION_LABELS = {
  * against the spec's worked examples without mocking anything. */
 export function computeHappinessComponents(
   inputs: HappinessInputs,
-  config: HappinessConfig = HAPPINESS_CONFIG
+  config: HappinessConfig = HAPPINESS_CONFIG,
+  dayAdjust: number = 0
 ): HappinessResult {
   const calmScore = inputs.busynessScore === null ? null : clamp(100 - inputs.busynessScore, 0, 100);
 
@@ -199,6 +213,7 @@ export function computeHappinessComponents(
     return {
       finalScore: null,
       finalRaw: null,
+      dayAdjust: 0,
       baseScore: null,
       weakestScore: null,
       weakestComponent: null,
@@ -211,12 +226,13 @@ export function computeHappinessComponents(
 
   const weakest = available.reduce((min, d) => (d.value < min.value ? d : min));
 
-  const finalRaw = (1 - config.weakestLinkWeight) * baseScore + config.weakestLinkWeight * weakest.value;
+  const finalRaw = (1 - config.weakestLinkWeight) * baseScore + config.weakestLinkWeight * weakest.value + dayAdjust;
   const finalScore = roundHalfUp(clamp(finalRaw, 0, 100));
 
   return {
     finalScore,
     finalRaw,
+    dayAdjust,
     baseScore,
     weakestScore: weakest.value,
     weakestComponent: weakest.label,
@@ -236,42 +252,4 @@ export function computeDisplayedScore(
   return roundHalfUp(
     config.smoothingTodayWeight * finalScore + config.smoothingYesterdayWeight * yesterdayDisplayedScore
   );
-}
-
-// ── Per-dimension percentile normalization (HHI v3, 2026-09-01) ──────────
-//
-// The six dimensions come from four independent formulas (this repo's own
-// mind/social/travel math, a separate Python busyness service, and two
-// external systems' own composite indices) with wildly different shapes —
-// some rarely exceed 60-70 under completely normal real-world behavior,
-// some saturate to 90+ easily. Weight-averaging their raw 0-100 outputs
-// directly meant "80" carried a different meaning in every dimension:
-// recalibrating four separately-owned formulas (two of them in other
-// repos) to all agree on an absolute scale isn't practical, and even after
-// doing so there's no guarantee they'd actually end up comparable without
-// looking at real usage data anyway — which is exactly what this does
-// instead, automatically, per person.
-//
-// percentileRank ranks today's raw score against that SAME dimension's own
-// trailing window of raw scores, so "80" always means "a relatively good
-// day for you, in that dimension" regardless of what the underlying
-// formula's own scale looks like — self-calibrating per person per
-// dimension by construction, with no formula surgery required.
-export const PERCENTILE_WINDOW_DAYS = 90;
-
-// Below this many historical days, a percentile is closer to noise than
-// signal (with 2 data points, today is trivially either the best or worst
-// day ever) — fall back to the raw score unchanged until enough history has
-// accumulated, rather than showing a misleadingly precise-looking 0 or 100.
-export const MIN_HISTORY_DAYS_FOR_PERCENTILE = 10;
-
-/** `value`'s percentile rank (0-100) within `history`: what fraction of
- * historical days scored at or below today. Always "higher is better"
- * regardless of the raw formula's own direction/scale — callers invert
- * "lower is better" raw scores (e.g. busyness) to their "higher is better"
- * form (e.g. calm = 100-busyness) before calling this, not after. */
-export function percentileRank(value: number, history: number[]): number {
-  if (history.length < MIN_HISTORY_DAYS_FOR_PERCENTILE) return roundHalfUp(clamp(value, 0, 100));
-  const countAtOrBelow = history.filter((h) => h <= value).length;
-  return roundHalfUp((countAtOrBelow / history.length) * 100);
 }

@@ -10,6 +10,8 @@ export const MIND_IDEAS_WEIGHT = 0.8;
 export const MIND_REPORT_WEIGHT = 0.2;
 /** 這天起 happiness_index_history.mind_raw 存的是合成版；之前是日記篇數版，不拿來當百分位歷史。 */
 export const MIND_COMBINED_SINCE = "2026-10-10";
+/** 這天起想法分數改用修正後的公式（見 ideasMind.ts）；之前的 mind_raw 飽和，不和新分數畫在一起。 */
+export const MIND_V3_SINCE = "2026-10-31";
 
 export interface CombinedMind {
   score: number | null;

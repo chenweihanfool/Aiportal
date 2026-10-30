@@ -21,7 +21,7 @@ export interface DimensionDef {
   icon: string
   /** 識別色 */
   color: string
-  /** /api/dashboard 的 hhi 摘要 data 裡，這個面向的正規化分數（對照自己近 90 天的百分位，0–100）欄位 */
+  /** /api/dashboard 的 hhi 摘要 data 裡，這個面向的分數（公式算出的絕對分，0–100）欄位 */
   scoreKey: string
   /** hhi 摘要 data.weights 裡的權重欄位 */
   weightKey: string
@@ -29,11 +29,9 @@ export interface DimensionDef {
   defaultWeight: number
   /** 來源子系統在 /api/dashboard summaries 的 id */
   subsystemId: string
-  /** 子系統摘要裡的「原始分數」欄位（未正規化，只在詳細數據裡對照顯示）；沒有就 null */
+  /** 子系統摘要裡的「原始值」欄位（只在詳細數據裡對照顯示）；沒有就 null */
   rawField: string | null
   detail: DimensionDetailKind
-  /** true＝不排百分位，面向分數就是原始分數（與 api-server happinessDimensionHistory.ts 的 ABSOLUTE_DIMENSIONS 一致） */
-  absolute?: boolean
   /** 這個面向衡量什麼、資料從哪來（面向頁用） */
   about: { measures: string; source: string }
 }
@@ -53,7 +51,7 @@ export const DIMENSIONS: DimensionDef[] = [
   },
   {
     key: 'calm', label: '從容', icon: '🌿', color: '#5f9bf0',
-    // calmScore 已經反向＋正規化（越高越從容）；rawField 的 busyIndex 是「越高越忙」的原始值，只在詳細數據裡對照顯示
+    // calmScore 已經反向（越高越從容）；rawField 的 busyIndex 是「越高越忙」的原始值，只在詳細數據裡對照顯示
     scoreKey: 'calmScore', weightKey: 'calmWeight', defaultWeight: 0.15,
     subsystemId: 'vikunja', rawField: 'busyIndex', detail: 'subsystem',
     about: { measures: '任務有沒有堆積：逾期壓力、近期負荷、停滯與拖延反過來算，越高越從容。', source: '任務追蹤系統（Vikunja）' },
@@ -73,7 +71,7 @@ export const DIMENSIONS: DimensionDef[] = [
   {
     key: 'travel', label: '旅遊', icon: '🧳', color: '#f29e4c',
     scoreKey: 'travelScore', weightKey: 'travelWeight', defaultWeight: 0.12,
-    subsystemId: 'travel', rawField: 'travelScore', detail: 'subsystem', absolute: true,
+    subsystemId: 'travel', rawField: 'travelScore', detail: 'subsystem',
     about: { measures: '距上次旅行多久、近 180 天累積的旅行天數、近 90 天吃過幾間美食，有排定的行程再加分。', source: '旅遊生活（遊記＋美食地圖）' },
   },
 ]
