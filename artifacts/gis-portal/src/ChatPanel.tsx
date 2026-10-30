@@ -1,15 +1,42 @@
 // 入口網內建 HERMES 對話。純邏輯在 chatView.ts，網路在 chatApi.ts。
+// 使用者 2026-10-30：「想法庫會蓋掉HERMES對話框 讓我不好複製貼上」——對話是獨立的浮動視窗，不佔抽屜，開著想法庫也能用。
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { MarkdownView } from './MarkdownView'
 import { answerApproval, fetchChatStatus, fetchMessages, fetchRun, newChat, readEvents, requestRestart, sendMessage, stopRun, type ChatStatus } from './chatApi'
-import { applyEvent, applyStatus, emptyRun, parseSse, restartBusy, restartText, tokenText, type RunView } from './chatView'
+import { applyEvent, applyStatus, emptyRun, parseSse, restartBusy, restartText, setPrefillTarget, tokenText, type RunView } from './chatView'
 
 type Item = { key: string; role: 'user' | 'assistant' | 'divider'; content: string }
 
 const POLL_MS = 2000
 const STATUS_MS = 15_000
 
-export function ChatPanel({ pw }: { pw: string }) {
+/** 浮動按鈕與視窗。關掉只是隱藏：回覆跑到一半不會中斷，對話內容也還在 */
+export function ChatDock({ pw }: { pw: string }) {
+  const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [prefill, setPrefill] = useState<{ text: string; n: number } | null>(null)
+  const show = () => { setMounted(true); setOpen(true) }
+  useEffect(() => {
+    setPrefillTarget((text) => { show(); setPrefill((p) => ({ text, n: (p?.n ?? 0) + 1 })) })
+    return () => setPrefillTarget(null)
+  }, [])
+  return (
+    <>
+      <button type="button" className="hm-chat-fab" data-testid="chat-open" aria-label="和 HERMES 對話" aria-expanded={open} title="和 HERMES 對話" onClick={() => (open ? setOpen(false) : show())}>💬</button>
+      {mounted && (
+        <section className="ch-dock" data-testid="chat-dock" role="dialog" aria-label="HERMES 對話" hidden={!open}>
+          <header className="ch-dock-head">
+            <h2>HERMES 對話</h2>
+            <button type="button" className="ch-btn" onClick={() => setOpen(false)} aria-label="收起對話">✕</button>
+          </header>
+          <ChatPanel pw={pw} prefill={prefill} />
+        </section>
+      )}
+    </>
+  )
+}
+
+export function ChatPanel({ pw, prefill }: { pw: string; prefill: { text: string; n: number } | null }) {
   const [status, setStatus] = useState<ChatStatus | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [input, setInput] = useState('')
@@ -19,6 +46,7 @@ export function ChatPanel({ pw }: { pw: string }) {
   const [confirming, setConfirming] = useState(false)
   const [lastTokens, setLastTokens] = useState<number | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const seq = useRef(0)
   const push = (role: Item['role'], content: string) => setItems((xs) => [...xs, { key: `n${++seq.current}`, role, content }])
 
@@ -34,6 +62,12 @@ export function ChatPanel({ pw }: { pw: string }) {
     const t = setInterval(() => { void loadStatus() }, restarting ? 3000 : STATUS_MS)
     return () => clearInterval(t)
   }, [loadStatus, restarting])
+
+  useEffect(() => {
+    if (!prefill) return
+    setInput((s) => (s.trim() ? `${s}\n${prefill.text}` : prefill.text))
+    inputRef.current?.focus()
+  }, [prefill])
 
   useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight }) }, [items, run])
 
@@ -159,7 +193,7 @@ export function ChatPanel({ pw }: { pw: string }) {
       </div>
       {error && <p className="ch-note" role="alert" style={{ margin: 0, color: '#e0605a' }}>{error}</p>}
       <form className="ch-form" onSubmit={(e) => void send(e)}>
-        <textarea className="ch-input" data-testid="chat-input" rows={2} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey} placeholder="和 HERMES 說話（Enter 送出，Shift+Enter 換行）" aria-label="訊息" disabled={!ready} />
+        <textarea ref={inputRef} className="ch-input" data-testid="chat-input" rows={3} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey} placeholder="和 HERMES 說話（Enter 送出，Shift+Enter 換行）" aria-label="訊息" disabled={!ready} />
         {runId
           ? <button type="button" className="ch-btn ch-btn--warn" onClick={() => void stopRun(pw, runId)}>中止</button>
           : <button type="submit" className="ch-btn" disabled={!ready || !input.trim()}>送出</button>}

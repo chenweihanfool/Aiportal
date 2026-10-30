@@ -1,6 +1,16 @@
 // 入口網內建 HERMES 對話的純邏輯：解析事件流、把事件累積成畫面狀態。網路在 chatApi.ts，畫面在 ChatPanel.tsx。
 // HERMES 的 /v1/runs/{id}/events 每筆是 `data: {json}`，事件名在 JSON 的 event 欄；`:` 開頭是註解（keepalive、stream closed）。
 
+// 別的畫面把一句話帶進對話框（想法庫的「給 HERMES」）。首頁的 ChatDock 掛著才有接收者。
+let prefillTarget: ((text: string) => void) | null = null
+export function setPrefillTarget(fn: ((text: string) => void) | null) { prefillTarget = fn }
+/** 回傳有沒有帶過去；沒有對話框（例如舊版首頁）回 false，呼叫端退回複製 */
+export function prefillHermesChat(text: string): boolean {
+  if (!prefillTarget) return false
+  prefillTarget(text)
+  return true
+}
+
 export interface ChatEvent { event: string; [k: string]: unknown }
 
 /** requestId／executionGeneration：HERMES 有給就原樣帶回 */
