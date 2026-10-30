@@ -32,6 +32,10 @@ services:
       # 倉庫索引（GET /api/github/repos）：fine-grained token，只給 Metadata: Read；空值＝只抓公開倉庫。GITHUB_REPO_OWNER 空值＝chenweihanfool。
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_REPO_OWNER: ${GITHUB_REPO_OWNER:-}
+      # 入口網內建 HERMES 對話：與 HERMES 的 API_SERVER_KEY 同一把；空值＝對話顯示「尚未設定」（重啟 Gateway 不需要）。
+      HERMES_API_BASE: ${HERMES_API_BASE:-http://hermes:8642}
+      HERMES_API_KEY: ${HERMES_API_KEY:-}
+      HERMES_CHAT_IDLE_MINUTES: ${HERMES_CHAT_IDLE_MINUTES:-60}
       # 附件預覽（GET /api/hermes-attachment）讀這個資料夾；唯讀掛載，api-server 無法寫入或改動 vault。
       HERMES_ATTACHMENT_ROOT: /data/attachments
       # 遊記相片的縮圖／檢視圖（GET /api/media/trips/…）讀這個資料夾；唯讀掛載，api-server 無法寫入。

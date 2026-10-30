@@ -17,3 +17,4 @@ export * from "./hermesIdeas";
 export * from "./hermesPlaces";
 export * from "./hermesTrips";
 export * from "./feedSnapshot";
+export * from "./hermesChat";
