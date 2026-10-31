@@ -42,7 +42,7 @@ pnpm workspace（Node 22、TypeScript 5.9）。細節以程式碼為準；這段
 - 改 schema 欄位只增不改；不相容就升 `version`，舊版推送會被 409 擋下，所以**推送端要跟著上線**（部署順序：先 api-server，再 kb-pipeline 腳本）。
 
 ### 前端擴充點
-- 首頁區塊：在 `homeNav.ts` 的 `HOME_SECTIONS` 加一筆，再用 `<HomeCard id="…">` 包內容；導覽與標題自動帶上。
+- 首頁區塊：在 `homeNav.ts` 的 `HOME_SECTIONS` 加一筆，再用 `<HomeCard id="…">` 包內容；導覽與標題自動帶上。不是區塊的常用功能加在同檔的 `HOME_SHORTCUTS`。
 - 六個生活面向：註冊表是 `dimensions.ts`（頁面 `DimensionPage.tsx`）。
 - 色彩與主題 token：`portal.css` 的 `:root` 與 `theme.ts` 的 `CSS_TOKENS` 必須一致，有測試比對。
 - 版本歷程在 `versionHistory.ts`；每個使用者看得到的變更都要升版號並補一筆。

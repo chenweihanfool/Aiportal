@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { biggestDrag, buildHhiBreakdown } from './boardView'
-import { SCORE_NOTE, deltaText, dimHash, dimNeighbors, dimOverview, rangeStats, recentDigest } from './dimensionPage'
+import { SCORE_NOTE, deltaText, dimHash, dimHref, dimNeighbors, dimOverview, rangeStats, recentDigest } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
 import { DIMENSIONS, DIMENSION_FALLBACK_COLOR, dimensionOf } from './dimensions'
 import { useAsync, useNow } from './homeHooks'
@@ -183,7 +183,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                             const on = r.key === dimKey
                             return (
                               <li key={r.key}>
-                                <a href={`#${dimHash(r.key)}`} className={`dp-ov-row${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined} style={{ ['--dim' as string]: d?.color ?? DIMENSION_FALLBACK_COLOR }}
+                                <a href={dimHref(r.key)} className={`dp-ov-row${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined} style={{ ['--dim' as string]: d?.color ?? DIMENSION_FALLBACK_COLOR }}
                                   title={r.gap === null ? `${r.label}：沒有分數` : `${r.label} ${Math.round(r.value!)} 分・權重 ${r.weightPct}%・還能補 ${r.gap} 分`}
                                   onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(r.key) }}>
                                   <span className="dp-ov-name"><span aria-hidden>{d?.icon}</span>{r.label}{drag?.key === r.key && <em title="權重 × 離滿分的差最大">短板</em>}</span>
@@ -233,8 +233,8 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
           </div>
           {nb && (
             <nav className="dp-pager" aria-label="切換面向">
-              <a href={`#${dimHash(nb.prev)}`} data-testid="dp-prev" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.prev) }}>← {dimensionOf(nb.prev)?.label}</a>
-              <a href={`#${dimHash(nb.next)}`} data-testid="dp-next" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.next) }}>{dimensionOf(nb.next)?.label} →</a>
+              <a href={dimHref(nb.prev)} data-testid="dp-prev" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.prev) }}>← {dimensionOf(nb.prev)?.label}</a>
+              <a href={dimHref(nb.next)} data-testid="dp-next" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.next) }}>{dimensionOf(nb.next)?.label} →</a>
             </nav>
           )}
         </div>
@@ -250,7 +250,7 @@ function Shell({ title, dimKey, children }: { title: string; dimKey: string; chi
         <a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); window.location.hash = '' }}>← 首頁</a>
         <nav className="dp-nav" aria-label="六個面向">
           {DIMENSIONS.map((d) => (
-            <a key={d.key} href={`#${dimHash(d.key)}`} data-testid={`dp-nav-${d.key}`} className={`dp-chip${d.key === dimKey ? ' is-on' : ''}`} style={{ ['--dim' as string]: d.color }}
+            <a key={d.key} href={dimHref(d.key)} data-testid={`dp-nav-${d.key}`} className={`dp-chip${d.key === dimKey ? ' is-on' : ''}`} style={{ ['--dim' as string]: d.color }}
               aria-current={d.key === dimKey ? 'page' : undefined} aria-label={d.label} title={d.label}
               onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(d.key) }}>
               <span aria-hidden>{d.icon}</span><span className="dp-chip-t">{d.label}</span>

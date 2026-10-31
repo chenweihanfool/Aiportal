@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { HOME_SECTIONS, activeSection } from './homeNav'
+import { HOME_SECTIONS, HOME_SHORTCUTS, activeSection } from './homeNav'
 
 // 首頁左側錨點導覽（≥1300px 是左側直排、較窄時是頂部橫排；樣式在 portal.css 的 hm-nav）。
 // 點了捲到該區塊；目前看到哪一區由 IntersectionObserver 判斷（不監聽 scroll 事件）。
-export function HomeNav() {
+// 底下一組「常用入口」是到別的頁或開抽屜（HOME_SHORTCUTS），不參與目前區塊的高亮。
+export function HomeNav({ onOpenIdeas }: { onOpenIdeas: () => void }) {
   const [active, setActive] = useState<string | null>(HOME_SECTIONS[0]?.id ?? null)
   const visible = useRef(new Set<string>())
   // 點了導覽後的一小段時間不聽 IntersectionObserver：頁面捲不到底的區塊（最後幾個）不會因為上面的區塊還在視窗內而被搶走高亮
@@ -45,6 +46,11 @@ export function HomeNav() {
           <span aria-hidden>{s.icon}</span><span className="hm-nav-label">{s.label}</span>
         </button>
       ))}
+      <div className="hm-nav-shorts" role="group" aria-label="常用入口">
+        {HOME_SHORTCUTS.map((s) => 'href' in s
+          ? <a key={s.id} href={s.href} className="hm-nav-short"><span aria-hidden>{s.icon}</span><span className="hm-nav-label">{s.label}</span></a>
+          : <button key={s.id} type="button" className="hm-nav-short" aria-haspopup="dialog" onClick={onOpenIdeas}><span aria-hidden>{s.icon}</span><span className="hm-nav-label">{s.label}</span></button>)}
+      </div>
     </nav>
   )
 }

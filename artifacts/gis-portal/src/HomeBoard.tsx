@@ -186,7 +186,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
 
   return (
     <div className="hm-layout">
-    <HomeNav />
+    <HomeNav onOpenIdeas={() => { if (on) setDrawer('ideas'); else onRequestUnlock() }} />
     <div className="hm-root" data-sys={alert ? 'alert' : 'ok'}>
       <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence} move={move}
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock}

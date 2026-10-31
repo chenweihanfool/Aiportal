@@ -1,11 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { HOME_SECTIONS, activeSection, sectionDef } from './homeNav'
+import { HOME_SECTIONS, HOME_SHORTCUTS, activeSection, sectionDef } from './homeNav'
 
 const order = HOME_SECTIONS.map((s) => s.id)
 
 describe('HOME_SECTIONS', () => {
   it('has unique ids', () => {
     expect(new Set(order).size).toBe(order.length)
+  })
+})
+
+describe('HOME_SHORTCUTS', () => {
+  it('id 不重複，每一筆都有名稱與圖示', () => {
+    expect(new Set(HOME_SHORTCUTS.map((s) => s.id)).size).toBe(HOME_SHORTCUTS.length)
+    for (const s of HOME_SHORTCUTS) {
+      expect(s.label.length).toBeGreaterThan(0)
+      expect(s.icon.length).toBeGreaterThan(0)
+    }
+  })
+  it('使用者常用的三個都在，連結是 hash 路由', () => {
+    expect(HOME_SHORTCUTS.map((s) => s.label)).toEqual(['時間軸', '想法庫', '關係宇宙'])
+    for (const s of HOME_SHORTCUTS) if ('href' in s) expect(s.href.startsWith('#')).toBe(true)
   })
 })
 

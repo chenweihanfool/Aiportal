@@ -22,6 +22,18 @@ export const HOME_SECTIONS: readonly HomeSectionDef[] = [
   { id: 'sec-svc', label: '付費服務', icon: '💳', title: '付費服務' },
 ]
 
+/**
+ * 常用入口：不在首頁區塊裡的功能，放在導覽上不用捲動就點得到（使用者 2026-11-01：「這幾個功能又蠻常用」）。
+ * 新增一個入口＝加一筆。有 href 是到別的頁；action 是首頁自己處理的動作（想法庫是抽屜，沒有網址）。
+ */
+export type HomeShortcutDef = { id: string; label: string; icon: string } & ({ href: `#${string}` } | { action: 'ideas' })
+
+export const HOME_SHORTCUTS: readonly HomeShortcutDef[] = [
+  { id: 'timeline', label: '時間軸', icon: '🕒', href: '#graph/timeline' },
+  { id: 'ideas', label: '想法庫', icon: '💡', action: 'ideas' },
+  { id: 'graph', label: '關係宇宙', icon: '🌌', href: '#graph' },
+]
+
 /** 目前高亮哪一個：視窗中可見的區塊裡，註冊表順序最前面的；都不可見時維持上一個。 */
 export function activeSection(order: readonly string[], visible: ReadonlySet<string>, previous: string | null): string | null {
   for (const id of order) if (visible.has(id)) return id

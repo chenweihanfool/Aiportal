@@ -977,15 +977,19 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 .hm-layout { display: block; }
 .hm-nav { position: sticky; top: 0; z-index: 20; display: flex; gap: 0.35rem; overflow-x: auto; padding: 0.4rem 0; margin-bottom: 0.6rem; background: var(--c-bg); scrollbar-width: none; }
 .hm-nav::-webkit-scrollbar { display: none; }
-.hm-nav-item { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.35rem; font: inherit; font-size: 0.72rem; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 999px; padding: 3px 11px; cursor: pointer; white-space: nowrap; }
-.hm-nav-item:hover { color: var(--c-ink); border-color: var(--c-line-strong); }
+.hm-nav-item, .hm-nav-short { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.35rem; font: inherit; font-size: 0.72rem; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 999px; padding: 3px 11px; cursor: pointer; white-space: nowrap; }
+.hm-nav-item:hover, .hm-nav-short:hover { color: var(--c-ink); border-color: var(--c-line-strong); }
 .hm-nav-item[data-active="true"] { color: var(--c-bg); background: var(--c-accent); border-color: var(--c-accent); font-weight: 700; }
-.hm-nav-item:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.hm-nav-item:focus-visible, .hm-nav-short:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+/* 常用入口：窄螢幕排在橫列最前面（放後面要先滑過九顆錨點）；≥1300px 在直排底部，用分隔線跟錨點分開 */
+.hm-nav-shorts { order: -1; flex: 0 0 auto; display: flex; gap: 0.35rem; }
+.hm-nav-short { text-decoration: none; }
 .hm-layout section[id^="sec-"] { scroll-margin-top: 3.2rem; }
 @media (min-width: 1300px) {
   .hm-layout { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 0.9rem; align-items: start; }
   .hm-nav { flex-direction: column; overflow: visible; top: 0.4rem; margin: 0; padding: 0; background: transparent; gap: 0.3rem; }
-  .hm-nav-item { border-radius: 8px; padding: 6px 10px; justify-content: flex-start; }
+  .hm-nav-item, .hm-nav-short { border-radius: 8px; padding: 6px 10px; justify-content: flex-start; }
+  .hm-nav-shorts { order: 0; flex-direction: column; gap: 0.3rem; margin-top: 0.35rem; padding-top: 0.6rem; border-top: 1px solid var(--c-line); }
   .hm-layout section[id^="sec-"] { scroll-margin-top: 0.6rem; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
@@ -1144,11 +1148,11 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 .hm-sub { font-size: var(--fs-xs); }
 .hm-note { font-size: var(--fs-sm); }
 .hm-chip { border-radius: var(--r-sm); }
-.hm-nav-item { font-size: var(--fs-xs); }
+.hm-nav-item, .hm-nav-short { font-size: var(--fs-xs); }
 @media (min-width: 1300px) {
   .hm-layout { grid-template-columns: 7.2rem minmax(0, 1fr); }
   .hm-nav { top: var(--sp-2); }
-  .hm-nav-item { border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
+  .hm-nav-item, .hm-nav-short { border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
 }
 
 /* ── 今天：左＝問候、大分數、一句話；右＝一眼看 ── */

@@ -56,6 +56,8 @@ export function dimKeyFromHash(hash: string): string | null {
 }
 
 export const dimHash = (key: string) => `dim/${key}`
+/** 面向頁的連結：`<a href>` 一律用這個。少了 # 會變成站內路徑 /dim/<key>，伺服器回首頁 HTML，畫面是白的（2.72.0 修過） */
+export const dimHref = (key: string) => `#${dimHash(key)}`
 
 /** 前一個與後一個面向（循環），給頁首的切換用 */
 export function dimNeighbors(key: string): { prev: string; next: string } | null {
