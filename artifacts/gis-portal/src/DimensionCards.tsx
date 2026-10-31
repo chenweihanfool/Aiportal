@@ -7,6 +7,7 @@ import { rawToScoreText } from './dimensionPage'
 import { MIND_SCORE_BANDS, SOCIAL_SCORE_BANDS, bandTone, formatMinutesAgo, formatPct, formatTWD, heroTone } from './format'
 import { FormulaPanel, FormulaToggle, LabeledRadarChart, LockedGaugeCard, SupportStats } from './panelUi'
 import { type DashboardSummary, type SiteData } from './portalApi'
+import { FITNESS_REPORT_URL, formatWeekRange, parseFitnessWeeklyReport, type FitnessWeeklyReport } from './fitnessWeeklyReport'
 
 // ─────────────────────────────────────────────
 // Six-dimension summary bodies — one per HHI-contributing subsystem with a
@@ -41,6 +42,51 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
 
 const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌', '有氧']
 
+const OBSERVATION_MARK = {
+  good: { mark: '✓', color: COLOR.ok },
+  warn: { mark: '!', color: COLOR.warn },
+  info: { mark: '・', color: COLOR.steel },
+}
+
+// 上週週報：FitnessForge 算好的摘要，完整內容連回 FitnessForge 的週報告頁
+function FitnessWeeklyReportSection({ report }: { report: FitnessWeeklyReport }) {
+  const change = report.scoreChangePct
+  const items = [
+    { label: '綜合分', value: report.totalScore.toLocaleString('zh-TW') },
+    { label: '比前 4 週', value: change !== null ? `${change >= 0 ? '+' : ''}${change}%` : '—', color: change === null ? undefined : (change >= 0 ? COLOR.ok : COLOR.crit) },
+    { label: '里程碑', value: `${report.stars} / 5` },
+    { label: '訓練天數', value: `${report.trainingDays} 天` },
+    { label: '力量組數', value: `${report.strengthSets} 組` },
+    { label: '有氧', value: `${report.cardioMinutes} 分鐘` },
+    { label: '每日步數', value: report.dailySteps !== null ? report.dailySteps.toLocaleString('zh-TW') : '—' },
+    { label: '連續達標', value: `${report.streak} 週` },
+  ]
+  return (
+    <div data-testid="fitness-weekly-report" style={{ marginTop: '1.1rem', paddingTop: '1rem', borderTop: `1px solid ${COLOR.line}` }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '4px 12px', marginBottom: '10px' }}>
+        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>
+          上週週報 <span style={{ fontFamily: FONT.mono, fontWeight: 400, color: COLOR.steel }}>{formatWeekRange(report.weekStart, report.weekEnd)}</span>
+        </div>
+        <a href={FITNESS_REPORT_URL} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', color: COLOR.steel }}>看完整週報 →</a>
+      </div>
+      <SupportStats items={items} />
+      {report.observations.length > 0 && (
+        <ul style={{ listStyle: 'none', margin: '0.9rem 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {report.observations.map(o => (
+            <li key={o.text} style={{ display: 'flex', gap: '8px', fontSize: '0.78rem', lineHeight: 1.5, color: COLOR.ink }}>
+              <span aria-hidden style={{ flexShrink: 0, width: '1em', textAlign: 'center', fontWeight: 700, color: OBSERVATION_MARK[o.tone].color }}>{OBSERVATION_MARK[o.tone].mark}</span>
+              <span>{o.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {report.focus.length > 0 && (
+        <div style={{ marginTop: '0.7rem', fontSize: '0.74rem', color: COLOR.steel }}>這週優先練：{report.focus.join('、')}</div>
+      )}
+    </div>
+  )
+}
+
 function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
   const weeklyScore = typeof data['weeklyScore'] === 'number' ? data['weeklyScore'] : null
   const trendPct = typeof data['trendPct'] === 'number' ? data['trendPct'] : null
@@ -54,6 +100,7 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
     label: name,
     value: muscleComposites.find(m => m.name === name)?.composite ?? null,
   }))
+  const weeklyReport = parseFitnessWeeklyReport(data['weeklyReport'])
 
   const items = [
     { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—', formula: '本週各筆訓練紀錄的加權分數總和（原始累積量，未經配速調整）' },
@@ -67,16 +114,19 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
   ]
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem', alignItems: 'center' }}>
-      <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-        <SupportStats items={items} />
-        <FormulaPanel rows={[
-          { label: '身體（來源：運動習慣指數）', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）' },
-          ...items,
-        ]} />
+    <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.6rem', alignItems: 'center' }}>
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          <SupportStats items={items} />
+          <FormulaPanel rows={[
+            { label: '身體（來源：運動習慣指數）', formula: '訓練量分／覆蓋分／均衡分／趨勢分，各自正規化到 0-100 後取平均（缺項就用剩下的取平均）' },
+            ...items,
+          ]} />
+        </div>
+        <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={220} color={COLOR.amber} />
       </div>
-      <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={220} color={COLOR.amber} />
-    </div>
+      {weeklyReport && <FitnessWeeklyReportSection report={weeklyReport} />}
+    </>
   )
 }
 
