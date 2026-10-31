@@ -74,7 +74,7 @@ export function BriefBoard({ brief, parsed, crowd }: { brief: Brief; parsed: Par
         </section>
       )}
       <div className="br-foot">
-        {parsed.system && <span title={parsed.system.text}><span className="ch-dot" data-on={parsed.system.ok} />系統{parsed.system.ok ? '正常' : '有異常'}</span>}
+        {parsed.system && <span title={parsed.system.text}><span className="ch-dot" data-on={parsed.system.ok} />報告當時系統{parsed.system.ok ? '正常' : '有異常'}</span>}
         <details className="br-more">
           <summary>完整分析</summary>
           {parsed.analysis.map((p, i) => <p key={i}>{p}</p>)}

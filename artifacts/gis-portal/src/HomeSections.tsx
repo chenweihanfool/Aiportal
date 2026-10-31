@@ -16,7 +16,7 @@ import { biggestDrag, dayLinkText } from './boardView'
 import type { ActivityInsight, CompanionData } from './companion'
 import type { Brief, Crowd, ParsedBrief } from './briefView'
 import { BriefBoard } from './BriefBoard'
-import { dimHash } from './dimensionPage'
+import { dimHref } from './dimensionPage'
 import { HomeCard } from './HomeCard'
 
 // 新首頁（HomeBoard）五個區塊的呈現元件。資料與狀態判定都由 HomeBoard.tsx 傳進來，這裡只負責畫。
@@ -95,7 +95,7 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
       {/* 一眼看（2.53.0）：最弱面向、系統燈、今年進度——最重要的三件事不用往下捲就看得到 */}
       <div className="hm-glance" aria-label="重點">
         {drag && dragMeta && drag.value !== null && (
-          <a className="hm-glance-item hm-glance-drag" href={dimHash(drag.key)} style={{ ['--dim' as string]: dragMeta.color }} data-testid="hm-glance-drag"
+          <a className="hm-glance-item hm-glance-drag" href={dimHref(drag.key)} style={{ ['--dim' as string]: dragMeta.color }} data-testid="hm-glance-drag"
             aria-label={`最弱面向：${dragMeta.label} ${drag.value} 分，點開看面向頁`}>
             <span className="hm-glance-k">最弱面向</span>
             <span className="hm-glance-v"><span aria-hidden>{dragMeta.icon}</span>{dragMeta.label}<b>{drag.value}</b></span>

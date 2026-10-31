@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deltaText, dimHash, dimKeyFromHash, dimNeighbors, dimOverview, rangeStats, recentDigest } from './dimensionPage'
+import { deltaText, dimHash, dimHref, dimKeyFromHash, dimNeighbors, dimOverview, rangeStats, recentDigest } from './dimensionPage'
 import { dimensionSeries } from './homeView'
 
 const hist = (vals: Array<number | null>, end = '2026-10-16') => {
@@ -41,6 +41,8 @@ describe('hash helpers', () => {
     expect(dimKeyFromHash('#dim/calm/extra')).toBeNull()
     expect(dimKeyFromHash('#trips/calm')).toBeNull()
     expect(dimHash('mind')).toBe('dim/mind')
+    expect(dimHref('mind')).toBe('#dim/mind')
+    expect(dimKeyFromHash(dimHref('lifeFreedom'))).toBe('lifeFreedom')
   })
   it('neighbors wrap around', () => {
     expect(dimNeighbors('lifeFreedom')).toEqual({ prev: 'travel', next: 'fitness' })
