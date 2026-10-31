@@ -797,11 +797,13 @@ button.hm-lock:hover { border-color: var(--c-warn); }
   .hm-kb { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hm-dim-foot { flex-direction: column; }
   /* ① 今天：大分數在左、等級／差／連續天數在右，一句話整行在下面（原本分數獨佔一整列、右邊全空） */
-  .hm-today-body { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "score meta" "sent sent"; align-items: center; gap: 0.1rem 0.9rem; }
+  .hm-today-body { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "score meta" "sent sent" "move move"; align-items: center; gap: 0.1rem 0.9rem; }
   .hm-score { grid-area: score; }
   .hm-today-text { display: contents; }
   .hm-score-meta { grid-area: meta; }
   .hm-sentence { grid-area: sent; margin: 0; }
+  /* 「👉 今天最划算」另佔一列：原本跟上一句同在 sent 格，手機上兩行字疊在一起（2.70.3） */
+  .hm-sentence.hm-move { grid-area: move; }
   .hm-today { gap: 0.5rem; }
 }
 /* 手機頁首（樣式本體見檔尾的 tb-*）：頁首跟著內容捲走 */
