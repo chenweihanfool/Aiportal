@@ -11,11 +11,12 @@ const graph: Graph = {
     { id: 'e1', date: '2026-10-01', title: '致民段界址鑑界會勘', status: null, tags: [], case: '致民段分割案' },
     { id: 'e2', date: '2026-10-20', title: '致民段成果檢核', status: null, tags: [], case: '致民段分割案' },
     { id: 'e3', date: '2026-10-25', title: '舊案歸檔', status: null, tags: [], case: '舊案' },
-    { id: 'e4', date: '', title: '日期不明的事', status: null, tags: [], case: null },
+    { id: 'e4', date: '', title: '日期不明的事', status: null, tags: [], case: '狀態結案' },
   ],
   cases: [
     { name: '致民段分割案', eventCount: 2, status: 'active', taskState: '進行中' },
     { name: '舊案', eventCount: 1, status: 'active', taskState: '已結案' },
+    { name: '狀態結案', eventCount: 1, status: '已結案' },
   ],
   objects: [],
   edges: [
@@ -23,7 +24,7 @@ const graph: Graph = {
     { person: SELF_NAME, eventId: 'e2', role: '承辦' }, { person: '王小明', eventId: 'e2', role: '同事' },
     { person: SELF_NAME, eventId: 'e3', role: '承辦' }, { person: '林大華', eventId: 'e3', role: '同事' },
   ],
-  caseEdges: [{ eventId: 'e1', case: '致民段分割案' }, { eventId: 'e2', case: '致民段分割案' }, { eventId: 'e3', case: '舊案' }],
+  caseEdges: [{ eventId: 'e1', case: '致民段分割案' }, { eventId: 'e2', case: '致民段分割案' }, { eventId: 'e3', case: '舊案' }, { eventId: 'e4', case: '狀態結案' }],
   objectEdges: [],
   methods: [{ name: '界址鑑界會勘流程', eventCount: 2, promoted: true }, { name: '鑑界會勘候選', eventCount: 1, promoted: false }],
   methodEdges: [

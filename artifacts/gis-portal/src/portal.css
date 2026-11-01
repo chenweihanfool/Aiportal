@@ -1607,10 +1607,11 @@ button.ms-col { cursor: pointer; }
 .rl-row:hover, .rl-event:hover, .rl-chip:hover:not(.is-static) { border-color: var(--c-line-strong); }
 .rl-row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-row .rl-muted { margin-left: auto; flex: 0 0 auto; }
+.rl-event { overflow-wrap: anywhere; }
 .rl-event .rl-muted { flex: 0 0 auto; }
 .rl-kind { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--c-accent); }
 .rl-card { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-3); min-width: 0; }
-.rl-card h2 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.rl-card h2 { margin: 0; font-size: 1rem; color: var(--c-ink); overflow-wrap: anywhere; }
 .rl-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .rl-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--c-ink); }
 .rl-chips { display: flex; flex-wrap: wrap; gap: 6px; }

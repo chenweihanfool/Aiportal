@@ -102,12 +102,17 @@ function row(index: GraphIndex, kind: RelationKind, name: string): RelationRow {
   return { kind, name, count: events.length, lastDate: events.find((e) => e.date)?.date ?? '' }
 }
 
+/** 案件頁的結案字眼，與 api-server 的 isActiveCase 同一組判斷 */
+const CLOSED_STATUS = /^(closed|done|resolved|completed|archived|cancelled|已?結案|已?完成|已?封存|已?取消)$/i
+const isOpenCase = (index: GraphIndex, name: string) =>
+  index.caseTaskState.get(name) !== '已結案' && !CLOSED_STATUS.test((index.caseStatus.get(name) ?? '').trim())
+
 const byRecent = (a: RelationRow, b: RelationRow) => b.lastDate.localeCompare(a.lastDate) || b.count - a.count || a.name.localeCompare(b.name)
 
 /** 搜尋前的預設畫面：最近有動靜的人、還沒結案的案件 */
 export function overview(index: GraphIndex): { people: RelationRow[]; cases: RelationRow[] } {
   const people = [...index.personEvents.keys()].filter((n) => n !== SELF_NAME).map((n) => row(index, 'person', n))
-  const cases = [...index.caseEvents.keys()].filter((n) => index.caseTaskState.get(n) !== '已結案').map((n) => row(index, 'case', n))
+  const cases = [...index.caseEvents.keys()].filter((n) => isOpenCase(index, n)).map((n) => row(index, 'case', n))
   return { people: people.sort(byRecent).slice(0, OVERVIEW_ROWS), cases: cases.sort(byRecent).slice(0, OVERVIEW_ROWS) }
 }
 

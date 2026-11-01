@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetchHermesGraph } from './hermesGraphApi'
 import { apiFetchReports, parseBrief, pickBrief } from './briefView'
 import { buildIndex, caseId, eventId, personId, type GraphIndex } from './graphInsights'
@@ -66,9 +66,12 @@ function EventRows({ events }: { events: RelationEvent[] }) {
 
 function DossierCard({ index, selected, onPick, onClose }: { index: GraphIndex; selected: Selected; onPick: (s: Selected) => void; onClose: () => void }) {
   const d = useMemo(() => dossier(index, selected.kind, selected.name, todayIso()), [index, selected])
+  // 從捲到下面的清單點人或案時，卷宗開在畫面上方，要捲過去才看得到
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => { ref.current?.scrollIntoView({ block: 'nearest' }) }, [selected])
   const focus: GraphFocus = d.kind === 'person' ? { kind: 'person', id: personId(d.name) } : { kind: 'case', id: caseId(d.name) }
   return (
-    <section className="rl-card" data-testid="rl-dossier" aria-label={`${d.name} 的卷宗`}>
+    <section ref={ref} className="rl-card" data-testid="rl-dossier" aria-label={`${d.name} 的卷宗`}>
       <header className="rl-head">
         <h2>{d.name}</h2>
         {d.stateLabel && <span className="rl-chip is-static">{d.stateLabel}</span>}
@@ -94,7 +97,7 @@ function FindTab({ index }: { index: GraphIndex }) {
   const base = useMemo(() => overview(index), [index])
   return (
     <div className="rl-body">
-      <input className="rl-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋人名或案件" aria-label="搜尋人名或案件" />
+      <input className="rl-search" type="search" value={query} onChange={(e) => { setQuery(e.target.value); setSelected(null) }} placeholder="搜尋人名或案件" aria-label="搜尋人名或案件" />
       {selected && <DossierCard index={index} selected={selected} onPick={setSelected} onClose={() => setSelected(null)} />}
       {query.trim()
         ? <RowList rows={rows} onPick={setSelected} empty="找不到這個人或案件。" />
@@ -133,7 +136,7 @@ function PrepTab({ index, pw }: { index: GraphIndex; pw: string }) {
   }, [index, reports.data])
   if (reports.loading) return <p className="rl-muted rl-pad">讀取明日報告中…</p>
   if (reports.error) return <p className="rl-muted rl-pad">明日報告讀取失敗，稍後再試。</p>
-  if (!prep) return <p className="rl-muted rl-pad">明日報告每晚 21:00 整理，好了這裡就會對到相關的人與案件。</p>
+  if (!prep) return <p className="rl-muted rl-pad">{pickBrief(reports.data, todayIso()) ? '明日報告的內容解析不出待辦事項。' : '明日報告每晚 21:00 整理，好了這裡就會對到相關的人與案件。'}</p>
   return (
     <div className="rl-body">
       <p className="rl-muted">{prep.label}的事，知識庫裡找得到的背景</p>
