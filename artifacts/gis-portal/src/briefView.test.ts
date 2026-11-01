@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crowdOf, dueDate, dueLabel, parseBrief, parseReports, pickBrief, type Report } from './briefView'
+import { crowdOf, dueDate, dueLabel, parseBrief, systemTextOk, parseReports, pickBrief, type Report } from './briefView'
 import type { GanttData } from './taskGantt'
 
 const r = (date: string, key = 'tomorrow'): Report => ({ key, title: '明日報告', date, bodyMd: `內容 ${date}`, createdAt: 't' })
@@ -58,6 +58,15 @@ describe('parseBrief', () => {
     expect(p.tip).toContain('建議把進度通報提前')
     expect(p.system?.ok).toBe(true)
     expect(parseBrief(SAMPLE.replace('本班無異常', 'L3 失敗'), '2026-10-31')?.system?.ok).toBe(false)
+  })
+
+  it('系統狀態的各種正常說法都算正常，提到失敗就不算', () => {
+    expect(systemTextOk('cron 心跳 🟢 所有排程正常；健康面板 4/4 正常，僅 L2 知識庫(Agent) 自 10/09 起維持暫停。本班 collector 清除 5 個殭屍鎖。')).toBe(true)
+    expect(systemTextOk('cron 心跳全部正常')).toBe(true)
+    expect(systemTextOk('本班無異常')).toBe(true)
+    expect(systemTextOk('L1 心跳警告：超過 21 小時。其餘全部正常')).toBe(false)
+    expect(systemTextOk('L3 班次失敗')).toBe(false)
+    expect(systemTextOk('知識庫消化顯示排程過渡')).toBe(false)
   })
   it('認不出格式回 null，由畫面退回原文', () => {
     expect(parseBrief('隨便一段文字', '2026-10-31')).toBeNull()
