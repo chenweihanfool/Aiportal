@@ -227,6 +227,7 @@ const kbNum = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-U
 export const GROWTH_LINKS: ReadonlyArray<{ href: string; label: string; testId?: string }> = [
   { href: '#year', label: '年度回顧', testId: 'hm-year-link' },
   { href: '#graph/timeline', label: '時間軸' },
+  { href: '#relations', label: '關係' },
   { href: '#graph', label: '關係宇宙' },
   { href: '#architecture', label: '知識庫架構', testId: 'hm-arch-link' },
 ]

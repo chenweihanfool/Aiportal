@@ -267,7 +267,7 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   check(`${T}：今天卡的「一眼看」有最弱面向（財務自由 68、拉低 8.6 分）與系統燈（全部正常），且都在首屏內`, /最弱面向/.test(glance.drag) && /財務自由/.test(glance.drag) && /68/.test(glance.drag) && /拉低總分 8\.6 分/.test(glance.drag) && /全部正常/.test(glance.sys) && glance.todayBottom <= h, JSON.stringify(glance))
   check(`${T}：最弱面向連到 hash 路由（少了 # 會變站內路徑、畫面全白）`, (await page.locator('[data-testid="hm-glance-drag"]').getAttribute('href')) === '#dim/lifeFreedom')
   const shortcuts = await page.evaluate(() => ({ names: [...document.querySelectorAll('.hm-nav-short')].map((a) => a.innerText.trim()), hrefs: [...document.querySelectorAll('a.hm-nav-short')].map((a) => a.getAttribute('href')), bottom: Math.max(...[...document.querySelectorAll('.hm-nav-short')].map((a) => a.getBoundingClientRect().bottom)) }))
-  check(`${T}：常用入口（時間軸、想法庫、關係宇宙）不用捲動就看得到`, shortcuts.names.length === 3 && /時間軸/.test(shortcuts.names[0]) && /想法庫/.test(shortcuts.names[1]) && /關係宇宙/.test(shortcuts.names[2]) && shortcuts.hrefs.join() === '#graph/timeline,#graph' && shortcuts.bottom <= h, JSON.stringify(shortcuts))
+  check(`${T}：常用入口（時間軸、想法庫、關係）不用捲動就看得到`, shortcuts.names.length === 3 && /時間軸/.test(shortcuts.names[0]) && /想法庫/.test(shortcuts.names[1]) && /關係/.test(shortcuts.names[2]) && shortcuts.hrefs.join() === '#graph/timeline,#relations' && shortcuts.bottom <= h, JSON.stringify(shortcuts))
   const txt = await page.locator('.hm-root').innerText()
   check(`${T}：① 有分數 71、連 3 天上升、今年已過 %`, /71/.test(txt) && /連 3 天上升/.test(txt) && /已過\s*\d+%/.test(txt))
   check(`${T}：① 一句話含最大短板「財務自由」（biggestDrag：68 分 × 27%）`, /最大的短板是「財務自由」（68 分，拉低總分 8\.6 分）/.test(txt))

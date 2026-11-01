@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { COLOR, FONT } from './theme'
 
-export type GraphTab = 'universe' | 'timeline'
+export type GraphTab = 'find' | 'prep' | 'universe' | 'timeline'
 
-// 全頁殼：頂端「← 返回儀表板」＋兩個分頁（關係宇宙／時間軸）。原本內嵌在 RelationshipUniverse.tsx，
+// 全頁殼：頂端「← 返回儀表板」＋分頁（找人／案、見面前、關係宇宙、時間軸）。原本內嵌在 RelationshipUniverse.tsx，
 // 抽出來讓兩個分頁共用同一個頁首；分頁用 hash route 切換（#graph／#graph/timeline），跟既有路由同一套做法。
 export function GraphShell({ tab, onBack, extra, children }: { tab: GraphTab; onBack: () => void; extra?: ReactNode; children: ReactNode }) {
   const tabStyle = (active: boolean) => ({
@@ -16,6 +16,10 @@ export function GraphShell({ tab, onBack, extra, children }: { tab: GraphTab; on
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}`, flexWrap: 'wrap' }}>
         <span onClick={onBack} style={{ cursor: 'pointer', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.04em' }}>← 返回儀表板</span>
         <nav aria-label="關係圖分頁" style={{ display: 'flex', gap: '1.1rem' }}>
+          <button type="button" aria-current={tab === 'find' ? 'page' : undefined} style={tabStyle(tab === 'find')}
+            onClick={() => { window.location.hash = '#relations' }}>找人／案</button>
+          <button type="button" aria-current={tab === 'prep' ? 'page' : undefined} style={tabStyle(tab === 'prep')}
+            onClick={() => { window.location.hash = '#relations/prep' }}>見面前</button>
           <button type="button" aria-current={tab === 'universe' ? 'page' : undefined} style={tabStyle(tab === 'universe')}
             onClick={() => { window.location.hash = '#graph' }}>事人物關係宇宙</button>
           <button type="button" aria-current={tab === 'timeline' ? 'page' : undefined} style={tabStyle(tab === 'timeline')}

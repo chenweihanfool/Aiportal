@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
+import { RelationsView } from './RelationsView'
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { ArchitectureView } from './ArchitectureView'
 import { TimelineView } from './TimelineView'
@@ -104,6 +105,10 @@ export default function App() {
   const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
   if (reviewYear !== null) {
     return <YearReview year={reviewYear} unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock} />
+  }
+  // 關係頁（2026-11-01）：#relations 找人／案、#relations/prep 見面前；3D 宇宙仍在 #graph
+  if (hashRoute === '#relations' || hashRoute === '#relations/prep') {
+    return <RelationsView tab={hashRoute === '#relations' ? 'find' : 'prep'} unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />
   }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
