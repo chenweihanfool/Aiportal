@@ -66,7 +66,8 @@ function parseTaskHead(head: string, briefDate: string): BriefTask {
 
 /** 系統狀態段是 AI 寫的句子，用詞每天不同（2026-11-01 寫「所有排程正常」就被當成異常）。有正常的說法、又沒提到失敗才算正常。 */
 export function systemTextOk(text: string): boolean {
-  return /無異常|一切正常|全部正常|所有排程正常/.test(text) && !/失敗|逾時|錯誤|警告/.test(text)
+  const stated = text.replace(/(?:無|沒有|未見|0\s*(?:筆|件|次)?)(?:任何)?(?:失敗|逾時|錯誤|警告)/g, '')
+  return /無異常|一切正常|全部正常|所有排程正常/.test(text) && !/失敗|逾時|錯誤|警告/.test(stated)
 }
 
 export function parseBrief(md: string, briefDate: string): ParsedBrief | null {
