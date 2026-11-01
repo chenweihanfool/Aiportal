@@ -71,6 +71,8 @@ describe('parseBrief', () => {
     expect(systemTextOk('一切正常，沒有錯誤')).toBe(true)
     expect(systemTextOk('所有排程正常，0 筆逾時')).toBe(true)
     expect(systemTextOk('所有排程正常，但 L4 逾時')).toBe(false)
+    expect(systemTextOk('其餘全部正常，L4 10 筆失敗')).toBe(false)
+    expect(systemTextOk('所有排程正常，但 L3 異常')).toBe(false)
   })
   it('認不出格式回 null，由畫面退回原文', () => {
     expect(parseBrief('隨便一段文字', '2026-10-31')).toBeNull()
