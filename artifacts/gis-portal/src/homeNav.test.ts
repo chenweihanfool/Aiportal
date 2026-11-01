@@ -18,7 +18,7 @@ describe('HOME_SHORTCUTS', () => {
     }
   })
   it('使用者常用的三個都在，連結是 hash 路由', () => {
-    expect(HOME_SHORTCUTS.map((s) => s.label)).toEqual(['時間軸', '想法庫', '關係宇宙'])
+    expect(HOME_SHORTCUTS.map((s) => s.label)).toEqual(['時間軸', '想法庫', '關係'])
     for (const s of HOME_SHORTCUTS) if ('href' in s) expect(s.href.startsWith('#')).toBe(true)
   })
 })

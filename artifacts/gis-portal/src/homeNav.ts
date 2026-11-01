@@ -31,7 +31,7 @@ export type HomeShortcutDef = { id: string; label: string; icon: string } & ({ h
 export const HOME_SHORTCUTS: readonly HomeShortcutDef[] = [
   { id: 'timeline', label: '時間軸', icon: '🕒', href: '#graph/timeline' },
   { id: 'ideas', label: '想法庫', icon: '💡', action: 'ideas' },
-  { id: 'graph', label: '關係宇宙', icon: '🌌', href: '#graph' },
+  { id: 'relations', label: '關係', icon: '🌌', href: '#relations' },
 ]
 
 /** 目前高亮哪一個：視窗中可見的區塊裡，註冊表順序最前面的；都不可見時維持上一個。 */

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
+import { RelationsView } from './RelationsView'
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { ArchitectureView } from './ArchitectureView'
 import { TimelineView } from './TimelineView'
@@ -100,17 +101,26 @@ export default function App() {
     setAdminOpen(true)
   }, [])
 
+  // 全頁路由提早 return，密碼框要跟著帶上，不然頁內的「解鎖」按了沒反應
+  const unlockModal = modal.visible && (
+    <PasswordModal pendingUrl={modal.pendingUrl} onSuccess={handleModalSuccess} onCancel={() => setModal({ visible: false, pendingUrl: '' })} />
+  )
+
   // 年度回顧（P2-1）：#year＝今年，#year/<年>＝指定的年；年份不合理就當首頁
   const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
   if (reviewYear !== null) {
     return <YearReview year={reviewYear} unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock} />
+  }
+  // 關係頁（2026-11-01）：#relations 找人／案、#relations/prep 見面前；3D 宇宙仍在 #graph
+  if (hashRoute === '#relations' || hashRoute === '#relations/prep') {
+    return <><RelationsView tab={hashRoute === '#relations' ? 'find' : 'prep'} unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />{unlockModal}</>
   }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
   }
   // 知識庫架構頁（2026-10-22）：分層架構圖＋L1～L5 即時狀態；入口在首頁「成長軌跡」與戰情室旁
   if (hashRoute === '#architecture') {
-    return <ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />
+    return <><ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />{unlockModal}</>
   }
   if (hashRoute === '#graph/timeline') {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
@@ -161,13 +171,7 @@ export default function App() {
         onNavigateGraph={() => { window.location.hash = 'graph' }}
       />
 
-      {modal.visible && (
-        <PasswordModal
-          pendingUrl={modal.pendingUrl}
-          onSuccess={handleModalSuccess}
-          onCancel={() => setModal({ visible: false, pendingUrl: '' })}
-        />
-      )}
+      {unlockModal}
 
       {adminAuth && !adminOpen && (
         <AdminAuthModal onSuccess={handleAdminAuthSuccess} onCancel={() => setAdminAuth(false)} />
