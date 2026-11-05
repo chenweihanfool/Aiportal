@@ -40,3 +40,4 @@
 | `vikunja-gantt` | 1 | 從容面板的任務甘特圖（kb-pipeline `vikunja-gantt-pusher.py`，每 10 分鐘唯讀 Vikunja） |
 | `hermes-reports` | 1 | 原本只發 Telegram 的報告，目前是明日報告（kb-pipeline `report-publish.py`） |
 | `companion` | 1 | 首頁陪伴區塊：歷年今天、很久沒聯絡的人、每天的家人朋友互動（kb-pipeline `companion-pusher.py`，每 10 分鐘只讀） |
+| `topics` | 1 | 知識頁（#knowledge）：知識庫長出來的主題、頁面內容、成長紀錄與相關題目（kb-pipeline 每週推送） |
