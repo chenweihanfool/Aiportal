@@ -23,6 +23,72 @@
       "type": "integer",
       "minimum": 0
     },
+    "tree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domains"
+      ],
+      "properties": {
+        "domains": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "branches"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "branches": {
+                "type": "array",
+                "maxItems": 40,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "name",
+                    "topics"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    "topics": {
+                      "type": "array",
+                      "maxItems": 300,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 40
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "topics": {
       "type": "array",
       "maxItems": 300,
@@ -113,6 +179,43 @@
             ],
             "pattern": "^\\d{4}-\\d{2}$"
           },
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 40
+          },
+          "path": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "monthCounts": {
+            "type": "array",
+            "maxItems": 36,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "month",
+                "count"
+              ],
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}$"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
           "body": {
             "type": [
               "string",
@@ -162,6 +265,13 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "month": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d{4}-\\d{2}$"
                 }
               }
             }

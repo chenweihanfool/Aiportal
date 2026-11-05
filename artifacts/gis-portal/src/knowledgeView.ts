@@ -1,11 +1,13 @@
-// 知識頁（#knowledge，2026-11-05）的純函式：解析 feed `topics`（schemaVersion 1）、分組、篩選、關係圖座標。
+// 知識頁（#knowledge，2026-11-05；2.75.0 改成知識樹）的純函式：解析 feed `topics`（schemaVersion 1）、分組、篩選、建樹、頁面解析、樹狀圖座標。
 // 資料由 kb-pipeline 每週推送（契約見 docs/feed-api.md 與 api-server 的 feeds/registry.ts）；這裡不碰網路。
 // 元件在 KnowledgeView.tsx，樣式在 portal.css 的 kn-*。
 
 export type TopicKind = 'concept' | 'method'
 
 export interface TopicGrowth { date: string; text: string }
-export interface TopicSource { id: string; title: string }
+export interface TopicSource { id: string; title: string; month: string | null }
+export interface MonthCount { month: string; count: number }
+export interface FeedTree { domains: Array<{ id: string; name: string; branches: Array<{ id: string; name: string; topics: string[] }> }> }
 export interface TopicRelated { id: string; name: string; sharedDocs: number; sharedCases: number }
 
 export interface Topic {
@@ -29,6 +31,11 @@ export interface Topic {
   growth: TopicGrowth[]
   sources: TopicSource[]
   related: TopicRelated[]
+  /** 所屬枝 id；沒有為 null */
+  branch: string | null
+  /** [領域名, 枝名]；沒有為 [] */
+  path: string[]
+  monthCounts: MonthCount[]
 }
 
 export interface TopicsData {
@@ -36,6 +43,8 @@ export interface TopicsData {
   total: number
   published: number
   topics: Topic[]
+  /** 知識樹；推送端還沒更新時為 null */
+  tree: FeedTree | null
 }
 
 /** 超過這麼久沒更新就標「資料已過期」（推送是每週，但 HERMES 可能晚推；超過一小時就提醒） */
@@ -61,7 +70,15 @@ function parseTopic(raw: unknown): Topic | null {
     ? t.growth.filter((g): g is TopicGrowth => !!g && isStr((g as TopicGrowth).date) && isStr((g as TopicGrowth).text))
     : []
   const sources: TopicSource[] = Array.isArray(t.sources)
-    ? t.sources.filter((s): s is TopicSource => !!s && isStr((s as TopicSource).id) && isStr((s as TopicSource).title))
+    ? t.sources
+        .filter((s): s is { id: string; title: string; month?: unknown } => !!s && isStr((s as TopicSource).id) && isStr((s as TopicSource).title))
+        .map((s) => ({ id: s.id, title: s.title, month: strOrNull(s.month, MONTH_RE) }))
+    : []
+  const path: string[] = Array.isArray(t.path) ? t.path.filter(isStr).slice(0, 2) : []
+  const monthCounts: MonthCount[] = Array.isArray(t.monthCounts)
+    ? t.monthCounts
+        .filter((m): m is MonthCount => !!m && isStr((m as MonthCount).month) && MONTH_RE.test((m as MonthCount).month) && isNum((m as MonthCount).count) && (m as MonthCount).count >= 0)
+        .map((m) => ({ month: m.month, count: m.count }))
     : []
   const related: TopicRelated[] = Array.isArray(t.related)
     ? t.related
@@ -86,14 +103,35 @@ function parseTopic(raw: unknown): Topic | null {
     growth,
     sources,
     related,
+    branch: isStr(t.branch) && t.branch ? t.branch : null,
+    path,
+    monthCounts,
   }
+}
+
+function parseTree(raw: unknown): FeedTree | null {
+  const r = raw as { domains?: unknown } | null
+  if (!r || typeof r !== 'object' || !Array.isArray(r.domains)) return null
+  const domains: FeedTree['domains'] = []
+  for (const d of r.domains) {
+    const dd = d as { id?: unknown; name?: unknown; branches?: unknown } | null
+    if (!dd || !isStr(dd.id) || !isStr(dd.name) || !Array.isArray(dd.branches)) continue
+    const branches: FeedTree['domains'][number]['branches'] = []
+    for (const b of dd.branches) {
+      const bb = b as { id?: unknown; name?: unknown; topics?: unknown } | null
+      if (!bb || !isStr(bb.id) || !isStr(bb.name) || !Array.isArray(bb.topics)) continue
+      branches.push({ id: bb.id, name: bb.name, topics: bb.topics.filter(isStr) })
+    }
+    domains.push({ id: dd.id, name: dd.name, branches })
+  }
+  return { domains }
 }
 
 /** 同 archStats 的寫法：available 不是 true、或 payload 形狀不對回 null */
 export function parseTopics(raw: unknown): TopicsData | null {
   const root = (raw as { available?: boolean; payload?: unknown } | null) ?? null
   if (!root || root.available !== true) return null
-  const p = root.payload as { computedAt?: unknown; total?: unknown; published?: unknown; topics?: unknown } | null
+  const p = root.payload as { computedAt?: unknown; total?: unknown; published?: unknown; topics?: unknown; tree?: unknown } | null
   if (!p || !isStr(p.computedAt) || !Array.isArray(p.topics)) return null
   const topics = p.topics.map(parseTopic).filter((t): t is Topic => t !== null)
   return {
@@ -101,6 +139,7 @@ export function parseTopics(raw: unknown): TopicsData | null {
     total: isNum(p.total) ? p.total : topics.length,
     published: isNum(p.published) ? p.published : topics.filter((t) => t.revision > 0).length,
     topics,
+    tree: parseTree((p as { tree?: unknown }).tree),
   }
 }
 
@@ -159,46 +198,202 @@ export function kindLabel(kind: TopicKind): string {
   return kind === 'concept' ? '概念' : '方法'
 }
 
-export interface GraphNode { id: string; name: string; x: number; y: number; r: number }
-export interface GraphEdge { a: string; b: string; w: number }
-export interface TopicGraph { nodes: GraphNode[]; edges: GraphEdge[] }
+export interface BuiltBranch { id: string; name: string; count: number; topics: Topic[] }
+export interface BuiltDomain { id: string; name: string; count: number; branches: BuiltBranch[] }
+export interface BuiltTree { domains: BuiltDomain[]; unassigned: Topic[] }
 
 /**
- * 題目關係圖的座標。節點＝有關係或被指到的題目；邊＝related（無向、去重，權重＝sharedDocs＋0.5×sharedCases，
- * 兩邊都有寫時取較大者）。確定性的圓形排列：依 id 排序後等角度，從正上方開始順時針。
- * 指到不在清單裡的題目就略過那條邊。沒有任何邊時回空。
+ * 把 feed 的 tree（只有 id）接上題目本體。count＝底下題數；指到不存在的題目略過；
+ * 沒在 tree 裡的題目進 unassigned（維持 data.topics 的順序）；tree 為 null 時全部進 unassigned。
+ * 同一題在樹裡出現多次時只算第一次。
  */
-export function layoutGraph(topics: readonly Topic[], width: number, height: number): TopicGraph {
-  const byId = new Map(topics.map((t) => [t.id, t]))
-  const weights = new Map<string, GraphEdge>()
-  for (const t of topics) {
-    for (const r of t.related) {
-      if (r.id === t.id || !byId.has(r.id)) continue
-      const [a, b] = t.id < r.id ? [t.id, r.id] : [r.id, t.id]
-      const w = r.sharedDocs + 0.5 * r.sharedCases
-      const key = `${a}\u0000${b}`
-      const prev = weights.get(key)
-      if (!prev || w > prev.w) weights.set(key, { a, b, w })
+export function buildTree(data: Pick<TopicsData, 'topics' | 'tree'>): BuiltTree {
+  const byId = new Map(data.topics.map((t) => [t.id, t]))
+  const placed = new Set<string>()
+  const domains: BuiltDomain[] = []
+  for (const d of data.tree?.domains ?? []) {
+    const branches: BuiltBranch[] = []
+    for (const b of d.branches) {
+      const topics: Topic[] = []
+      for (const id of b.topics) {
+        const t = byId.get(id)
+        if (!t || placed.has(id)) continue
+        placed.add(id)
+        topics.push(t)
+      }
+      branches.push({ id: b.id, name: b.name, count: topics.length, topics })
+    }
+    domains.push({ id: d.id, name: d.name, count: branches.reduce((n, b) => n + b.count, 0), branches })
+  }
+  return { domains, unassigned: data.topics.filter((t) => !placed.has(t.id)) }
+}
+
+export interface Bullet { text: string; refs: number[]; single: boolean }
+export interface ParsedBody {
+  summary: Bullet | null
+  what: Bullet[]
+  how: Bullet[]
+  caution: Bullet[]
+  unknown: Bullet[]
+  other: string
+}
+
+const REF_RE = /⟦(\d+)⟧/g
+const SINGLE_MARK = '（僅一例）'
+
+function makeBullet(raw: string): Bullet {
+  const refs: number[] = []
+  let text = raw.replace(REF_RE, (_m, n: string) => {
+    refs.push(Number(n))
+    return ''
+  })
+  const single = text.includes(SINGLE_MARK)
+  if (single) text = text.split(SINGLE_MARK).join('')
+  return { text: text.replace(/\s+/g, ' ').trim(), refs, single }
+}
+
+type SectionKey = 'what' | 'how' | 'caution' | 'unknown'
+
+function sectionOf(title: string): SectionKey | null {
+  if (title.includes('幹嘛')) return 'what'
+  if (title.includes('怎麼做')) return 'how'
+  if (title.includes('注意')) return 'caution'
+  if (title.includes('不知道')) return 'unknown'
+  return null
+}
+
+/**
+ * 把頁面四節 markdown 拆開：「這件事到底在幹嘛」第一條＝summary、其餘進 what；「怎麼做」「要注意」「還不知道」各一組。
+ * 條目＝以 - * + 或「1.」開頭的行（後面的縮排續行併進上一條）；含「來源沒有提到」的條目略過；
+ * 認不出的標題連同其內容、以及標題前的文字，原文放 other。
+ */
+export function parseBody(body: string): ParsedBody {
+  const out: ParsedBody = { summary: null, what: [], how: [], caution: [], unknown: [], other: '' }
+  const other: string[] = []
+  const lists: Record<SectionKey, string[][]> = { what: [], how: [], caution: [], unknown: [] }
+  let current: SectionKey | null = null
+  let last: string[] | null = null
+  for (const line of body.split(/\r?\n/)) {
+    const h = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line)
+    if (h) {
+      current = sectionOf(h[1]!)
+      last = null
+      if (current === null) other.push(line)
+      continue
+    }
+    if (current === null) {
+      other.push(line)
+      continue
+    }
+    const b = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line)
+    if (b) {
+      last = [b[1]!]
+      lists[current].push(last)
+    } else if (last && line.trim() && /^\s+/.test(line)) {
+      last.push(line.trim())
+    } else if (!line.trim()) {
+      last = null
     }
   }
-  if (weights.size === 0) return { nodes: [], edges: [] }
+  const toBullets = (rows: string[][]) =>
+    rows.map((r) => makeBullet(r.join(' '))).filter((x) => x.text && !x.text.includes('來源沒有提到'))
+  const what = toBullets(lists.what)
+  out.summary = what[0] ?? null
+  out.what = what.slice(1)
+  out.how = toBullets(lists.how)
+  out.caution = toBullets(lists.caution)
+  out.unknown = toBullets(lists.unknown)
+  out.other = other.join('\n').trim()
+  return out
+}
 
-  const edges = [...weights.values()].sort((x, y) => (x.a === y.a ? (x.b < y.b ? -1 : x.b > y.b ? 1 : 0) : x.a < y.a ? -1 : 1))
-  const ids = [...new Set(edges.flatMap((e) => [e.a, e.b]))].sort()
-  const cx = width / 2
-  const cy = height / 2
-  const ring = Math.max(0, Math.min(width, height) / 2 - 22)
-  const nodes: GraphNode[] = ids.map((id, i) => {
-    const t = byId.get(id)!
-    const angle = -Math.PI / 2 + (2 * Math.PI * i) / ids.length
-    const r = Math.min(18, Math.max(6, 6 + t.docs * 0.5))
-    return {
-      id,
-      name: t.name,
-      x: ids.length === 1 ? cx : cx + ring * Math.cos(angle),
-      y: ids.length === 1 ? cy : cy + ring * Math.sin(angle),
-      r,
+export type TreeNodeKind = 'root' | 'domain' | 'branch' | 'topic'
+export interface TreeInput { id: string; label: string; kind: TreeNodeKind; docs?: number; children?: TreeInput[] }
+export interface TreeLayoutOptions {
+  /** 這些 id 的子孫不畫（節點本身仍畫成葉） */
+  collapsed?: ReadonlySet<string>
+  /** 每層橫向間距（預設 180） */
+  dx?: number
+  /** 葉節點縱向間距（預設 28） */
+  dy?: number
+  /** 四周留白（預設 24） */
+  pad?: number
+}
+export interface TreeNodePos { id: string; label: string; depth: number; x: number; y: number; kind: TreeNodeKind; r: number }
+export interface TreeEdge { from: string; to: string }
+export interface TreeLayout { nodes: TreeNodePos[]; edges: TreeEdge[]; width: number; height: number }
+
+function nodeRadius(n: TreeInput): number {
+  if (n.kind === 'topic') return Math.min(14, Math.max(5, 5 + (n.docs ?? 0) * 0.5))
+  return n.kind === 'root' ? 9 : n.kind === 'domain' ? 8 : 6
+}
+
+/**
+ * 橫向（左→右）樹狀圖：根在左、葉在右，葉節點依序等距，父節點 y＝子節點 y 的平均。
+ * 確定性（不用亂數）。collapsed 內的 id 其子孫不出現。
+ */
+export function layoutTidyTree(root: TreeInput, opts: TreeLayoutOptions = {}): TreeLayout {
+  const dx = opts.dx ?? 180
+  const dy = opts.dy ?? 28
+  const pad = opts.pad ?? 24
+  const collapsed = opts.collapsed
+  const nodes: TreeNodePos[] = []
+  const edges: TreeEdge[] = []
+  let leaf = 0
+  let maxDepth = 0
+  const walk = (n: TreeInput, depth: number): number => {
+    maxDepth = Math.max(maxDepth, depth)
+    const kids = collapsed?.has(n.id) ? [] : n.children ?? []
+    const idx = nodes.length
+    nodes.push({ id: n.id, label: n.label, depth, x: pad + depth * dx, y: 0, kind: n.kind, r: nodeRadius(n) })
+    let y: number
+    if (kids.length === 0) {
+      y = pad + leaf * dy
+      leaf += 1
+    } else {
+      const ys = kids.map((k) => {
+        const cy = walk(k, depth + 1)
+        edges.push({ from: n.id, to: k.id })
+        return cy
+      })
+      y = ys.reduce((a, b) => a + b, 0) / ys.length
     }
-  })
-  return { nodes, edges }
+    nodes[idx]!.y = y
+    return y
+  }
+  walk(root, 0)
+  return { nodes, edges, width: pad * 2 + maxDepth * dx, height: pad * 2 + Math.max(0, leaf - 1) * dy }
+}
+
+/** 把 buildTree 的結果轉成 layoutTidyTree 的輸入；未歸類的題目掛成一個「未歸類」領域 */
+export function treeToLayoutInput(built: BuiltTree, rootLabel = '知識庫'): TreeInput {
+  const topicNode = (t: Topic): TreeInput => ({ id: t.id, label: t.name, kind: 'topic', docs: t.docs })
+  const children: TreeInput[] = built.domains.map((d) => ({
+    id: d.id,
+    label: d.name,
+    kind: 'domain',
+    children: d.branches.map((b) => ({ id: b.id, label: b.name, kind: 'branch', children: b.topics.map(topicNode) })),
+  }))
+  if (built.unassigned.length > 0) {
+    children.push({ id: '__unassigned', label: '未歸類', kind: 'domain', children: built.unassigned.map(topicNode) })
+  }
+  return { id: '__root', label: rootLabel, kind: 'root', children }
+}
+
+/** 補齊首尾之間缺的月份（count 0），舊→新；輸入可亂序、同月份加總 */
+export function monthSeries(monthCounts: readonly MonthCount[]): MonthCount[] {
+  const valid = monthCounts.filter((m) => MONTH_RE.test(m.month))
+  if (valid.length === 0) return []
+  const sums = new Map<string, number>()
+  for (const m of valid) sums.set(m.month, (sums.get(m.month) ?? 0) + m.count)
+  const keys = [...sums.keys()].sort()
+  const idx = (k: string) => Number(k.slice(0, 4)) * 12 + Number(k.slice(5, 7)) - 1
+  const first = idx(keys[0]!)
+  const last = idx(keys[keys.length - 1]!)
+  const out: MonthCount[] = []
+  for (let i = first; i <= last; i++) {
+    const month = `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`
+    out.push({ month, count: sums.get(month) ?? 0 })
+  }
+  return out
 }

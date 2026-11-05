@@ -240,7 +240,7 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
     },
   },
   // 知識頁（#knowledge）：知識庫自己長出來的主題（題目）、頁面內容、成長紀錄與相關題目。推送端 kb-pipeline 每週產生後推送（契約見 docs/feed-api.md）。
-  // 欄位只增不改；body 是頁面四節的 markdown（wikilink 已由推送端轉成純文字）。
+  // 欄位只增不改；body 是頁面四節的 markdown（來源標記為 ⟦n⟧ 腳註，n＝sources 的 1 起算位置）；2.75.0 起含知識樹 tree、每題 branch／path／monthCounts。
   topics: {
     version: 1,
     description: "主題知識頁：知識庫自己長出來的題目、頁面內容、成長紀錄與相關題目",
@@ -255,6 +255,40 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
         computedAt: { type: "string", minLength: 10, maxLength: 40 },
         total: { type: "integer", minimum: 0 },
         published: { type: "integer", minimum: 0 },
+        tree: {
+          type: "object",
+          additionalProperties: false,
+          required: ["domains"],
+          properties: {
+            domains: {
+              type: "array",
+              maxItems: 20,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["id", "name", "branches"],
+                properties: {
+                  id: { type: "string", minLength: 1, maxLength: 40 },
+                  name: { type: "string", maxLength: 40 },
+                  branches: {
+                    type: "array",
+                    maxItems: 40,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["id", "name", "topics"],
+                      properties: {
+                        id: { type: "string", minLength: 1, maxLength: 40 },
+                        name: { type: "string", maxLength: 40 },
+                        topics: { type: "array", maxItems: 300, items: { type: "string", minLength: 1, maxLength: 40 } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         topics: {
           type: "array",
           maxItems: 300,
@@ -276,6 +310,21 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
               monthsSpan: { type: "integer", minimum: 0 },
               firstMonth: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
               lastMonth: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
+              branch: { type: ["string", "null"], maxLength: 40 },
+              path: { type: "array", maxItems: 2, items: { type: "string", maxLength: 40 } },
+              monthCounts: {
+                type: "array",
+                maxItems: 36,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["month", "count"],
+                  properties: {
+                    month: { type: "string", pattern: "^\\d{4}-\\d{2}$" },
+                    count: { type: "integer", minimum: 0 },
+                  },
+                },
+              },
               body: { type: ["string", "null"], maxLength: 13000 },
               growth: {
                 type: "array",
@@ -300,6 +349,7 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
                   properties: {
                     id: { type: "string", minLength: 1, maxLength: 120 },
                     title: { type: "string", minLength: 1, maxLength: 200 },
+                    month: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
                   },
                 },
               },
