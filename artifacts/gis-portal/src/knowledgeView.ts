@@ -250,7 +250,7 @@ function makeBullet(raw: string): Bullet {
   const single = text.includes(SINGLE_MARK)
   if (single) text = text.split(SINGLE_MARK).join('')
   // 腳註拿掉後，多來源之間的頓號、逗號會落單（「提香 、」）：清掉空白後的孤立標點與句尾殘留
-  text = text.replace(/\s+([、，,；;])/g, '$1').replace(/([、，,；;])+(?=\s*([、，,；;。．]|$))/g, '')
+  text = text.replace(/\s+([、，,；;。．.])/g, '$1').replace(/([、，,；;])+(?=\s*([、，,；;。．]|$))/g, '')
   return { text: text.replace(/\s+/g, ' ').trim(), refs, single }
 }
 

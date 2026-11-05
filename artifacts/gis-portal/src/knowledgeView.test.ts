@@ -372,6 +372,12 @@ describe('parseBody 腳註清理', () => {
     expect(r.how.map((b) => b.text)).toEqual(['先低溫提香', '再焙火。'])
     expect(r.how[0].refs).toEqual([1, 2])
   })
+  it('句號前不留空白', () => {
+    const r = parseBody('## 怎麼做
+- A ⟦1⟧，B ⟦2⟧。
+- 先量 ⟦1⟧。')
+    expect(r.how.map((b) => b.text)).toEqual(['A，B。', '先量。'])
+  })
   it('一般句中的頓號保留', () => {
     const r = parseBody('## 怎麼做\n- 先看閘門、再量流量 ⟦1⟧')
     expect(r.how[0].text).toBe('先看閘門、再量流量')
