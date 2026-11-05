@@ -169,7 +169,7 @@ function FullTree({ built, onOpen }: { built: BuiltTree; onOpen: (id: string) =>
               aria-label={isTopic ? n.label : `${n.label}（${folded ? '展開' : '收合'}）`}
               onClick={act} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); act() } }}>
               <circle cx={n.x} cy={n.y} r={n.r} />
-              <text x={isTopic ? n.x + n.r + 6 : n.x} y={isTopic ? n.y + 4 : n.y - n.r - 5} textAnchor="start">{n.label}</text>
+              <text x={isTopic ? n.x + n.r + 6 : n.x} y={isTopic ? n.y + 4 : n.y - n.r - 5} textAnchor="start">{n.label.length > 14 ? `${n.label.slice(0, 13)}…` : n.label}<title>{n.label}</title></text>
             </g>
           )
         })}

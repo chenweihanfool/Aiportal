@@ -365,3 +365,15 @@ describe('parseBody 條目符號', () => {
     expect(parseBody('## 要注意\n- 小心').caution[0]).toEqual({ text: '小心', refs: [], single: false })
   })
 })
+
+describe('parseBody 腳註清理', () => {
+  it('多來源以頓號分隔時，拿掉腳註後不留孤立標點', () => {
+    const r = parseBody('## 怎麼做\n- 先低溫提香 ⟦1⟧、⟦2⟧\n- 再焙火 ⟦1⟧，⟦3⟧。')
+    expect(r.how.map((b) => b.text)).toEqual(['先低溫提香', '再焙火。'])
+    expect(r.how[0].refs).toEqual([1, 2])
+  })
+  it('一般句中的頓號保留', () => {
+    const r = parseBody('## 怎麼做\n- 先看閘門、再量流量 ⟦1⟧')
+    expect(r.how[0].text).toBe('先看閘門、再量流量')
+  })
+})
