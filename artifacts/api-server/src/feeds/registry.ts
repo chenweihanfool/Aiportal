@@ -239,6 +239,91 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 知識頁（#knowledge）：知識庫自己長出來的主題（題目）、頁面內容、成長紀錄與相關題目。推送端 kb-pipeline 每週產生後推送（契約見 docs/feed-api.md）。
+  // 欄位只增不改；body 是頁面四節的 markdown（wikilink 已由推送端轉成純文字）。
+  topics: {
+    version: 1,
+    description: "主題知識頁：知識庫自己長出來的題目、頁面內容、成長紀錄與相關題目",
+    maxBytes: 1536 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "topics feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "total", "published", "topics"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        total: { type: "integer", minimum: 0 },
+        published: { type: "integer", minimum: 0 },
+        topics: {
+          type: "array",
+          maxItems: 300,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "name", "kind", "why", "firstSeen", "revision", "docs", "newDocs", "monthsSpan", "body", "growth", "sources", "related"],
+            properties: {
+              id: { type: "string", minLength: 1, maxLength: 40 },
+              name: { type: "string", minLength: 1, maxLength: 60 },
+              kind: { enum: ["concept", "method"] },
+              why: { type: "string", maxLength: 200 },
+              firstSeen: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              lastSeen: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              updated: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              revision: { type: "integer", minimum: 0 },
+              docs: { type: "integer", minimum: 0 },
+              newDocs: { type: "integer", minimum: 0 },
+              monthsSpan: { type: "integer", minimum: 0 },
+              firstMonth: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
+              lastMonth: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
+              body: { type: ["string", "null"], maxLength: 13000 },
+              growth: {
+                type: "array",
+                maxItems: 20,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["date", "text"],
+                  properties: {
+                    date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+                    text: { type: "string", maxLength: 300 },
+                  },
+                },
+              },
+              sources: {
+                type: "array",
+                maxItems: 40,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["id", "title"],
+                  properties: {
+                    id: { type: "string", minLength: 1, maxLength: 120 },
+                    title: { type: "string", minLength: 1, maxLength: 200 },
+                  },
+                },
+              },
+              related: {
+                type: "array",
+                maxItems: 5,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["id", "name"],
+                  properties: {
+                    id: { type: "string", minLength: 1, maxLength: 40 },
+                    name: { type: "string", minLength: 1, maxLength: 60 },
+                    sharedDocs: { type: "integer", minimum: 0 },
+                    sharedCases: { type: "integer", minimum: 0 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,

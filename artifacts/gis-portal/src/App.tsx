@@ -5,6 +5,7 @@ import { FoodMapView } from './FoodMapView'
 import { RelationsView } from './RelationsView'
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { ArchitectureView } from './ArchitectureView'
+import { KnowledgeView } from './KnowledgeView'
 import { TimelineView } from './TimelineView'
 import { TripsView } from './TripsView'
 import { dimKeyFromHash } from './dimensionPage'
@@ -121,6 +122,11 @@ export default function App() {
   // 知識庫架構頁（2026-10-22）：分層架構圖＋L1～L5 即時狀態；入口在首頁「成長軌跡」與戰情室旁
   if (hashRoute === '#architecture') {
     return <><ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />{unlockModal}</>
+  }
+  // 知識頁（2026-11-05）：#knowledge＝題目牆、#knowledge/<id>＝單題頁；id 經 decodeURIComponent
+  if (hashRoute === '#knowledge' || hashRoute.startsWith('#knowledge/')) {
+    const topicId = hashRoute === '#knowledge' ? null : decodeURIComponent(hashRoute.slice('#knowledge/'.length))
+    return <><KnowledgeView unlockedPassword={unlockedPassword} topicId={topicId} onRequestUnlock={handleRequestUnlock} />{unlockModal}</>
   }
   if (hashRoute === '#graph/timeline') {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />

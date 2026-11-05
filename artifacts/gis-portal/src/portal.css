@@ -1619,3 +1619,61 @@ button.ms-col { cursor: pointer; }
 .rl-chip.is-static { cursor: default; }
 .rl-chip i { font-style: normal; color: var(--c-ink-2); font-size: var(--fs-xs); }
 .rl-link { font: inherit; font-size: var(--fs-sm); color: var(--c-accent); background: none; border: 0; padding: 2px 4px; cursor: pointer; }
+
+/* ── 知識頁（#knowledge，2026-11-05）：kn-* ── */
+.kn-root { position: fixed; inset: 0; z-index: 200; overflow-y: auto; overflow-x: hidden; background: var(--c-bg); color: var(--c-ink); font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; padding: 0 var(--sp-4) var(--sp-6); box-sizing: border-box; }
+.kn-head { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); padding: var(--sp-3) 0; background: var(--c-bg); border-bottom: 1px solid var(--c-line); }
+.kn-head h1 { margin: 0; font-size: var(--fs-md); font-weight: 700; }
+.kn-back, .kn-link { font: inherit; font-size: var(--fs-sm); color: var(--c-accent); background: none; border: 0; padding: 2px 4px; cursor: pointer; }
+.kn-btn { font: inherit; font-size: var(--fs-sm); color: var(--c-accent); background: var(--c-surface); border: 1px solid var(--c-accent); border-radius: var(--r-pill); padding: var(--sp-1) var(--sp-3); cursor: pointer; }
+.kn-btn--head { margin-left: auto; }
+.kn-stale { font-size: var(--fs-xs); color: var(--c-warn); }
+.kn-body { padding-top: var(--sp-4); min-width: 0; }
+.kn-muted { color: var(--c-ink-3); font-size: var(--fs-sm); }
+.kn-bad { color: var(--c-crit); }
+.kn-empty { color: var(--c-ink-2); font-size: var(--fs-sm); line-height: 1.7; padding: var(--sp-4); background: var(--c-surface); border: 1px dashed var(--c-line); border-radius: var(--r-md); }
+.kn-stats { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--c-ink-2); overflow-wrap: anywhere; }
+.kn-stats b { color: var(--c-ink); }
+.kn-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-4); }
+.kn-seg { display: inline-flex; border: 1px solid var(--c-line); border-radius: var(--r-pill); overflow: hidden; }
+.kn-seg button { font: inherit; font-size: var(--fs-xs); color: var(--c-ink-2); background: var(--c-surface); border: 0; padding: var(--sp-1) var(--sp-3); cursor: pointer; }
+.kn-seg button[aria-pressed="true"] { color: var(--c-bg); background: var(--c-accent); }
+.kn-search { flex: 1 1 180px; min-width: 0; max-width: 100%; font: inherit; font-size: var(--fs-sm); color: var(--c-ink); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-1) var(--sp-2); box-sizing: border-box; }
+.kn-group { margin-bottom: var(--sp-5); }
+.kn-group h2 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--c-ink-2); letter-spacing: 0.04em; }
+.kn-count { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--c-ink-3); margin-left: var(--sp-1); }
+.kn-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-3); }
+.kn-card { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; min-width: 0; text-align: left; font: inherit; color: var(--c-ink); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-3); cursor: pointer; box-sizing: border-box; }
+.kn-card:hover, .kn-card:focus-visible { border-color: var(--c-accent); outline: none; }
+.kn-card-top { display: flex; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
+.kn-card-top b { font-size: var(--fs-sm); overflow-wrap: anywhere; min-width: 0; }
+.kn-kind { flex: 0 0 auto; font-size: var(--fs-2xs); color: var(--c-ink-2); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 0 var(--sp-2); white-space: nowrap; }
+.kn-kind[data-kind="method"] { color: var(--c-ok); border-color: var(--c-ok); }
+.kn-why { font-size: var(--fs-xs); color: var(--c-ink-2); line-height: 1.6; overflow-wrap: anywhere; }
+.kn-meta { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin: 0; font-size: var(--fs-2xs); color: var(--c-ink-3); font-family: var(--font-mono); }
+.kn-new { color: var(--c-accent); }
+.kn-graph { display: block; width: 100%; height: auto; max-width: 640px; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); }
+.kn-graph line { stroke: var(--c-line-strong); }
+.kn-graph circle { fill: var(--c-raised); stroke: var(--c-accent); stroke-width: 1.5; }
+.kn-graph .kn-node { cursor: pointer; }
+.kn-graph .kn-node:hover circle, .kn-graph .kn-node:focus-visible circle { fill: var(--c-accent-dim); }
+.kn-graph text { font-size: 11px; fill: var(--c-ink-2); pointer-events: none; }
+.kn-page { max-width: 760px; }
+.kn-title { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); line-height: 1.3; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.kn-page .kn-why { font-size: var(--fs-sm); margin-bottom: var(--sp-2); }
+.kn-page .kn-meta { margin-bottom: var(--sp-4); }
+.kn-section { margin-bottom: var(--sp-5); min-width: 0; overflow-wrap: anywhere; }
+.kn-section h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--c-ink-2); }
+.kn-timeline { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--c-line); }
+.kn-timeline li { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); padding: var(--sp-1) 0 var(--sp-1) var(--sp-3); font-size: var(--fs-sm); color: var(--c-ink-2); line-height: 1.6; }
+.kn-date { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--c-ink-3); }
+.kn-sources, .kn-related { margin: 0; padding-left: var(--sp-5); font-size: var(--fs-sm); color: var(--c-ink-2); line-height: 1.7; }
+.kn-related { list-style: none; padding-left: 0; }
+.kn-related li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+@media (max-width: 479px) {
+  .kn-root { padding: 0 16px 24px; }
+  .kn-cards { grid-template-columns: 1fr; }
+  .kn-head h1 { font-size: var(--fs-sm); }
+  .kn-btn--head { margin-left: 0; }
+  .kn-search { flex-basis: 100%; }
+}
