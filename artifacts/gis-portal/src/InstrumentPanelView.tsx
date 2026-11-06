@@ -66,6 +66,7 @@ export function InstrumentPanelView({
         summary={dashboard.find(d => d.subsystemId === 'social-index')}
         hhiSummary={hhiSummary}
         unlocked={unlocked}
+        pw={unlocked ? unlockedPassword : null}
         onSelect={onRequestUnlock}
       />
     </div>

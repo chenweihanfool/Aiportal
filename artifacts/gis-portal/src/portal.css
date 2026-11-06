@@ -1792,3 +1792,36 @@ button.ms-col { cursor: pointer; }
   .kn-btn--head { margin-left: 0; }
   .kn-title { font-size: 19px; }
 }
+
+/* ── 陪伴：很久沒聯絡的動作、社交明細「近 14 天」（2.79.0） ── */
+.hm-quiet-item { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; border-bottom: 1px solid var(--c-line); }
+.hm-quiet-item:last-child { border-bottom: 0; }
+.hm-quiet-event { font-size: 0.66rem; color: var(--c-ink-3); overflow-wrap: anywhere; }
+.hm-quiet-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.hm-quiet-btn { font: inherit; font-size: 0.66rem; color: var(--c-ink-2); background: var(--c-raised); border: 1px solid var(--c-line); border-radius: 999px; padding: 1px 9px; cursor: pointer; }
+.hm-quiet-btn:hover, .hm-quiet-btn:focus-visible { color: var(--c-accent); border-color: var(--c-accent); outline: none; }
+.hm-quiet-err { margin: 4px 0 0; font-size: 0.68rem; color: var(--c-crit); }
+.hm-quiet-hidden { margin-top: 6px; }
+.hm-quiet-hidden summary { cursor: pointer; }
+
+.hm-soc-recent { margin-top: 0.9rem; padding-top: 0.6rem; border-top: 1px solid var(--c-line); }
+.hm-soc-empty { margin-top: 0.8rem; }
+.hm-soc-strip { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; }
+.hm-soc-cell { display: inline-block; height: 16px; border-radius: 3px; background: var(--c-raised); border: 1px solid var(--c-line); }
+.hm-soc-face { background: var(--c-accent); border-color: var(--c-accent); }
+.hm-soc-call { background: var(--c-ok); border-color: var(--c-ok); }
+.hm-soc-text { background: var(--c-line-strong); border-color: var(--c-line-strong); }
+.hm-soc-none { background: var(--c-raised); border-color: var(--c-line); }
+.hm-soc-legend { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 4px; }
+.hm-soc-legend .hm-soc-cell { width: 10px; height: 10px; vertical-align: middle; }
+.hm-soc-people { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 0.6rem; }
+.hm-soc-chip { font-size: 0.68rem; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 999px; padding: 2px 9px; }
+.hm-soc-chip b { color: var(--c-accent); font-weight: 600; }
+.hm-soc-cmp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 0.6rem; }
+.hm-soc-cmp-item { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 6px; padding: 6px 8px; }
+.hm-soc-cmp-label { font-size: 0.62rem; color: var(--c-ink-3); }
+.hm-soc-cmp-num { font-size: 0.78rem; color: var(--c-ink); }
+.hm-soc-delta { font-size: 0.68rem; color: var(--c-ink-2); }
+.hm-soc-up { color: var(--c-ok); }
+.hm-soc-down { color: var(--c-concern); }
+.hm-soc-suggest { margin: 0.6rem 0 0; font-size: 0.76rem; color: var(--c-ink); }

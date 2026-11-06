@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { COLOR } from './theme'
 import type { HhiBreakdown } from './boardView'
 import type { IdeaItem } from './boardApi'
@@ -13,7 +13,7 @@ import {
   type SystemLight, type YearProgress,
 } from './homeView'
 import { biggestDrag, dayLinkText } from './boardView'
-import type { ActivityInsight, CompanionData } from './companion'
+import { apiDeletePersonAction, apiPutPersonAction, rotateQuiet, visibleQuietPeople, type ActivityInsight, type CompanionData, type PersonAction, type PersonActionBody, type QuietPerson } from './companion'
 import type { Brief, Crowd, ParsedBrief } from './briefView'
 import { BriefBoard } from './BriefBoard'
 import { dimHref } from './dimensionPage'
@@ -337,7 +337,92 @@ export function BriefSection({ st, brief, parsed, crowd, onRequestUnlock, onRetr
 }
 
 // ── 陪伴：歷年今天、很久沒聯絡、什麼事讓你變好 ──────────
-export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, recall = [] }: {
+const NO_ACTIONS: PersonAction[] = []
+
+// 很久沒聯絡：每天輪替 3 人，可按「已聯絡／暫緩 30 天／不再提醒」（入口網自己的狀態，不寫回 HERMES）
+function QuietPeople({ people, actions, today, pw, onChanged }: {
+  people: QuietPerson[]
+  actions: PersonAction[]
+  today: string
+  pw: string | null
+  onChanged?: () => void
+}) {
+  const [local, setLocal] = useState<PersonAction[]>(actions)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => setLocal(actions), [actions])
+  const shown = useMemo(() => rotateQuiet(visibleQuietPeople(people, local, today), today), [people, local, today])
+  const hidden = local.filter((a) => a.action === 'never')
+
+  const apply = async (name: string, optimistic: PersonAction | null, call: () => Promise<void>) => {
+    if (!pw) return
+    const before = local
+    setErr(null)
+    setLocal((cur) => [...cur.filter((a) => a.name !== name), ...(optimistic ? [optimistic] : [])])
+    try {
+      await call()
+      onChanged?.()
+    } catch {
+      setLocal(before)
+      setErr('儲存失敗，請稍後再試。')
+    }
+  }
+  const put = (name: string, body: PersonActionBody) => {
+    const opt: PersonAction = { name, action: body.action, until: body.until ?? null, reason: body.reason ?? null, updatedAt: new Date().toISOString() }
+    return apply(name, opt, () => apiPutPersonAction(pw!, name, body))
+  }
+  const snooze = (name: string) => {
+    const until = new Date(Date.parse(`${today}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10)
+    return put(name, { action: 'snooze', until })
+  }
+  const never = (name: string) => {
+    if (!window.confirm(`以後不再提醒你聯絡「${name}」？之後可以在下方還原。`)) return
+    const reason = window.prompt('原因（可留空，例如：已故）', '')
+    if (reason === null) return
+    return put(name, { action: 'never', ...(reason.trim() ? { reason: reason.trim().slice(0, 60) } : {}) })
+  }
+
+  return (
+    <div data-testid="quiet-people" className="hm-quiet">
+      <h3 className="hm-h3">👋 很久沒聯絡</h3>
+      {shown.length === 0 ? <p className="hm-muted">最近都有聯絡。</p> : (
+        <ul className="hm-comp-list">
+          {shown.map((p) => (
+            <li key={p.name} className="hm-quiet-item">
+              <div>
+                {p.name}
+                <span className="hm-muted">　{p.daysQuiet} 天沒聯絡{p.usualGapDays ? `（平常約每 ${p.usualGapDays} 天）` : ''}</span>
+              </div>
+              {p.lastEvent && <div className="hm-quiet-event">{p.lastEvent}</div>}
+              {pw && (
+                <div className="hm-quiet-actions">
+                  <button type="button" className="hm-quiet-btn" onClick={() => void put(p.name, { action: 'contacted' })}>已聯絡</button>
+                  <button type="button" className="hm-quiet-btn" onClick={() => void snooze(p.name)}>暫緩 30 天</button>
+                  <button type="button" className="hm-quiet-btn" onClick={() => void never(p.name)}>不再提醒</button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {err && <p className="hm-quiet-err" role="alert">{err}</p>}
+      {hidden.length > 0 && (
+        <details className="hm-quiet-hidden">
+          <summary className="hm-muted">已不提醒 {hidden.length} 人</summary>
+          <ul className="hm-comp-list">
+            {hidden.map((a) => (
+              <li key={a.name}>
+                {a.name}{a.reason && <span className="hm-muted">　{a.reason}</span>}
+                {pw && <>　<button type="button" className="hm-quiet-btn" onClick={() => void apply(a.name, null, () => apiDeletePersonAction(pw, a.name))}>還原</button></>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  )
+}
+
+export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, recall = [], pw = null, today, actions = NO_ACTIONS, onActionsChange }: {
   st: BlockStatus
   data: CompanionData | null
   insight: ActivityInsight
@@ -345,6 +430,12 @@ export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, 
   onRetry: () => void
   /** 一年前的這時候用過的主題（feed topic-nudges）；空陣列就不加第四格 */
   recall?: NudgeRecall[]
+  /** 人物提醒動作要寫入用的密碼；null 就不顯示按鈕 */
+  pw?: string | null
+  today: string
+  actions?: PersonAction[]
+  /** 動作寫入成功（或失敗還原）後，通知上層重新讀取 */
+  onActionsChange?: () => void
 }) {
   return (
     <HomeCard id="sec-companion" className="hm-companion">
@@ -359,17 +450,13 @@ export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, 
                 </ul>
               )}
             </div>
-            <div data-testid="quiet-people">
-              <h3 className="hm-h3">👋 很久沒聯絡</h3>
-              {data.quietPeople.length === 0 ? <p className="hm-muted">最近都有聯絡。</p> : (
-                <ul className="hm-comp-list">
-                  {data.quietPeople.slice(0, 5).map((p) => <li key={p.name} title={p.lastEvent ?? undefined}>{p.name}<span className="hm-muted">　{p.daysQuiet} 天前</span></li>)}
-                </ul>
-              )}
-            </div>
+            <QuietPeople people={data.quietPeople} actions={actions} today={today} pw={pw} onChanged={onActionsChange} />
             <div data-testid="activity-insight">
               <h3 className="hm-h3">🔍 什麼事讓你變好</h3>
-              <p className={insight.ready ? '' : 'hm-muted'}>{insight.text}</p>
+              {insight.lines.length > 0 && (
+                <ul className="hm-comp-list">{insight.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+              )}
+              {insight.pending !== '' && <p className="hm-muted">{insight.pending}</p>}
             </div>
             {recall.length > 0 && (
               <div data-testid="recall-topics">
