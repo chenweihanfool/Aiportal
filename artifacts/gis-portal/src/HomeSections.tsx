@@ -92,7 +92,7 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
                 {move && <p className="hm-sentence hm-move" data-testid="today-move">👉 {move}</p>}
                 {nudges.slice(0, 2).map((n) => (
                   <p key={`${n.forDate}-${n.topicId}`} className="hm-sentence hm-nudge" data-testid="today-nudge" title={triggerTitles(n)}>
-                    📚 今天用得上：<a href={knowledgeHref(n.topicId)}>{n.name}</a>{n.point ? `｜${n.point}` : ''}
+                    📚 今天用得上：<a className="hm-topic-link" href={knowledgeHref(n.topicId)}>{n.name}</a>{n.point ? `｜${n.point}` : ''}
                   </p>
                 ))}
               </div>
@@ -322,7 +322,7 @@ export function BriefSection({ st, brief, parsed, crowd, onRequestUnlock, onRetr
             <ul className="hm-comp-list">
               {nudges.slice(0, 4).map((n) => (
                 <li key={`${n.forDate}-${n.topicId}`}>
-                  <a href={knowledgeHref(n.topicId)}>{n.name}</a>
+                  <a className="hm-topic-link" href={knowledgeHref(n.topicId)}>{n.name}</a>
                   {n.path.length > 0 && <span className="hm-muted">　{n.path.join(' › ')}</span>}
                   {n.point && <span>｜{n.point}</span>}
                   <div className="hm-muted">因為：{triggerTitles(n)}</div>
@@ -377,7 +377,7 @@ export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, 
                 <ul className="hm-comp-list">
                   {recall.map((r) => (
                     <li key={r.topicId} title={r.point || undefined}>
-                      <a href={knowledgeHref(r.topicId)}>{r.name}</a>
+                      <a className="hm-topic-link" href={knowledgeHref(r.topicId)}>{r.name}</a>
                       <span className="hm-muted">　{r.reason}</span>
                     </li>
                   ))}
