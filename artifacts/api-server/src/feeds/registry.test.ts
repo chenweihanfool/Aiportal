@@ -79,5 +79,8 @@ describe("feed registry", () => {
     expect(validateFeedRequest("companion", day({ types: { face_to_face: 1, call: 0 } })).ok).toBe(false);
     expect(validateFeedRequest("companion", day({ types: { face_to_face: 1, call: 0, text: 1, other: 1 } })).ok).toBe(false);
     expect(validateFeedRequest("companion", body({ ...old, quietPeople: [{ ...old.quietPeople[0], usualGapDays: 0 }] })).ok).toBe(false);
+    // 只有社交紀錄、沒有事件連到人物頁的人 events＝0 要能過（kb-pipeline companion v2）；負數仍擋
+    expect(validateFeedRequest("companion", body({ ...old, quietPeople: [{ ...old.quietPeople[0], events: 0, lastEvent: null }] })).ok).toBe(true);
+    expect(validateFeedRequest("companion", body({ ...old, quietPeople: [{ ...old.quietPeople[0], events: -1 }] })).ok).toBe(false);
   });
 });

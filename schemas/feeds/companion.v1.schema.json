@@ -78,7 +78,7 @@
           },
           "events": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 0
           },
           "lastEvent": {
             "type": [

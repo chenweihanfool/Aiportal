@@ -186,7 +186,7 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
               name: { type: "string", minLength: 1, maxLength: 60 },
               lastDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
               daysQuiet: { type: "integer", minimum: 0 },
-              events: { type: "integer", minimum: 1 },
+              events: { type: "integer", minimum: 0 },  // 0＝只有社交紀錄、沒有事件連到人物頁（2026-11-07 起）
               lastEvent: { type: ["string", "null"], maxLength: 120 },
               usualGapDays: { type: ["integer", "null"], minimum: 1, maximum: 3650 },
               overdue: { type: "number", minimum: 0, maximum: 1000 },
