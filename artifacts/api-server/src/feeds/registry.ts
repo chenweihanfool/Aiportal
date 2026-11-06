@@ -374,6 +374,76 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 首頁主動推播主題知識：「今天」卡、明日報告區塊（依報告日）、陪伴區塊的「一年前的這時候」。
+  // 推送端 kb-pipeline vikunja-gantt-pusher.py（每 10 分鐘）；matches 只有今天與明天（forDate＝date 或 date+1），recall 為週期喚回。
+  "topic-nudges": {
+    version: 1,
+    description: "首頁主動推播主題知識：今明兩天任務／日記相關的知識頁、去年同期喚回",
+    maxBytes: 64 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "topic-nudges feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "date", "matches", "recall"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        matches: {
+          type: "array",
+          maxItems: 8,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["forDate", "topicId", "name", "path", "published", "point", "triggers", "score"],
+            properties: {
+              forDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              topicId: { type: "string", minLength: 1, maxLength: 40 },
+              name: { type: "string", minLength: 1, maxLength: 80 },
+              path: { type: "array", maxItems: 2, items: { type: "string", minLength: 1, maxLength: 40 } },
+              published: { type: "boolean" },
+              point: { type: "string", minLength: 0, maxLength: 120 },
+              triggers: {
+                type: "array",
+                minItems: 1,
+                maxItems: 5,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["kind", "title", "due"],
+                  properties: {
+                    kind: { enum: ["task", "diary"] },
+                    title: { type: "string", minLength: 1, maxLength: 120 },
+                    due: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+                  },
+                },
+              },
+              score: { type: "integer", minimum: 0, maximum: 100 },
+            },
+          },
+        },
+        recall: {
+          type: "array",
+          maxItems: 3,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["topicId", "name", "path", "published", "point", "reason", "lastMonth", "years"],
+            properties: {
+              topicId: { type: "string", minLength: 1, maxLength: 40 },
+              name: { type: "string", minLength: 1, maxLength: 80 },
+              path: { type: "array", maxItems: 2, items: { type: "string", minLength: 1, maxLength: 40 } },
+              published: { type: "boolean" },
+              point: { type: "string", minLength: 0, maxLength: 120 },
+              reason: { type: "string", minLength: 1, maxLength: 80 },
+              lastMonth: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
+              years: { type: "array", maxItems: 10, items: { type: "integer", minimum: 2000, maximum: 2100 } },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,

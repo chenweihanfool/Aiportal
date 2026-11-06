@@ -678,6 +678,9 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 .hm-streak { color: var(--c-ink-2); font-size: 0.74rem; }
 .hm-sentence { margin: 0; font-size: clamp(0.8rem, 1.9vh, 0.98rem); line-height: 1.5; color: var(--c-ink); }
 .hm-move { color: var(--c-ink-2); }
+/* 主題知識推播（topic-nudges）：今天卡的一行、明日報告區塊的清單 */
+.hm-nudge { color: var(--c-ink-2); overflow-wrap: anywhere; }
+.hm-brief-nudges { margin-top: 0.6rem; font-size: 0.8rem; line-height: 1.55; color: var(--c-ink); }
 .hm-comp-grid { display: grid; gap: 0.8rem 1.2rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); font-size: 0.8rem; line-height: 1.55; color: var(--c-ink); }
 .hm-comp-grid p { margin: 0; }
 .hm-h3 { margin: 0 0 0.3rem; font-size: 0.78rem; font-weight: 600; color: var(--c-ink-2); }
@@ -804,6 +807,8 @@ button.hm-lock:hover { border-color: var(--c-warn); }
   .hm-sentence { grid-area: sent; margin: 0; }
   /* 「👉 今天最划算」另佔一列：原本跟上一句同在 sent 格，手機上兩行字疊在一起（2.70.3） */
   .hm-sentence.hm-move { grid-area: move; }
+  /* 主題推播每則獨佔一列、可換行（不跟 sent／move 格搶位置） */
+  .hm-sentence.hm-nudge { grid-area: auto; grid-column: 1 / -1; }
   .hm-today { gap: 0.5rem; }
 }
 /* 手機頁首（樣式本體見檔尾的 tb-*）：頁首跟著內容捲走 */
