@@ -4,7 +4,14 @@ import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isAuthorized } from "../lib/adminSession";
 import { nameCandidates } from "../lib/attachmentFile";
-import { checkRawPath, isInsideRoot, MAX_RAW_BYTES, rawContentDisposition, stripPullPrefix } from "../lib/rawFile";
+import {
+  checkRawPath,
+  createNasGuard,
+  isInsideRoot,
+  MAX_RAW_BYTES,
+  rawContentDisposition,
+  stripPullPrefix,
+} from "../lib/rawFile";
 
 const router = Router();
 
@@ -22,9 +29,21 @@ function rawNasRoot(): string {
 
 // VPN 斷線時 NAS 的 realpath／stat 可能卡住好幾秒，整段包一層逾時，避免請求一直掛著。
 function rawNasTimeoutMs(): number {
-  const ms = Number(process.env["RAW_NAS_TIMEOUT_MS"]);
-  return Number.isFinite(ms) && ms > 0 ? ms : 8000;
+  return positiveNumber(process.env["RAW_NAS_TIMEOUT_MS"], 8000);
 }
+
+function positiveNumber(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+const NAS_OFFLINE_MESSAGE = "家中 NAS 暫時連不到（VPN 可能斷線）";
+
+// 斷路器：NAS 一旦逾時或回連線類錯誤，冷卻期內直接回 504、不碰 NAS（見 createNasGuard）。
+export const nasGuard = createNasGuard({
+  cooldownMs: () => positiveNumber(process.env["RAW_NAS_COOLDOWN_MS"], 60_000),
+  maxInflight: () => positiveNumber(process.env["RAW_NAS_MAX_INFLIGHT"], 2),
+});
 
 class NasTimeoutError extends Error {}
 
@@ -122,18 +141,28 @@ router.get("/hermes-raw", async (req: Request, res: Response) => {
   }
 
   // VPS 上沒有 → 找家中 NAS。NAS 根目錄不存在（沒掛）時與以前完全相同：回 404。
+  // 斷路器冷卻中，或已有上限數量的底層 NAS 呼叫還沒真正結束：不碰 NAS，直接回 504。
+  if (nasGuard.blockReason()) {
+    return res.status(504).json({ message: NAS_OFFLINE_MESSAGE });
+  }
+
   let nas: NasLookup;
   try {
-    nas = await withTimeout(lookupNas(check.rel), rawNasTimeoutMs());
+    nasGuard.begin();
+    // 在原始 promise 的 finally 遞減（不是逾時 race 的 finally）：卡住的呼叫仍算在 in-flight。
+    const lookup = lookupNas(check.rel).finally(() => nasGuard.end());
+    nas = await withTimeout(lookup, rawNasTimeoutMs());
   } catch (err) {
     if (err instanceof NasTimeoutError) {
-      return res.status(504).json({ message: "家中 NAS 暫時連不到（VPN 可能斷線）" });
+      nasGuard.markDown();
+      return res.status(504).json({ message: NAS_OFFLINE_MESSAGE });
     }
     const code = fsErrorCode(err);
     if (code === "ENOENT" || code === "ENOTDIR") {
       nas = { ok: false, kind: "missing" }; // NAS 根目錄沒掛：照舊找不到
     } else {
-      return res.status(504).json({ message: "家中 NAS 暫時連不到（VPN 可能斷線）" }); // EIO、EHOSTDOWN…
+      nasGuard.markDown(); // EIO、EHOSTDOWN…：進入冷卻，後續請求不再碰 NAS
+      return res.status(504).json({ message: NAS_OFFLINE_MESSAGE });
     }
   }
 

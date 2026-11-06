@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 const PWD = "raw-test-pwd";
 const dir = mkdtempSync(path.join(tmpdir(), "raw-root-"));
@@ -15,7 +15,18 @@ const nasHang = path.join(tmpdir(), "raw-nas-hang-");
 const nasEio = path.join(tmpdir(), "raw-nas-eio-");
 
 // NAS 逾時／EIO 用 mock 模擬：只攔這兩條前綴，其他路徑照真實檔案系統走。
-const fsCtl = vi.hoisted(() => ({ hangPrefix: "", eioPrefix: "" }));
+// pending 讓我們在測試結束時把卡住的呼叫放掉；calls 用來證明「冷卻期內完全不碰 NAS」。
+const fsCtl = vi.hoisted(() => ({
+  hangPrefix: "",
+  eioPrefix: "",
+  calls: 0,
+  pending: [] as Array<() => void>,
+  releaseHang() {
+    const list = this.pending;
+    this.pending = [];
+    for (const release of list) release();
+  },
+}));
 fsCtl.hangPrefix = nasHang;
 fsCtl.eioPrefix = nasEio;
 
@@ -24,8 +35,17 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   const wrap = (fn: (...args: unknown[]) => Promise<unknown>) => async (...args: unknown[]) => {
     const p = args[0];
     const hits = (prefix: string) => prefix !== "" && typeof p === "string" && p.startsWith(prefix);
-    if (hits(fsCtl.hangPrefix)) return new Promise<never>(() => {}); // 永不 settle，模擬 VPN 斷線時卡住
-    if (hits(fsCtl.eioPrefix)) throw Object.assign(new Error("EIO"), { code: "EIO" });
+    if (hits(fsCtl.hangPrefix)) {
+      fsCtl.calls += 1;
+      // 卡住直到測試呼叫 releaseHang()，模擬 VPN 斷線時 realpath／stat 一直不回來。
+      return new Promise<never>((_, reject) => {
+        fsCtl.pending.push(() => reject(Object.assign(new Error("ETIMEDOUT"), { code: "ETIMEDOUT" })));
+      });
+    }
+    if (hits(fsCtl.eioPrefix)) {
+      fsCtl.calls += 1;
+      throw Object.assign(new Error("EIO"), { code: "EIO" });
+    }
     return fn(...args);
   };
   return {
@@ -57,9 +77,18 @@ try {
 describe("GET /api/hermes-raw", () => {
   let server: Server;
   let base = "";
+  let nasGuard: import("../lib/rawFile").NasGuard;
 
   const get = (p: string, pwd: string | null = PWD) =>
     fetch(`${base}/api/hermes-raw?path=${encodeURIComponent(p)}`, { headers: pwd ? { "x-admin-password": pwd } : {} });
+
+  const waitFor = async (cond: () => boolean, ms = 2000) => {
+    const start = Date.now();
+    while (!cond()) {
+      if (Date.now() - start > ms) throw new Error("waitFor 逾時");
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  };
 
   beforeAll(async () => {
     process.env["ADMIN_PASSWORD"] = PWD;
@@ -81,11 +110,19 @@ describe("GET /api/hermes-raw", () => {
     // NAS 有、VPS 沒有；VPS 上的相對路徑多包一層 `_staging-from-home/`。
     writeFileSync(path.join(nasDir, "案A", "y.pdf"), "%PDF-1.4 from nas");
     const express = (await import("express")).default;
-    const router = (await import("./hermesRaw")).default;
+    const mod = await import("./hermesRaw");
+    nasGuard = mod.nasGuard;
     const app = express();
-    app.use("/api", router);
+    app.use("/api", mod.default);
     await new Promise<void>((r) => { server = app.listen(0, "127.0.0.1", () => r()); });
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+  afterEach(async () => {
+    fsCtl.releaseHang();
+    await new Promise((r) => setTimeout(r, 0)); // 讓被放掉的底層呼叫跑完 finally，計數才不會跨題
+    nasGuard?.reset();
+    fsCtl.calls = 0;
+    vi.restoreAllMocks();
   });
   afterAll(async () => {
     await new Promise((r) => server?.close(r));
@@ -186,6 +223,87 @@ describe("GET /api/hermes-raw", () => {
       const r = await get("人類/不存在.pdf");
       expect(r.status).toBe(504);
       expect(await r.json()).toEqual({ message: "家中 NAS 暫時連不到（VPN 可能斷線）" });
+    } finally {
+      process.env["HERMES_RAW_NAS_ROOT"] = saved;
+    }
+  });
+
+  it("answers 504 during the cooldown without touching the NAS", async () => {
+    const saved = process.env["HERMES_RAW_NAS_ROOT"];
+    const savedCooldown = process.env["RAW_NAS_COOLDOWN_MS"];
+    process.env["HERMES_RAW_NAS_ROOT"] = nasHang;
+    process.env["RAW_NAS_COOLDOWN_MS"] = "60000";
+    try {
+      expect((await get("人類/不存在.pdf")).status).toBe(504); // 第一次：逾時，開啟斷路器
+      fsCtl.calls = 0;
+      const r = await get("人類/不存在.pdf");
+      expect(r.status).toBe(504);
+      expect(await r.json()).toEqual({ message: "家中 NAS 暫時連不到（VPN 可能斷線）" });
+      expect(fsCtl.calls).toBe(0); // 冷卻期內完全不碰 NAS 的 fs
+    } finally {
+      process.env["HERMES_RAW_NAS_ROOT"] = saved;
+      if (savedCooldown === undefined) delete process.env["RAW_NAS_COOLDOWN_MS"];
+      else process.env["RAW_NAS_COOLDOWN_MS"] = savedCooldown;
+    }
+  });
+
+  it("tries the NAS again after the cooldown expires", async () => {
+    const saved = process.env["HERMES_RAW_NAS_ROOT"];
+    const savedCooldown = process.env["RAW_NAS_COOLDOWN_MS"];
+    process.env["HERMES_RAW_NAS_ROOT"] = nasHang;
+    process.env["RAW_NAS_COOLDOWN_MS"] = "60000";
+    try {
+      expect((await get("人類/不存在.pdf")).status).toBe(504);
+      process.env["HERMES_RAW_NAS_ROOT"] = nasDir;
+      // 注入 now：冷卻結束後的下一個請求會再試一次 NAS（不必真的等 60 秒）。
+      const nowMs = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(nowMs + 60_001);
+      const r = await get("人類/_staging-from-home/案A/y.pdf");
+      expect(r.status).toBe(200);
+      expect(await r.text()).toBe("%PDF-1.4 from nas");
+    } finally {
+      process.env["HERMES_RAW_NAS_ROOT"] = saved;
+      if (savedCooldown === undefined) delete process.env["RAW_NAS_COOLDOWN_MS"];
+      else process.env["RAW_NAS_COOLDOWN_MS"] = savedCooldown;
+    }
+  });
+
+  it("answers 504 immediately when the in-flight NAS limit is reached", async () => {
+    const saved = process.env["HERMES_RAW_NAS_ROOT"];
+    const savedTimeout = process.env["RAW_NAS_TIMEOUT_MS"];
+    const savedMax = process.env["RAW_NAS_MAX_INFLIGHT"];
+    process.env["HERMES_RAW_NAS_ROOT"] = nasHang;
+    process.env["RAW_NAS_TIMEOUT_MS"] = "5000";
+    process.env["RAW_NAS_MAX_INFLIGHT"] = "2";
+    try {
+      const p1 = get("人類/不存在.pdf");
+      const p2 = get("人類/不存在.pdf");
+      await waitFor(() => fsCtl.calls >= 2); // 兩個底層 NAS 呼叫都已卡住
+      const callsBefore = fsCtl.calls;
+      const r3 = await get("人類/不存在.pdf");
+      expect(r3.status).toBe(504);
+      expect(fsCtl.calls).toBe(callsBefore); // 第三個請求不碰 NAS
+      fsCtl.releaseHang();
+      expect((await p1).status).toBe(504);
+      expect((await p2).status).toBe(504);
+    } finally {
+      process.env["HERMES_RAW_NAS_ROOT"] = saved;
+      process.env["RAW_NAS_TIMEOUT_MS"] = savedTimeout!;
+      if (savedMax === undefined) delete process.env["RAW_NAS_MAX_INFLIGHT"];
+      else process.env["RAW_NAS_MAX_INFLIGHT"] = savedMax;
+    }
+  });
+
+  it("still serves a VPS file normally while the NAS breaker is open", async () => {
+    const saved = process.env["HERMES_RAW_NAS_ROOT"];
+    process.env["HERMES_RAW_NAS_ROOT"] = nasHang;
+    try {
+      expect((await get("人類/不存在.pdf")).status).toBe(504); // 開斷路
+      fsCtl.calls = 0;
+      const r = await get("人類/案件A/公文.pdf");
+      expect(r.status).toBe(200);
+      expect(await r.text()).toBe("%PDF-1.4 fake");
+      expect(fsCtl.calls).toBe(0);
     } finally {
       process.env["HERMES_RAW_NAS_ROOT"] = saved;
     }

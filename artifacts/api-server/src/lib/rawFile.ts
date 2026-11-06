@@ -81,3 +81,58 @@ export function stripPullPrefix(rel: string): string {
   }
   return out;
 }
+
+/**
+ * 家中 NAS 的斷路器與同時上限（狀態由 routes/hermesRaw.ts 建立單例；這裡只放可測試的邏輯）。
+ * VPN 斷線時 realpath／stat 會卡住並佔用 libuv 的 fs threadpool，拖垮整個 api-server；
+ * 所以一段時間內不再嘗試（冷卻），而且同時未真正結束的底層呼叫數有上限。
+ */
+export type NasBlockReason = "cooldown" | "busy";
+
+export interface NasGuard {
+  /** 現在能不能查 NAS；不行時回原因（冷卻中優先於忙碌）。 */
+  blockReason(nowMs?: number): NasBlockReason | null;
+  /** 底層 NAS fs 呼叫開始。 */
+  begin(): void;
+  /** 底層 NAS fs 呼叫真正結束（要掛在原始 promise 的 finally，不是逾時 race 的 finally）。 */
+  end(): void;
+  /** 逾時或連線類錯誤：冷卻到 now + cooldownMs。 */
+  markDown(nowMs?: number): void;
+  /** 清空狀態（測試用）。 */
+  reset(): void;
+}
+
+export interface NasGuardOptions {
+  /** 時鐘（測試可注入）；預設每次呼叫 Date.now()。 */
+  now?: () => number;
+  cooldownMs?: () => number;
+  maxInflight?: () => number;
+}
+
+export function createNasGuard(opts: NasGuardOptions = {}): NasGuard {
+  const now = opts.now ?? (() => Date.now());
+  const cooldownMs = opts.cooldownMs ?? (() => 60_000);
+  const maxInflight = opts.maxInflight ?? (() => 2);
+  let downUntil = 0;
+  let inflight = 0;
+  return {
+    blockReason(nowMs = now()) {
+      if (nowMs < downUntil) return "cooldown";
+      if (inflight >= maxInflight()) return "busy";
+      return null;
+    },
+    begin() {
+      inflight += 1;
+    },
+    end() {
+      if (inflight > 0) inflight -= 1;
+    },
+    markDown(nowMs = now()) {
+      downUntil = nowMs + cooldownMs();
+    },
+    reset() {
+      downUntil = 0;
+      inflight = 0;
+    },
+  };
+}
