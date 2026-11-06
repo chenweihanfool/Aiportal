@@ -17,6 +17,14 @@ describe('parseCompanion', () => {
 })
 
 describe('bestMove', () => {
+  it('社交建議跳過「不再提醒」的人', () => {
+    const c = { computedAt: 'x', date: '2026-11-07', onThisDay: [], socialDays: [], quietPeople: [
+      { name: '岳父', lastDate: '2026-08-01', daysQuiet: 98, events: 9 }, { name: '小明', lastDate: '2026-09-01', daysQuiet: 67, events: 5 }] } as CompanionData
+    const acts: PersonAction[] = [{ name: '岳父', action: 'never', until: null, reason: '已故', updatedAt: '2026-11-07T01:00:00Z' }]
+    const out = bestMove([row('social', '社交', 20, 13)], c, acts, '2026-11-07')
+    expect(out).toContain('小明')
+    expect(out).not.toContain('岳父')
+  })
   it('挑補起來幫助最大的面向，寫出效益', () => {
     expect(bestMove([row('lifeFreedom', '財務自由', 67, 27), row('fitness', '身體', 20, 18)], null)).toBe('今天最划算：今天動一下，排一次訓練。「身體」每多 10 分，總分約加 1.8 分。')
   })

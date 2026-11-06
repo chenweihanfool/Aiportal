@@ -141,7 +141,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     : !historyUsable && histBase.state !== 'pending' ? '趨勢暫時無法取得'
     : null
   const sentence = todaySentence({ trend, rows: breakdown?.rows ?? [], trendKnown: trendNote === null })
-  const move = useMemo(() => bestMove(breakdown?.rows ?? [], companion.data), [breakdown, companion.data])
+  const move = useMemo(() => bestMove(breakdown?.rows ?? [], companion.data, personActions.data ?? [], todayIso), [breakdown, companion.data, personActions.data, todayIso])
   const insight = useMemo(() => activityInsight(histData, dailyLife.data), [histData, dailyLife.data])
   const brief = useMemo(() => pickBrief(reports.data, todayIso), [reports.data, todayIso])
   const briefParsed = useMemo(() => (brief ? parseBrief(brief.bodyMd, brief.date) : null), [brief])

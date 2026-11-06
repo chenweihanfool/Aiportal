@@ -56,11 +56,12 @@ const MOVES: Record<string, string> = {
 }
 
 /** 今日最划算的一件事：挑補起來對總分幫助最大的面向；社交優先點名最久沒聯絡的人。財務主要看市場、權重又最大，留著會天天推它，不列入 */
-export function bestMove(rows: HhiRow[], c: CompanionData | null): string | null {
+/** actions／today 有給時，先濾掉「已聯絡／暫緩／不再提醒」的人（例如已故的人不會被建議聯絡） */
+export function bestMove(rows: HhiRow[], c: CompanionData | null, actions: readonly PersonAction[] = [], today = ''): string | null {
   const r = biggestDrag(rows.filter((x) => x.key in MOVES))
   if (!r || r.value === null) return null
   const gain = ((10 * r.weightPct) / 100).toFixed(1)
-  const who = r.key === 'social' ? c?.quietPeople[0] : undefined
+  const who = r.key === 'social' && c ? (today ? visibleQuietPeople(c.quietPeople, actions, today) : c.quietPeople)[0] : undefined
   const act = who ? `聯絡一下${who.name}（${who.daysQuiet} 天沒聯絡了）` : MOVES[r.key]
   return act ? `今天最划算：${act}。「${r.label}」每多 10 分，總分約加 ${gain} 分。` : null
 }

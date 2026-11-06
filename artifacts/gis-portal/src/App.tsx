@@ -165,7 +165,7 @@ export default function App() {
           <DimensionPage
             dimKey={dimKey} hhiData={hhi?.data ?? undefined} hhiFetchedAt={hhi?.fetchedAt ?? null} hhiError={hhi?.status === 'error'}
             unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock}
-            detail={<DimensionDetail dimKey={dimKey} dashboard={dashboard} />} links={dimensionLinks(dimKey, sites, handleSiteClick)}
+            detail={<DimensionDetail dimKey={dimKey} dashboard={dashboard} pw={unlockedPassword} />} links={dimensionLinks(dimKey, sites, handleSiteClick)}
           />
         )
       })()}

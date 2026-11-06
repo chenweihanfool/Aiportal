@@ -5,18 +5,13 @@ import { MindDetailBody, SUMMARY_BODIES, SocialDetailBody } from './DimensionCar
 import { dimensionOf } from './dimensions'
 import { rawToScoreText } from './dimensionPage'
 import { formatMinutesAgo } from './format'
-import { UNLOCK_KEY, type DashboardSummary, type SiteData } from './portalApi'
+import { type DashboardSummary, type SiteData } from './portalApi'
 
 // ─────────────────────────────────────────────
 // 面向頁（#dim/<key>）的「分數怎麼來」與相關連結。各面向的原始數據元件沿用首頁卡片展開用的同一批
 // （*SummaryBody／MindDetailBody／SocialDetailBody），所以首頁卡片與面向頁不會各說各話。
 // ─────────────────────────────────────────────
-// App.tsx 不在這次改動範圍，面向頁拿不到 unlockedPassword，改讀 App 同一個 localStorage 鍵（面向頁只有解鎖後才看得到）
-function storedPassword(): string | null {
-  try { return localStorage.getItem(UNLOCK_KEY) } catch { return null }
-}
-
-export function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboard: DashboardSummary[] }) {
+export function DimensionDetail({ dimKey, dashboard, pw = null }: { dimKey: string; dashboard: DashboardSummary[]; pw?: string | null }) {
   const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
   const def = dimensionOf(dimKey)
   if (!def) return null
@@ -62,7 +57,7 @@ export function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboa
             {names.map(n => <span key={n} style={{ fontSize: '0.68rem', color: COLOR.steel, background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 9px' }}>{n}</span>)}
           </div>
         )}
-        <SocialDetailBody summary={summary} hhiSummary={hhiSummary} pw={storedPassword()} />
+        <SocialDetailBody summary={summary} hhiSummary={hhiSummary} pw={pw} />
         <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
       </div>
     )
