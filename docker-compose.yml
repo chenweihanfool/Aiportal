@@ -42,7 +42,8 @@ services:
       HERMES_RAW_ROOT: /data/raw
       # 原檔在 VPS 找不到時的後備：家中 NAS 的唯讀掛載點。主機端由 HERMES 以 cifs 唯讀掛載家中 NAS、經 VPN；
       # VPN 斷線時 API 8 秒內回 504，不會卡住。
-      HERMES_RAW_NAS_ROOT: /data/raw-nas
+      # 可由主機 .env 覆寫成 /data/raw-nas 底下的子路徑（RAW_NAS_DIR 掛上層目錄時用）
+      HERMES_RAW_NAS_ROOT: ${HERMES_RAW_NAS_ROOT:-/data/raw-nas}
       # 遊記相片的縮圖／檢視圖（GET /api/media/trips/…）讀這個資料夾；唯讀掛載，api-server 無法寫入。
       HERMES_MEDIA_ROOT: /data/media
     volumes:
@@ -54,7 +55,9 @@ services:
       - ${RAW_DIR:-./raw}:/data/raw:ro
       # 原檔後備：主機端由 HERMES 以 cifs 唯讀掛載家中 NAS（經 VPN），在這裡再掛進容器；
       # 未設 RAW_NAS_DIR 時掛本專案內一個空的 ./raw-nas（行為同沒掛 NAS：只找 VPS）。
-      - ${RAW_NAS_DIR:-./raw-nas}:/data/raw-nas:ro
+      # 建議 RAW_NAS_DIR=/mnt（掛載點的上層、恆存在）＋ HERMES_RAW_NAS_ROOT 指到子路徑：NAS 走 VPN 自動掛載，
+      # 直接掛 NAS 內路徑時，重建當下 VPN 斷線會讓容器起不來。rslave 讓主機之後掛上的 NAS 傳進容器。
+      - ${RAW_NAS_DIR:-./raw-nas}:/data/raw-nas:ro,rslave
       # 在主機 .env 設 MEDIA_DIR=<HERMES 寫入衍生檔的資料夾>（HERMES 端 TRIP_MEDIA_DIR 設成 <MEDIA_DIR>/trips）。
       # 未設時掛本專案內一個空的 ./media（API 回「找不到」，不影響其他功能），不會誤掛到別處。
       - ${MEDIA_DIR:-./media}:/data/media:ro
