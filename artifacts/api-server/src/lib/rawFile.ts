@@ -62,3 +62,22 @@ export function rawContentDisposition(name: string, disposition: RawDisposition)
 export function isInsideRoot(root: string, abs: string, sep: string): boolean {
   return abs === root || abs.startsWith(root.endsWith(sep) ? root : root + sep);
 }
+
+// 家中 NAS 的掛載點對應的是「去掉這兩個前綴之後」的相對路徑；VPS 的 人類/ 底下可能多包一層。
+const PULL_PREFIXES = ["_pulled-from-home/", "_staging-from-home/"];
+
+/** 反覆去掉開頭的 `_pulled-from-home/`、`_staging-from-home/`，得到 NAS 上的相對路徑。 */
+export function stripPullPrefix(rel: string): string {
+  let out = rel;
+  let stripped = true;
+  while (stripped) {
+    stripped = false;
+    for (const prefix of PULL_PREFIXES) {
+      if (out.startsWith(prefix)) {
+        out = out.slice(prefix.length);
+        stripped = true;
+      }
+    }
+  }
+  return out;
+}

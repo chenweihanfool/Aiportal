@@ -82,7 +82,11 @@ export async function apiSearchHermesDocs(adminPassword: string, q: string, sign
 
 export type RawFileResult =
   | { ok: true; blob: Blob }
-  | { ok: false; reason: 'not-found' | 'not-mounted' | 'too-large' | 'unsupported' | 'forbidden' | 'error'; message: string }
+  | {
+      ok: false
+      reason: 'not-found' | 'not-mounted' | 'nas-offline' | 'too-large' | 'unsupported' | 'forbidden' | 'error'
+      message: string
+    }
 
 /** 原檔（/api/hermes-raw）：帶 header 取成 Blob，做法同 attachmentApi。 */
 export async function apiFetchHermesRaw(adminPassword: string, path: string, signal?: AbortSignal): Promise<RawFileResult> {
@@ -95,10 +99,11 @@ export async function apiFetchHermesRaw(adminPassword: string, path: string, sig
   if (r.ok) return { ok: true, blob: await r.blob() }
   switch (r.status) {
     case 403: return { ok: false, reason: 'forbidden', message: '需要解鎖私領域才能開原檔。' }
-    case 404: return { ok: false, reason: 'not-found', message: '找不到這個原檔（檔案可能已被移動或改名）。' }
+    case 404: return { ok: false, reason: 'not-found', message: 'VPS 與家中 NAS 都找不到這個原檔（可能已移動或改名）。' }
     case 413: return { ok: false, reason: 'too-large', message: '原檔過大，不提供開啟。' }
     case 415: return { ok: false, reason: 'unsupported', message: '這種檔案類型不提供開啟。' }
     case 503: return { ok: false, reason: 'not-mounted', message: '原檔資料夾尚未掛載。' }
+    case 504: return { ok: false, reason: 'nas-offline', message: '家中 NAS 暫時連不到（VPN 可能斷線），可先複製路徑回家再開。' }
     default: return { ok: false, reason: 'error', message: '暫時無法取得原檔，稍後再試。' }
   }
 }
