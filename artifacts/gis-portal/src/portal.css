@@ -681,6 +681,9 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 /* 主題知識推播（topic-nudges）：今天卡的一行、明日報告區塊的清單 */
 .hm-nudge { color: var(--c-ink-2); overflow-wrap: anywhere; }
 .hm-brief-nudges { margin-top: 0.6rem; font-size: 0.8rem; line-height: 1.55; color: var(--c-ink); }
+/* 推播的題目連結：沿用入口網的琥珀色連結，不用瀏覽器預設藍紫底線（深底上看不清，2.76.1） */
+.hm-topic-link, .hm-topic-link:visited { color: var(--c-accent); font-weight: 600; text-decoration: none; }
+.hm-topic-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 .hm-comp-grid { display: grid; gap: 0.8rem 1.2rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); font-size: 0.8rem; line-height: 1.55; color: var(--c-ink); }
 .hm-comp-grid p { margin: 0; }
 .hm-h3 { margin: 0 0 0.3rem; font-size: 0.78rem; font-weight: 600; color: var(--c-ink-2); }
