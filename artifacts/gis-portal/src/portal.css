@@ -17,6 +17,9 @@
   --c-warn: #e8b23d;
   --c-concern: #d9772e;
   --c-crit: #e2584f;
+  /* 分數色階的高分兩級（低分沿用 warn／concern／crit） */
+  --c-score-good: #9cc44a;
+  --c-score-great: #34c26b;
   /* 間距：4px 為一階 */
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;

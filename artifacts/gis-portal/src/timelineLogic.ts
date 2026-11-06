@@ -1,4 +1,5 @@
 // 時間軸的純邏輯（分組標題、列日期、一句話顯示、分頁合併、鄰近期間、分數徽章）。可單元測試，不碰 React／網路。
+import { SCORE_THRESHOLDS } from './theme'
 import type { TimelineItem, TimelineLevel } from './timelineApi'
 
 export const LEVELS: Array<{ level: TimelineLevel; label: string }> = [
@@ -70,12 +71,13 @@ export function neighbors(items: TimelineItem[], key: string): { older: Timeline
   return { older: items[i + 1] ?? null, newer: items[i - 1] ?? null }
 }
 
-/** 每日報告分數徽章（日報 📊 段，0–100）：整數分數；色調五段（80／65／50／35），與儀表板的 great→crit 語意一致。 */
+/** 每日報告分數徽章（日報 📊 段，0–100）：整數分數；色調五段，門檻與 SCORE_THRESHOLDS 相同（35／50／65／80），顏色見 SCORE_SCALE。 */
 export type ScoreTone = 'great' | 'ok' | 'warn' | 'concern' | 'crit'
 export function reportBadge(score: { total: number } | null): { text: string; tone: ScoreTone } | null {
   if (!score || Number.isNaN(score.total)) return null
   const t = score.total
-  const tone: ScoreTone = t >= 80 ? 'great' : t >= 65 ? 'ok' : t >= 50 ? 'warn' : t >= 35 ? 'concern' : 'crit'
+  const [concern, warn, good, great] = SCORE_THRESHOLDS
+  const tone: ScoreTone = t >= great ? 'great' : t >= good ? 'ok' : t >= warn ? 'warn' : t >= concern ? 'concern' : 'crit'
   return { text: String(Math.round(t)), tone }
 }
 
