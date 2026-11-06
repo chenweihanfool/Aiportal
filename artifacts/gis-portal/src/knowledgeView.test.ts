@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTree, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
+import { bulletId, bulletsCiting, buildTree, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
 
 const feed = (payload: unknown, available = true) => ({ available, payload })
 
@@ -379,5 +379,95 @@ describe('parseBody 腳註清理', () => {
   it('一般句中的頓號保留', () => {
     const r = parseBody('## 怎麼做\n- 先看閘門、再量流量 ⟦1⟧')
     expect(r.how[0].text).toBe('先看閘門、再量流量')
+  })
+})
+
+describe('來源可追溯（2.77.0）', () => {
+  const feedWith = (sources: unknown) => parseTopics(feed({
+    computedAt: '2026-11-05T10:00:00+08:00',
+    topics: [{ id: 'T1', name: 'x', kind: 'concept', firstSeen: '2026-01-02', revision: 1, docs: 1, newDocs: 0, monthsSpan: 1, sources }],
+  }))!.topics[0]!.sources
+
+  it('parseTopics：新欄位合法時帶入，不合法當 undefined，舊 payload 照常', () => {
+    const [a, b, c] = feedWith([
+      { id: 'a', title: 'A', month: '2026-01', type: 'pdf', case: '案甲', date: '2026-01-05' },
+      { id: 'b', title: 'B', type: 'docx', case: 5, date: '2026/01/05' },
+      { id: 'c', title: 'C', month: '2026-02' },
+    ])!
+    expect(a).toEqual({ id: 'a', title: 'A', month: '2026-01', type: 'pdf', case: '案甲', date: '2026-01-05' })
+    expect(b).toEqual({ id: 'b', title: 'B', month: null })
+    expect(c).toEqual({ id: 'c', title: 'C', month: '2026-02' })
+  })
+
+  it('commonTitlePrefix', () => {
+    expect(commonTitlePrefix(['縣有地租約-契約書', '縣有地租約-付款單'])).toBe('縣有地租約-')
+    expect(commonTitlePrefix(['甲乙丙', '甲乙丁'])).toBe('')
+    expect(commonTitlePrefix(['完全相同的標題', '完全相同的標題'])).toBe('')
+    expect(commonTitlePrefix(['縣有地租約', '縣有地租約書'])).toBe('')
+    expect(commonTitlePrefix(['只有一條標題'])).toBe('')
+    expect(commonTitlePrefix([])).toBe('')
+  })
+
+  it('groupSourcesByCase：依案件、其他放最後、保留原序號', () => {
+    const g = groupSourcesByCase([
+      { id: '1', title: 'a', month: null },
+      { id: '2', title: 'b', month: null, case: '乙案' },
+      { id: '3', title: 'c', month: null, case: '甲案' },
+      { id: '4', title: 'd', month: null, case: '乙案' },
+    ])
+    expect(g.map((x) => x.label)).toEqual(['乙案', '甲案', '其他'])
+    expect(g[0]!.items.map((i) => i.n)).toEqual([2, 4])
+    expect(g[2]!.items.map((i) => i.n)).toEqual([1])
+    expect(g[2]!.case).toBeNull()
+  })
+
+  it('stageOf：照順序比對', () => {
+    expect(stageOf('招標公告')).toBe('招標')
+    expect(stageOf('開標紀錄')).toBe('開標')
+    expect(stageOf('評審委員名單')).toBe('評選')
+    expect(stageOf('議價紀錄')).toBe('決標')
+    expect(stageOf('簽約通知')).toBe('簽約')
+    expect(stageOf('進度報告')).toBe('履約')
+    expect(stageOf('驗收單')).toBe('驗收')
+    expect(stageOf('請款單')).toBe('付款')
+    expect(stageOf('終止契約通知')).toBe('簽約')
+    expect(stageOf('爭議處理')).toBe('爭議')
+    expect(stageOf('隨手筆記')).toBeNull()
+  })
+
+  it('markerOrdinals 與 parseBodyWithMarkers 的 k0', () => {
+    expect(markerOrdinals('a⟦3⟧b⟦1⟧⟦2⟧c')).toEqual([{ k: 0, ref: 3 }, { k: 1, ref: 1 }, { k: 2, ref: 2 }])
+    expect(markerOrdinals('沒有')).toEqual([])
+    const p = parseBodyWithMarkers(['## 這件事到底在幹嘛', '- 一句⟦1⟧⟦2⟧', '- 補充⟦3⟧', '## 怎麼做', '- 來源沒有提到⟦4⟧', '- 步驟⟦5⟧'].join('\n'))
+    expect(p.summary!.k0).toBe(0)
+    expect(p.what[0]!.k0).toBe(2)
+    expect(p.how[0]!.k0).toBe(4)
+    expect(p.how[0]!.refs).toEqual([5])
+  })
+
+  it('bulletsCiting', () => {
+    const p = parseBodyWithMarkers(['## 這件事到底在幹嘛', '- 一句⟦1⟧', '- 補充⟦1⟧⟦2⟧', '## 怎麼做', '- 步驟⟦2⟧', '- 另一步⟦1⟧'].join('\n'))
+    expect(bulletsCiting(p, 1)).toEqual([bulletId('summary'), 'what:0', 'how:1'])
+    expect(bulletsCiting(p, 2)).toEqual(['what:0', 'how:0'])
+    expect(bulletsCiting(p, 9)).toEqual([])
+  })
+
+  it('caseTimeline：組內舊到新、無日期排組尾', () => {
+    const t = caseTimeline([
+      { id: '1', title: '驗收單', month: null, case: '甲', date: '2026-03-01' },
+      { id: '2', title: '無日期', month: null, case: '甲' },
+      { id: '3', title: '招標公告', month: null, case: '甲', date: '2026-01-01' },
+      { id: '4', title: '別案', month: null },
+    ])
+    expect(t[0]!.items.map((i) => i.n)).toEqual([3, 1, 2])
+    expect(t[0]!.items.map((i) => i.stage)).toEqual(['招標', '驗收', null])
+    expect(t[1]!.label).toBe('其他')
+  })
+
+  it('highlightRanges：不分大小寫、特殊字元當字面', () => {
+    expect(highlightRanges('Abc abC', 'abc')).toEqual([[0, 3], [4, 7]])
+    expect(highlightRanges('a.b axb', 'a.b')).toEqual([[0, 3]])
+    expect(highlightRanges('abc', '  ')).toEqual([])
+    expect(highlightRanges('abc', 'z')).toEqual([])
   })
 })

@@ -5,7 +5,10 @@
 export type TopicKind = 'concept' | 'method'
 
 export interface TopicGrowth { date: string; text: string }
-export interface TopicSource { id: string; title: string; month: string | null }
+export type SourceType = 'pdf' | 'word' | 'excel' | 'image' | 'text' | 'diary' | 'note' | 'event' | 'other'
+const SOURCE_TYPES: readonly string[] = ['pdf', 'word', 'excel', 'image', 'text', 'diary', 'note', 'event', 'other']
+/** type／case／date 是 2.77.0 起 feed 才有的選填欄位；舊 payload 或不合法的值＝undefined */
+export interface TopicSource { id: string; title: string; month: string | null; type?: SourceType; case?: string; date?: string }
 export interface MonthCount { month: string; count: number }
 export interface FeedTree { domains: Array<{ id: string; name: string; branches: Array<{ id: string; name: string; topics: string[] }> }> }
 export interface TopicRelated { id: string; name: string; sharedDocs: number; sharedCases: number }
@@ -71,8 +74,15 @@ function parseTopic(raw: unknown): Topic | null {
     : []
   const sources: TopicSource[] = Array.isArray(t.sources)
     ? t.sources
-        .filter((s): s is { id: string; title: string; month?: unknown } => !!s && isStr((s as TopicSource).id) && isStr((s as TopicSource).title))
-        .map((s) => ({ id: s.id, title: s.title, month: strOrNull(s.month, MONTH_RE) }))
+        .filter((s): s is { id: string; title: string; month?: unknown; type?: unknown; case?: unknown; date?: unknown } => !!s && isStr((s as TopicSource).id) && isStr((s as TopicSource).title))
+        .map((s): TopicSource => {
+          const out: TopicSource = { id: s.id, title: s.title, month: strOrNull(s.month, MONTH_RE) }
+          if (isStr(s.type) && SOURCE_TYPES.includes(s.type)) out.type = s.type as SourceType
+          if (isStr(s.case) && s.case.trim() && s.case.length <= 60) out.case = s.case
+          const d = strOrNull(s.date, DATE_RE)
+          if (d) out.date = d
+          return out
+        })
     : []
   const path: string[] = Array.isArray(t.path) ? t.path.filter(isStr).slice(0, 2) : []
   const monthCounts: MonthCount[] = Array.isArray(t.monthCounts)
@@ -228,7 +238,8 @@ export function buildTree(data: Pick<TopicsData, 'topics' | 'tree'>): BuiltTree 
   return { domains, unassigned: data.topics.filter((t) => !placed.has(t.id)) }
 }
 
-export interface Bullet { text: string; refs: number[]; single: boolean }
+/** k0（只有 parseBodyWithMarkers 會填）＝這條第一個 ⟦n⟧ 在整份 body 裡的序號（0 起），第 i 個 ref 的序號＝k0+i */
+export interface Bullet { text: string; refs: number[]; single: boolean; k0?: number }
 export interface ParsedBody {
   summary: Bullet | null
   what: Bullet[]
@@ -270,12 +281,25 @@ function sectionOf(title: string): SectionKey | null {
  * 認不出的標題連同其內容、以及標題前的文字，原文放 other。
  */
 export function parseBody(body: string): ParsedBody {
+  return parseBodyImpl(body, false)
+}
+
+/** 同 parseBody，但每條 bullet 多帶 k0（腳註小卡要對照 topic doc 的 quotes[k]） */
+export function parseBodyWithMarkers(body: string): ParsedBody {
+  return parseBodyImpl(body, true)
+}
+
+function parseBodyImpl(body: string, withK: boolean): ParsedBody {
   const out: ParsedBody = { summary: null, what: [], how: [], caution: [], unknown: [], other: '' }
   const other: string[] = []
   const lists: Record<SectionKey, string[][]> = { what: [], how: [], caution: [], unknown: [] }
+  const starts = new Map<string[], number>()
+  let seen = 0
   let current: SectionKey | null = null
   let last: string[] | null = null
   for (const line of body.split(/\r?\n/)) {
+    const before = seen
+    seen += (line.match(/⟦\d+⟧/g) ?? []).length
     const h = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line)
     if (h) {
       current = sectionOf(h[1]!)
@@ -290,6 +314,7 @@ export function parseBody(body: string): ParsedBody {
     const b = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line)
     if (b) {
       last = [b[1]!]
+      starts.set(last, before)
       lists[current].push(last)
     } else if (last && line.trim() && /^\s+/.test(line)) {
       last.push(line.trim())
@@ -298,7 +323,7 @@ export function parseBody(body: string): ParsedBody {
     }
   }
   const toBullets = (rows: string[][]) =>
-    rows.map((r) => makeBullet(r.join(' '))).filter((x) => x.text && !x.text.includes('來源沒有提到'))
+    rows.map((r) => { const bl = makeBullet(r.join(' ')); if (withK) bl.k0 = starts.get(r) ?? 0; return bl }).filter((x) => x.text && !x.text.includes('來源沒有提到'))
   const what = toBullets(lists.what)
   out.summary = what[0] ?? null
   out.what = what.slice(1)
@@ -396,6 +421,126 @@ export function monthSeries(monthCounts: readonly MonthCount[]): MonthCount[] {
   for (let i = first; i <= last; i++) {
     const month = `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`
     out.push({ month, count: sums.get(month) ?? 0 })
+  }
+  return out
+}
+
+/* ───────── 來源可追溯（2.77.0） ───────── */
+
+/**
+ * 所有標題的最長共同前綴（以字元計）。< 4 字回 ''；
+ * 前綴把任何一條標題吃光（含整條相同、只有一條）時也回 ''，免得條目顯示空白。
+ */
+export function commonTitlePrefix(titles: readonly string[]): string {
+  if (titles.length === 0) return ''
+  const arrs = titles.map((t) => Array.from(t))
+  const first = arrs[0]!
+  let len = first.length
+  for (const a of arrs) {
+    let i = 0
+    while (i < len && i < a.length && a[i] === first[i]) i++
+    len = i
+    if (len === 0) break
+  }
+  if (len < 4) return ''
+  if (arrs.some((a) => a.length <= len)) return ''
+  return first.slice(0, len).join('')
+}
+
+export const OTHER_CASE = '其他'
+export interface NumberedSource { source: TopicSource; /** 1 起算的來源序號（＝⟦n⟧ 的 n） */ n: number }
+export interface CaseGroup { case: string | null; label: string; items: NumberedSource[] }
+
+function numbered(sources: readonly TopicSource[]): NumberedSource[] {
+  return sources.map((source, i) => ({ source, n: i + 1 }))
+}
+
+function groupNumbered(items: NumberedSource[]): CaseGroup[] {
+  const map = new Map<string, NumberedSource[]>()
+  const other: NumberedSource[] = []
+  for (const it of items) {
+    const c = it.source.case
+    if (!c) {
+      other.push(it)
+      continue
+    }
+    const arr = map.get(c)
+    if (arr) arr.push(it)
+    else map.set(c, [it])
+  }
+  const groups: CaseGroup[] = [...map.entries()].map(([c, list]) => ({ case: c, label: c, items: list }))
+  if (other.length > 0) groups.push({ case: null, label: OTHER_CASE, items: other })
+  return groups
+}
+
+/** 依 case 分組（組序＝case 第一次出現的順序）；沒有 case 的歸「其他」放最後；組內保留原序號 n */
+export function groupSourcesByCase(sources: readonly TopicSource[]): CaseGroup[] {
+  return groupNumbered(numbered(sources))
+}
+
+const STAGE_RULES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ['招標', ['招標', '公告']],
+  ['開標', ['開標']],
+  ['評選', ['評選', '評審']],
+  ['決標', ['決標', '議價']],
+  ['簽約', ['契約', '簽約']],
+  ['履約', ['履約', '進度']],
+  ['驗收', ['驗收']],
+  ['付款', ['付款', '請款']],
+  ['爭議', ['爭議', '罰則', '終止']],
+]
+
+/** 標題關鍵字→階段標籤；依 STAGE_RULES 的順序比對，第一個命中的為準；都沒有回 null */
+export function stageOf(title: string): string | null {
+  for (const [stage, keys] of STAGE_RULES) {
+    if (keys.some((k) => title.includes(k))) return stage
+  }
+  return null
+}
+
+/** 本文裡第 k 個 ⟦n⟧ 標記（依文字順序，k 從 0）→ { k, ref: n } */
+export function markerOrdinals(body: string): Array<{ k: number; ref: number }> {
+  const out: Array<{ k: number; ref: number }> = []
+  for (const m of body.matchAll(/⟦(\d+)⟧/g)) out.push({ k: out.length, ref: Number(m[1]) })
+  return out
+}
+
+export type BulletSection = 'summary' | 'what' | 'how' | 'caution' | 'unknown'
+export const bulletId = (section: BulletSection, index = 0): string => (section === 'summary' ? 'summary' : `${section}:${index}`)
+
+/** 引用來源 n 的 bullet 識別（bulletId 格式），依頁面順序；UI 用它標亮 */
+export function bulletsCiting(parsed: ParsedBody, n: number): string[] {
+  const ids: string[] = []
+  if (parsed.summary?.refs.includes(n)) ids.push(bulletId('summary'))
+  for (const section of ['what', 'how', 'caution', 'unknown'] as const) {
+    parsed[section].forEach((b, i) => {
+      if (b.refs.includes(n)) ids.push(bulletId(section, i))
+    })
+  }
+  return ids
+}
+
+export interface TimelineItem extends NumberedSource { stage: string | null }
+export interface TimelineGroup { case: string | null; label: string; items: TimelineItem[] }
+
+/** 卷宗時間線：依 case 分組，組內 date 舊→新，沒有 date 的排組尾（維持原序） */
+export function caseTimeline(sources: readonly TopicSource[]): TimelineGroup[] {
+  return groupNumbered(numbered(sources)).map((g) => {
+    const dated = g.items.filter((it) => it.source.date).sort((a, b) => (a.source.date! < b.source.date! ? -1 : a.source.date! > b.source.date! ? 1 : a.n - b.n))
+    const undated = g.items.filter((it) => !it.source.date)
+    return { case: g.case, label: g.label, items: [...dated, ...undated].map((it) => ({ ...it, stage: stageOf(it.source.title) })) }
+  })
+}
+
+/** 不分大小寫找出 q 在 text 的所有命中區間 [start, end)；q 去頭尾空白後為空回 [] */
+export function highlightRanges(text: string, q: string): Array<[number, number]> {
+  const needle = q.trim()
+  if (!needle) return []
+  const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  const out: Array<[number, number]> = []
+  for (const m of text.matchAll(re)) {
+    if (m[0].length === 0) continue
+    out.push([m.index!, m.index! + m[0].length])
   }
   return out
 }
