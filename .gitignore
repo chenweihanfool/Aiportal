@@ -55,3 +55,6 @@ Thumbs.db
 # host-specific compose settings (see docker-compose.override.example.yml)
 docker-compose.override.yml
 /attachments/
+# 原檔（人類／）掛載用的空資料夾：只保留 .gitkeep，其餘（真實原檔）不進 git
+/raw/*
+!/raw/.gitkeep

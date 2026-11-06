@@ -1,8 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { db, hermesDocTable, hermesGraphSnapshotTable } from "@workspace/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { buildContexts, isDocKind, validateDocs } from "../lib/hermesDoc";
+import { escapeLike, makeSnippet, validateSearchParams } from "../lib/hermesDocSearch";
 
 const router = Router();
 
@@ -59,6 +60,11 @@ router.get("/hermes-doc/:kind/:key", async (req: Request, res: Response) => {
     kind, key, title: row.title, bodyMd: row.bodyMd, truncated: row.truncated, updatedAt: row.updatedAt.toISOString(),
   };
 
+  // 來源原文與主題引文索引：原樣回 meta（type／case／date／rawPath／quotes…）與 sourcePath，不組脈絡。
+  if (kind === "source" || kind === "topic") {
+    return res.json({ ...base, meta: row.meta, sourcePath: row.sourcePath });
+  }
+
   if (kind === "event") {
     const meta = row.meta as { date?: unknown; sources?: unknown };
     return res.json({
@@ -98,6 +104,34 @@ router.get("/hermes-doc/:kind/:key", async (req: Request, res: Response) => {
     promoted: meta.promoted === true,
     aliases: Array.isArray(meta.aliases) ? meta.aliases.filter((a): a is string => typeof a === "string") : [],
     contexts: buildContexts(meta.refs, eventById, bodyHeadById),
+  });
+});
+
+// 原文全文搜尋：只搜 kind='source' 的 title 與 body_md，不分大小寫的子字串比對（ILIKE，% _ \ 已跳脫）。
+// 依 meta.date 新到舊，null 排最後。snippet 與 hitAt 在 JS 端由 makeSnippet 算。
+router.get("/hermes-doc-search", async (req: Request, res: Response) => {
+  if (!isAuthorized(req.headers["x-admin-password"])) {
+    return res.status(403).json({ message: "需要解鎖私領域才能查看" });
+  }
+  const v = validateSearchParams(req.query["q"], req.query["limit"]);
+  if (!v.ok) return res.status(400).json({ message: v.message });
+
+  const pattern = `%${escapeLike(v.q)}%`;
+  const rows = await db
+    .select({ key: hermesDocTable.docKey, title: hermesDocTable.title, bodyMd: hermesDocTable.bodyMd, meta: hermesDocTable.meta })
+    .from(hermesDocTable)
+    .where(and(
+      eq(hermesDocTable.kind, "source"),
+      or(sql`${hermesDocTable.title} ILIKE ${pattern}`, sql`${hermesDocTable.bodyMd} ILIKE ${pattern}`),
+    ))
+    .orderBy(sql`(${hermesDocTable.meta}->>'date') DESC NULLS LAST`)
+    .limit(v.limit);
+
+  return res.json({
+    results: rows.map((r) => {
+      const { snippet, hitAt } = makeSnippet(r.bodyMd, v.q);
+      return { key: r.key, title: r.title, meta: r.meta, snippet, hitAt };
+    }),
   });
 });
 
