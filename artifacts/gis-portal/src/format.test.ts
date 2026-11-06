@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hhiTone, scoreColor } from './format'
+import { MIND_SCORE_BANDS, SOCIAL_SCORE_BANDS, bandTone, hhiTone, scoreColor } from './format'
 import { SCORE_SCALE, SCORE_THRESHOLDS } from './theme'
 
 describe('scoreColor（分數色階，越綠越好）', () => {
@@ -28,5 +28,16 @@ describe('hhiTone', () => {
     expect(hhiTone(50)).toEqual({ color: '#e8b23d', label: '尚可，需留意' })
     expect(hhiTone(35)).toEqual({ color: '#d9772e', label: '需調整' })
     expect(hhiTone(34)).toEqual({ color: '#e2584f', label: '警報，先照顧自己' })
+  })
+})
+
+describe('bandTone（心智／社交）顏色與 hhiTone 同分同色', () => {
+  it.each([30, 45, 60, 72, 90])('%s 分', (s) => {
+    expect(bandTone(s, SOCIAL_SCORE_BANDS).color).toBe(hhiTone(s).color)
+    expect(bandTone(s, MIND_SCORE_BANDS).color).toBe(hhiTone(s).color)
+  })
+  it('標籤仍照各自分級', () => {
+    expect(bandTone(45, SOCIAL_SCORE_BANDS).label).toBe('偏冷')
+    expect(bandTone(85, MIND_SCORE_BANDS).label).toBe('優良')
   })
 })

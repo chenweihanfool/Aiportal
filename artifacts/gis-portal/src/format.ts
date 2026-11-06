@@ -59,8 +59,9 @@ type Band = [threshold: number, color: string, label: string]
 
 export function bandTone(score: number | null, bands: Band[]): { color: string; label: string } {
   if (score === null) return { color: COLOR.steelDim, label: '資料不足' }
-  for (const [threshold, color, label] of bands) {
-    if (score >= threshold) return { color, label }
+  // 標籤照各面向自己的分級；顏色一律照分數走 scoreColor，同分數在熱圖、時間軸、六面向都是同一色
+  for (const [threshold, , label] of bands) {
+    if (score >= threshold) return { color: scoreColor(score), label }
   }
   return { color: COLOR.steelDim, label: '資料不足' }
 }
