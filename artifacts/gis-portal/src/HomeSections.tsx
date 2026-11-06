@@ -422,7 +422,7 @@ function QuietPeople({ people, actions, today, pw, onChanged }: {
   )
 }
 
-export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, recall = [], pw = null, today, actions = NO_ACTIONS, onActionsChange }: {
+export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, recall = [], pw = null, today, actions = NO_ACTIONS, onActionsChange, actionsReady = true }: {
   st: BlockStatus
   data: CompanionData | null
   insight: ActivityInsight
@@ -436,6 +436,8 @@ export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, 
   actions?: PersonAction[]
   /** 動作寫入成功（或失敗還原）後，通知上層重新讀取 */
   onActionsChange?: () => void
+  /** 提醒設定讀不到（null＝還沒讀到）：不顯示名單，免得「不再提醒」的人（例如已故）又冒出來 */
+  actionsReady?: boolean
 }) {
   return (
     <HomeCard id="sec-companion" className="hm-companion">
@@ -450,7 +452,12 @@ export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, 
                 </ul>
               )}
             </div>
-            <QuietPeople people={data.quietPeople} actions={actions} today={today} pw={pw} onChanged={onActionsChange} />
+            {actionsReady ? <QuietPeople people={data.quietPeople} actions={actions} today={today} pw={pw} onChanged={onActionsChange} /> : (
+              <div data-testid="quiet-people">
+                <h3 className="hm-h3">👋 很久沒聯絡</h3>
+                <p className="hm-muted">提醒設定暫時讀不到，稍後再顯示名單。</p>
+              </div>
+            )}
             <div data-testid="activity-insight">
               <h3 className="hm-h3">🔍 什麼事讓你變好</h3>
               {insight.lines.length > 0 && (

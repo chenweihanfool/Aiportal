@@ -141,7 +141,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     : !historyUsable && histBase.state !== 'pending' ? '趨勢暫時無法取得'
     : null
   const sentence = todaySentence({ trend, rows: breakdown?.rows ?? [], trendKnown: trendNote === null })
-  const move = useMemo(() => bestMove(breakdown?.rows ?? [], companion.data, personActions.data ?? [], todayIso), [breakdown, companion.data, personActions.data, todayIso])
+  // 提醒設定沒讀到時不點名（companion 傳 null → 一般建議），免得建議聯絡「不再提醒」的人
+  const move = useMemo(() => bestMove(breakdown?.rows ?? [], personActions.data ? companion.data : null, personActions.data ?? [], todayIso), [breakdown, companion.data, personActions.data, todayIso])
   const insight = useMemo(() => activityInsight(histData, dailyLife.data), [histData, dailyLife.data])
   const brief = useMemo(() => pickBrief(reports.data, todayIso), [reports.data, todayIso])
   const briefParsed = useMemo(() => (brief ? parseBrief(brief.bodyMd, brief.date) : null), [brief])
@@ -202,7 +203,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       <BriefSection st={briefSt} brief={brief} parsed={briefParsed} crowd={briefCrowd} onRequestUnlock={onRequestUnlock} onRetry={reports.reload}
         nudges={brief ? nudgesFor(nudges.data, brief.date) : []} todayIso={todayIso} />
       <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} links={dimLinks} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
-      <CompanionSection st={companionSt} data={companion.data} insight={insight} onRequestUnlock={onRequestUnlock} onRetry={companion.reload} recall={nudges.data?.recall ?? []} pw={pw} today={todayIso} actions={personActions.data ?? undefined} onActionsChange={personActions.reload} />
+      <CompanionSection st={companionSt} data={companion.data} insight={insight} onRequestUnlock={onRequestUnlock} onRetry={companion.reload} recall={nudges.data?.recall ?? []} pw={pw} today={todayIso} actions={personActions.data ?? undefined} onActionsChange={personActions.reload} actionsReady={personActions.data !== null} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
       <FunSection ideasSt={ideasSt} ideasCount={ideasList?.ideas.length ?? 0} topIdeas={ideaTop}
