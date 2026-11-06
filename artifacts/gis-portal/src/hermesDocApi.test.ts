@@ -66,4 +66,9 @@ describe('apiFetchHermesRaw', () => {
       message: '家中 NAS 暫時連不到（VPN 可能斷線），可先複製路徑回家再開。',
     })
   })
+
+  it('429（NAS 忙碌，不是斷線）回 nas-busy', async () => {
+    mockFetch(429)
+    expect(await apiFetchHermesRaw('pw', 'p')).toMatchObject({ ok: false, reason: 'nas-busy', message: '家中 NAS 忙碌中，請幾秒後再試。' })
+  })
 })

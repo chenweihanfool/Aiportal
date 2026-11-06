@@ -142,7 +142,12 @@ router.get("/hermes-raw", async (req: Request, res: Response) => {
 
   // VPS 上沒有 → 找家中 NAS。NAS 根目錄不存在（沒掛）時與以前完全相同：回 404。
   // 斷路器冷卻中，或已有上限數量的底層 NAS 呼叫還沒真正結束：不碰 NAS，直接回 504。
-  if (nasGuard.blockReason()) {
+  const blocked = nasGuard.blockReason();
+  if (blocked === "busy") {
+    // NAS 不一定斷線，只是同時進行的讀取已達上限：回 429，不要用「VPN 斷線」誤導（PM 修正）
+    return res.status(429).json({ message: "家中 NAS 忙碌中，請幾秒後再試" });
+  }
+  if (blocked) {
     return res.status(504).json({ message: NAS_OFFLINE_MESSAGE });
   }
 

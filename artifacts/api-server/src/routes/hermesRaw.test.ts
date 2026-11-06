@@ -268,7 +268,7 @@ describe("GET /api/hermes-raw", () => {
     }
   });
 
-  it("answers 504 immediately when the in-flight NAS limit is reached", async () => {
+  it("answers 429 (busy, not offline) immediately when the in-flight NAS limit is reached", async () => {
     const saved = process.env["HERMES_RAW_NAS_ROOT"];
     const savedTimeout = process.env["RAW_NAS_TIMEOUT_MS"];
     const savedMax = process.env["RAW_NAS_MAX_INFLIGHT"];
@@ -281,7 +281,7 @@ describe("GET /api/hermes-raw", () => {
       await waitFor(() => fsCtl.calls >= 2); // 兩個底層 NAS 呼叫都已卡住
       const callsBefore = fsCtl.calls;
       const r3 = await get("人類/不存在.pdf");
-      expect(r3.status).toBe(504);
+      expect(r3.status).toBe(429);
       expect(fsCtl.calls).toBe(callsBefore); // 第三個請求不碰 NAS
       fsCtl.releaseHang();
       expect((await p1).status).toBe(504);

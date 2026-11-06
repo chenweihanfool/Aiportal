@@ -84,7 +84,7 @@ export type RawFileResult =
   | { ok: true; blob: Blob }
   | {
       ok: false
-      reason: 'not-found' | 'not-mounted' | 'nas-offline' | 'too-large' | 'unsupported' | 'forbidden' | 'error'
+      reason: 'not-found' | 'not-mounted' | 'nas-offline' | 'nas-busy' | 'too-large' | 'unsupported' | 'forbidden' | 'error'
       message: string
     }
 
@@ -103,6 +103,7 @@ export async function apiFetchHermesRaw(adminPassword: string, path: string, sig
     case 413: return { ok: false, reason: 'too-large', message: '原檔過大，不提供開啟。' }
     case 415: return { ok: false, reason: 'unsupported', message: '這種檔案類型不提供開啟。' }
     case 503: return { ok: false, reason: 'not-mounted', message: '原檔資料夾尚未掛載。' }
+    case 429: return { ok: false, reason: 'nas-busy', message: '家中 NAS 忙碌中，請幾秒後再試。' }
     case 504: return { ok: false, reason: 'nas-offline', message: '家中 NAS 暫時連不到（VPN 可能斷線），可先複製路徑回家再開。' }
     default: return { ok: false, reason: 'error', message: '暫時無法取得原檔，稍後再試。' }
   }
