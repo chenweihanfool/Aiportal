@@ -41,6 +41,19 @@ export const COLOR = {
   crit: '#e2584f',
 } as const
 
+// 分數色階（低→高，越綠越好）：熱圖、時間軸徽章、六面向分數共用同一組顏色。
+// 門檻見 SCORE_THRESHOLDS；高分成長軌跡是綠、低分是紅，琥珀不再是最高分。
+export const SCORE_SCALE = {
+  crit: COLOR.crit,
+  concern: COLOR.concern,
+  warn: COLOR.warn,
+  good: '#9cc44a',   // 黃綠：65–79
+  great: '#34c26b',  // 綠：80 以上
+} as const
+
+/** 分數色階的門檻（低→高）：≥35 concern、≥50 warn、≥65 good、≥80 great，以下 crit。 */
+export const SCORE_THRESHOLDS = [35, 50, 65, 80] as const
+
 // ─────────────────────────────────────────────
 // 設計 token（2.53.0 首頁改版）：portal.css 的 :root 用同一組名稱與值定義 CSS 變數（--c-* 顏色、--sp-* 間距、--r-* 圓角、--fs-* 字級），
 // 樣式表一律寫 var(--…)，不再散寫色碼；JS 的行內樣式仍用上面的 COLOR／FONT。
@@ -64,6 +77,9 @@ export const CSS_TOKENS: Record<string, string> = {
   '--c-warn': COLOR.warn,
   '--c-concern': COLOR.concern,
   '--c-crit': COLOR.crit,
+  // 分數色階的高分兩級（低分沿用 warn／concern／crit）
+  '--c-score-good': SCORE_SCALE.good,
+  '--c-score-great': SCORE_SCALE.great,
   // 間距：4px 為一階
   '--sp-1': '0.25rem',
   '--sp-2': '0.5rem',

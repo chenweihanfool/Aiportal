@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { COLOR, FONT } from './theme'
+import { COLOR, FONT, SCORE_SCALE } from './theme'
 import { GraphShell } from './GraphShell'
 import { MarkdownView } from './MarkdownView'
 import { ReportBody } from './ReportBody'
@@ -15,12 +15,14 @@ import {
 } from './timelineApi'
 import {
   LEVELS, LEVEL_LABEL, groupItems, itemKey, mergePages, neighbors, oneLine, reportBadge, reportScoreLine, rowDateLabel,
+  type ScoreTone,
 } from './timelineLogic'
 
 const LEVEL_KEY = 'kb.timeline.level'
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
-const SCORE_TONE: Record<'great' | 'ok' | 'warn' | 'concern' | 'crit', string> = {
-  great: COLOR.amber, ok: COLOR.ok, warn: COLOR.warn, concern: COLOR.concern, crit: COLOR.crit,
+// 與熱圖、六面向同一份分數色階（SCORE_SCALE，越綠越好）；時間軸的 ok 就是色階的 good（黃綠）。
+const SCORE_TONE: Record<ScoreTone, string> = {
+  great: SCORE_SCALE.great, ok: SCORE_SCALE.good, warn: SCORE_SCALE.warn, concern: SCORE_SCALE.concern, crit: SCORE_SCALE.crit,
 }
 const BADGE_STYLE = { fontFamily: FONT.mono, fontSize: '0.82rem', borderRadius: 4, padding: '0 0.35rem', whiteSpace: 'nowrap' } as const
 const MOBILE_BADGE = { fontSize: '0.7rem', padding: '0 0.2rem' } as const   // 手機寬度不夠，徽章縮小以保留摘要的可讀寬度
@@ -171,8 +173,8 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
             {LEVELS.map(l => (
               <button key={l.level} type="button" role="tab" aria-selected={level === l.level} onClick={() => setLevel(l.level)}
                 style={{ cursor: 'pointer', fontFamily: FONT.body, fontSize: '0.98rem', padding: '0.3rem 1rem', borderRadius: 999,
-                  border: `1px solid ${level === l.level ? COLOR.amber : COLOR.line}`, background: level === l.level ? COLOR.panelRaised : 'transparent',
-                  color: level === l.level ? COLOR.amber : COLOR.steel }}>{l.label}</button>
+                  border: `1px solid ${level === l.level ? 'var(--c-accent)' : COLOR.line}`, background: level === l.level ? COLOR.panelRaised : 'transparent',
+                  color: level === l.level ? 'var(--c-accent)' : COLOR.steel }}>{l.label}</button>
             ))}
           </div>
           <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '0 1.2rem 1.5rem' }} data-testid="timeline-list">
@@ -183,7 +185,7 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
             {groups.map(g => (
               <section key={g.header + g.items[0].periodKey}>
                 {g.header && (
-                  <div style={{ position: 'sticky', top: 0, zIndex: 1, background: COLOR.panelDeep, padding: '0.55rem 0 0.3rem', color: COLOR.amberDim,
+                  <div style={{ position: 'sticky', top: 0, zIndex: 1, background: COLOR.panelDeep, padding: '0.55rem 0 0.3rem', color: 'var(--c-accent-dim)',
                     fontFamily: FONT.mono, fontSize: '0.88rem', letterSpacing: '0.06em', borderBottom: `1px solid ${COLOR.line}` }}>{g.header}</div>
                 )}
                 {g.items.map(it => {
