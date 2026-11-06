@@ -62,4 +62,7 @@
 ## GET /api/hermes-raw?path=（原檔，標頭 `x-admin-password`）
 - `path` 是 vault「人類/」之下的相對路徑（開頭的 `人類/` 可省略）。拒絕 `..`、絕對路徑、反斜線、空字串、隱藏檔（回 400）。
 - 根目錄由環境變數 `HERMES_RAW_ROOT` 指定（預設 `/data/raw`，compose 以唯讀掛載 `RAW_DIR`）；根目錄不存在回 503「原檔資料夾尚未掛載」。realpath 必須仍在根目錄之內，symlink 逃逸回 400。
+- 後備：`HERMES_RAW_ROOT` 找不到時，再到 `HERMES_RAW_NAS_ROOT`（預設 `/data/raw-nas`，compose 以唯讀掛載 `RAW_NAS_DIR`；主機端由 HERMES 以 cifs 唯讀掛載家中 NAS、經 VPN）找。NAS 上的相對路徑是去掉開頭 `_pulled-from-home/`、`_staging-from-home/` 之後的 `rel`（可重複去掉）。兩邊都有同名檔案時，以 VPS 的為準。
+- NAS 根目錄不存在（沒掛）時行為與沒有這項功能相同：找不到回 404。NAS 的 realpath／stat 整段有逾時（`RAW_NAS_TIMEOUT_MS`，預設 8000 毫秒）；逾時或 NAS 回 EIO、EHOSTDOWN、ETIMEDOUT、ENOTCONN 等連線錯誤時回 **504** `{"message":"家中 NAS 暫時連不到（VPN 可能斷線）"}`。NAS 內的 junction／symlink 逃逸同樣回 400。
+- 斷路器：NAS 逾時或回上述連線錯誤後，`RAW_NAS_COOLDOWN_MS`（預設 60000 毫秒）內不再碰 NAS、直接回 504；同時未真正結束的 NAS fs 呼叫達 `RAW_NAS_MAX_INFLIGHT`（預設 2）時回 429「家中 NAS 忙碌中，請幾秒後再試」（忙碌不等於斷線）。VPS 有檔時一律照常回，不受斷路器影響。
 - inline：pdf、png、jpg、jpeg、gif、webp、txt、csv。attachment（強制下載）：doc、docx、xls、xlsx、ppt、pptx、tif、tiff。其他副檔名回 415；超過 50 MB 回 413。

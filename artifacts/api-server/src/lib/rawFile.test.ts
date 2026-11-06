@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkRawPath, isInsideRoot, rawContentDisposition } from "./rawFile";
+import { checkRawPath, isInsideRoot, rawContentDisposition, stripPullPrefix } from "./rawFile";
 
 describe("checkRawPath", () => {
   it.each([
@@ -76,5 +76,22 @@ describe("isInsideRoot", () => {
     expect(isInsideRoot("/data/raw", "/data/raw/a.pdf", "/")).toBe(true);
     expect(isInsideRoot("/data/raw", "/data/raw2/a.pdf", "/")).toBe(false);
     expect(isInsideRoot("/data/raw", "/etc/passwd", "/")).toBe(false);
+  });
+});
+
+describe("stripPullPrefix", () => {
+  it("leaves paths without a pull prefix alone", () => {
+    expect(stripPullPrefix("案A/y.pdf")).toBe("案A/y.pdf");
+    expect(stripPullPrefix("_pulled-from-homex/y.pdf")).toBe("_pulled-from-homex/y.pdf");
+  });
+
+  it("strips each known prefix once", () => {
+    expect(stripPullPrefix("_pulled-from-home/案A/y.pdf")).toBe("案A/y.pdf");
+    expect(stripPullPrefix("_staging-from-home/案A/y.pdf")).toBe("案A/y.pdf");
+  });
+
+  it("strips repeated and mixed prefixes", () => {
+    expect(stripPullPrefix("_staging-from-home/_pulled-from-home/案A/y.pdf")).toBe("案A/y.pdf");
+    expect(stripPullPrefix("_pulled-from-home/_pulled-from-home/案A/y.pdf")).toBe("案A/y.pdf");
   });
 });

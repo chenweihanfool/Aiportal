@@ -5,6 +5,15 @@
 // ─────────────────────────────────────────────
 export const VERSION_HISTORY = [
   {
+    version: '2.77.1',
+    date: '2026-11-06',
+    summary: '開原檔可讀家中 NAS',
+    changes: [
+      '知識頁「開原檔」先在 VPS 的「人類/」找，找不到再到家中 NAS 找（NAS 上對應的是去掉 `_pulled-from-home/`、`_staging-from-home/` 之後的相對路徑）。',
+      'VPN 斷線、NAS 連不到時，8 秒內回覆「家中 NAS 暫時連不到（VPN 可能斷線），可先複製路徑回家再開」，不會一直卡住；兩邊都沒有時提示「VPS 與家中 NAS 都找不到這個原檔」。',
+    ],
+  },
+  {
     version: '2.77.0',
     date: '2026-11-06',
     summary: '知識頁來源可追溯',

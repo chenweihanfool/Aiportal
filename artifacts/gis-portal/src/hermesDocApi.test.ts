@@ -43,14 +43,32 @@ describe('apiSearchHermesDocs', () => {
 })
 
 describe('apiFetchHermesRaw', () => {
-  it('200 回 blob；503／404／413 各有訊息', async () => {
+  it('200 回 blob；503／404／413／504 各有訊息', async () => {
     mockFetch(200, 'x')
     expect((await apiFetchHermesRaw('pw', '人類/a.pdf')).ok).toBe(true)
     mockFetch(503)
     expect(await apiFetchHermesRaw('pw', 'p')).toMatchObject({ ok: false, reason: 'not-mounted', message: '原檔資料夾尚未掛載。' })
     mockFetch(404)
-    expect(await apiFetchHermesRaw('pw', 'p')).toMatchObject({ ok: false, reason: 'not-found' })
+    expect(await apiFetchHermesRaw('pw', 'p')).toMatchObject({
+      ok: false,
+      reason: 'not-found',
+      message: 'VPS 與家中 NAS 都找不到這個原檔（可能已移動或改名）。',
+    })
     mockFetch(413)
     expect(await apiFetchHermesRaw('pw', 'p')).toMatchObject({ ok: false, reason: 'too-large' })
+  })
+
+  it('504（家中 NAS 連不到）回 nas-offline 與可照做的訊息', async () => {
+    mockFetch(504)
+    expect(await apiFetchHermesRaw('pw', 'p')).toMatchObject({
+      ok: false,
+      reason: 'nas-offline',
+      message: '家中 NAS 暫時連不到（VPN 可能斷線），可先複製路徑回家再開。',
+    })
+  })
+
+  it('429（NAS 忙碌，不是斷線）回 nas-busy', async () => {
+    mockFetch(429)
+    expect(await apiFetchHermesRaw('pw', 'p')).toMatchObject({ ok: false, reason: 'nas-busy', message: '家中 NAS 忙碌中，請幾秒後再試。' })
   })
 })
