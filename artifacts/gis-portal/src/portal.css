@@ -1732,6 +1732,48 @@ button.ms-col { cursor: pointer; }
 .kn-sources { margin: 0; padding-left: var(--sp-5); font-size: 14px; color: var(--c-ink-2); line-height: 1.7; }
 .kn-sources li { padding: 1px var(--sp-2); border-radius: var(--r-sm); }
 .kn-sources li[data-hl="true"] { background: var(--c-accent-dim); color: var(--c-ink); }
+/* 來源可追溯（2.77.0）：腳註小卡、來源清單／時間線、原文面板、原文搜尋 */
+.kn-bt[data-cited="true"] { background: var(--c-accent-dim); border-radius: var(--r-sm); box-shadow: 0 0 0 3px var(--c-accent-dim); }
+.kn-fr { position: relative; display: inline-block; }
+.kn-pop { position: absolute; z-index: 20; top: 100%; left: 0; display: flex; flex-direction: column; gap: var(--sp-2); width: 320px; max-width: min(340px, calc(100vw - 32px)); padding: var(--sp-3); font-size: 13px; line-height: 1.6; font-weight: 400; white-space: normal; text-align: left; color: var(--c-ink); background: var(--c-raised); border: 1px solid var(--c-line-strong); border-radius: var(--r-md); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
+.kn-pop-head { overflow-wrap: anywhere; }
+.kn-pop-tag { font-size: var(--fs-xs); color: var(--c-ink-3); }
+.kn-pop-quote { margin: 0; padding: 0 0 0 var(--sp-2); border-left: 3px solid var(--c-accent); color: var(--c-ink-2); overflow-wrap: anywhere; }
+.kn-pop-actions { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.kn-pop-msg { color: var(--c-warn); font-size: var(--fs-xs); }
+.kn-mini { font: inherit; font-size: 12px; color: var(--c-accent); background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 0 var(--sp-2); cursor: pointer; white-space: nowrap; }
+.kn-mini:hover, .kn-btn:hover { background: var(--c-hover); }
+.kn-mini:focus-visible, .kn-src-title:focus-visible, .kn-hit-item:focus-visible, .kn-btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.kn-srcwrap { display: flex; flex-direction: column; gap: var(--sp-2); }
+.kn-srcwrap > .kn-seg { align-self: flex-start; }
+.kn-prefix { margin: 0; font-size: 13px; color: var(--c-ink-3); overflow-wrap: anywhere; }
+.kn-case-title { margin: var(--sp-2) 0 var(--sp-1); font-size: 14px; color: var(--c-ink-2); }
+.kn-sources { list-style: none; padding-left: 0; margin: 0; }
+.kn-sources li, .kn-srctl li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.kn-sno { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-ink-3); min-width: 1.5em; }
+.kn-badge { font-size: 12px; color: var(--c-ink-2); white-space: nowrap; }
+.kn-badge-l { margin-left: 2px; }
+.kn-src-title { font: inherit; font-size: 14px; color: var(--c-ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; overflow-wrap: anywhere; min-width: 0; }
+.kn-src-title:hover { text-decoration: underline; }
+.kn-srctl li[data-hl="true"] { background: var(--c-accent-dim); border-radius: var(--r-sm); }
+.kn-stage { font-size: 12px; color: var(--c-ok); border: 1px solid var(--c-ok); border-radius: var(--r-pill); padding: 0 var(--sp-2); white-space: nowrap; }
+.kn-overlay { position: fixed; inset: 0; z-index: 300; display: flex; justify-content: flex-end; background: rgba(0, 0, 0, 0.5); }
+.kn-panel { display: flex; flex-direction: column; width: min(640px, 100vw); height: 100%; background: var(--c-bg); color: var(--c-ink); border-left: 1px solid var(--c-line-strong); }
+.kn-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--c-line); }
+.kn-panel-head h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.kn-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); font-size: 14px; }
+.kn-panel-meta { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-3); margin: 0 0 var(--sp-3); }
+.kn-panel-meta dt { color: var(--c-ink-3); }
+.kn-panel-meta dd { margin: 0; overflow-wrap: anywhere; }
+.kn-notice { padding: var(--sp-2) var(--sp-3); color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: var(--r-md); }
+.kn-fulltext { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; line-height: 1.7; margin: 0 0 var(--sp-4); padding: var(--sp-3); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); }
+.kn-hit { background: var(--c-accent-dim); color: var(--c-ink); border-radius: 2px; box-shadow: 0 0 0 1px var(--c-accent); }
+.kn-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.kn-hit-item { display: flex; flex-direction: column; gap: 2px; width: 100%; font: inherit; text-align: left; color: var(--c-ink); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-2); cursor: pointer; }
+.kn-hit-item:hover { background: var(--c-hover); }
+.kn-hit-title { font-size: 14px; overflow-wrap: anywhere; }
+.kn-hit-meta { font-size: var(--fs-xs); color: var(--c-ink-3); }
+.kn-hit-snip { font-size: 13px; color: var(--c-ink-2); line-height: 1.5; overflow-wrap: anywhere; }
 
 /* 右欄 */
 .kn-side { display: flex; flex-direction: column; }

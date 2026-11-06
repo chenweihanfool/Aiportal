@@ -1,8 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
+import { SourceSearchResults } from './KnowledgeSearch'
+import { FootRefs, SourceList, TraceProvider, useTopicQuotes, type TraceCtx } from './KnowledgeTrace'
 import { InlineText } from './MarkdownView'
 import { useAsync, useNow } from './homeHooks'
 import {
-  buildTree, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, treeToLayoutInput,
+  buildTree, bulletId, bulletsCiting, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBodyWithMarkers, parseTopics, treeToLayoutInput,
+  type ParsedBody,
   type Bullet, type BuiltTree, type Topic, type TopicKind, type TopicsData,
 } from './knowledgeView'
 
@@ -69,14 +73,17 @@ function OutlineGroup({ id, label, count, level, open, onToggle, children }: {
   )
 }
 
-function TreePanel({ data, selectedId, onOpen }: { data: TopicsData; selectedId: string | null; onOpen: (id: string) => void }) {
+function TreePanel({ data, selectedId, onOpen, pw, onOpenSource }: {
+  data: TopicsData; selectedId: string | null; onOpen: (id: string) => void; pw: string; onOpenSource: (key: string, q: string) => void
+}) {
+  const [mode, setMode] = useState<'topic' | 'source'>('topic')
   const [kind, setKind] = useState<TopicKind | 'all'>('all')
   const [q, setQ] = useState('')
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
-  const filtered = useMemo(() => filterTopics(data.topics, { kind, q }), [data.topics, kind, q])
+  const filtered = useMemo(() => filterTopics(data.topics, { kind, q: mode === 'topic' ? q : '' }), [data.topics, kind, q, mode])
   const built = useMemo(() => buildTree({ topics: filtered, tree: data.tree }), [filtered, data.tree])
   // 預設展開第一層（領域）；選中題目所在的枝與領域自動展開；搜尋時命中的祖先全部展開
-  const searching = q.trim() !== '' || kind !== 'all'
+  const searching = (mode === 'topic' && q.trim() !== '') || kind !== 'all'
   const autoOpen = useMemo(() => {
     const s = new Set<string>()
     for (const d of built.domains) {
@@ -101,7 +108,14 @@ function TreePanel({ data, selectedId, onOpen }: { data: TopicsData; selectedId:
   return (
     <nav className="kn-tree" aria-label="知識樹">
       <h2 className="kn-col-title">知識樹</h2>
-      <input type="search" className="kn-search" placeholder="搜尋題目名稱" aria-label="搜尋題目" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="kn-seg" role="group" aria-label="搜尋範圍">
+        {([['topic', '題目'], ['source', '原文']] as const).map(([k, label]) => (
+          <button key={k} type="button" aria-pressed={mode === k} onClick={() => setMode(k)}>{label}</button>
+        ))}
+      </div>
+      <input type="search" className="kn-search" placeholder={mode === 'topic' ? '搜尋題目名稱' : '搜尋來源原文'} aria-label={mode === 'topic' ? '搜尋題目' : '搜尋原文'} value={q} onChange={(e) => setQ(e.target.value)} />
+      {mode === 'source' && <SourceSearchResults pw={pw} q={q} onPick={onOpenSource} />}
+      {mode === 'topic' && <>
       <div className="kn-seg" role="group" aria-label="種類篩選">
         {([['all', '全部'], ['concept', '概念'], ['method', '方法']] as const).map(([k, label]) => (
           <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>{label}</button>
@@ -124,6 +138,7 @@ function TreePanel({ data, selectedId, onOpen }: { data: TopicsData; selectedId:
           </OutlineGroup>
         )}
       </ul>
+      </>}
     </nav>
   )
 }
@@ -192,29 +207,19 @@ function TreeOverview({ data, now, onOpen }: { data: TopicsData; now: Date; onOp
 
 /* ───────── 中欄：題目頁 ───────── */
 
-function Refs({ refs, t, onJump }: { refs: number[]; t: Topic; onJump: (n: number) => void }) {
-  if (refs.length === 0) return null
+function BulletText({ b, bid, cited }: { b: Bullet; bid: string; cited: ReadonlySet<string> }) {
   return (
-    <span className="kn-refs">
-      {refs.map((n, i) => (
-        <button key={`${n}-${i}`} type="button" className="kn-ref" title={t.sources[n - 1]?.title ?? `來源 ${n}`} aria-label={`來源 ${n}：${t.sources[n - 1]?.title ?? ''}`} onClick={() => onJump(n)}>{n}</button>
-      ))}
+    <span className="kn-bt" id={`kn-b-${bid}`} data-cited={cited.has(bid)}>
+      <InlineText text={b.text} />
+      {b.single && <span className="kn-single">僅一例</span>}
+      <FootRefs refs={b.refs} k0={b.k0} />
     </span>
   )
 }
 
-function BulletText({ b, t, onJump }: { b: Bullet; t: Topic; onJump: (n: number) => void }) {
-  return (
-    <>
-      <InlineText text={b.text} />
-      {b.single && <span className="kn-single">僅一例</span>}
-      <Refs refs={b.refs} t={t} onJump={onJump} />
-    </>
-  )
-}
-
-function TopicPage({ t, onJump, hl }: { t: Topic; onJump: (n: number) => void; hl: number | null }) {
-  const parsed = useMemo(() => (t.body ? parseBody(t.body) : null), [t.body])
+function TopicPage({ t, parsed, hl, cited, onSelect, onView }: {
+  t: Topic; parsed: ParsedBody | null; hl: number | null; cited: ReadonlySet<string>; onSelect: (n: number) => void; onView: (n: number) => void
+}) {
   const range = monthRange(t)
   return (
     <article className="kn-page">
@@ -234,31 +239,31 @@ function TopicPage({ t, onJump, hl }: { t: Topic; onJump: (n: number) => void; h
           {parsed.summary && (
             <section className="kn-summary" aria-label="一句話">
               <h3>一句話</h3>
-              <p><BulletText b={parsed.summary} t={t} onJump={onJump} /></p>
+              <p><BulletText b={parsed.summary} bid={bulletId('summary')} cited={cited} /></p>
             </section>
           )}
           {parsed.what.length > 0 && (
             <section className="kn-section" aria-label="這件事在幹嘛">
               <h3>這件事在幹嘛</h3>
-              <ul className="kn-plain">{parsed.what.map((b, i) => <li key={i}><BulletText b={b} t={t} onJump={onJump} /></li>)}</ul>
+              <ul className="kn-plain">{parsed.what.map((b, i) => <li key={i}><BulletText b={b} bid={bulletId('what', i)} cited={cited} /></li>)}</ul>
             </section>
           )}
           {parsed.how.length > 0 && (
             <section className="kn-section" aria-label="怎麼做">
               <h3>怎麼做</h3>
-              <ol className="kn-steps">{parsed.how.map((b, i) => <li key={i}><span className="kn-stepno" aria-hidden="true">{i + 1}</span><div><BulletText b={b} t={t} onJump={onJump} /></div></li>)}</ol>
+              <ol className="kn-steps">{parsed.how.map((b, i) => <li key={i}><span className="kn-stepno" aria-hidden="true">{i + 1}</span><div><BulletText b={b} bid={bulletId('how', i)} cited={cited} /></div></li>)}</ol>
             </section>
           )}
           {parsed.caution.length > 0 && (
             <section className="kn-section" aria-label="要注意">
               <h3>要注意</h3>
-              <ul className="kn-cautions">{parsed.caution.map((b, i) => <li key={i}><span aria-hidden="true">⚠</span><div><BulletText b={b} t={t} onJump={onJump} /></div></li>)}</ul>
+              <ul className="kn-cautions">{parsed.caution.map((b, i) => <li key={i}><span aria-hidden="true">⚠</span><div><BulletText b={b} bid={bulletId('caution', i)} cited={cited} /></div></li>)}</ul>
             </section>
           )}
           {parsed.unknown.length > 0 && (
             <section className="kn-section" aria-label="還不知道">
               <h3>還不知道</h3>
-              <ul className="kn-unknowns">{parsed.unknown.map((b, i) => <li key={i}><span aria-hidden="true">？</span><div><BulletText b={b} t={t} onJump={onJump} /></div></li>)}</ul>
+              <ul className="kn-unknowns">{parsed.unknown.map((b, i) => <li key={i}><span aria-hidden="true">？</span><div><BulletText b={b} bid={bulletId('unknown', i)} cited={cited} /></div></li>)}</ul>
             </section>
           )}
           {parsed.other && <section className="kn-section" aria-label="其他"><p className="kn-other">{parsed.other}</p></section>}
@@ -267,13 +272,7 @@ function TopicPage({ t, onJump, hl }: { t: Topic; onJump: (n: number) => void; h
 
       <section className="kn-section" aria-label="來源">
         <h3>來源</h3>
-        {t.sources.length === 0 ? <p className="kn-muted">沒有列出來源。</p> : (
-          <ol className="kn-sources">
-            {t.sources.slice(0, 40).map((s, i) => (
-              <li key={s.id} id={`kn-src-${i + 1}`} data-hl={hl === i + 1}>{s.title}{s.month && <span className="kn-date"> {s.month}</span>}</li>
-            ))}
-          </ol>
-        )}
+        <SourceList t={t} hl={hl} onSelect={onSelect} onView={onView} />
       </section>
     </article>
   )
@@ -361,16 +360,29 @@ function SideColumn({ t, data, onOpen }: { t: Topic | null; data: TopicsData; on
 
 /* ───────── 外殼 ───────── */
 
-function Layout({ data, now, topic, topicId, onOpen, onBack }: {
-  data: TopicsData; now: Date; topic: Topic | null; topicId: string | null; onOpen: (id: string) => void; onBack: () => void
+function Layout({ data, now, topic, topicId, onOpen, onBack, pw }: {
+  data: TopicsData; now: Date; topic: Topic | null; topicId: string | null; onOpen: (id: string) => void; onBack: () => void; pw: string
 }) {
   const [drawer, setDrawer] = useState(false)
   const [hl, setHl] = useState<number | null>(null)
+  const [cited, setCited] = useState<ReadonlySet<string>>(new Set())
+  const [panel, setPanel] = useState<{ key: string; q: string } | null>(null)
+  const parsed = useMemo(() => (topic?.body ? parseBodyWithMarkers(topic.body) : null), [topic?.body])
+  const quotes = useTopicQuotes(pw, topic?.id ?? '')
   const jump = (n: number) => {
     setHl(n)
     document.getElementById(`kn-src-${n}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
-  const open = (id: string) => { setDrawer(false); setHl(null); onOpen(id) }
+  // 點來源：標亮本文中引用它的 bullet，並捲到第一個
+  const select = (n: number) => {
+    setHl(n)
+    const ids = parsed ? bulletsCiting(parsed, n) : []
+    setCited(new Set(ids))
+    if (ids[0]) document.getElementById(`kn-b-${ids[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+  const viewSource = (n: number) => { const s = topic?.sources[n - 1]; if (s) setPanel({ key: s.id, q: '' }) }
+  const open = (id: string) => { setDrawer(false); setHl(null); setCited(new Set()); setPanel(null); onOpen(id) }
+  const trace: TraceCtx | null = topic ? { pw, topic, quotes, onJump: jump, onViewSource: viewSource } : null
   let center: ReactNode
   if (topicId && !topic) {
     center = (
@@ -383,7 +395,7 @@ function Layout({ data, now, topic, topicId, onOpen, onBack }: {
     center = (
       <>
         <button type="button" className="kn-back" onClick={onBack}>← 全樹</button>
-        <TopicPage t={topic} onJump={jump} hl={hl} />
+        <TraceProvider value={trace}><TopicPage t={topic} parsed={parsed} hl={hl} cited={cited} onSelect={select} onView={viewSource} /></TraceProvider>
       </>
     )
   } else {
@@ -392,9 +404,10 @@ function Layout({ data, now, topic, topicId, onOpen, onBack }: {
   return (
     <div className="kn-layout" data-drawer={drawer}>
       <button type="button" className="kn-drawer-btn" aria-expanded={drawer} onClick={() => setDrawer((v) => !v)}>☰ 目錄</button>
-      <div className="kn-left"><TreePanel data={data} selectedId={topic?.id ?? null} onOpen={open} /></div>
+      <div className="kn-left"><TreePanel data={data} selectedId={topic?.id ?? null} onOpen={open} pw={pw} onOpenSource={(key, q) => setPanel({ key, q })} /></div>
       <main className="kn-main">{center}</main>
       <div className="kn-right"><SideColumn t={topic} data={data} onOpen={open} /></div>
+      {panel && <KnowledgeSourcePanel pw={pw} sourceKey={panel.key} query={panel.q} onClose={() => setPanel(null)} onOpenTopic={open} />}
     </div>
   )
 }
@@ -423,7 +436,7 @@ export function KnowledgeView({ unlockedPassword, topicId, onRequestUnlock }: {
   } else if (!feed.data || !feed.data.available || !data) {
     content = <div className="kn-body"><p className="kn-empty">尚未收到推送，HERMES 部署後才會有資料。</p></div>
   } else {
-    content = <Layout data={data} now={now} topic={topic} topicId={topicId} onOpen={openTopic} onBack={backToTree} />
+    content = <Layout data={data} now={now} topic={topic} topicId={topicId} onOpen={openTopic} onBack={backToTree} pw={unlockedPassword as string} />
   }
 
   return (
