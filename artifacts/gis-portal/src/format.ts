@@ -1,5 +1,5 @@
 // 數字格式、分數等級（顏色與文字）的純函式。
-import { COLOR } from './theme'
+import { COLOR, SCORE_SCALE, SCORE_THRESHOLDS } from './theme'
 
 // ─────────────────────────────────────────────
 // Format helpers
@@ -36,12 +36,23 @@ export function heroTone(score: number | null, invert: boolean): { color: string
   return { color: COLOR.crit, label: invert ? '緊繃' : '待加強' }
 }
 
+// 分數→顏色一律走 SCORE_SCALE（低→高：crit、concern、warn、good、great），
+// 越綠越好；門檻與 SCORE_THRESHOLDS 相同（35／50／65／80）。
+const SCORE_STEPS = [SCORE_SCALE.crit, SCORE_SCALE.concern, SCORE_SCALE.warn, SCORE_SCALE.good, SCORE_SCALE.great] as const
+
+export function scoreColor(score: number): string {
+  let i = 0
+  while (i < SCORE_THRESHOLDS.length && score >= SCORE_THRESHOLDS[i]!) i++
+  return SCORE_STEPS[i]!
+}
+
 export function hhiTone(score: number): { color: string; label: string } {
-  if (score >= 80) return { color: COLOR.amber, label: '很幸福' }
-  if (score >= 65) return { color: COLOR.ok, label: '穩定前進' }
-  if (score >= 50) return { color: COLOR.warn, label: '尚可，需留意' }
-  if (score >= 35) return { color: COLOR.concern, label: '需調整' }
-  return { color: COLOR.crit, label: '警報，先照顧自己' }
+  const color = scoreColor(score)
+  if (score >= 80) return { color, label: '很幸福' }
+  if (score >= 65) return { color, label: '穩定前進' }
+  if (score >= 50) return { color, label: '尚可，需留意' }
+  if (score >= 35) return { color, label: '需調整' }
+  return { color, label: '警報，先照顧自己' }
 }
 
 type Band = [threshold: number, color: string, label: string]
@@ -61,8 +72,8 @@ export function pctTone(pct: number | null): string {
   return COLOR.ok
 }
 
-export const MIND_SCORE_BANDS: Band[] = [[80, COLOR.ok, '優良'], [60, COLOR.warn, '普通'], [40, COLOR.concern, '偏弱'], [0, COLOR.crit, '停滯']]
-export const SOCIAL_SCORE_BANDS: Band[] = [[80, COLOR.ok, '熱絡'], [60, COLOR.warn, '普通'], [40, COLOR.concern, '偏冷'], [0, COLOR.crit, '疏離']]
+export const MIND_SCORE_BANDS: Band[] = [[80, SCORE_SCALE.great, '優良'], [60, SCORE_SCALE.good, '普通'], [40, SCORE_SCALE.warn, '偏弱'], [0, SCORE_SCALE.crit, '停滯']]
+export const SOCIAL_SCORE_BANDS: Band[] = [[80, SCORE_SCALE.great, '熱絡'], [60, SCORE_SCALE.good, '普通'], [40, SCORE_SCALE.warn, '偏冷'], [0, SCORE_SCALE.crit, '疏離']]
 
 export function formatGb(n: number): string {
   return `${n.toFixed(1)} GB`
