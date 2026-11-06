@@ -1,5 +1,5 @@
 // 六個面向的摘要內容與卡片（財務／身體／從容／旅遊的 *SummaryBody，心智、社交的明細與卡片）。#dim/<key> 面向頁也用這裡的明細元件。
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { COLOR, FONT } from './theme'
 import { DIMENSIONS, dimensionOf, type DimensionDef } from './dimensions'
 import { Gauge } from './Gauge'
@@ -7,6 +7,9 @@ import { rawToScoreText } from './dimensionPage'
 import { MIND_SCORE_BANDS, SOCIAL_SCORE_BANDS, bandTone, formatMinutesAgo, formatPct, formatTWD, heroTone } from './format'
 import { FormulaPanel, FormulaToggle, LabeledRadarChart, LockedGaugeCard, SupportStats } from './panelUi'
 import { type DashboardSummary, type SiteData } from './portalApi'
+import { apiFetchCompanion, apiFetchPersonActions, taipeiDateOf, visibleQuietPeople } from './companion'
+import { socialRecent, type CompareWindow, type SocialLevel } from './socialRecent'
+import { useAsync } from './homeHooks'
 import { FITNESS_REPORT_URL, formatWeekRange, parseFitnessWeeklyReport, type FitnessWeeklyReport } from './fitnessWeeklyReport'
 
 // ─────────────────────────────────────────────
@@ -400,7 +403,58 @@ export function MindIndexCard({
 // 社交指標 (HHI v2) — 全被動日記萃取，資料來源是 social_interactions.jsonl。
 // ─────────────────────────────────────────────
 // 社交面向的明細（首頁卡片展開與 #dim/social 頁共用）：三個子分數、觀測日、算法
-export function SocialDetailBody({ summary, hhiSummary }: { summary: DashboardSummary | undefined; hhiSummary: DashboardSummary | undefined }) {
+const LEVEL_LABEL: Record<SocialLevel, string> = { face: '見面', call: '通話', text: '訊息', none: '無' }
+
+function Delta({ label, cur, prev, unit, approx }: { label: string; cur: number; prev: number; unit: string; approx?: boolean }) {
+  const d = cur - prev
+  return (
+    <div className="hm-soc-cmp-item">
+      <div className="hm-soc-cmp-label">{label}</div>
+      <div className="hm-soc-cmp-num">{approx ? '約 ' : ''}{cur} {unit}</div>
+      <div className={`hm-soc-delta ${d > 0 ? 'hm-soc-up' : d < 0 ? 'hm-soc-down' : ''}`}>{d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : '持平'}</div>
+    </div>
+  )
+}
+
+// 社交明細的「近 14 天」區：互動條、互動對象、與前 14 天比較、建議聯絡誰（資料來自 feed companion 與人物提醒動作）
+function SocialRecentBlock({ pw }: { pw: string | null }) {
+  const companion = useAsync(pw, apiFetchCompanion)
+  const actions = useAsync(pw, apiFetchPersonActions)
+  const today = taipeiDateOf(new Date().toISOString())
+  const r = useMemo(() => socialRecent(companion.data, today), [companion.data, today])
+  const next = useMemo(
+    () => (companion.data ? visibleQuietPeople(companion.data.quietPeople, actions.data ?? [], today)[0] : undefined),
+    [companion.data, actions.data, today],
+  )
+  if (!companion.data || !r.hasDetail) return <p className="hm-muted hm-soc-empty" data-testid="social-recent-empty">互動明細還沒推上來</p>
+  const { current, previous, approx }: { current: CompareWindow; previous: CompareWindow; approx: boolean } = r.compare
+  return (
+    <div className="hm-soc-recent" data-testid="social-recent">
+      <h3 className="hm-h3">近 14 天</h3>
+      <div className="hm-soc-strip" aria-label="近 14 天互動條（今天在最右）">
+        {r.strip.map((c) => (
+          <span key={c.date} className={`hm-soc-cell hm-soc-${c.level}`} title={`${c.date}　${LEVEL_LABEL[c.level]}${c.names.length ? `　${c.names.join('、')}` : ''}`} />
+        ))}
+      </div>
+      <div className="hm-soc-legend hm-muted">
+        {(['face', 'call', 'text', 'none'] as const).map((k) => <span key={k}><i className={`hm-soc-cell hm-soc-${k}`} /> {LEVEL_LABEL[k]}</span>)}
+      </div>
+      {r.people.length > 0 && (
+        <div className="hm-soc-people" aria-label="近 14 天互動對象">
+          {r.people.map((p) => <span key={p.name} className="hm-soc-chip">{p.name} <b>{p.count}</b></span>)}
+        </div>
+      )}
+      <div className="hm-soc-cmp" aria-label="與前 14 天比較">
+        <Delta label="互動人數" cur={current.people} prev={previous.people} unit="人" approx={approx} />
+        <Delta label="互動天數" cur={current.days} prev={previous.days} unit="天" />
+        <Delta label="見面次數" cur={current.meets} prev={previous.meets} unit="次" />
+      </div>
+      {next && <p className="hm-soc-suggest">可以聯絡：{next.name}（{next.daysQuiet} 天沒聯絡）</p>}
+    </div>
+  )
+}
+
+export function SocialDetailBody({ summary, hhiSummary, pw = null }: { summary: DashboardSummary | undefined; hhiSummary: DashboardSummary | undefined; pw?: string | null }) {
   const data = summary?.data
   const observedDayCount = typeof data?.['observedDayCount'] === 'number' ? data['observedDayCount'] as number : null
   const distinctPersonCount = typeof data?.['distinctPersonCount'] === 'number' ? data['distinctPersonCount'] as number : null
@@ -430,6 +484,7 @@ export function SocialDetailBody({ summary, hhiSummary }: { summary: DashboardSu
         { label: '社交指標（計入幸福指數）', formula: 'socialScore = round(0.35 × 廣度 + 0.35 × 互動強度 + 0.30 × 規律)' },
         ...socialItems,
       ]} />
+      <SocialRecentBlock pw={pw} />
     </>
   )
 }
@@ -438,11 +493,14 @@ export function SocialIndexCard({
   summary,
   hhiSummary,
   unlocked,
+  pw = null,
   onSelect,
 }: {
   summary: DashboardSummary | undefined
   hhiSummary: DashboardSummary | undefined
   unlocked: boolean
+  /** 社交明細「近 14 天」要讀 feed 與動作用的密碼 */
+  pw?: string | null
   onSelect: () => void
 }) {
   const isLocked = !unlocked
@@ -493,7 +551,7 @@ export function SocialIndexCard({
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
           {expanded && (
             <div style={{ marginTop: '0.5rem' }}>
-              <SocialDetailBody summary={summary} hhiSummary={hhiSummary} />
+              <SocialDetailBody summary={summary} hhiSummary={hhiSummary} pw={pw} />
             </div>
           )}
         </div>

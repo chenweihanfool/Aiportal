@@ -20,6 +20,7 @@ import hermesAttachmentRouter from "./hermesAttachment";
 import hermesRawRouter from "./hermesRaw";
 import hermesMediaRouter from "./hermesMedia";
 import hermesChatRouter from "./hermesChat";
+import companionActionsRouter from "./companionActions";
 import exportRouter from "./export";
 
 const router: IRouter = Router();
@@ -46,6 +47,7 @@ router.use(hermesAttachmentRouter);
 router.use(hermesRawRouter);
 router.use(hermesMediaRouter);
 router.use(hermesChatRouter);
+router.use(companionActionsRouter);
 router.use(exportRouter);
 
 export default router;

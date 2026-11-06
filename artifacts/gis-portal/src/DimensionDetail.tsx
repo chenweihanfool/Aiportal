@@ -11,7 +11,7 @@ import { type DashboardSummary, type SiteData } from './portalApi'
 // 面向頁（#dim/<key>）的「分數怎麼來」與相關連結。各面向的原始數據元件沿用首頁卡片展開用的同一批
 // （*SummaryBody／MindDetailBody／SocialDetailBody），所以首頁卡片與面向頁不會各說各話。
 // ─────────────────────────────────────────────
-export function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboard: DashboardSummary[] }) {
+export function DimensionDetail({ dimKey, dashboard, pw = null }: { dimKey: string; dashboard: DashboardSummary[]; pw?: string | null }) {
   const hhiSummary = dashboard.find(d => d.subsystemId === 'hhi')
   const def = dimensionOf(dimKey)
   if (!def) return null
@@ -57,7 +57,7 @@ export function DimensionDetail({ dimKey, dashboard }: { dimKey: string; dashboa
             {names.map(n => <span key={n} style={{ fontSize: '0.68rem', color: COLOR.steel, background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 9px' }}>{n}</span>)}
           </div>
         )}
-        <SocialDetailBody summary={summary} hhiSummary={hhiSummary} />
+        <SocialDetailBody summary={summary} hhiSummary={hhiSummary} pw={pw} />
         <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
       </div>
     )
