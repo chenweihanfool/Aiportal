@@ -37,8 +37,8 @@ describe("validateDocs", () => {
     expect(validateDocs({ docs: [doc({ kind: "concept", key: "X" }), doc({ kind: "method", key: "X" })] }).ok).toBe(true);
   });
 
-  it("isDocKind only accepts the three kinds", () => {
-    expect(["event", "concept", "method"].every(isDocKind)).toBe(true);
+  it("isDocKind accepts the known kinds (event/concept/method/source/topic)", () => {
+    expect(["event", "concept", "method", "source", "topic"].every(isDocKind)).toBe(true);
     expect(isDocKind("person")).toBe(false);
     expect(isDocKind(undefined)).toBe(false);
   });

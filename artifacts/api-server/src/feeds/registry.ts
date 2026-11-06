@@ -350,6 +350,10 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
                     id: { type: "string", minLength: 1, maxLength: 120 },
                     title: { type: "string", minLength: 1, maxLength: 200 },
                     month: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
+                    // 以下三個為選填（v1 只加選填，舊 payload 不帶也合法）
+                    type: { enum: ["pdf", "word", "excel", "image", "text", "diary", "note", "event", "other"] },
+                    case: { type: ["string", "null"], maxLength: 60 },
+                    date: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
                   },
                 },
               },

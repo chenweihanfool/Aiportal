@@ -2,7 +2,8 @@
 // 全部是純函式（不碰 DB／網路），方便單元測試；routes/hermesDoc.ts 只負責撈資料與呼叫這裡。
 // 設計：kb-pipeline docs/portal-content-design.md。
 
-export const DOC_KINDS = ["event", "concept", "method"] as const;
+// source：主題來源的原文（一個來源一筆）；topic：已發布主題的引文索引（meta.quotes）。
+export const DOC_KINDS = ["event", "concept", "method", "source", "topic"] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
 
 export const MAX_DOCS_PER_POST = 100;

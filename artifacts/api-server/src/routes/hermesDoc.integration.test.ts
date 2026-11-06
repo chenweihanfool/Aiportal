@@ -135,4 +135,50 @@ describe.skipIf(!enabled)("hermes-doc API（真實 Postgres）", () => {
     expect(body).toMatchObject({ kind: "method", bodyMd: "", promoted: false });
     expect(body.contexts).toHaveLength(1);
   });
+
+  it("stores and returns source and topic docs (key with slashes); meta and sourcePath are returned", async () => {
+    const src = {
+      kind: "source", key: "AI/工作/x", title: "開標紀錄", bodyMd: "本次開標於 3/5 進行", truncated: false,
+      meta: { type: "note", case: null, date: "2026-03-05", originName: null, rawPath: null, textFrom: "note", evidence: null, topics: [] },
+      sourcePath: "AI/工作/x.md", contentHash: "hash-source-1",
+    };
+    const topic = {
+      kind: "topic", key: "topic-a", title: "招標流程", bodyMd: "", truncated: false,
+      meta: { quotes: [{ k: 0, ref: 1, text: "本次開標於 3/5 進行", fromOriginal: true, weak: false }] },
+      sourcePath: null, contentHash: "hash-topic-1",
+    };
+    expect((await post([src, topic])).status).toBe(200);
+    expect((await post([{ ...src, bodyMd: "改過的全文" , contentHash: "hash-source-2"}])).status).toBe(200);
+
+    const s = await get(`/hermes-doc/source/${encodeURIComponent("AI/工作/x")}`);
+    expect(s.status).toBe(200);
+    expect(await json(s)).toMatchObject({ kind: "source", key: "AI/工作/x", bodyMd: "改過的全文", sourcePath: "AI/工作/x.md", meta: { date: "2026-03-05" } });
+
+    const t = await get("/hermes-doc/topic/topic-a");
+    expect(await json(t)).toMatchObject({ kind: "topic", title: "招標流程", meta: { quotes: [{ k: 0, ref: 1 }] } });
+    expect((await get("/hermes-doc/source/NOPE")).status).toBe(404);
+  });
+
+  it("search: only source docs, case-insensitive, escapes % _ \\, 400 on bad q, 403 without password", async () => {
+    await post([
+      { kind: "source", key: "S1", title: "招標公告", bodyMd: "本案 Budget 100%_完成", truncated: false, meta: { date: "2026-01-01" }, sourcePath: null, contentHash: "hash-s1-xxxx" },
+      { kind: "source", key: "S2", title: "其他", bodyMd: "budget 不含百分比", truncated: false, meta: { date: "2026-09-01" }, sourcePath: null, contentHash: "hash-s2-xxxx" },
+      { kind: "source", key: "S3", title: "沒關係", bodyMd: "完全無關", truncated: false, meta: {}, sourcePath: null, contentHash: "hash-s3-xxxx" },
+      { kind: "event", key: "EV-X", title: "budget 事件", bodyMd: "budget", truncated: false, meta: {}, sourcePath: null, contentHash: "hash-ev-xxxx" },
+    ]);
+    const r = await get(`/hermes-doc-search?q=${encodeURIComponent("BUDGET")}`);
+    expect(r.status).toBe(200);
+    const res = (await json(r)).results as Array<{ key: string; snippet: string; hitAt: number | null }>;
+    expect(res.map((x) => x.key)).toEqual(["S2", "S1"]); // 新到舊；event 不在結果裡
+    expect(res[0]).toMatchObject({ key: "S2", hitAt: 0 });
+
+    // % 與 _ 必須被跳脫：搜 "%_" 只能命中 S1，不能當萬用字元命中全部
+    const esc = await json(await get(`/hermes-doc-search?q=${encodeURIComponent("%_")}`));
+    expect(esc.results.map((x: { key: string }) => x.key)).toEqual(["S1"]);
+
+    expect((await get("/hermes-doc-search?q=%20%20")).status).toBe(400);
+    expect((await get(`/hermes-doc-search?q=${"x".repeat(51)}`)).status).toBe(400);
+    expect((await get("/hermes-doc-search?q=a&limit=0")).status).toBe(400);
+    expect((await get("/hermes-doc-search?q=a", null)).status).toBe(403);
+  });
 });
