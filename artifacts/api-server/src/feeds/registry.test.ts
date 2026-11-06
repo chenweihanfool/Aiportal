@@ -64,4 +64,20 @@ describe("feed registry", () => {
     expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "2026-10-24", count: 2, titles: ["甲", "乙"] }] })).ok).toBe(true);
     expect(validateFeedRequest("tasks-done", body({ ...ok, days: [{ date: "2026-10-24", count: 31, titles: Array(31).fill("x") }] })).ok).toBe(false);
   });
+
+  it("companion：新欄位（usualGapDays／overdue／names／types）選填，舊推送仍合法，超量被擋", () => {
+    const body = (payload: unknown) => ({ schemaVersion: 1, generatedAt: "2026-11-07", payload });
+    const old = { computedAt: "2026-11-07T10:00:00+08:00", date: "2026-11-07", onThisDay: [],
+      quietPeople: [{ name: "王小明", lastDate: "2026-06-01", daysQuiet: 159, events: 5 }], socialDays: [{ date: "2026-11-06", people: 2 }] };
+    expect(validateFeedRequest("companion", body(old)).ok).toBe(true);
+    const next = { ...old,
+      quietPeople: [{ ...old.quietPeople[0], usualGapDays: 30, overdue: 5.3 }, { name: "李小華", lastDate: "2026-05-01", daysQuiet: 190, events: 2, usualGapDays: null }],
+      socialDays: [{ date: "2026-11-06", people: 2, names: ["甲", "乙"], types: { face_to_face: 1, call: 0, text: 1 } }] };
+    expect(validateFeedRequest("companion", body(next)).ok).toBe(true);
+    const day = (extra: object) => body({ ...old, socialDays: [{ date: "2026-11-06", people: 2, ...extra }] });
+    expect(validateFeedRequest("companion", day({ names: Array.from({ length: 21 }, (_, i) => `n${i}`) })).ok).toBe(false);
+    expect(validateFeedRequest("companion", day({ types: { face_to_face: 1, call: 0 } })).ok).toBe(false);
+    expect(validateFeedRequest("companion", day({ types: { face_to_face: 1, call: 0, text: 1, other: 1 } })).ok).toBe(false);
+    expect(validateFeedRequest("companion", body({ ...old, quietPeople: [{ ...old.quietPeople[0], usualGapDays: 0 }] })).ok).toBe(false);
+  });
 });

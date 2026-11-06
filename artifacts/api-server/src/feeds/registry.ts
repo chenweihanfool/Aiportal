@@ -188,6 +188,8 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
               daysQuiet: { type: "integer", minimum: 0 },
               events: { type: "integer", minimum: 1 },
               lastEvent: { type: ["string", "null"], maxLength: 120 },
+              usualGapDays: { type: ["integer", "null"], minimum: 1, maximum: 3650 },
+              overdue: { type: "number", minimum: 0, maximum: 1000 },
             },
           },
         },
@@ -201,6 +203,17 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
             properties: {
               date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
               people: { type: "integer", minimum: 1 },
+              names: { type: "array", maxItems: 20, items: { type: "string", maxLength: 60 } },
+              types: {
+                type: "object",
+                additionalProperties: false,
+                required: ["face_to_face", "call", "text"],
+                properties: {
+                  face_to_face: { type: "integer", minimum: 0 },
+                  call: { type: "integer", minimum: 0 },
+                  text: { type: "integer", minimum: 0 },
+                },
+              },
             },
           },
         },
