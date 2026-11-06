@@ -20,6 +20,7 @@ import { BriefSection, CompanionSection, DimensionsSection, FunSection, GrowthSe
 import { activityInsight, apiFetchCompanion, bestMove } from './companion'
 import { apiFetchReports, crowdOf, parseBrief, pickBrief } from './briefView'
 import { apiFetchGantt } from './taskGantt'
+import { apiFetchTopicNudges, nudgesFor } from './topicNudges'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
   oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus, type DimSeries,
@@ -74,6 +75,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const companion = useAsync(pw, apiFetchCompanion)
   const reports = useAsync(pw, apiFetchReports)
   const gantt = useAsync(pw, apiFetchGantt)
+  // 主題知識推播（失敗或沒資料時三處都不顯示，不併進既有區塊的狀態）
+  const nudges = useAsync(pw, apiFetchTopicNudges)
 
   const dimLinks = useMemo(() => dimensionSiteLinks(sites), [sites])
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
@@ -190,12 +193,13 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     <div className="hm-root" data-sys={alert ? 'alert' : 'ok'}>
       <TodaySection greetingText={g.text} part={g.part} dateLabel={dateLabel} st={hhiSt} breakdown={breakdown} trend={trend} trendNote={trendNote} sentence={sentence} move={move}
         year={yearProgress(now)} toneOf={toneOf} onOpen={() => setDrawer('hhi')} onRequestUnlock={onRequestUnlock}
-        system={on && sysSt.state === 'fresh' ? light : null} onOpenSystem={() => setDrawer('ops')} />
+        system={on && sysSt.state === 'fresh' ? light : null} onOpenSystem={() => setDrawer('ops')} nudges={nudgesFor(nudges.data, todayIso)} />
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
       <PaidServicesSection st={svcSt} usage={usage.data} paid={paid.data} onOpen={() => setDrawer('svc')} onRequestUnlock={onRequestUnlock} />
-      <BriefSection st={briefSt} brief={brief} parsed={briefParsed} crowd={briefCrowd} onRequestUnlock={onRequestUnlock} onRetry={reports.reload} />
+      <BriefSection st={briefSt} brief={brief} parsed={briefParsed} crowd={briefCrowd} onRequestUnlock={onRequestUnlock} onRetry={reports.reload}
+        nudges={brief ? nudgesFor(nudges.data, brief.date) : []} todayIso={todayIso} />
       <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} links={dimLinks} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
-      <CompanionSection st={companionSt} data={companion.data} insight={insight} onRequestUnlock={onRequestUnlock} onRetry={companion.reload} />
+      <CompanionSection st={companionSt} data={companion.data} insight={insight} onRequestUnlock={onRequestUnlock} onRetry={companion.reload} recall={nudges.data?.recall ?? []} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />
       <FunSection ideasSt={ideasSt} ideasCount={ideasList?.ideas.length ?? 0} topIdeas={ideaTop}

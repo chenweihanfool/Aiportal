@@ -18,6 +18,7 @@ import type { Brief, Crowd, ParsedBrief } from './briefView'
 import { BriefBoard } from './BriefBoard'
 import { dimHref } from './dimensionPage'
 import { HomeCard } from './HomeCard'
+import { knowledgeHref, nudgeLabel, triggerTitles, type NudgeMatch, type NudgeRecall } from './topicNudges'
 
 // 新首頁（HomeBoard）五個區塊的呈現元件。資料與狀態判定都由 HomeBoard.tsx 傳進來，這裡只負責畫。
 // 樣式在 portal.css 的 hm-* 類別；每個區塊外框是 HomeCard（id、標題、圖示來自 homeNav.ts 的註冊表）。
@@ -29,7 +30,7 @@ const LAMP: Record<SystemLight['level'], string> = { ok: COLOR.ok, warn: COLOR.w
 // ── ① 今天 ────────────────────────────────────
 type WantEntry = { name: string; kind: Parameters<typeof statusLabelFor>[0]; area: string | null; days: number }
 
-export function TodaySection({ greetingText, part, dateLabel, st, breakdown, trend, trendNote, sentence, move, year, toneOf, onOpen, onRequestUnlock, system, onOpenSystem }: {
+export function TodaySection({ greetingText, part, dateLabel, st, breakdown, trend, trendNote, sentence, move, year, toneOf, onOpen, onRequestUnlock, system, onOpenSystem, nudges = [] }: {
   greetingText: string
   part: DayPart
   dateLabel: string
@@ -48,6 +49,8 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
   /** 「一眼看」欄的系統燈；null＝未解鎖或還沒載入（不顯示這一格） */
   system?: SystemLight | null
   onOpenSystem?: () => void
+  /** 今天用得上的主題知識（feed topic-nudges）；空陣列就不顯示 */
+  nudges?: NudgeMatch[]
 }) {
   const shown = useCountUp(breakdown?.displayed ?? null)
   // 只有分數本身看得到（新鮮或過期但仍顯示）時才列最弱面向；未解鎖／載入中／失敗都不露出任何分數
@@ -87,6 +90,11 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
                 </div>
                 <p className="hm-sentence">{sentence}</p>
                 {move && <p className="hm-sentence hm-move" data-testid="today-move">👉 {move}</p>}
+                {nudges.slice(0, 2).map((n) => (
+                  <p key={`${n.forDate}-${n.topicId}`} className="hm-sentence hm-nudge" data-testid="today-nudge" title={triggerTitles(n)}>
+                    📚 今天用得上：<a href={knowledgeHref(n.topicId)}>{n.name}</a>{n.point ? `｜${n.point}` : ''}
+                  </p>
+                ))}
               </div>
             </div>
           )}
@@ -293,30 +301,50 @@ export function GrowthSection({ histSt, heat, heatPending, kbSt, kb, milestones,
 
 // ── ④ 好玩的 ──────────────────────────────────
 // ── 明日報告：前一晚看明天要注意的事 ──────────
-export function BriefSection({ st, brief, parsed, crowd, onRequestUnlock, onRetry }: {
+export function BriefSection({ st, brief, parsed, crowd, onRequestUnlock, onRetry, nudges = [], todayIso }: {
   st: BlockStatus
   brief: Brief | null
   parsed: ParsedBrief | null
   crowd: Crowd | null
   onRequestUnlock: () => void
   onRetry: () => void
+  /** 報告日當天用得上的主題知識（feed topic-nudges）；空陣列就不顯示 */
+  nudges?: NudgeMatch[]
+  todayIso: string
 }) {
   return (
     <HomeCard id="sec-brief" className="hm-brief" right={brief ? <span className="hm-muted">{brief.label}</span> : undefined}>
       <StateFrame status={st} source="明日報告" onRequestUnlock={onRequestUnlock} onRetry={onRetry} empty="明日報告每晚 21:00 整理，好了就會出現在這裡。">
         {brief && <BriefBoard brief={brief} parsed={parsed} crowd={crowd} />}
+        {brief && nudges.length > 0 && (
+          <div className="hm-brief-nudges" data-testid="brief-nudges">
+            <h3 className="hm-h3">📚 {nudgeLabel(brief.date, todayIso)}</h3>
+            <ul className="hm-comp-list">
+              {nudges.slice(0, 4).map((n) => (
+                <li key={`${n.forDate}-${n.topicId}`}>
+                  <a href={knowledgeHref(n.topicId)}>{n.name}</a>
+                  {n.path.length > 0 && <span className="hm-muted">　{n.path.join(' › ')}</span>}
+                  {n.point && <span>｜{n.point}</span>}
+                  <div className="hm-muted">因為：{triggerTitles(n)}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </StateFrame>
     </HomeCard>
   )
 }
 
 // ── 陪伴：歷年今天、很久沒聯絡、什麼事讓你變好 ──────────
-export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry }: {
+export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry, recall = [] }: {
   st: BlockStatus
   data: CompanionData | null
   insight: ActivityInsight
   onRequestUnlock: () => void
   onRetry: () => void
+  /** 一年前的這時候用過的主題（feed topic-nudges）；空陣列就不加第四格 */
+  recall?: NudgeRecall[]
 }) {
   return (
     <HomeCard id="sec-companion" className="hm-companion">
@@ -343,6 +371,19 @@ export function CompanionSection({ st, data, insight, onRequestUnlock, onRetry }
               <h3 className="hm-h3">🔍 什麼事讓你變好</h3>
               <p className={insight.ready ? '' : 'hm-muted'}>{insight.text}</p>
             </div>
+            {recall.length > 0 && (
+              <div data-testid="recall-topics">
+                <h3 className="hm-h3">🔁 一年前的這時候</h3>
+                <ul className="hm-comp-list">
+                  {recall.map((r) => (
+                    <li key={r.topicId} title={r.point || undefined}>
+                      <a href={knowledgeHref(r.topicId)}>{r.name}</a>
+                      <span className="hm-muted">　{r.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </StateFrame>

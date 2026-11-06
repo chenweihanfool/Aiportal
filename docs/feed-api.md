@@ -41,3 +41,4 @@
 | `hermes-reports` | 1 | 原本只發 Telegram 的報告，目前是明日報告（kb-pipeline `report-publish.py`） |
 | `companion` | 1 | 首頁陪伴區塊：歷年今天、很久沒聯絡的人、每天的家人朋友互動（kb-pipeline `companion-pusher.py`，每 10 分鐘只讀） |
 | `topics` | 1 | 知識頁（#knowledge）：知識庫長出來的主題、頁面內容、成長紀錄與相關題目（kb-pipeline 每週推送）。2.75.0 起含知識樹 |
+| `topic-nudges` | 1 | 首頁主動推播主題知識：「今天」卡、明日報告區塊、陪伴區塊的「一年前的這時候」（kb-pipeline `vikunja-gantt-pusher.py`，每 10 分鐘） |
