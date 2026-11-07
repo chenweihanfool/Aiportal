@@ -1,13 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
 import { SourceSearchResults } from './KnowledgeSearch'
-import { FootRefs, SourceList, TraceProvider, useTopicQuotes, type TraceCtx } from './KnowledgeTrace'
-import { InlineText } from './MarkdownView'
+import { SourceList, TraceProvider, useTopicQuotes, type TraceCtx } from './KnowledgeTrace'
+import { BulletText, ConceptBody, MethodBody } from './KnowledgeParts'
 import { useAsync, useNow } from './homeHooks'
 import {
   buildTree, bulletId, bulletsCiting, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBodyWithMarkers, parseTopics, treeToLayoutInput,
   type ParsedBody,
-  type Bullet, type BuiltTree, type Topic, type TopicKind, type TopicsData,
+  type BuiltTree, type Topic, type TopicKind, type TopicsData,
 } from './knowledgeView'
 
 // 知識頁（#knowledge＝全樹、#knowledge/<id>＝題目頁；2.75.0 改成三欄＋知識樹）。資料來自 feed `topics`（HERMES 每週推送）。
