@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bulletId, bulletsCiting, buildTree, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
+import { bulletId, bulletsCiting, buildTree, checkKey, loadChecks, relatedByKind, saveChecks, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
 
 const feed = (payload: unknown, available = true) => ({ available, payload })
 
@@ -254,7 +254,7 @@ describe('parseBody', () => {
   })
 
   it('空字串或沒有標題的文字', () => {
-    expect(parseBody('')).toEqual({ summary: null, what: [], how: [], caution: [], unknown: [], other: '' })
+    expect(parseBody('')).toEqual({ format: 'legacy', summary: null, what: [], how: [], caution: [], unknown: [], why: [], myths: [], examples: [], prep: [], steps: [], decisions: [], pitfalls: [], other: '' })
     expect(parseBody('只有一段話').other).toBe('只有一段話')
   })
 
@@ -472,5 +472,158 @@ describe('來源可追溯（2.77.0）', () => {
     expect(highlightRanges('a.b axb', 'a.b')).toEqual([[0, 3]])
     expect(highlightRanges('abc', '  ')).toEqual([])
     expect(highlightRanges('abc', 'z')).toEqual([])
+  })
+})
+
+describe('parseBody 新格式（概念／方法）', () => {
+  const concept = [
+    '## 一句話',
+    '- 界址點是界線的轉折位置 ⟦1⟧',
+    '',
+    '## 為什麼存在',
+    '- 沒有它界線無法落地 ⟦2⟧',
+    '',
+    '## 常見誤解',
+    '- 以為：界址點就是界標 → 其實：界標只是標示物 ⟦3⟧',
+    '- 以為: 越新越準 -> 其實: 要看測量方法（僅一例） ⟦4⟧',
+    '- 這條沒有箭頭 ⟦5⟧',
+    '- 來源沒有提到',
+    '',
+    '## 實例',
+    '- 某案例 ⟦6⟧',
+    '',
+    '## 還不知道',
+    '- 適用範圍 ⟦7⟧',
+  ].join('\n')
+  const method = [
+    '## 一句話',
+    '- 用 RTK 量測 ⟦1⟧',
+    '## 開工前準備',
+    '- 電池充飽 ⟦2⟧',
+    '- 來源沒有提到',
+    '## 步驟',
+    '1. 架設基站 ⟦3⟧',
+    '2. 開機 ⟦4⟧',
+    '## 判斷點',
+    '- 如果：沒有固定解 ⇒ 就：換位置 ⟦5⟧',
+    '- 不是這個格式 ⟦6⟧',
+    '## 踩過的坑',
+    '- 電量不足：多帶一顆電池 ⟦7⟧',
+    '- 沒有冒號的坑',
+    '## 還不知道',
+    '- 其他 ⟦8⟧',
+  ].join('\n')
+
+  it('概念範例：format 與各節條目數、不落到 other', () => {
+    const p = parseBodyWithMarkers(concept)
+    expect(p.format).toBe('concept')
+    expect(p.summary?.text).toBe('界址點是界線的轉折位置')
+    expect(p.why).toHaveLength(1)
+    expect(p.myths).toHaveLength(3)
+    expect(p.examples).toHaveLength(1)
+    expect(p.unknown).toHaveLength(1)
+    expect(p.steps).toHaveLength(0)
+    expect(p.other).toBe('')
+  })
+
+  it('myth 拆欄（全形／半形冒號、各種箭頭）與拆不開', () => {
+    const { myths } = parseBody(concept)
+    expect(myths[0]).toMatchObject({ myth: '界址點就是界標', truth: '界標只是標示物', refs: [3] })
+    expect(myths[1]).toMatchObject({ myth: '越新越準', truth: '要看測量方法', single: true })
+    expect(myths[2]!.myth).toBeUndefined()
+    expect(myths[2]!.truth).toBeUndefined()
+    expect(myths[2]!.text).toBe('這條沒有箭頭')
+  })
+
+  it('方法範例：format、各節條目數、來源沒有提到略過、不落到 other', () => {
+    const p = parseBody(method)
+    expect(p.format).toBe('method')
+    expect(p.summary?.text).toBe('用 RTK 量測')
+    expect(p.prep.map((b) => b.text)).toEqual(['電池充飽'])
+    expect(p.steps).toHaveLength(2)
+    expect(p.decisions).toHaveLength(2)
+    expect(p.pitfalls).toHaveLength(2)
+    expect(p.unknown).toHaveLength(1)
+    expect(p.other).toBe('')
+  })
+
+  it('decision／pitfall 拆欄與拆不開', () => {
+    const p = parseBody(method)
+    expect(p.decisions[0]).toMatchObject({ when: '沒有固定解', then: '換位置' })
+    expect(p.decisions[1]!.when).toBeUndefined()
+    expect(p.pitfalls[0]).toMatchObject({ trap: '電量不足', avoid: '多帶一顆電池' })
+    expect(p.pitfalls[1]!.trap).toBeUndefined()
+    expect(p.pitfalls[1]!.text).toBe('沒有冒號的坑')
+  })
+
+  it('bulletsCiting 找得到新格式各節條目', () => {
+    const c = parseBodyWithMarkers(concept)
+    expect(bulletsCiting(c, 1)).toEqual(['summary'])
+    expect(bulletsCiting(c, 2)).toEqual([bulletId('why', 0)])
+    expect(bulletsCiting(c, 3)).toEqual([bulletId('myths', 0)])
+    expect(bulletsCiting(c, 6)).toEqual([bulletId('examples', 0)])
+    const m = parseBodyWithMarkers(method)
+    expect(bulletsCiting(m, 2)).toEqual([bulletId('prep', 0)])
+    expect(bulletsCiting(m, 4)).toEqual([bulletId('steps', 1)])
+    expect(bulletsCiting(m, 5)).toEqual([bulletId('decisions', 0)])
+    expect(bulletsCiting(m, 7)).toEqual([bulletId('pitfalls', 0)])
+  })
+
+  it('legacy 範例 format=legacy', () => {
+    const p = parseBody('## 這件事到底在幹嘛\n- 甲 ⟦1⟧\n- 乙\n## 怎麼做\n1. 做\n## 要注意\n- 慎')
+    expect(p.format).toBe('legacy')
+    expect(p.summary?.text).toBe('甲')
+    expect(p.what).toHaveLength(1)
+    expect(p.how).toHaveLength(1)
+    expect(p.caution).toHaveLength(1)
+    expect(p.myths).toEqual([])
+  })
+})
+
+describe('relatedByKind', () => {
+  const a = topic({ id: 'a', kind: 'concept' })
+  const b = topic({ id: 'b', kind: 'method' })
+  const c = topic({ id: 'c', kind: 'concept' })
+  const rel = (id: string) => ({ id, name: id, sharedDocs: 1, sharedCases: 0 })
+  it('依 kind 分組、略過不存在與自己、保留順序', () => {
+    const t = topic({ id: 't', kind: 'concept', related: [rel('b'), rel('zzz'), rel('a'), rel('t'), rel('c'), rel('b')] })
+    const r = relatedByKind(t, [a, b, c, t])
+    expect(r.methods.map((x) => x.id)).toEqual(['b'])
+    expect(r.concepts.map((x) => x.id)).toEqual(['a', 'c'])
+  })
+  it('沒有 related 回兩個空陣列', () => {
+    expect(relatedByKind(topic({ id: 't' }), [a])).toEqual({ concepts: [], methods: [] })
+  })
+})
+
+describe('勾選狀態讀寫', () => {
+  const mem = () => {
+    const m = new Map<string, string>()
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) }
+  }
+  it('鍵格式', () => {
+    expect(checkKey('t1', 3)).toBe('kn-check:t1:3')
+  })
+  it('存了再讀得回來', () => {
+    const s = mem()
+    expect(saveChecks(s, 'k', new Set(['steps:0', 'prep:1']))).toBe(true)
+    expect([...loadChecks(s, 'k')].sort()).toEqual(['prep:1', 'steps:0'])
+  })
+  it('沒有值、壞 JSON、非陣列、混雜型別', () => {
+    const s = mem()
+    expect(loadChecks(s, 'k').size).toBe(0)
+    s.setItem('k', '{壞')
+    expect(loadChecks(s, 'k').size).toBe(0)
+    s.setItem('k', '{"a":1}')
+    expect(loadChecks(s, 'k').size).toBe(0)
+    s.setItem('k', '["a", 1, null, "b"]')
+    expect([...loadChecks(s, 'k')]).toEqual(['a', 'b'])
+  })
+  it('store 丟例外或沒有 store 都回空集合、寫入回 false', () => {
+    const bad = { getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('quota') } }
+    expect(loadChecks(bad, 'k').size).toBe(0)
+    expect(saveChecks(bad, 'k', new Set(['a']))).toBe(false)
+    expect(loadChecks(null, 'k').size).toBe(0)
+    expect(saveChecks(undefined, 'k', new Set())).toBe(false)
   })
 })

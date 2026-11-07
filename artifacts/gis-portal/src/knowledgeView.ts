@@ -239,13 +239,31 @@ export function buildTree(data: Pick<TopicsData, 'topics' | 'tree'>): BuiltTree 
 }
 
 /** k0（只有 parseBodyWithMarkers 會填）＝這條第一個 ⟦n⟧ 在整份 body 裡的序號（0 起），第 i 個 ref 的序號＝k0+i */
-export interface Bullet { text: string; refs: number[]; single: boolean; k0?: number }
+export interface Bullet {
+  text: string; refs: number[]; single: boolean; k0?: number
+  /** 常見誤解：以為／其實（拆不開為 undefined） */
+  myth?: string; truth?: string
+  /** 判斷點：如果／就 */
+  when?: string; then?: string
+  /** 踩過的坑：坑／怎麼避開 */
+  trap?: string; avoid?: string
+}
+export type BodyFormat = 'concept' | 'method' | 'legacy'
 export interface ParsedBody {
+  /** 從標題判斷：有「常見誤解」「為什麼存在」→ concept；有「步驟」「判斷點」「踩過的坑」→ method；其餘 legacy */
+  format: BodyFormat
   summary: Bullet | null
   what: Bullet[]
   how: Bullet[]
   caution: Bullet[]
   unknown: Bullet[]
+  why: Bullet[]
+  myths: Bullet[]
+  examples: Bullet[]
+  prep: Bullet[]
+  steps: Bullet[]
+  decisions: Bullet[]
+  pitfalls: Bullet[]
   other: string
 }
 
@@ -265,9 +283,17 @@ function makeBullet(raw: string): Bullet {
   return { text: text.replace(/\s+/g, ' ').trim(), refs, single }
 }
 
-type SectionKey = 'what' | 'how' | 'caution' | 'unknown'
+type SectionKey = 'one' | 'what' | 'how' | 'caution' | 'unknown' | 'why' | 'myths' | 'examples' | 'prep' | 'steps' | 'decisions' | 'pitfalls'
 
 function sectionOf(title: string): SectionKey | null {
+  if (title.includes('一句話')) return 'one'
+  if (title.includes('為什麼存在')) return 'why'
+  if (title.includes('常見誤解')) return 'myths'
+  if (title.includes('實例')) return 'examples'
+  if (title.includes('開工前準備')) return 'prep'
+  if (title.includes('步驟')) return 'steps'
+  if (title.includes('判斷點')) return 'decisions'
+  if (title.includes('踩過的坑')) return 'pitfalls'
   if (title.includes('幹嘛')) return 'what'
   if (title.includes('怎麼做')) return 'how'
   if (title.includes('注意')) return 'caution'
@@ -276,7 +302,8 @@ function sectionOf(title: string): SectionKey | null {
 }
 
 /**
- * 把頁面四節 markdown 拆開：「這件事到底在幹嘛」第一條＝summary、其餘進 what；「怎麼做」「要注意」「還不知道」各一組。
+ * 把頁面 markdown 拆開：舊格式「這件事到底在幹嘛」第一條＝summary、其餘進 what；「怎麼做」「要注意」「還不知道」各一組；
+ * 新格式（概念／方法）「一句話」第一條＝summary，另有 why／myths／examples／prep／steps／decisions／pitfalls，format 由標題判斷。
  * 條目＝以 - * + 或「1.」開頭的行（後面的縮排續行併進上一條）；含「來源沒有提到」的條目略過；
  * 認不出的標題連同其內容、以及標題前的文字，原文放 other。
  */
@@ -289,10 +316,33 @@ export function parseBodyWithMarkers(body: string): ParsedBody {
   return parseBodyImpl(body, true)
 }
 
+const MYTH_RE = /^\s*以為\s*[:：]\s*(.*?)\s*(?:→|->|⇒)\s*其實\s*[:：]\s*(.*)$/s
+const DECISION_RE = /^\s*如果\s*[:：]\s*(.*?)\s*(?:→|->|⇒)\s*就\s*[:：]\s*(.*)$/s
+const PITFALL_RE = /^\s*([^:：]+?)\s*[:：]\s*(.+)$/s
+
+function splitMyth(b: Bullet): Bullet {
+  const m = MYTH_RE.exec(b.text)
+  return m && m[1] && m[2] ? { ...b, myth: m[1], truth: m[2] } : b
+}
+function splitDecision(b: Bullet): Bullet {
+  const m = DECISION_RE.exec(b.text)
+  return m && m[1] && m[2] ? { ...b, when: m[1], then: m[2] } : b
+}
+function splitPitfall(b: Bullet): Bullet {
+  const m = PITFALL_RE.exec(b.text)
+  return m && m[1] && m[2] ? { ...b, trap: m[1], avoid: m[2] } : b
+}
+
 function parseBodyImpl(body: string, withK: boolean): ParsedBody {
-  const out: ParsedBody = { summary: null, what: [], how: [], caution: [], unknown: [], other: '' }
+  const out: ParsedBody = {
+    format: 'legacy', summary: null, what: [], how: [], caution: [], unknown: [],
+    why: [], myths: [], examples: [], prep: [], steps: [], decisions: [], pitfalls: [], other: '',
+  }
   const other: string[] = []
-  const lists: Record<SectionKey, string[][]> = { what: [], how: [], caution: [], unknown: [] }
+  const lists: Record<SectionKey, string[][]> = {
+    one: [], what: [], how: [], caution: [], unknown: [], why: [], myths: [], examples: [], prep: [], steps: [], decisions: [], pitfalls: [],
+  }
+  const seenKeys = new Set<SectionKey>()
   const starts = new Map<string[], number>()
   let seen = 0
   let current: SectionKey | null = null
@@ -303,6 +353,7 @@ function parseBodyImpl(body: string, withK: boolean): ParsedBody {
     const h = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line)
     if (h) {
       current = sectionOf(h[1]!)
+      if (current) seenKeys.add(current)
       last = null
       if (current === null) other.push(line)
       continue
@@ -324,12 +375,27 @@ function parseBodyImpl(body: string, withK: boolean): ParsedBody {
   }
   const toBullets = (rows: string[][]) =>
     rows.map((r) => { const bl = makeBullet(r.join(' ')); if (withK) bl.k0 = starts.get(r) ?? 0; return bl }).filter((x) => x.text && !x.text.includes('來源沒有提到'))
+  const one = toBullets(lists.one)
   const what = toBullets(lists.what)
-  out.summary = what[0] ?? null
-  out.what = what.slice(1)
+  if (one.length > 0) {
+    out.summary = one[0]!
+    out.what = what
+  } else {
+    out.summary = what[0] ?? null
+    out.what = what.slice(1)
+  }
   out.how = toBullets(lists.how)
   out.caution = toBullets(lists.caution)
   out.unknown = toBullets(lists.unknown)
+  out.why = toBullets(lists.why)
+  out.myths = toBullets(lists.myths).map(splitMyth)
+  out.examples = toBullets(lists.examples)
+  out.prep = toBullets(lists.prep)
+  out.steps = toBullets(lists.steps)
+  out.decisions = toBullets(lists.decisions).map(splitDecision)
+  out.pitfalls = toBullets(lists.pitfalls).map(splitPitfall)
+  if (seenKeys.has('why') || seenKeys.has('myths')) out.format = 'concept'
+  else if (seenKeys.has('steps') || seenKeys.has('decisions') || seenKeys.has('pitfalls')) out.format = 'method'
   out.other = other.join('\n').trim()
   return out
 }
@@ -506,14 +572,14 @@ export function markerOrdinals(body: string): Array<{ k: number; ref: number }> 
   return out
 }
 
-export type BulletSection = 'summary' | 'what' | 'how' | 'caution' | 'unknown'
+export type BulletSection = 'summary' | 'what' | 'how' | 'caution' | 'unknown' | 'why' | 'myths' | 'examples' | 'prep' | 'steps' | 'decisions' | 'pitfalls'
 export const bulletId = (section: BulletSection, index = 0): string => (section === 'summary' ? 'summary' : `${section}:${index}`)
 
 /** 引用來源 n 的 bullet 識別（bulletId 格式），依頁面順序；UI 用它標亮 */
 export function bulletsCiting(parsed: ParsedBody, n: number): string[] {
   const ids: string[] = []
   if (parsed.summary?.refs.includes(n)) ids.push(bulletId('summary'))
-  for (const section of ['what', 'how', 'caution', 'unknown'] as const) {
+  for (const section of ['what', 'how', 'caution', 'unknown', 'why', 'myths', 'examples', 'prep', 'steps', 'decisions', 'pitfalls'] as const) {
     parsed[section].forEach((b, i) => {
       if (b.refs.includes(n)) ids.push(bulletId(section, i))
     })
@@ -544,4 +610,47 @@ export function highlightRanges(text: string, q: string): Array<[number, number]
     out.push([m.index!, m.index! + m[0].length])
   }
   return out
+}
+
+/** 關係區：把 t.related 依對方題目的 kind 分組；對方不在題目清單、或是自己就略過（保留 related 原本的順序） */
+export function relatedByKind(t: Pick<Topic, 'id' | 'related'>, topics: readonly Topic[]): { concepts: Topic[]; methods: Topic[] } {
+  const byId = new Map(topics.map((x) => [x.id, x]))
+  const out = { concepts: [] as Topic[], methods: [] as Topic[] }
+  const seen = new Set<string>()
+  for (const r of t.related) {
+    const o = byId.get(r.id)
+    if (!o || o.id === t.id || seen.has(o.id)) continue
+    seen.add(o.id)
+    if (o.kind === 'concept') out.concepts.push(o)
+    else out.methods.push(o)
+  }
+  return out
+}
+
+/** 方法頁勾選狀態（localStorage）：鍵 kn-check:<topicId>:<revision>，值＝勾選條目 id 的 JSON 陣列 */
+export interface CheckStore { getItem(key: string): string | null; setItem(key: string, value: string): void }
+export const checkKey = (topicId: string, revision: number): string => `kn-check:${topicId}:${revision}`
+
+/** 讀不到、壞 JSON、不是字串陣列、store 丟例外都回空集合 */
+export function loadChecks(store: CheckStore | null | undefined, key: string): Set<string> {
+  try {
+    const raw = store?.getItem(key)
+    if (!raw) return new Set()
+    const v: unknown = JSON.parse(raw)
+    if (!Array.isArray(v)) return new Set()
+    return new Set(v.filter((x): x is string => typeof x === 'string'))
+  } catch {
+    return new Set()
+  }
+}
+
+/** 寫入失敗（例外）時靜默略過，回傳是否成功 */
+export function saveChecks(store: CheckStore | null | undefined, key: string, checks: ReadonlySet<string>): boolean {
+  try {
+    if (!store) return false
+    store.setItem(key, JSON.stringify([...checks]))
+    return true
+  } catch {
+    return false
+  }
 }

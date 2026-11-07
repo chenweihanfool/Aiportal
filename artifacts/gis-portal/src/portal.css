@@ -1828,3 +1828,56 @@ button.ms-col { cursor: pointer; }
 .hm-soc-up { color: var(--c-ok); }
 .hm-soc-down { color: var(--c-concern); }
 .hm-soc-suggest { margin: 0.6rem 0 0; font-size: 0.76rem; color: var(--c-ink); }
+
+/* ── 知識頁概念／方法分版（2.80.0）：翻牌誤解、勾選清單、現場模式、判斷點分岔、關係區 ── */
+.kn-legacy-note { margin: calc(var(--sp-2) * -1) 0 var(--sp-3); font-size: 12px; color: var(--c-ink-3); }
+.kn-live-btn { margin: 0 0 var(--sp-3); }
+.kn-myth-count { margin: 0 0 var(--sp-2); }
+.kn-myths, .kn-forks, .kn-checklist { list-style: none; margin: 0; padding: 0; }
+.kn-myths { display: flex; flex-direction: column; gap: var(--sp-2); }
+.kn-myth { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); overflow: hidden; }
+.kn-myth--plain { padding: var(--sp-3); }
+.kn-myth[data-open="true"] { border-color: var(--c-ok); }
+.kn-myth-front { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); width: 100%; text-align: left; font: inherit; font-size: 15px; line-height: 1.6; color: var(--c-ink); background: none; border: 0; padding: var(--sp-3); cursor: pointer; }
+.kn-myth-front:hover { background: var(--c-hover); }
+.kn-myth-front:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.kn-myth-text { flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
+.kn-myth-hint { font-size: 12px; color: var(--c-accent); white-space: nowrap; }
+.kn-myth-tag { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: var(--r-pill); padding: 0 var(--sp-2); }
+.kn-myth-tag--ok { color: var(--c-ok); border-color: var(--c-ok); }
+.kn-myth-truth { display: flex; gap: var(--sp-2); align-items: baseline; padding: var(--sp-3); border-top: 1px dashed var(--c-line-strong); font-size: 15px; line-height: 1.7; transform-origin: top; animation: kn-flip 0.28s ease-out; overflow-wrap: anywhere; }
+.kn-myth-truth[hidden] { display: none; }
+.kn-myth[data-cited="true"] { box-shadow: 0 0 0 3px var(--c-accent-dim); }
+@keyframes kn-flip { from { opacity: 0; transform: rotateX(-80deg); } to { opacity: 1; transform: rotateX(0); } }
+.kn-rel h4 { margin: var(--sp-2) 0 var(--sp-1); font-size: 14px; color: var(--c-ink-2); }
+.kn-progress { margin-bottom: var(--sp-4); }
+.kn-progress-row { display: flex; align-items: center; gap: var(--sp-3); }
+.kn-bar { flex: 1; height: 10px; background: var(--c-raised); border-radius: var(--r-pill); overflow: hidden; }
+.kn-bar-fill { height: 100%; background: var(--c-ok); border-radius: var(--r-pill); transition: width 0.25s ease; }
+.kn-progress-n { font-family: var(--font-mono); font-size: 14px; color: var(--c-ink-2); }
+.kn-done { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin: var(--sp-3) 0 0; font-size: 16px; font-weight: 700; color: var(--c-ok); }
+.kn-checklist { display: flex; flex-direction: column; gap: var(--sp-2); }
+.kn-ck { display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); }
+.kn-ck[data-checked="true"] { border-color: var(--c-ok); }
+.kn-ck[data-checked="true"] .kn-ck-body { color: var(--c-ink-3); text-decoration: line-through; }
+.kn-ck-box { flex: 0 0 auto; width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--c-ok); cursor: pointer; }
+.kn-ck-body { min-width: 0; flex: 1; }
+.kn-ck .kn-stepno { flex: 0 0 28px; }
+.kn-forks { display: flex; flex-direction: column; gap: var(--sp-3); }
+.kn-fork { background: var(--c-surface); border: 1px solid var(--c-line); border-left: 4px solid var(--c-accent); border-radius: var(--r-md); padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
+.kn-fork-if, .kn-fork-then { display: flex; gap: var(--sp-2); align-items: baseline; overflow-wrap: anywhere; }
+.kn-fork-then { padding-left: var(--sp-4); }
+.kn-fork-then[data-cited="true"] { background: var(--c-accent-dim); border-radius: var(--r-sm); }
+.kn-fork-tag { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--c-accent); border: 1px solid var(--c-accent); border-radius: var(--r-pill); padding: 0 var(--sp-2); }
+.kn-fork-tag--then { color: var(--c-ok); border-color: var(--c-ok); }
+.kn-trap { display: block; margin-bottom: 2px; }
+.kn-avoid { color: var(--c-ink-2); }
+.kn-page[data-live="true"] { max-width: none; }
+.kn-page[data-live="true"] .kn-section, .kn-page[data-live="true"] .kn-ck-body { font-size: 20px; line-height: 1.7; }
+.kn-page[data-live="true"] .kn-ck { padding: var(--sp-4); gap: var(--sp-4); }
+.kn-page[data-live="true"] .kn-ck-box { width: 36px; height: 36px; }
+.kn-page[data-live="true"] .kn-stepno { flex-basis: 36px; height: 36px; font-size: 18px; }
+@media (prefers-reduced-motion: reduce) {
+  .kn-myth-truth { animation: none; }
+  .kn-bar-fill { transition: none; }
+}
