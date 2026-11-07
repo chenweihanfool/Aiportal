@@ -27,7 +27,8 @@ export interface ResolvedEventDate {
 /** 字串開頭是不是真實存在的日期（2026-02-31 不算）；是就回 YYYY-MM-DD。 */
 export function validDay(v: unknown): string | null {
   if (typeof v !== "string") return null;
-  const m = DAY_RE.exec(v.trim());
+  // 去掉前後引號：推送端曾把 `date: "2026-11-07"` 連引號送上來，整批事件因此不屬於任何一天（2026-11-08）
+  const m = DAY_RE.exec(v.trim().replace(/^["']+|["']+$/g, "").trim());
   if (!m) return null;
   const day = `${m[1]}-${m[2]}-${m[3]}`;
   const ms = Date.parse(`${day}T00:00:00Z`);

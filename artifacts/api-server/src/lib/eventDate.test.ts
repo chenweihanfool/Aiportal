@@ -7,6 +7,16 @@ describe("validDay", () => {
     expect(validDay("2026-10-16T09:30:00+08:00")).toBe("2026-10-16");
     for (const bad of ["null", "", "~", "2026-02-31", "2026-13-01", "10-16", null, undefined, 20261016]) expect(validDay(bad)).toBeNull();
   });
+  it("ignores surrounding quotes the pusher used to send along (2026-11-08)", () => {
+    expect(validDay('"2026-11-07"')).toBe("2026-11-07");
+    expect(validDay("'2026-08-17'")).toBe("2026-08-17");
+    expect(validDay(' "2026-11-07" ')).toBe("2026-11-07");
+    expect(validDay('"null"')).toBeNull();
+    expect(validDay('"2026-02-31"')).toBeNull();
+  });
+  it("a quoted frontmatter date wins over the extraction time (RTK 8/17 event must not land on 11-07)", () => {
+    expect(resolveEventDate({ date: '"2026-08-17"', createdAt: "2026-11-07T17:45:00+08:00" }).date).toBe("2026-08-17");
+  });
 });
 
 describe("resolveEventDate", () => {
