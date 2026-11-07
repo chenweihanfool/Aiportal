@@ -207,31 +207,29 @@ function TreeOverview({ data, now, onOpen }: { data: TopicsData; now: Date; onOp
 
 /* ───────── 中欄：題目頁 ───────── */
 
-function BulletText({ b, bid, cited }: { b: Bullet; bid: string; cited: ReadonlySet<string> }) {
-  return (
-    <span className="kn-bt" id={`kn-b-${bid}`} data-cited={cited.has(bid)}>
-      <InlineText text={b.text} />
-      {b.single && <span className="kn-single">僅一例</span>}
-      <FootRefs refs={b.refs} k0={b.k0} />
-    </span>
-  )
-}
-
-function TopicPage({ t, parsed, hl, cited, onSelect, onView }: {
-  t: Topic; parsed: ParsedBody | null; hl: number | null; cited: ReadonlySet<string>; onSelect: (n: number) => void; onView: (n: number) => void
+function TopicPage({ t, parsed, hl, cited, topics, onOpen, onSelect, onView }: {
+  t: Topic; parsed: ParsedBody | null; hl: number | null; cited: ReadonlySet<string>; topics: readonly Topic[]
+  onOpen: (id: string) => void; onSelect: (n: number) => void; onView: (n: number) => void
 }) {
   const range = monthRange(t)
+  const [live, setLive] = useState(false)
+  const isMethod = parsed?.format === 'method'
+  const liveOn = live && isMethod
   return (
-    <article className="kn-page">
-      {t.path.length > 0 && <p className="kn-crumb">{t.path.join(' › ')}</p>}
+    <article className="kn-page" data-live={liveOn}>
+      {!liveOn && t.path.length > 0 && <p className="kn-crumb">{t.path.join(' › ')}</p>}
       <h2 className="kn-title">{t.name} <span className="kn-kind" data-kind={t.kind}>{kindLabel(t.kind)}</span></h2>
-      {t.why && <p className="kn-why">{t.why}</p>}
-      <p className="kn-meta">
-        <span>{t.docs} 份來源</span>
-        {t.monthsSpan > 0 && <span>橫跨 {t.monthsSpan} 個月{range ? `（${range}）` : ''}</span>}
-        <span>{t.updated ? `更新於 ${t.updated}` : '尚未成頁'}</span>
-        {t.newDocs > 0 && <span className="kn-new">＋{t.newDocs} 新素材</span>}
-      </p>
+      {isMethod && <button type="button" className="kn-btn kn-live-btn" aria-pressed={live} onClick={() => setLive((v) => !v)}>{live ? '離開現場模式' : '現場模式'}</button>}
+      {!liveOn && t.why && <p className="kn-why">{t.why}</p>}
+      {!liveOn && (
+        <p className="kn-meta">
+          <span>{t.docs} 份來源</span>
+          {t.monthsSpan > 0 && <span>橫跨 {t.monthsSpan} 個月{range ? `（${range}）` : ''}</span>}
+          <span>{t.updated ? `更新於 ${t.updated}` : '尚未成頁'}</span>
+          {t.newDocs > 0 && <span className="kn-new">＋{t.newDocs} 新素材</span>}
+        </p>
+      )}
+      {parsed?.format === 'legacy' && <p className="kn-legacy-note">舊格式，之後會自動換成新版</p>}
 
       {!parsed && <p className="kn-muted">這題還在累積素材，每週會挑幾題寫成頁面。</p>}
       {parsed && (
@@ -242,31 +240,33 @@ function TopicPage({ t, parsed, hl, cited, onSelect, onView }: {
               <p><BulletText b={parsed.summary} bid={bulletId('summary')} cited={cited} /></p>
             </section>
           )}
-          {parsed.what.length > 0 && (
+          {parsed.format === 'concept' && <ConceptBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} />}
+          {parsed.format === 'method' && <MethodBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} live={liveOn} />}
+          {parsed.format === 'legacy' && parsed.what.length > 0 && (
             <section className="kn-section" aria-label="這件事在幹嘛">
               <h3>這件事在幹嘛</h3>
               <ul className="kn-plain">{parsed.what.map((b, i) => <li key={i}><BulletText b={b} bid={bulletId('what', i)} cited={cited} /></li>)}</ul>
             </section>
           )}
-          {parsed.how.length > 0 && (
+          {parsed.format === 'legacy' && parsed.how.length > 0 && (
             <section className="kn-section" aria-label="怎麼做">
               <h3>怎麼做</h3>
               <ol className="kn-steps">{parsed.how.map((b, i) => <li key={i}><span className="kn-stepno" aria-hidden="true">{i + 1}</span><div><BulletText b={b} bid={bulletId('how', i)} cited={cited} /></div></li>)}</ol>
             </section>
           )}
-          {parsed.caution.length > 0 && (
+          {parsed.format === 'legacy' && parsed.caution.length > 0 && (
             <section className="kn-section" aria-label="要注意">
               <h3>要注意</h3>
               <ul className="kn-cautions">{parsed.caution.map((b, i) => <li key={i}><span aria-hidden="true">⚠</span><div><BulletText b={b} bid={bulletId('caution', i)} cited={cited} /></div></li>)}</ul>
             </section>
           )}
-          {parsed.unknown.length > 0 && (
+          {!liveOn && parsed.unknown.length > 0 && (
             <section className="kn-section" aria-label="還不知道">
               <h3>還不知道</h3>
               <ul className="kn-unknowns">{parsed.unknown.map((b, i) => <li key={i}><span aria-hidden="true">？</span><div><BulletText b={b} bid={bulletId('unknown', i)} cited={cited} /></div></li>)}</ul>
             </section>
           )}
-          {parsed.other && <section className="kn-section" aria-label="其他"><p className="kn-other">{parsed.other}</p></section>}
+          {!liveOn && parsed.other && <section className="kn-section" aria-label="其他"><p className="kn-other">{parsed.other}</p></section>}
         </>
       )}
 
@@ -395,7 +395,7 @@ function Layout({ data, now, topic, topicId, onOpen, onBack, pw }: {
     center = (
       <>
         <button type="button" className="kn-back" onClick={onBack}>← 全樹</button>
-        <TraceProvider value={trace}><TopicPage t={topic} parsed={parsed} hl={hl} cited={cited} onSelect={select} onView={viewSource} /></TraceProvider>
+        <TraceProvider value={trace}><TopicPage key={`${topic.id}:${topic.revision}`} t={topic} parsed={parsed} hl={hl} cited={cited} topics={data.topics} onOpen={open} onSelect={select} onView={viewSource} /></TraceProvider>
       </>
     )
   } else {
