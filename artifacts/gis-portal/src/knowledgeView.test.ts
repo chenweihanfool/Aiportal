@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bulletId, bulletsCiting, buildTree, checkKey, loadChecks, relatedByKind, saveChecks, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
+import { parseDiagram, bulletId, bulletsCiting, buildTree, checkKey, loadChecks, relatedByKind, saveChecks, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
 
 const feed = (payload: unknown, available = true) => ({ available, payload })
 
@@ -24,6 +24,7 @@ function topic(over: Partial<Topic> & { id: string }): Topic {
     branch: null,
     path: [],
     monthCounts: [],
+    diagram: null,
     ...over,
   }
 }
@@ -625,5 +626,106 @@ describe('勾選狀態讀寫', () => {
     expect(saveChecks(bad, 'k', new Set(['a']))).toBe(false)
     expect(loadChecks(null, 'k').size).toBe(0)
     expect(saveChecks(undefined, 'k', new Set())).toBe(false)
+  })
+})
+
+// ───────── 圖解 diagram（2.81.0） ─────────
+
+const baseTopic = { id: 'T1', name: '題目', kind: 'method', firstSeen: '2026-01-01', revision: 1, docs: 3, newDocs: 0, monthsSpan: 1, sources: [{ id: 's1', title: '甲' }, { id: 's2', title: '乙' }, { id: 's3', title: '丙' }] }
+
+const flowOk = () => ({
+  type: 'flow', version: 1, lanes: ['甲方', '乙方'], phases: ['收件', '處理', '結案'],
+  nodes: [
+    { id: 'a', label: '送件', src: [1], lane: 0, phase: 0, shape: 'step' },
+    { id: 'b', label: '能補正？', src: [1, 2], lane: 1, phase: 1, shape: 'decision', pitfall: true },
+    { id: 'c', label: '結案', src: [3], lane: 1, phase: 2, shape: 'step', unknown: true, note: '說明', sub: '副標' },
+  ],
+  edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c', label: '是' }, { from: 'c', to: 'a', back: true }],
+})
+const timelineOk = () => ({
+  type: 'timeline', version: 1, tracks: [{ id: 't1', label: '回診' }],
+  items: [{ track: 't1', date: '2026-08-01', label: '回診', src: [1] }, { track: 't1', date: '2026-09-01', end: '2026-09-03', label: '回診', src: [1, 2], ai: true }],
+  metrics: [{ label: '數值', unit: 'mg', points: [{ date: '2026-08-01', value: 9.1, src: [1] }, { date: '2026-09-01', value: 9.6, src: [2] }] }],
+})
+const mapOk = () => ({
+  type: 'map', version: 1, core: '共同核心',
+  observations: [{ id: 'o1', label: '觀察甲', src: [1] }, { id: 'o2', label: '觀察乙', src: [2, 3] }],
+  frameworks: [{ id: 'f1', label: '框架甲', src: [1, 2], unknown: true }],
+  judgments: [{ id: 'j1', label: '判斷甲', src: [3], ai: true }],
+  links: [{ from: 'o1', to: 'f1' }, { from: 'o2', to: 'f1' }, { from: 'f1', to: 'j1' }],
+})
+const withDiagram = (diagram: unknown) => parseTopics(feed({ computedAt: '2026-11-05T21:30:00+08:00', topics: [{ ...baseTopic, diagram }, { ...baseTopic, id: 'T2' }] }))!
+
+describe('parseDiagram（feed 每題的選用欄位 diagram）', () => {
+  it('舊資料沒有 diagram 欄位 → null，其餘欄位照常', () => {
+    const d = withDiagram(undefined)
+    expect(d.topics[0]!.diagram).toBeNull()
+    expect(d.topics[1]!.diagram).toBeNull()
+    expect(d.topics).toHaveLength(2)
+  })
+
+  it('三種合法 diagram 都解析成功', () => {
+    expect(withDiagram(flowOk()).topics[0]!.diagram).toMatchObject({ type: 'flow', lanes: ['甲方', '乙方'] })
+    const f = withDiagram(flowOk()).topics[0]!.diagram
+    expect(f && f.type === 'flow' && f.nodes[2]).toMatchObject({ unknown: true, note: '說明', sub: '副標' })
+    expect(f && f.type === 'flow' && f.edges[2]).toMatchObject({ back: true })
+    const t = withDiagram(timelineOk()).topics[0]!.diagram
+    expect(t).toMatchObject({ type: 'timeline', tracks: [{ id: 't1' }] })
+    expect(t && t.type === 'timeline' && t.items[1]).toMatchObject({ end: '2026-09-03', ai: true, src: [1, 2] })
+    expect(t && t.type === 'timeline' && t.metrics[0]!.points).toHaveLength(2)
+    expect(withDiagram(mapOk()).topics[0]!.diagram).toMatchObject({ type: 'map', core: '共同核心' })
+  })
+
+  it('不合法 → 該題 diagram 為 null，其餘欄位與整份資料照常', () => {
+    const bad = (mutate: (d: Record<string, any>) => void, make: () => Record<string, any> = flowOk) => {
+      const d = make()
+      mutate(d)
+      const out = withDiagram(d)
+      expect(out.topics).toHaveLength(2)
+      expect(out.topics[0]!.name).toBe('題目')
+      expect(out.topics[0]!.diagram).toBeNull()
+    }
+    bad((d) => { d.nodes[0].src = [4] }) // src 超出 sources 範圍
+    bad((d) => { d.nodes[0].src = [] }) // src 為空
+    bad((d) => { d.nodes[0].id = 'Bad-Id' }) // id 格式
+    bad((d) => { d.nodes[1].id = 'a' }) // id 重複
+    bad((d) => { d.nodes[0].label = '' }) // label 太短
+    bad((d) => { d.nodes[0].label = '一二三四五六七八九十一二三四五' }) // label 15 字
+    bad((d) => { d.edges[0].to = 'zz' }) // edge 指向不存在的 id
+    bad((d) => { d.edges[0] = { from: 'b', to: 'a' } }) // 非 back 邊往回走
+    bad((d) => { d.nodes[0].lane = 2 }) // lane 超出
+    bad((d) => { d.nodes[0].phase = 3 }) // phase 超出
+    bad((d) => { d.nodes[1].lane = 0; d.nodes[1].phase = 0 }) // 同一格兩個節點
+    bad((d) => { d.nodes[0].shape = 'circle' }) // shape 不認得
+    bad((d) => { d.lanes = ['只有一個'] }) // lanes 太少
+    bad((d) => { d.nodes.pop() }) // nodes 少於 3
+    bad((d) => { d.type = 'chart' }) // type 不認得
+    bad((d) => { d.version = 2 }) // version 不對
+    bad((d) => { d.items[0].track = 'nope' }, timelineOk) // track 不存在
+    bad((d) => { d.items[0].date = '2026-13-40' }, timelineOk) // 日期不存在
+    bad((d) => { d.items[1].end = '2026-08-01' }, timelineOk) // end 早於 date
+    bad((d) => { d.metrics[0].points.pop() }, timelineOk) // points 少於 2
+    bad((d) => { d.metrics[0].points[0].value = 'x' }, timelineOk) // value 不是數字
+    bad((d) => { d.links.push({ from: 'o1', to: 'j1' }) }, mapOk) // link 方向不允許
+    bad((d) => { d.links[0].to = 'zz' }, mapOk) // link 指向不存在
+    bad((d) => { d.observations = [] }, mapOk) // 觀察至少 1 個
+    bad((d) => { d.core = '一二三四五六七八九十一二三四五六七八九十一二三四五' }, mapOk) // core 25 字
+    bad((d) => { d.judgments[0].id = 'o1' }, mapOk) // 跨欄 id 重複
+  })
+
+  it('src 接受單一整數，並包成陣列；null／非物件回 null', () => {
+    const t = timelineOk()
+    ;(t.items[0] as { src: unknown }).src = 2
+    const out = parseDiagram(t, 3)
+    expect(out && out.type === 'timeline' && out.items[0]!.src).toEqual([2])
+    expect(parseDiagram(null, 3)).toBeNull()
+    expect(parseDiagram('flow', 3)).toBeNull()
+  })
+
+  it('沒有 metrics 欄位也合法（視為 0 個）', () => {
+    const t = timelineOk() as Record<string, unknown>
+    delete t.metrics
+    const out = parseDiagram(t, 3)
+    expect(out && out.type === 'timeline' && out.metrics).toEqual([])
   })
 })

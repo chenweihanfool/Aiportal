@@ -3,6 +3,8 @@ import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
 import { SourceSearchResults } from './KnowledgeSearch'
 import { SourceList, TraceProvider, useTopicQuotes, type TraceCtx } from './KnowledgeTrace'
 import { BulletText, ConceptBody, MethodBody } from './KnowledgeParts'
+import { KnowledgeDiagram } from './KnowledgeDiagram'
+import type { HermesTopicQuote } from './hermesDocApi'
 import { useAsync, useNow } from './homeHooks'
 import {
   buildTree, bulletId, bulletsCiting, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBodyWithMarkers, parseTopics, treeToLayoutInput,
@@ -207,39 +209,19 @@ function TreeOverview({ data, now, onOpen }: { data: TopicsData; now: Date; onOp
 
 /* ───────── 中欄：題目頁 ───────── */
 
-function TopicPage({ t, parsed, hl, cited, topics, onOpen, onSelect, onView }: {
+function TopicPage({ t, parsed, hl, cited, topics, quotes, onOpen, onSelect, onView, onViewQ }: {
   t: Topic; parsed: ParsedBody | null; hl: number | null; cited: ReadonlySet<string>; topics: readonly Topic[]
-  onOpen: (id: string) => void; onSelect: (n: number) => void; onView: (n: number) => void
+  quotes: readonly HermesTopicQuote[] | null
+  onOpen: (id: string) => void; onSelect: (n: number) => void; onView: (n: number) => void; onViewQ: (n: number, q: string) => void
 }) {
   const range = monthRange(t)
   const [live, setLive] = useState(false)
   const isMethod = parsed?.format === 'method'
   const liveOn = live && isMethod
-  return (
-    <article className="kn-page" data-live={liveOn}>
-      {!liveOn && t.path.length > 0 && <p className="kn-crumb">{t.path.join(' › ')}</p>}
-      <h2 className="kn-title">{t.name} <span className="kn-kind" data-kind={t.kind}>{kindLabel(t.kind)}</span></h2>
-      {isMethod && <button type="button" className="kn-btn kn-live-btn" aria-pressed={live} onClick={() => setLive((v) => !v)}>{live ? '離開現場模式' : '現場模式'}</button>}
-      {!liveOn && t.why && <p className="kn-why">{t.why}</p>}
-      {!liveOn && (
-        <p className="kn-meta">
-          <span>{t.docs} 份來源</span>
-          {t.monthsSpan > 0 && <span>橫跨 {t.monthsSpan} 個月{range ? `（${range}）` : ''}</span>}
-          <span>{t.updated ? `更新於 ${t.updated}` : '尚未成頁'}</span>
-          {t.newDocs > 0 && <span className="kn-new">＋{t.newDocs} 新素材</span>}
-        </p>
-      )}
-      {parsed?.format === 'legacy' && <p className="kn-legacy-note">舊格式，之後會自動換成新版</p>}
-
-      {!parsed && <p className="kn-muted">這題還在累積素材，每週會挑幾題寫成頁面。</p>}
-      {parsed && (
-        <>
-          {parsed.summary && (
-            <section className="kn-summary" aria-label="一句話">
-              <h3>一句話</h3>
-              <p><BulletText b={parsed.summary} bid={bulletId('summary')} cited={cited} /></p>
-            </section>
-          )}
+  const [textOpen, setTextOpen] = useState(true)
+  const showDiagram = !!t.diagram && !liveOn
+  const body = parsed ? (
+    <>
           {parsed.format === 'concept' && <ConceptBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} />}
           {parsed.format === 'method' && <MethodBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} live={liveOn} />}
           {parsed.format === 'legacy' && parsed.what.length > 0 && (
@@ -267,6 +249,40 @@ function TopicPage({ t, parsed, hl, cited, topics, onOpen, onSelect, onView }: {
             </section>
           )}
           {!liveOn && parsed.other && <section className="kn-section" aria-label="其他"><p className="kn-other">{parsed.other}</p></section>}
+    </>
+  ) : null
+  return (
+    <article className="kn-page" data-live={liveOn}>
+      {!liveOn && t.path.length > 0 && <p className="kn-crumb">{t.path.join(' › ')}</p>}
+      <h2 className="kn-title">{t.name} <span className="kn-kind" data-kind={t.kind}>{kindLabel(t.kind)}</span></h2>
+      {isMethod && <button type="button" className="kn-btn kn-live-btn" aria-pressed={live} onClick={() => setLive((v) => !v)}>{live ? '離開現場模式' : '現場模式'}</button>}
+      {!liveOn && t.why && <p className="kn-why">{t.why}</p>}
+      {!liveOn && (
+        <p className="kn-meta">
+          <span>{t.docs} 份來源</span>
+          {t.monthsSpan > 0 && <span>橫跨 {t.monthsSpan} 個月{range ? `（${range}）` : ''}</span>}
+          <span>{t.updated ? `更新於 ${t.updated}` : '尚未成頁'}</span>
+          {t.newDocs > 0 && <span className="kn-new">＋{t.newDocs} 新素材</span>}
+        </p>
+      )}
+      {parsed?.format === 'legacy' && <p className="kn-legacy-note">舊格式，之後會自動換成新版</p>}
+
+      {!parsed && <p className="kn-muted">這題還在累積素材，每週會挑幾題寫成頁面。</p>}
+      {parsed && (
+        <>
+          {parsed.summary && (
+            <section className="kn-summary" aria-label="一句話">
+              <h3>一句話</h3>
+              <p><BulletText b={parsed.summary} bid={bulletId('summary')} cited={cited} /></p>
+            </section>
+          )}
+          {showDiagram && t.diagram && <KnowledgeDiagram topic={t} diagram={t.diagram} quotes={quotes} onOpenSource={onViewQ} />}
+          {showDiagram ? (
+            <details className="kn-textfold" open={textOpen} onToggle={(e) => setTextOpen(e.currentTarget.open)}>
+              <summary>文字版</summary>
+              {body}
+            </details>
+          ) : body}
         </>
       )}
 
@@ -381,6 +397,8 @@ function Layout({ data, now, topic, topicId, onOpen, onBack, pw }: {
     if (ids[0]) document.getElementById(`kn-b-${ids[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
   const viewSource = (n: number) => { const s = topic?.sources[n - 1]; if (s) setPanel({ key: s.id, q: '' }) }
+  // 圖解點來源：同樣開原文面板，但帶 2.77 的原文句（q）捲到引用段落
+  const viewSourceQ = (n: number, q: string) => { const s = topic?.sources[n - 1]; if (s) setPanel({ key: s.id, q }) }
   const open = (id: string) => { setDrawer(false); setHl(null); setCited(new Set()); setPanel(null); onOpen(id) }
   const trace: TraceCtx | null = topic ? { pw, topic, quotes, onJump: jump, onViewSource: viewSource } : null
   let center: ReactNode
@@ -395,7 +413,7 @@ function Layout({ data, now, topic, topicId, onOpen, onBack, pw }: {
     center = (
       <>
         <button type="button" className="kn-back" onClick={onBack}>← 全樹</button>
-        <TraceProvider value={trace}><TopicPage key={`${topic.id}:${topic.revision}`} t={topic} parsed={parsed} hl={hl} cited={cited} topics={data.topics} onOpen={open} onSelect={select} onView={viewSource} /></TraceProvider>
+        <TraceProvider value={trace}><TopicPage key={`${topic.id}:${topic.revision}`} t={topic} parsed={parsed} hl={hl} cited={cited} topics={data.topics} quotes={quotes} onOpen={open} onSelect={select} onView={viewSource} onViewQ={viewSourceQ} /></TraceProvider>
       </>
     )
   } else {

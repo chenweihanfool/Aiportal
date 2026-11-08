@@ -1881,3 +1881,69 @@ button.ms-col { cursor: pointer; }
   .kn-myth-truth { animation: none; }
   .kn-bar-fill { transition: none; }
 }
+
+/* ───────── 知識頁圖解（2.81.0）：kn-dg-* ───────── */
+.kn-dg { container-type: inline-size; margin: 0 0 var(--sp-5); min-width: 0; }
+.kn-dg-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+@container (min-width: 760px) { .kn-dg-body { grid-template-columns: minmax(0, 1.7fr) minmax(220px, 1fr); align-items: start; } }
+.kn-dg-scroll { overflow-x: auto; max-width: 100%; min-width: 0; border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-surface); }
+.kn-dg-svg { display: block; font-family: var(--font-body); }
+.kn-dg-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); font-size: var(--fs-sm); color: var(--c-ink-2); margin-bottom: var(--sp-2); }
+.kn-dg-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.kn-dg [data-ev="multi"] { --ev: var(--c-ok); --evw: 3px; --evd: none; }
+.kn-dg [data-ev="one"] { --ev: var(--c-concern); --evw: 1.4px; --evd: none; }
+.kn-dg [data-ev="ai"] { --ev: var(--c-crit); --evw: 1.6px; --evd: 6 4; }
+.kn-dg-sw { display: inline-block; width: 16px; height: 10px; border-radius: 2px; border: var(--evw, 1.5px) solid var(--ev, var(--c-ink-3)); border-style: solid; box-sizing: border-box; }
+.kn-dg-sw[data-ev="ai"] { border-style: dashed; }
+.kn-dg-shape { fill: var(--c-raised); stroke: var(--ev, var(--c-line-strong)); stroke-width: var(--evw, 1.4px); stroke-dasharray: var(--evd, none); }
+.kn-dg-node { cursor: pointer; outline: none; }
+.kn-dg-node:hover .kn-dg-shape, .kn-dg-node:focus-visible .kn-dg-shape { stroke: var(--c-accent); stroke-width: 3px; }
+.kn-dg-node[data-sel="true"] .kn-dg-shape { fill: var(--c-hover); stroke: var(--c-accent); stroke-width: 3px; }
+.kn-dg-nbox { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 4px 8px; box-sizing: border-box; color: var(--c-ink); font-size: 13px; line-height: 1.3; overflow: hidden; }
+.kn-dg-nbox b { font-weight: 700; font-size: 13.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.kn-dg-nbox small { color: var(--c-ink-2); font-size: 11px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.kn-dg-lane { fill: var(--c-surface); }
+.kn-dg-lane[data-odd="1"] { fill: var(--c-bg); }
+.kn-dg-lanename { fill: var(--c-ink); font-size: 14px; font-weight: 700; }
+.kn-dg-phase { fill: var(--c-accent); font-size: 12px; font-family: var(--font-mono); }
+.kn-dg-col { stroke: var(--c-line); stroke-dasharray: 2 4; }
+.kn-dg-edge { fill: none; stroke: var(--c-ink-3); stroke-width: 1.6px; }
+.kn-dg-edge[data-back="true"] { stroke-dasharray: 5 4; stroke: var(--c-ink-2); }
+.kn-dg-marker { color: var(--c-ink-2); }
+.kn-dg-marker[data-ev] { color: var(--ev); }
+.kn-dg-elabel { fill: var(--c-ink-2); font-size: 12px; }
+.kn-dg-warn { fill: var(--c-crit); color: var(--c-crit); font-size: 13px; font-weight: 700; }
+.kn-dg-q { fill: var(--c-warn); color: var(--c-warn); font-size: 14px; font-weight: 700; }
+.kn-dg-srcno { fill: var(--c-ink-2); font-size: 10.5px; font-family: var(--font-mono); }
+.kn-dg-core { fill: var(--c-surface); stroke: var(--c-accent-dim); }
+.kn-dg-coretext { fill: var(--c-accent); font-size: 14px; font-weight: 700; }
+.kn-dg-link { fill: none; stroke: var(--ev); stroke-width: var(--evw); stroke-dasharray: var(--evd); opacity: 0.85; }
+.kn-dg-todayline { stroke: var(--c-accent); stroke-width: 1.5px; }
+.kn-dg-todaytext { fill: var(--c-accent); font-size: 12px; font-weight: 700; }
+.kn-dg-today { display: inline-block; width: 2px; height: 12px; background: var(--c-accent); }
+.kn-dg-ilabel { fill: var(--c-ink-2); font-size: 12px; }
+.kn-dg-fc circle { fill: none; stroke: var(--c-ink); stroke-width: 1.6px; stroke-dasharray: 3 2; }
+.kn-dg-fc text { fill: var(--c-ink-2); font-size: 12px; }
+.kn-dg-line { fill: none; stroke: var(--c-ink); stroke-width: 1.8px; }
+.kn-dg-pt { fill: var(--c-ink); }
+.kn-dg-pt[data-last="true"] { fill: var(--c-accent); }
+.kn-dg-ptval { fill: var(--c-accent); font-size: 12px; font-weight: 700; }
+.kn-dg-next { background: var(--c-surface); border: 1px solid var(--c-line); border-left: 4px solid var(--c-accent); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+.kn-dg-next h4 { margin: 0 0 var(--sp-2); font-size: 14px; color: var(--c-ink-2); }
+.kn-dg-next ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.kn-dg-next li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); }
+.kn-dg-next b { font-size: 20px; color: var(--c-accent); font-variant-numeric: tabular-nums; }
+.kn-dg-next-label { min-width: 4em; font-weight: 700; }
+.kn-dg-detail { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); min-width: 0; overflow-wrap: anywhere; }
+.kn-dg-detail h4 { margin: 0 0 var(--sp-2); font-size: 15px; }
+.kn-dg-detail h5 { margin: var(--sp-3) 0 var(--sp-1); font-size: 12px; color: var(--c-ink-2); font-weight: 700; }
+.kn-dg-detail p { margin: 0 0 var(--sp-2); font-size: 14px; line-height: 1.6; }
+.kn-dg-ev { display: flex; align-items: center; gap: 6px; color: var(--ev, var(--c-ink-2)); font-weight: 700; }
+.kn-dg-unk { color: var(--c-warn); }
+.kn-dg-srcs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.kn-dg-src { font: inherit; font-size: 13px; text-align: left; display: flex; gap: var(--sp-2); align-items: baseline; width: 100%; color: var(--c-ink); background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-1) var(--sp-2); cursor: pointer; }
+.kn-dg-src:hover { background: var(--c-hover); border-color: var(--c-accent); }
+.kn-dg-src:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.kn-textfold { margin-top: var(--sp-2); }
+.kn-textfold > summary { cursor: pointer; font-weight: 700; color: var(--c-ink-2); padding: var(--sp-1) 0; margin-bottom: var(--sp-2); }
+.kn-textfold > summary:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
