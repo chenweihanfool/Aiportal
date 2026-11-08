@@ -152,7 +152,7 @@ describe("topics diagram", () => {
     }
   });
 
-  it("maxBytes 3 MiB：上限圖 × 64 ＋ 既有 1.5 MiB 預算容得下，64 題帶滿圖不回 413", () => {
+  it("maxBytes 4 MiB：上限圖 × 64 ＋ 既有 1.5 MiB 預算容得下，64 題帶滿圖不回 413", () => {
     const diagrams = [maxTimeline(), maxFlow(), maxMap()];
     for (const d of diagrams) {
       const r = check(d);
@@ -163,7 +163,7 @@ describe("topics diagram", () => {
     const biggest = sizeOf(biggestDiagram);
     const estimate = biggest * 64 + 1536 * 1024;
     const def = FEED_REGISTRY["topics"]!;
-    expect(def.maxBytes).toBe(3 * 1024 * 1024);
+    expect(def.maxBytes).toBe(4 * 1024 * 1024);
     expect(estimate).toBeLessThanOrEqual(def.maxBytes!);
 
     const payload = {

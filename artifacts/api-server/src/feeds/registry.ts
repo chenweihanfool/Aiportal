@@ -416,12 +416,12 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
   // 知識頁（#knowledge）：知識庫自己長出來的主題（題目）、頁面內容、成長紀錄與相關題目。推送端 kb-pipeline 每週產生後推送（契約見 docs/feed-api.md）。
   // 欄位只增不改；body 是頁面四節的 markdown（來源標記為 ⟦n⟧ 腳註，n＝sources 的 1 起算位置）；2.75.0 起含知識樹 tree、每題 branch／path／monthCounts。
   // 2026-11-08 起每題多選用欄位 diagram（null 或 flow／timeline／map，見上方常數）。
-  // maxBytes 3 MiB（2026-11-08 起）：既有正文預算約 1.5 MiB（1,572,864 位元組）＋ 64 題 × 一張上限尺寸的圖
-  // （上限圖實測最大 27,630 位元組，64 張合計 3,341,184 位元組；見 topicsDiagram.test.ts 的估算斷言）。
+  // maxBytes 4 MiB（2026-11-08 起）：既有正文預算約 1.5 MiB（1,572,864 位元組）＋ 64 題 × 一張上限尺寸的圖
+  // （上限圖實測最大 27,630 位元組，64 張合計 3,341,184 位元組；見 topicsDiagram.test.ts 的估算斷言），合計在 4 MiB（4,194,304）以內；3 MiB 放不下。
   topics: {
     version: 1,
     description: "主題知識頁：知識庫自己長出來的題目、頁面內容、成長紀錄與相關題目",
-    maxBytes: 3 * 1024 * 1024,
+    maxBytes: 4 * 1024 * 1024,
     schema: {
       $schema: "http://json-schema.org/draft-07/schema#",
       title: "topics feed v1",
