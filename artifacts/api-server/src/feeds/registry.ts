@@ -14,6 +14,167 @@ export interface FeedDef {
 export const FEED_NAME = /^[a-z][a-z0-9-]{1,39}$/;
 export const DEFAULT_MAX_BYTES = 1024 * 1024;
 
+// ── topics 的選用欄位 diagram（2026-11-08 起；知識頁的圖解資料）─────────────────────────────
+// 契約見任務單 kb-diagram-schema：diagram 為 null 或 flow／timeline／map 三種物件之一。
+// 跨欄位規則（id 唯一、邊兩端存在、lane/phase 在範圍內、end ≥ date、src ≤ 來源數、map 連線方向）
+// JSON Schema 表達不了，由推送端與前端各自檢查。
+const DIAGRAM_ID = { type: "string", pattern: "^[a-z0-9]{1,8}$" };
+const DIAGRAM_DATE = { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" };
+const DIAGRAM_SRC = { type: "array", minItems: 1, maxItems: 6, items: { type: "integer", minimum: 1 } };
+// 節點共同欄位（flow 的 nodes、map 的 observations／frameworks／judgments）
+const DIAGRAM_NODE = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "label", "src"],
+  properties: {
+    id: DIAGRAM_ID,
+    label: { type: "string", minLength: 1, maxLength: 14 },
+    sub: { type: "string", minLength: 0, maxLength: 24 },
+    src: DIAGRAM_SRC,
+    unknown: { type: "boolean" },
+    ai: { type: "boolean" },
+    note: { type: "string", minLength: 0, maxLength: 120 },
+  },
+};
+const DIAGRAM_FLOW_NODE = {
+  type: "object",
+  additionalProperties: false,
+  required: [...DIAGRAM_NODE.required, "lane", "phase", "shape"],
+  properties: {
+    ...DIAGRAM_NODE.properties,
+    lane: { type: "integer", minimum: 0 },
+    phase: { type: "integer", minimum: 0 },
+    shape: { enum: ["step", "decision"] },
+    pitfall: { type: "boolean" },
+  },
+};
+const DIAGRAM_FLOW = {
+  type: "object",
+  additionalProperties: false,
+  required: ["type", "version", "lanes", "phases", "nodes", "edges"],
+  properties: {
+    type: { const: "flow" },
+    version: { const: 1 },
+    lanes: { type: "array", minItems: 2, maxItems: 6, items: { type: "string", minLength: 1, maxLength: 8 } },
+    phases: { type: "array", minItems: 2, maxItems: 8, items: { type: "string", minLength: 1, maxLength: 8 } },
+    nodes: { type: "array", minItems: 3, maxItems: 20, items: DIAGRAM_FLOW_NODE },
+    edges: {
+      type: "array",
+      minItems: 2,
+      maxItems: 30,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["from", "to"],
+        properties: {
+          from: DIAGRAM_ID,
+          to: DIAGRAM_ID,
+          label: { type: "string", minLength: 0, maxLength: 10 },
+          back: { type: "boolean" },
+        },
+      },
+    },
+  },
+};
+const DIAGRAM_TIMELINE = {
+  type: "object",
+  additionalProperties: false,
+  required: ["type", "version", "tracks", "items"],
+  properties: {
+    type: { const: "timeline" },
+    version: { const: 1 },
+    tracks: {
+      type: "array",
+      minItems: 1,
+      maxItems: 6,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "label"],
+        properties: {
+          id: DIAGRAM_ID,
+          label: { type: "string", minLength: 1, maxLength: 8 },
+        },
+      },
+    },
+    items: {
+      type: "array",
+      minItems: 1,
+      maxItems: 80,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["track", "date", "label", "src"],
+        properties: {
+          track: DIAGRAM_ID,
+          date: DIAGRAM_DATE,
+          end: DIAGRAM_DATE,
+          label: { type: "string", minLength: 1, maxLength: 14 },
+          src: DIAGRAM_SRC,
+          sub: { type: "string", minLength: 0, maxLength: 24 },
+          note: { type: "string", minLength: 0, maxLength: 120 },
+          ai: { type: "boolean" },
+          unknown: { type: "boolean" },
+        },
+      },
+    },
+    metrics: {
+      type: "array",
+      minItems: 0,
+      maxItems: 2,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["label", "points"],
+        properties: {
+          label: { type: "string", minLength: 1, maxLength: 10 },
+          unit: { type: "string", minLength: 0, maxLength: 6 },
+          points: {
+            type: "array",
+            minItems: 2,
+            maxItems: 40,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["date", "value", "src"],
+              properties: {
+                date: DIAGRAM_DATE,
+                value: { type: "number" },
+                src: DIAGRAM_SRC,
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+const DIAGRAM_MAP = {
+  type: "object",
+  additionalProperties: false,
+  required: ["type", "version", "core", "observations", "frameworks", "judgments", "links"],
+  properties: {
+    type: { const: "map" },
+    version: { const: 1 },
+    core: { type: "string", minLength: 1, maxLength: 24 },
+    observations: { type: "array", minItems: 1, maxItems: 10, items: DIAGRAM_NODE },
+    frameworks: { type: "array", minItems: 1, maxItems: 6, items: DIAGRAM_NODE },
+    judgments: { type: "array", minItems: 1, maxItems: 10, items: DIAGRAM_NODE },
+    links: {
+      type: "array",
+      minItems: 0,
+      maxItems: 60,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["from", "to"],
+        properties: { from: DIAGRAM_ID, to: DIAGRAM_ID },
+      },
+    },
+  },
+};
+const DIAGRAM = { oneOf: [{ type: "null" }, DIAGRAM_FLOW, DIAGRAM_TIMELINE, DIAGRAM_MAP] };
+
 export const FEED_REGISTRY: Record<string, FeedDef> = {
   // 知識庫架構頁（#architecture）各節點的真實處理數字；推送端 kb-pipeline scripts/arch-stats-pusher.py（每 10 分鐘，只讀計算）。
   "kb-arch-stats": {
@@ -254,10 +415,13 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
   },
   // 知識頁（#knowledge）：知識庫自己長出來的主題（題目）、頁面內容、成長紀錄與相關題目。推送端 kb-pipeline 每週產生後推送（契約見 docs/feed-api.md）。
   // 欄位只增不改；body 是頁面四節的 markdown（來源標記為 ⟦n⟧ 腳註，n＝sources 的 1 起算位置）；2.75.0 起含知識樹 tree、每題 branch／path／monthCounts。
+  // 2026-11-08 起每題多選用欄位 diagram（null 或 flow／timeline／map，見上方常數）。
+  // maxBytes 3 MiB（2026-11-08 起）：既有正文預算約 1.5 MiB（1,572,864 位元組）＋ 64 題 × 一張上限尺寸的圖
+  // （上限圖實測最大 27,630 位元組，64 張合計 3,341,184 位元組；見 topicsDiagram.test.ts 的估算斷言）。
   topics: {
     version: 1,
     description: "主題知識頁：知識庫自己長出來的題目、頁面內容、成長紀錄與相關題目",
-    maxBytes: 1536 * 1024,
+    maxBytes: 3 * 1024 * 1024,
     schema: {
       $schema: "http://json-schema.org/draft-07/schema#",
       title: "topics feed v1",
@@ -385,6 +549,8 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
                   },
                 },
               },
+              // 選填：知識頁的圖解資料（2026-11-08 起）；舊推送不帶也合法。
+              diagram: DIAGRAM,
             },
           },
         },
