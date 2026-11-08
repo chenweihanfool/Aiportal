@@ -1,0 +1,224 @@
+{
+  "available": true,
+  "payload": {
+    "schemaVersion": 1,
+    "computedAt": "2026-11-08T08:00:00+08:00",
+    "total": 4,
+    "published": 4,
+    "tree": {
+      "domains": [
+        {
+          "id": "d1",
+          "name": "測試領域",
+          "branches": [
+            { "id": "b1", "name": "流程類", "topics": ["tflow", "ttime"] },
+            { "id": "b2", "name": "想法類", "topics": ["tmap", "told"] }
+          ]
+        }
+      ]
+    },
+    "topics": [
+      {
+        "id": "tflow",
+        "name": "送件補正流程",
+        "kind": "method",
+        "why": "示範用的流程題：從送件到結案，中間可能補正一次。",
+        "firstSeen": "2026-01-10",
+        "lastSeen": "2026-10-20",
+        "updated": "2026-11-05",
+        "revision": 2,
+        "docs": 5,
+        "newDocs": 0,
+        "monthsSpan": 6,
+        "firstMonth": "2026-05",
+        "lastMonth": "2026-10",
+        "branch": "b1",
+        "path": ["測試領域", "流程類"],
+        "monthCounts": [
+          { "month": "2026-05", "count": 1 },
+          { "month": "2026-07", "count": 2 },
+          { "month": "2026-10", "count": 2 }
+        ],
+        "growth": [{ "date": "2026-11-05", "text": "第二版：補上補正的判斷點" }],
+        "related": [],
+        "sources": [
+          { "id": "src-flow-1", "title": "送件須知（示範）", "month": "2026-05", "type": "pdf", "case": "示範案甲", "date": "2026-05-12" },
+          { "id": "src-flow-2", "title": "收件紀錄（示範）", "month": "2026-07", "type": "note", "case": "示範案甲", "date": "2026-07-03" },
+          { "id": "src-flow-3", "title": "補正通知（示範）", "month": "2026-07", "type": "pdf", "case": "示範案乙", "date": "2026-07-20" },
+          { "id": "src-flow-4", "title": "當日記錄一（示範）", "month": "2026-10", "type": "diary", "date": "2026-10-05" },
+          { "id": "src-flow-5", "title": "結案函（示範）", "month": "2026-10", "type": "pdf", "case": "示範案乙", "date": "2026-10-20" }
+        ],
+        "body": "## 一句話\n- 送件後由乙方收件審查，不齊就補正，補完再審，最後結案 ⟦1⟧ ⟦2⟧\n\n## 開工前準備\n- 備齊申請書與附件 ⟦1⟧\n- 確認收件窗口 ⟦2⟧\n\n## 步驟\n1. 甲方送件 ⟦1⟧\n2. 乙方收件並登記 ⟦2⟧\n3. 審查是否齊全 ⟦3⟧\n4. 不齊則通知補正 ⟦3⟧\n5. 補正完成後結案 ⟦5⟧\n\n## 判斷點\n- 如果：附件不齊 ⇒ 就：發補正通知 ⟦3⟧\n- 如果：附件齊全 ⇒ 就：直接審查 ⟦2⟧\n\n## 踩過的坑\n- 通知沒寫期限：補正通知一定要寫明期限 ⟦3⟧\n- 附件順序亂：照清單順序排 ⟦4⟧\n\n## 還不知道\n- 補正最多可以幾次 ⟦3⟧\n",
+        "diagram": {
+          "type": "flow",
+          "version": 1,
+          "lanes": ["甲方", "乙方", "審查"],
+          "phases": ["送件", "收件", "審查", "補正", "結案"],
+          "nodes": [
+            { "id": "a", "label": "送件", "sub": "備齊申請書", "src": [1, 2], "lane": 0, "phase": 0, "shape": "step", "note": "甲方備齊申請書與附件後送出。" },
+            { "id": "b", "label": "收件登記", "sub": "確認窗口", "src": [2], "lane": 1, "phase": 1, "shape": "step", "note": "乙方收件並登記，這一步只有一份來源提到。" },
+            { "id": "c", "label": "附件齊全？", "src": [2, 3], "lane": 2, "phase": 2, "shape": "decision", "note": "附件不齊走補正，齊全直接結案。" },
+            { "id": "d", "label": "發補正通知", "sub": "寫明期限", "src": [3], "lane": 1, "phase": 3, "shape": "step", "pitfall": true, "note": "通知沒寫期限會被退回，一定要寫明。" },
+            { "id": "e", "label": "補正", "src": [3, 4], "lane": 0, "phase": 3, "shape": "step", "ai": true, "note": "這一步是 AI 依來源續寫的推論。" },
+            { "id": "f", "label": "結案", "sub": "發結案函", "src": [5], "lane": 1, "phase": 4, "shape": "step", "unknown": true, "note": "補正最多幾次，來源沒有交代。" }
+          ],
+          "edges": [
+            { "from": "a", "to": "b" },
+            { "from": "b", "to": "c" },
+            { "from": "c", "to": "d", "label": "否" },
+            { "from": "c", "to": "f", "label": "是" },
+            { "from": "d", "to": "e" },
+            { "from": "e", "to": "c", "back": true, "label": "重審" }
+          ]
+        }
+      },
+      {
+        "id": "ttime",
+        "name": "定期回診紀錄",
+        "kind": "method",
+        "why": "示範用的時間題：每隔幾週回診一次，並記一個數值。",
+        "firstSeen": "2026-02-01",
+        "lastSeen": "2026-10-15",
+        "updated": "2026-11-04",
+        "revision": 1,
+        "docs": 6,
+        "newDocs": 1,
+        "monthsSpan": 4,
+        "firstMonth": "2026-07",
+        "lastMonth": "2026-10",
+        "branch": "b1",
+        "path": ["測試領域", "流程類"],
+        "monthCounts": [
+          { "month": "2026-07", "count": 1 },
+          { "month": "2026-08", "count": 2 },
+          { "month": "2026-09", "count": 2 },
+          { "month": "2026-10", "count": 1 }
+        ],
+        "growth": [],
+        "related": [],
+        "sources": [
+          { "id": "src-time-1", "title": "回診紀錄 7 月（示範）", "month": "2026-07", "type": "note", "date": "2026-07-23" },
+          { "id": "src-time-2", "title": "回診紀錄 8 月（示範）", "month": "2026-08", "type": "note", "date": "2026-08-20" },
+          { "id": "src-time-3", "title": "領藥單 9 月（示範）", "month": "2026-09", "type": "image", "date": "2026-09-17" },
+          { "id": "src-time-4", "title": "當日記錄 10 月（示範）", "month": "2026-10", "type": "diary", "date": "2026-10-15" },
+          { "id": "src-time-5", "title": "數值表（示範）", "month": "2026-10", "type": "excel", "date": "2026-10-15" }
+        ],
+        "body": "## 一句話\n- 每四週左右回診一次，回診當天領藥並記數值 ⟦1⟧ ⟦2⟧\n\n## 開工前準備\n- 帶健保卡與上次的數值表 ⟦5⟧\n\n## 步驟\n1. 回診前一天確認預約 ⟦4⟧\n2. 回診當天領藥 ⟦3⟧\n3. 回家後記下數值 ⟦5⟧\n\n## 判斷點\n- 如果：數值連兩次下降 ⇒ 就：下次回診提出來問 ⟦5⟧\n\n## 踩過的坑\n- 忘了帶數值表：前一天先放進包包 ⟦4⟧\n",
+        "diagram": {
+          "type": "timeline",
+          "version": 1,
+          "tracks": [{ "id": "visit", "label": "回診" }, { "id": "drug", "label": "領藥" }],
+          "items": [
+            { "track": "visit", "date": "2026-07-23", "label": "回診", "src": [1], "note": "第一次回診，只有一份來源。" },
+            { "track": "visit", "date": "2026-08-20", "label": "回診", "src": [2, 4], "note": "第二次回診。" },
+            { "track": "visit", "date": "2026-09-17", "label": "回診", "src": [3, 4] },
+            { "track": "visit", "date": "2026-10-15", "label": "回診", "sub": "提出數值問題", "src": [4, 5], "unknown": true, "note": "當天有提出問題，但醫師怎麼答，來源沒有交代。" },
+            { "track": "drug", "date": "2026-08-20", "end": "2026-09-17", "label": "第一輪藥", "src": [3] },
+            { "track": "drug", "date": "2026-09-17", "end": "2026-10-15", "label": "第二輪藥", "src": [3, 5], "ai": true, "note": "藥量天數是 AI 依領藥單推算的。" },
+            { "track": "drug", "date": "2026-10-15", "label": "領藥", "src": [5] }
+          ],
+          "metrics": [
+            {
+              "label": "數值",
+              "unit": "單位",
+              "points": [
+                { "date": "2026-07-23", "value": 9.1, "src": [1] },
+                { "date": "2026-08-20", "value": 9.6, "src": [2] },
+                { "date": "2026-09-17", "value": 10.2, "src": [5] },
+                { "date": "2026-10-15", "value": 10.6, "src": [5] }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "tmap",
+        "name": "觀察與判斷的關係",
+        "kind": "concept",
+        "why": "示範用的概念題：從幾個觀察壓出框架，再拿去做判斷。",
+        "firstSeen": "2026-03-01",
+        "lastSeen": "2026-09-30",
+        "updated": "2026-11-03",
+        "revision": 3,
+        "docs": 6,
+        "newDocs": 0,
+        "monthsSpan": 5,
+        "firstMonth": "2026-05",
+        "lastMonth": "2026-09",
+        "branch": "b2",
+        "path": ["測試領域", "想法類"],
+        "monthCounts": [
+          { "month": "2026-05", "count": 2 },
+          { "month": "2026-07", "count": 2 },
+          { "month": "2026-09", "count": 2 }
+        ],
+        "growth": [],
+        "related": [],
+        "sources": [
+          { "id": "src-map-1", "title": "觀察筆記甲（示範）", "month": "2026-05", "type": "note", "date": "2026-05-10" },
+          { "id": "src-map-2", "title": "觀察筆記乙（示範）", "month": "2026-05", "type": "note", "date": "2026-05-22" },
+          { "id": "src-map-3", "title": "讀書摘要（示範）", "month": "2026-07", "type": "text", "date": "2026-07-14" },
+          { "id": "src-map-4", "title": "當日記錄（示範）", "month": "2026-07", "type": "diary", "date": "2026-07-30" },
+          { "id": "src-map-5", "title": "AI 整理稿（示範）", "month": "2026-09", "type": "event", "date": "2026-09-02" },
+          { "id": "src-map-6", "title": "討論紀錄（示範）", "month": "2026-09", "type": "word", "date": "2026-09-30" }
+        ],
+        "body": "## 一句話\n- 好的判斷來自重複出現的觀察，先壓成框架，再拿去用 ⟦1⟧ ⟦2⟧\n\n## 為什麼存在\n- 只靠單次觀察容易下錯結論 ⟦3⟧\n\n## 常見誤解\n- 以：看過一次就是通則 ⇒ 其實：至少要兩份獨立來源 ⟦2⟧\n- 以為：看過一次就是通則 → 其實：至少要兩份獨立來源 ⟦2⟧\n\n## 實例\n- 兩份筆記都提到同一現象 ⟦1⟧ ⟦2⟧\n\n## 還不知道\n- 框架在什麼情況下會失效 ⟦6⟧\n",
+        "diagram": {
+          "type": "map",
+          "version": 1,
+          "core": "先觀察，再下結論",
+          "observations": [
+            { "id": "o1", "label": "觀察甲", "sub": "現象重複出現", "src": [1, 2], "note": "兩份筆記都看到同一現象。" },
+            { "id": "o2", "label": "觀察乙", "src": [3], "note": "只有讀書摘要提到一次。" },
+            { "id": "o3", "label": "觀察丙", "sub": "AI 推論", "src": [5], "ai": true, "note": "這條是 AI 整理稿的推論，還沒被原始材料驗證。" },
+            { "id": "o4", "label": "觀察丁", "src": [4, 6] }
+          ],
+          "frameworks": [
+            { "id": "f1", "label": "重複才算數", "sub": "兩份獨立來源", "src": [1, 2, 4], "note": "把重複出現的觀察壓成規則。" },
+            { "id": "f2", "label": "單例先保留", "src": [3], "unknown": true, "note": "單例要保留到什麼時候才丟，來源沒有說。" }
+          ],
+          "judgments": [
+            { "id": "j1", "label": "下結論前先找第二份", "src": [1, 2, 6] },
+            { "id": "j2", "label": "單例標成待驗證", "src": [3], "unknown": true },
+            { "id": "j3", "label": "AI 推論不當通則", "src": [5], "ai": true }
+          ],
+          "links": [
+            { "from": "o1", "to": "f1" },
+            { "from": "o4", "to": "f1" },
+            { "from": "o2", "to": "f2" },
+            { "from": "o3", "to": "f2" },
+            { "from": "f1", "to": "j1" },
+            { "from": "f2", "to": "j2" },
+            { "from": "f2", "to": "j3" }
+          ]
+        }
+      },
+      {
+        "id": "told",
+        "name": "舊頁沒有圖解",
+        "kind": "concept",
+        "why": "示範用的舊頁：推送端還沒送 diagram，頁面要和以前完全一樣。",
+        "firstSeen": "2026-04-01",
+        "lastSeen": "2026-08-30",
+        "updated": "2026-10-28",
+        "revision": 1,
+        "docs": 3,
+        "newDocs": 0,
+        "monthsSpan": 2,
+        "firstMonth": "2026-07",
+        "lastMonth": "2026-08",
+        "branch": "b2",
+        "path": ["測試領域", "想法類"],
+        "monthCounts": [{ "month": "2026-07", "count": 2 }, { "month": "2026-08", "count": 1 }],
+        "growth": [],
+        "related": [],
+        "sources": [
+          { "id": "src-old-1", "title": "舊頁來源一（示範）", "month": "2026-07", "type": "note", "date": "2026-07-01" },
+          { "id": "src-old-2", "title": "舊頁來源二（示範）", "month": "2026-07", "type": "note", "date": "2026-07-15" },
+          { "id": "src-old-3", "title": "舊頁來源三（示範）", "month": "2026-08", "type": "diary", "date": "2026-08-30" }
+        ],
+        "body": "## 一句話\n- 這是沒有圖解的舊頁 ⟦1⟧\n\n## 為什麼存在\n- 用來確認沒有圖解時版面不變 ⟦2⟧\n\n## 常見誤解\n- 以為：沒有圖就壞了 → 其實：圖是選用的 ⟦3⟧\n"
+      }
+    ]
+  }
+}
