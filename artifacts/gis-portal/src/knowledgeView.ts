@@ -39,7 +39,42 @@ export interface Topic {
   /** [領域名, 枝名]；沒有為 [] */
   path: string[]
   monthCounts: MonthCount[]
+  /** 圖解；推送端還沒送、或內容不合法為 null（其餘欄位不受影響） */
+  diagram: TopicDiagram | null
 }
+
+// ───────── 圖解 diagram（2.81.0）：feed 每題的選用欄位，三種 type；任何不合法整張丟掉（diagram＝null），其餘欄位照常 ─────────
+
+export interface DiagramNodeBase {
+  id: string
+  label: string
+  sub?: string
+  /** 該題 sources 的 1 起算序號（＝⟦n⟧ 的 n），1–6 個 */
+  src: number[]
+  unknown?: boolean
+  ai?: boolean
+  note?: string
+}
+export interface FlowNode extends DiagramNodeBase { lane: number; phase: number; shape: 'step' | 'decision'; pitfall?: boolean }
+export interface FlowEdge { from: string; to: string; label?: string; back?: boolean }
+export interface FlowDiagram { type: 'flow'; version: 1; lanes: string[]; phases: string[]; nodes: FlowNode[]; edges: FlowEdge[] }
+
+export interface TimelineTrack { id: string; label: string }
+export interface DiagramTimelineItem {
+  track: string; date: string; end?: string; label: string; sub?: string; note?: string
+  src: number[]; ai?: boolean; unknown?: boolean
+}
+export interface TimelineMetricPoint { date: string; value: number; src: number[] }
+export interface TimelineMetric { label: string; unit?: string; points: TimelineMetricPoint[] }
+export interface TimelineDiagram { type: 'timeline'; version: 1; tracks: TimelineTrack[]; items: DiagramTimelineItem[]; metrics: TimelineMetric[] }
+
+export interface MapLink { from: string; to: string }
+export interface MapDiagram {
+  type: 'map'; version: 1; core: string
+  observations: DiagramNodeBase[]; frameworks: DiagramNodeBase[]; judgments: DiagramNodeBase[]
+  links: MapLink[]
+}
+export type TopicDiagram = FlowDiagram | TimelineDiagram | MapDiagram
 
 export interface TopicsData {
   computedAt: string
@@ -60,6 +95,176 @@ const MONTH_RE = /^\d{4}-\d{2}$/
 const isStr = (v: unknown): v is string => typeof v === 'string'
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 const strOrNull = (v: unknown, re?: RegExp): string | null => (isStr(v) && (!re || re.test(v)) ? v : null)
+
+/* ───────── diagram 解析 ───────── */
+
+type Rec = Record<string, unknown>
+const isRec = (v: unknown): v is Rec => !!v && typeof v === 'object' && !Array.isArray(v)
+const DIAGRAM_ID_RE = /^[a-z0-9]{1,8}$/
+/** 以「字」計長（CJK 與 emoji 各算一字） */
+const strLen = (s: string): number => [...s].length
+const strIn = (v: unknown, min: number, max: number): v is string => isStr(v) && strLen(v) >= min && strLen(v) <= max
+const optStr = (v: unknown, max: number): boolean => v === undefined || (isStr(v) && strLen(v) <= max)
+const optBool = (v: unknown): boolean => v === undefined || typeof v === 'boolean'
+const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v)
+const validDate = (v: unknown): v is string => {
+  if (!isStr(v) || !DATE_RE.test(v)) return false
+  const d = new Date(`${v}T00:00:00Z`)
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === v
+}
+const inRange = (v: unknown, min: number, max: number): v is unknown[] => Array.isArray(v) && v.length >= min && v.length <= max
+
+/** src：1–6 個整數且都在 1..sourceCount；接受單一整數（會包成陣列）。不合法回 null */
+function parseSrc(v: unknown, sourceCount: number): number[] | null {
+  const arr = isInt(v) ? [v] : v
+  if (!inRange(arr, 1, 6)) return null
+  if (!arr.every((n) => isInt(n) && n >= 1 && n <= sourceCount)) return null
+  return arr as number[]
+}
+
+function parseBase(raw: unknown, sourceCount: number): DiagramNodeBase | null {
+  if (!isRec(raw)) return null
+  if (!isStr(raw.id) || !DIAGRAM_ID_RE.test(raw.id) || !strIn(raw.label, 1, 14)) return null
+  if (!optStr(raw.sub, 24) || !optStr(raw.note, 120) || !optBool(raw.unknown) || !optBool(raw.ai)) return null
+  const src = parseSrc(raw.src, sourceCount)
+  if (!src) return null
+  const n: DiagramNodeBase = { id: raw.id, label: raw.label, src }
+  if (raw.sub) n.sub = raw.sub as string
+  if (raw.note) n.note = raw.note as string
+  if (raw.unknown === true) n.unknown = true
+  if (raw.ai === true) n.ai = true
+  return n
+}
+
+function parseFlow(r: Rec, sourceCount: number): FlowDiagram | null {
+  if (!inRange(r.lanes, 2, 6) || !r.lanes.every((x) => strIn(x, 1, 20))) return null
+  if (!inRange(r.phases, 2, 8) || !r.phases.every((x) => strIn(x, 1, 20))) return null
+  const lanes = r.lanes as string[]
+  const phases = r.phases as string[]
+  if (!inRange(r.nodes, 3, 20)) return null
+  const nodes: FlowNode[] = []
+  const ids = new Set<string>()
+  const cells = new Set<string>()
+  for (const raw of r.nodes) {
+    const base = parseBase(raw, sourceCount)
+    if (!base || !isRec(raw) || ids.has(base.id)) return null
+    if (!isInt(raw.lane) || raw.lane < 0 || raw.lane >= lanes.length) return null
+    if (!isInt(raw.phase) || raw.phase < 0 || raw.phase >= phases.length) return null
+    if (raw.shape !== 'step' && raw.shape !== 'decision') return null
+    if (!optBool(raw.pitfall)) return null
+    const cell = `${raw.lane}:${raw.phase}`
+    if (cells.has(cell)) return null
+    ids.add(base.id)
+    cells.add(cell)
+    const n: FlowNode = { ...base, lane: raw.lane, phase: raw.phase, shape: raw.shape }
+    if (raw.pitfall === true) n.pitfall = true
+    nodes.push(n)
+  }
+  if (!inRange(r.edges, 2, 30)) return null
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const edges: FlowEdge[] = []
+  for (const raw of r.edges) {
+    if (!isRec(raw) || !isStr(raw.from) || !isStr(raw.to)) return null
+    const a = byId.get(raw.from)
+    const b = byId.get(raw.to)
+    if (!a || !b || !optStr(raw.label, 10) || !optBool(raw.back)) return null
+    if (raw.back !== true && b.phase < a.phase) return null
+    const e: FlowEdge = { from: raw.from, to: raw.to }
+    if (raw.label) e.label = raw.label as string
+    if (raw.back === true) e.back = true
+    edges.push(e)
+  }
+  return { type: 'flow', version: 1, lanes, phases, nodes, edges }
+}
+
+function parseTimeline(r: Rec, sourceCount: number): TimelineDiagram | null {
+  if (!inRange(r.tracks, 1, 6)) return null
+  const tracks: TimelineTrack[] = []
+  const trackIds = new Set<string>()
+  for (const raw of r.tracks) {
+    if (!isRec(raw) || !isStr(raw.id) || !raw.id || !strIn(raw.label, 1, 14) || trackIds.has(raw.id)) return null
+    trackIds.add(raw.id)
+    tracks.push({ id: raw.id, label: raw.label })
+  }
+  if (!inRange(r.items, 1, 80)) return null
+  const items: DiagramTimelineItem[] = []
+  for (const raw of r.items) {
+    if (!isRec(raw) || !isStr(raw.track) || !trackIds.has(raw.track)) return null
+    if (!validDate(raw.date) || !strIn(raw.label, 1, 14)) return null
+    if (raw.end !== undefined && (!validDate(raw.end) || raw.end < raw.date)) return null
+    if (!optStr(raw.sub, 24) || !optStr(raw.note, 120) || !optBool(raw.unknown) || !optBool(raw.ai)) return null
+    const src = parseSrc(raw.src, sourceCount)
+    if (!src) return null
+    const it: DiagramTimelineItem = { track: raw.track, date: raw.date, label: raw.label, src }
+    if (raw.end) it.end = raw.end as string
+    if (raw.sub) it.sub = raw.sub as string
+    if (raw.note) it.note = raw.note as string
+    if (raw.unknown === true) it.unknown = true
+    if (raw.ai === true) it.ai = true
+    items.push(it)
+  }
+  const metrics: TimelineMetric[] = []
+  if (r.metrics !== undefined) {
+    if (!inRange(r.metrics, 0, 2)) return null
+    for (const raw of r.metrics) {
+      if (!isRec(raw) || !strIn(raw.label, 1, 14) || !optStr(raw.unit, 8) || !inRange(raw.points, 2, 40)) return null
+      const points: TimelineMetricPoint[] = []
+      for (const p of raw.points) {
+        if (!isRec(p) || !validDate(p.date) || !isNum(p.value)) return null
+        const src = parseSrc(p.src, sourceCount)
+        if (!src) return null
+        points.push({ date: p.date, value: p.value, src })
+      }
+      const m: TimelineMetric = { label: raw.label, points }
+      if (raw.unit) m.unit = raw.unit as string
+      metrics.push(m)
+    }
+  }
+  return { type: 'timeline', version: 1, tracks, items, metrics }
+}
+
+function parseMap(r: Rec, sourceCount: number): MapDiagram | null {
+  if (!strIn(r.core, 1, 24)) return null
+  const ids = new Set<string>()
+  const group = (raw: unknown, max: number): DiagramNodeBase[] | null => {
+    if (!inRange(raw, 1, max)) return null
+    const out: DiagramNodeBase[] = []
+    for (const x of raw) {
+      const n = parseBase(x, sourceCount)
+      if (!n || ids.has(n.id)) return null
+      ids.add(n.id)
+      out.push(n)
+    }
+    return out
+  }
+  const observations = group(r.observations, 10)
+  const frameworks = group(r.frameworks, 6)
+  const judgments = group(r.judgments, 10)
+  if (!observations || !frameworks || !judgments) return null
+  const kind = new Map<string, 'o' | 'f' | 'j'>()
+  observations.forEach((n) => kind.set(n.id, 'o'))
+  frameworks.forEach((n) => kind.set(n.id, 'f'))
+  judgments.forEach((n) => kind.set(n.id, 'j'))
+  if (!Array.isArray(r.links) || r.links.length > 60) return null
+  const links: MapLink[] = []
+  for (const raw of r.links) {
+    if (!isRec(raw) || !isStr(raw.from) || !isStr(raw.to)) return null
+    const a = kind.get(raw.from)
+    const b = kind.get(raw.to)
+    if (!((a === 'o' && b === 'f') || (a === 'f' && b === 'j'))) return null
+    links.push({ from: raw.from, to: raw.to })
+  }
+  return { type: 'map', version: 1, core: r.core, observations, frameworks, judgments, links }
+}
+
+/** 解析單題 diagram；沒有（undefined／null）或任何不合法都回 null，呼叫端其餘欄位照常 */
+export function parseDiagram(raw: unknown, sourceCount: number): TopicDiagram | null {
+  if (!isRec(raw) || raw.version !== 1) return null
+  if (raw.type === 'flow') return parseFlow(raw, sourceCount)
+  if (raw.type === 'timeline') return parseTimeline(raw, sourceCount)
+  if (raw.type === 'map') return parseMap(raw, sourceCount)
+  return null
+}
 
 /** 單題解析；欄位壞掉回 null，呼叫端略過這一題（不讓整頁掛掉） */
 function parseTopic(raw: unknown): Topic | null {
@@ -116,6 +321,7 @@ function parseTopic(raw: unknown): Topic | null {
     branch: isStr(t.branch) && t.branch ? t.branch : null,
     path,
     monthCounts,
+    diagram: parseDiagram(t.diagram, sources.length),
   }
 }
 
