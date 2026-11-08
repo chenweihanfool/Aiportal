@@ -417,7 +417,7 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
   // 欄位只增不改；body 是頁面四節的 markdown（來源標記為 ⟦n⟧ 腳註，n＝sources 的 1 起算位置）；2.75.0 起含知識樹 tree、每題 branch／path／monthCounts。
   // 2026-11-08 起每題多選用欄位 diagram（null 或 flow／timeline／map，見上方常數）。
   // maxBytes 4 MiB（2026-11-08 起）：既有正文預算約 1.5 MiB（1,572,864 位元組）＋ 64 題 × 一張上限尺寸的圖
-  // （上限圖實測最大 27,630 位元組，64 張合計 3,341,184 位元組；見 topicsDiagram.test.ts 的估算斷言），合計在 4 MiB（4,194,304）以內；3 MiB 放不下。
+  // （上限圖實測最大 27,630 位元組，64 張 1,768,320 位元組，加正文預算估算 3,341,184 位元組；見 topicsDiagram.test.ts 的估算斷言），在 4 MiB（4,194,304）以內；3 MiB 放不下。
   topics: {
     version: 1,
     description: "主題知識頁：知識庫自己長出來的題目、頁面內容、成長紀錄與相關題目",
