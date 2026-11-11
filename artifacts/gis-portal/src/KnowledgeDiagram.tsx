@@ -65,7 +65,7 @@ function FlowSvg({ d, sel, onPick }: { d: FlowDiagram; sel: string | null; onPic
   const lay = useMemo(() => layoutFlow(d), [d])
   const meta = new Map(d.nodes.map((n) => [n.id, n]))
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: lay.width, minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="流程泳道圖">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: Math.round(lay.width * 1.25), minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="流程泳道圖">
       <defs>
         <marker id={`${uid}-ar`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" className="kn-dg-marker">
           <path d="M0 0L10 5L0 10z" fill="currentColor" />
@@ -122,7 +122,7 @@ function FlowSvg({ d, sel, onPick }: { d: FlowDiagram; sel: string | null; onPic
 function TimelineSvg({ d, now, sel, onPick }: { d: TimelineDiagram; now: Date; sel: string | null; onPick: (s: Selected) => void }) {
   const lay = useMemo(() => layoutTimeline(d, now), [d, now])
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: lay.width, minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="多軌時間軸">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: Math.round(lay.width * 1.25), minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="多軌時間軸">
       {lay.tracks.map((t, i) => (
         <g key={t.id}>
           <rect className="kn-dg-lane" data-odd={i % 2} x={0} y={t.y} width={lay.width} height={t.h} />
@@ -207,7 +207,7 @@ function MapSvg({ d, sel, onPick }: { d: MapDiagram; sel: string | null; onPick:
   const all = new Map([...d.observations, ...d.frameworks, ...d.judgments].map((n) => [n.id, n]))
   const colName = { o: '觀察', f: '框架', j: '判斷' } as const
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: lay.width, minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="觀察、框架、判斷三欄圖">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: Math.round(lay.width * 1.25), minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="觀察、框架、判斷三欄圖">
       <defs>
         {(['ai', 'one', 'multi'] as const).map((s) => (
           <marker key={s} id={`${uid}-ar-${s}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" className="kn-dg-marker" data-ev={s}>
