@@ -396,6 +396,79 @@ export function groupTopics(topics: readonly Topic[], now: Date): TopicGroups {
   return groups
 }
 
+/* ───────── 最近動態（2.82.0）：把 growth 攤成「哪一天新增／改版了哪些題目」 ───────── */
+
+/** 成長紀錄的文字清洗：空括號連同前面的空白拿掉；「新增 0 個來源」換成白話。 */
+export function cleanGrowthText(text: string): string {
+  return text
+    .replace(/新增 0 個來源/g, '改寫內容，沒有新來源')
+    .replace(/\s*（\s*）/g, '')
+    .replace(/\s*\(\s*\)/g, '')
+}
+
+export type TopicChange = 'new-page' | 'new-topic' | 'revised'
+export interface DayChangeItem { topic: Topic; change: TopicChange; detail: string }
+export interface DayChanges {
+  date: string
+  items: DayChangeItem[]
+  counts: { newPage: number; newTopic: number; revised: number; concept: number; method: number }
+}
+
+const CHANGE_RANK: Record<TopicChange, number> = { 'new-page': 0, 'new-topic': 1, revised: 2 }
+const CHANGE_PRIORITY: Record<TopicChange, number> = { 'new-page': 3, 'new-topic': 2, revised: 1 }
+
+/**
+ * 最近 days 天（含今天）每天新增／改版的題目。growth 每筆算一改動：該題最早日期的那筆算 new-page（同日多筆取陣列最後一筆），
+ * 其餘 revised；firstSeen 當天沒有 growth 的題目多一筆 new-topic。同一題同一天只留一筆（new-page > new-topic > revised）。
+ * 回傳新→舊，日內 new-page、new-topic、revised，同類維持輸入題目順序。
+ */
+export function changesByDay(topics: readonly Topic[], now: Date, days = 14): DayChanges[] {
+  const today = taipeiDay(now)
+  const inWindow = (d: string) => {
+    const diff = dayDiff(d, today)
+    return diff >= -(days - 1) && diff <= 0
+  }
+  const byDay = new Map<string, Map<string, DayChangeItem>>()
+  for (const t of topics) {
+    const valid = t.growth.filter((g) => validDate(g.date))
+    let firstDate: string | null = null
+    for (const g of valid) if (firstDate === null || g.date < firstDate) firstDate = g.date
+    const firstIndex = firstDate === null ? -1 : valid.reduce((last, g, i) => (g.date === firstDate ? i : last), -1)
+    const add = (date: string, change: TopicChange, detail: string) => {
+      if (!inWindow(date)) return
+      let day = byDay.get(date)
+      if (!day) { day = new Map(); byDay.set(date, day) }
+      const prev = day.get(t.id)
+      if (!prev || CHANGE_PRIORITY[change] > CHANGE_PRIORITY[prev.change]) day.set(t.id, { topic: t, change, detail })
+    }
+    valid.forEach((g, i) => add(g.date, i === firstIndex ? 'new-page' : 'revised', cleanGrowthText(g.text)))
+    if (inWindow(t.firstSeen) && !valid.some((g) => g.date === t.firstSeen)) add(t.firstSeen, 'new-topic', '系統長出新題目，素材累積中')
+  }
+  const out: DayChanges[] = []
+  for (const [date, map] of byDay) {
+    const items = [...map.values()].sort((a, b) => CHANGE_RANK[a.change] - CHANGE_RANK[b.change])
+    const counts = { newPage: 0, newTopic: 0, revised: 0, concept: 0, method: 0 }
+    for (const it of items) {
+      if (it.change === 'new-page') counts.newPage++
+      else if (it.change === 'new-topic') counts.newTopic++
+      else counts.revised++
+      if (it.topic.kind === 'concept') counts.concept++
+      else counts.method++
+    }
+    out.push({ date, items, counts })
+  }
+  return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+}
+
+/** 左側樹用：topic id → 最近 days 天內最新那一天的 change（同日優先序同上）。 */
+export function recentChangeOf(topics: readonly Topic[], now: Date, days = 7): Map<string, TopicChange> {
+  const out = new Map<string, TopicChange>()
+  for (const day of changesByDay(topics, now, days)) {
+    for (const it of day.items) if (!out.has(it.topic.id)) out.set(it.topic.id, it.change)
+  }
+  return out
+}
+
 export interface TopicFilter {
   kind?: TopicKind | 'all'
   q?: string

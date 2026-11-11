@@ -7,9 +7,10 @@ import { KnowledgeDiagram } from './KnowledgeDiagram'
 import type { HermesTopicQuote } from './hermesDocApi'
 import { useAsync, useNow } from './homeHooks'
 import {
-  buildTree, bulletId, bulletsCiting, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBodyWithMarkers, parseTopics, treeToLayoutInput,
+  buildTree, bulletId, bulletsCiting, changesByDay, cleanGrowthText, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBodyWithMarkers, parseTopics, recentChangeOf, treeToLayoutInput,
+  type DayChanges,
   type ParsedBody,
-  type BuiltTree, type Topic, type TopicKind, type TopicsData,
+  type BuiltTree, type Topic, type TopicChange, type TopicKind, type TopicsData,
 } from './knowledgeView'
 
 // 知識頁（#knowledge＝全樹、#knowledge/<id>＝題目頁；2.75.0 改成三欄＋知識樹）。資料來自 feed `topics`（HERMES 每週推送）。
@@ -38,6 +39,28 @@ function monthRange(t: Topic): string {
   return ''
 }
 
+/* ───────── 最近動態的顯示文字（2.82.0） ───────── */
+
+const CHANGE_LABEL: Record<TopicChange, string> = { 'new-page': '新頁面', 'new-topic': '新題目', revised: '改版' }
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
+
+function dayLabel(date: string): string {
+  return `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}（${WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()]}）`
+}
+
+function feedSummary(day: DayChanges, today: string, yesterday: string): string {
+  const c = day.counts
+  const types: string[] = []
+  if (c.newPage > 0) types.push(`新頁面 ${c.newPage}`)
+  if (c.newTopic > 0) types.push(`新題目 ${c.newTopic}`)
+  if (c.revised > 0) types.push(`改版 ${c.revised}`)
+  const kinds: string[] = []
+  if (c.concept > 0) kinds.push(`概念 ${c.concept}`)
+  if (c.method > 0) kinds.push(`方法 ${c.method}`)
+  const when = day.date === today ? '・今天' : day.date === yesterday ? '・昨天' : ''
+  return `${dayLabel(day.date)}${when}・${types.join('・')}｜${kinds.join('・')}`
+}
+
 function Locked({ onRequestUnlock }: { onRequestUnlock: () => void }) {
   return (
     <div className="kn-empty">
@@ -49,12 +72,12 @@ function Locked({ onRequestUnlock }: { onRequestUnlock: () => void }) {
 
 /* ───────── 左欄：知識樹（大綱） ───────── */
 
-function TopicRow({ t, selected, onOpen }: { t: Topic; selected: boolean; onOpen: (id: string) => void }) {
+function TopicRow({ t, selected, change, onOpen }: { t: Topic; selected: boolean; change?: TopicChange; onOpen: (id: string) => void }) {
   return (
     <li>
       <button type="button" className="kn-tt" data-selected={selected} data-unpublished={t.revision === 0} aria-current={selected ? 'page' : undefined} onClick={() => onOpen(t.id)}>
         <span className="kn-tt-name">{t.name}</span>
-        {t.newDocs > 0 && <span className="kn-dot" title={`＋${t.newDocs} 新素材`} aria-label={`${t.newDocs} 筆新素材`} />}
+        {change && <span className="kn-chg kn-chg--sm" data-chg={change} title={CHANGE_LABEL[change]}>{change === 'revised' ? '改' : '新'}</span>}
       </button>
     </li>
   )
@@ -75,17 +98,22 @@ function OutlineGroup({ id, label, count, level, open, onToggle, children }: {
   )
 }
 
-function TreePanel({ data, selectedId, onOpen, pw, onOpenSource }: {
-  data: TopicsData; selectedId: string | null; onOpen: (id: string) => void; pw: string; onOpenSource: (key: string, q: string) => void
+function TreePanel({ data, now, selectedId, onOpen, pw, onOpenSource }: {
+  data: TopicsData; now: Date; selectedId: string | null; onOpen: (id: string) => void; pw: string; onOpenSource: (key: string, q: string) => void
 }) {
   const [mode, setMode] = useState<'topic' | 'source'>('topic')
   const [kind, setKind] = useState<TopicKind | 'all'>('all')
   const [q, setQ] = useState('')
+  const [recentOnly, setRecentOnly] = useState(false)
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
-  const filtered = useMemo(() => filterTopics(data.topics, { kind, q: mode === 'topic' ? q : '' }), [data.topics, kind, q, mode])
+  const recent = useMemo(() => recentChangeOf(data.topics, now, 7), [data.topics, now])
+  const filtered = useMemo(() => {
+    const base = filterTopics(data.topics, { kind, q: mode === 'topic' ? q : '' })
+    return recentOnly ? base.filter((t) => recent.has(t.id)) : base
+  }, [data.topics, kind, q, mode, recentOnly, recent])
   const built = useMemo(() => buildTree({ topics: filtered, tree: data.tree }), [filtered, data.tree])
-  // 預設展開第一層（領域）；選中題目所在的枝與領域自動展開；搜尋時命中的祖先全部展開
-  const searching = (mode === 'topic' && q.trim() !== '') || kind !== 'all'
+  // 預設展開第一層（領域）；選中題目所在的枝與領域自動展開；搜尋或只看近 7 天時命中的祖先全部展開
+  const searching = (mode === 'topic' && q.trim() !== '') || kind !== 'all' || recentOnly
   const autoOpen = useMemo(() => {
     const s = new Set<string>()
     for (const d of built.domains) {
@@ -123,20 +151,21 @@ function TreePanel({ data, selectedId, onOpen, pw, onOpenSource }: {
           <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>{label}</button>
         ))}
       </div>
+      <button type="button" className="kn-recent-btn" aria-pressed={recentOnly} onClick={() => setRecentOnly((v) => !v)}>只看近 7 天</button>
       {filtered.length === 0 && <p className="kn-muted">沒有符合的題目。</p>}
       <ul className="kn-ol kn-ol--root">
         {built.domains.filter((d) => !searching || d.count > 0).map((d) => (
           <OutlineGroup key={d.id} id={d.id} label={d.name} count={d.count} level="domain" open={isOpen(d.id)} onToggle={toggle}>
             {d.branches.filter((b) => !searching || b.count > 0).map((b) => (
               <OutlineGroup key={b.id} id={b.id} label={b.name} count={b.count} level="branch" open={isOpen(b.id)} onToggle={toggle}>
-                {b.topics.map((t) => <TopicRow key={t.id} t={t} selected={t.id === selectedId} onOpen={onOpen} />)}
+                {b.topics.map((t) => <TopicRow key={t.id} t={t} selected={t.id === selectedId} change={recent.get(t.id)} onOpen={onOpen} />)}
               </OutlineGroup>
             ))}
           </OutlineGroup>
         ))}
         {built.unassigned.length > 0 && (
           <OutlineGroup id={UNASSIGNED_ID} label="未歸類" count={built.unassigned.length} level="domain" open={isOpen(UNASSIGNED_ID)} onToggle={toggle}>
-            {built.unassigned.map((t) => <TopicRow key={t.id} t={t} selected={t.id === selectedId} onOpen={onOpen} />)}
+            {built.unassigned.map((t) => <TopicRow key={t.id} t={t} selected={t.id === selectedId} change={recent.get(t.id)} onOpen={onOpen} />)}
           </OutlineGroup>
         )}
       </ul>
@@ -195,11 +224,38 @@ function FullTree({ built, onOpen }: { built: BuiltTree; onOpen: (id: string) =>
   )
 }
 
+function RecentChanges({ data, now, onOpen }: { data: TopicsData; now: Date; onOpen: (id: string) => void }) {
+  const days = useMemo(() => changesByDay(data.topics, now, 14), [data.topics, now])
+  const today = useMemo(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(now), [now])
+  const yesterday = useMemo(() => new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10), [today])
+  return (
+    <section className="kn-feed" aria-label="最近動態">
+      <h2 className="kn-h2">最近動態</h2>
+      {days.length === 0 ? <p className="kn-muted">近 14 天沒有新增或改版。</p> : days.map((day, i) => (
+        <details key={day.date} open={i < 3}>
+          <summary>{feedSummary(day, today, yesterday)}</summary>
+          <ul className="kn-feed-list">
+            {day.items.map((it) => (
+              <li key={it.topic.id}>
+                <span className="kn-chg" data-chg={it.change}>{CHANGE_LABEL[it.change]}</span>
+                <span className="kn-kind" data-kind={it.topic.kind}>{kindLabel(it.topic.kind)}</span>
+                <button type="button" className="kn-link" onClick={() => onOpen(it.topic.id)}>{it.topic.name}</button>
+                <span className="kn-muted">{it.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ))}
+    </section>
+  )
+}
+
 function TreeOverview({ data, now, onOpen }: { data: TopicsData; now: Date; onOpen: (id: string) => void }) {
   const built = useMemo(() => buildTree(data), [data])
   return (
     <>
       <Stats data={data} now={now} />
+      <RecentChanges data={data} now={now} onOpen={onOpen} />
       <h2 className="kn-h2">全樹</h2>
       <p className="kn-muted">點領域或枝可收合，點題目進入題目頁。{!data.tree && '推送端還沒更新知識樹，題目暫時都在「未歸類」。'}</p>
       <FullTree built={built} onOpen={onOpen} />
@@ -345,7 +401,7 @@ function SideColumn({ t, data, onOpen }: { t: Topic | null; data: TopicsData; on
         <h3>成長紀錄</h3>
         {t.growth.length === 0 ? <p className="kn-muted">還沒有成長紀錄。</p> : (
           <ol className="kn-timeline">
-            {t.growth.map((g, i) => <li key={`${g.date}-${i}`}><span className="kn-date">{g.date}</span><span>{g.text}</span></li>)}
+            {t.growth.map((g, i) => <li key={`${g.date}-${i}`}><span className="kn-date">{g.date}</span><span>{cleanGrowthText(g.text)}</span></li>)}
           </ol>
         )}
       </section>
@@ -422,7 +478,7 @@ function Layout({ data, now, topic, topicId, onOpen, onBack, pw }: {
   return (
     <div className="kn-layout" data-drawer={drawer}>
       <button type="button" className="kn-drawer-btn" aria-expanded={drawer} onClick={() => setDrawer((v) => !v)}>☰ 目錄</button>
-      <div className="kn-left"><TreePanel data={data} selectedId={topic?.id ?? null} onOpen={open} pw={pw} onOpenSource={(key, q) => setPanel({ key, q })} /></div>
+      <div className="kn-left"><TreePanel data={data} now={now} selectedId={topic?.id ?? null} onOpen={open} pw={pw} onOpenSource={(key, q) => setPanel({ key, q })} /></div>
       <main className="kn-main">{center}</main>
       <div className="kn-right"><SideColumn t={topic} data={data} onOpen={open} /></div>
       {panel && <KnowledgeSourcePanel pw={pw} sourceKey={panel.key} query={panel.q} onClose={() => setPanel(null)} onOpenTopic={open} />}

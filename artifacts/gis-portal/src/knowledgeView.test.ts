@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDiagram, bulletId, bulletsCiting, buildTree, checkKey, loadChecks, relatedByKind, saveChecks, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
+import { parseDiagram, bulletId, bulletsCiting, buildTree, checkKey, cleanGrowthText, changesByDay, recentChangeOf, loadChecks, relatedByKind, saveChecks, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
 
 const feed = (payload: unknown, available = true) => ({ available, payload })
 
@@ -727,5 +727,109 @@ describe('parseDiagram（feed 每題的選用欄位 diagram）', () => {
     delete t.metrics
     const out = parseDiagram(t, 3)
     expect(out && out.type === 'timeline' && out.metrics).toEqual([])
+  })
+})
+
+// ───────── 最近動態（2.82.0） ─────────
+
+const DAY_NOW = new Date('2026-11-12T04:00:00Z') // 台北 2026-11-12 中午
+
+describe('cleanGrowthText', () => {
+  it('空括號連同前面的空白拿掉；0 個來源換成白話；其他文字不變', () => {
+    expect(cleanGrowthText('第 3 版：新增 0 個來源（）')).toBe('第 3 版：改寫內容，沒有新來源')
+    expect(cleanGrowthText('第 1 版：新增 30 個來源（甲、乙）')).toBe('第 1 版：新增 30 個來源（甲、乙）')
+    expect(cleanGrowthText('第 2 版：新增 5 個來源 ()')).toBe('第 2 版：新增 5 個來源')
+    expect(cleanGrowthText('第 2 版：補圖（ ）')).toBe('第 2 版：補圖')
+    expect(cleanGrowthText('第 2 版：改寫內容')).toBe('第 2 版：改寫內容')
+  })
+})
+
+describe('changesByDay', () => {
+  it('最早一筆 growth＝新頁面、其餘改版；firstSeen 當天沒有 growth＝新題目；detail 有清洗', () => {
+    const topics = [
+      topic({
+        id: 'A', kind: 'concept', firstSeen: '2026-10-01',
+        // feed 順序新→舊，判定不能依賴順序
+        growth: [
+          { date: '2026-11-10', text: '第 2 版：新增 2 個來源（）' },
+          { date: '2026-11-03', text: '第 1 版：新增 30 個來源（甲、乙）' },
+        ],
+      }),
+      topic({ id: 'B', kind: 'method', firstSeen: '2026-11-08', growth: [] }),
+      topic({ id: 'C', kind: 'concept', firstSeen: '2026-11-12', growth: [{ date: '2026-11-12', text: '第 1 版：新增 0 個來源（）' }] }),
+    ]
+    const days = changesByDay(topics, DAY_NOW, 14)
+    expect(days.map((d) => d.date)).toEqual(['2026-11-12', '2026-11-10', '2026-11-08', '2026-11-03'])
+    expect(days[0]!.items.map((it) => [it.topic.id, it.change, it.detail])).toEqual([['C', 'new-page', '第 1 版：改寫內容，沒有新來源']])
+    expect(days[1]!.items.map((it) => [it.topic.id, it.change, it.detail])).toEqual([['A', 'revised', '第 2 版：新增 2 個來源']])
+    expect(days[2]!.items.map((it) => [it.topic.id, it.change, it.detail])).toEqual([['B', 'new-topic', '系統長出新題目，素材累積中']])
+    expect(days[3]!.items[0]).toMatchObject({ change: 'new-page', detail: '第 1 版：新增 30 個來源（甲、乙）' })
+  })
+
+  it('同日多筆 revised 只留第一筆；同日最早多筆取陣列最後一筆當新頁面', () => {
+    const topics = [
+      topic({
+        id: 'A', firstSeen: '2026-10-01',
+        growth: [
+          { date: '2026-11-09', text: '第一版' },
+          { date: '2026-11-11', text: '改版甲' },
+          { date: '2026-11-11', text: '改版乙' },
+        ],
+      }),
+      topic({ id: 'B', firstSeen: '2026-10-01', growth: [{ date: '2026-11-02', text: '早' }, { date: '2026-11-02', text: '晚' }] }),
+    ]
+    const days = changesByDay(topics, DAY_NOW, 14)
+    const d11 = days.find((d) => d.date === '2026-11-11')!
+    expect(d11.items).toHaveLength(1)
+    expect(d11.items[0]).toMatchObject({ topic: { id: 'A' }, change: 'revised', detail: '改版甲' })
+    const d02 = days.find((d) => d.date === '2026-11-02')!
+    expect(d02.items).toHaveLength(1)
+    expect(d02.items[0]).toMatchObject({ topic: { id: 'B' }, change: 'new-page', detail: '晚' })
+  })
+
+  it('視窗邊界：第 14 天（含）留、第 15 天與未來排除；最早 growth 在窗外時窗內都算改版', () => {
+    const topics = [
+      topic({ id: 'IN', firstSeen: '2026-10-01', growth: [{ date: '2026-10-30', text: '第 14 天' }] }),
+      topic({ id: 'OUT', firstSeen: '2026-10-01', growth: [{ date: '2026-10-29', text: '第 15 天' }] }),
+      topic({ id: 'FUT', firstSeen: '2026-10-01', growth: [{ date: '2026-11-13', text: '明天' }] }),
+      topic({ id: 'OLD', firstSeen: '2026-10-01', growth: [{ date: '2026-10-01', text: '很久以前' }, { date: '2026-11-07', text: '窗內改版' }] }),
+    ]
+    const days = changesByDay(topics, DAY_NOW, 14)
+    expect(days.map((d) => d.date)).toEqual(['2026-11-07', '2026-10-30'])
+    expect(days[0]!.items[0]).toMatchObject({ topic: { id: 'OLD' }, change: 'revised' })
+    expect(days[1]!.items[0]).toMatchObject({ topic: { id: 'IN' }, change: 'new-page' })
+  })
+
+  it('日內排序 new-page、new-topic、revised，同類維持輸入題目順序；counts 依種類計數', () => {
+    const topics = [
+      topic({ id: 'Z', kind: 'concept', firstSeen: '2026-10-01', growth: [{ date: '2026-10-01', text: '首' }, { date: '2026-11-05', text: '改乙' }] }),
+      topic({ id: 'X', kind: 'method', firstSeen: '2026-10-01', growth: [{ date: '2026-11-05', text: '新頁' }] }),
+      topic({ id: 'Y', kind: 'concept', firstSeen: '2026-11-05', growth: [] }),
+      topic({ id: 'W', kind: 'method', firstSeen: '2026-10-01', growth: [{ date: '2026-10-01', text: '首' }, { date: '2026-11-05', text: '改丙' }] }),
+    ]
+    const day = changesByDay(topics, DAY_NOW, 14).find((d) => d.date === '2026-11-05')!
+    expect(day.items.map((it) => [it.topic.id, it.change])).toEqual([['X', 'new-page'], ['Y', 'new-topic'], ['Z', 'revised'], ['W', 'revised']])
+    expect(day.counts).toEqual({ newPage: 1, newTopic: 1, revised: 2, concept: 2, method: 2 })
+  })
+
+  it('沒有變動回空陣列；days 可調', () => {
+    expect(changesByDay([topic({ id: 'A', firstSeen: '2026-01-01' })], DAY_NOW)).toEqual([])
+    const t = [topic({ id: 'A', firstSeen: '2026-11-01' })]
+    expect(changesByDay(t, DAY_NOW, 14).map((d) => d.date)).toEqual(['2026-11-01'])
+    expect(changesByDay(t, DAY_NOW, 1).map((d) => d.date)).toEqual([])
+  })
+})
+
+describe('recentChangeOf', () => {
+  it('取 7 天內最新那天的 change；窗外不列；同日依優先序', () => {
+    const topics = [
+      topic({ id: 'A', firstSeen: '2026-10-01', growth: [{ date: '2026-11-06', text: '首' }, { date: '2026-11-11', text: '改' }] }),
+      topic({ id: 'B', firstSeen: '2026-10-01', growth: [{ date: '2026-11-08', text: '首' }] }),
+      topic({ id: 'C', firstSeen: '2026-10-01', growth: [{ date: '2026-11-05', text: '窗外' }] }),
+      topic({ id: 'D', firstSeen: '2026-11-10', growth: [{ date: '2026-11-10', text: '首' }] }),
+    ]
+    const m = recentChangeOf(topics, DAY_NOW, 7)
+    expect([...m.entries()]).toEqual([['A', 'revised'], ['D', 'new-page'], ['B', 'new-page']])
+    expect(m.has('C')).toBe(false)
   })
 })

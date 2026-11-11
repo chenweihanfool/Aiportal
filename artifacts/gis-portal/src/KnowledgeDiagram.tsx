@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import type { HermesTopicQuote } from './hermesDocApi'
 import type { FlowDiagram, MapDiagram, Topic, TopicDiagram, TimelineDiagram } from './knowledgeView'
 import {
@@ -65,7 +65,7 @@ function FlowSvg({ d, sel, onPick }: { d: FlowDiagram; sel: string | null; onPic
   const lay = useMemo(() => layoutFlow(d), [d])
   const meta = new Map(d.nodes.map((n) => [n.id, n]))
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width={lay.width} height={lay.height} role="group" aria-label="流程泳道圖">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: lay.width, minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="流程泳道圖">
       <defs>
         <marker id={`${uid}-ar`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" className="kn-dg-marker">
           <path d="M0 0L10 5L0 10z" fill="currentColor" />
@@ -122,7 +122,7 @@ function FlowSvg({ d, sel, onPick }: { d: FlowDiagram; sel: string | null; onPic
 function TimelineSvg({ d, now, sel, onPick }: { d: TimelineDiagram; now: Date; sel: string | null; onPick: (s: Selected) => void }) {
   const lay = useMemo(() => layoutTimeline(d, now), [d, now])
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width={lay.width} height={lay.height} role="group" aria-label="多軌時間軸">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: lay.width, minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="多軌時間軸">
       {lay.tracks.map((t, i) => (
         <g key={t.id}>
           <rect className="kn-dg-lane" data-odd={i % 2} x={0} y={t.y} width={lay.width} height={t.h} />
@@ -207,7 +207,7 @@ function MapSvg({ d, sel, onPick }: { d: MapDiagram; sel: string | null; onPick:
   const all = new Map([...d.observations, ...d.frameworks, ...d.judgments].map((n) => [n.id, n]))
   const colName = { o: '觀察', f: '框架', j: '判斷' } as const
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width={lay.width} height={lay.height} role="group" aria-label="觀察、框架、判斷三欄圖">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: lay.width, minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="觀察、框架、判斷三欄圖">
       <defs>
         {(['ai', 'one', 'multi'] as const).map((s) => (
           <marker key={s} id={`${uid}-ar-${s}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" className="kn-dg-marker" data-ev={s}>
@@ -240,18 +240,20 @@ function MapSvg({ d, sel, onPick }: { d: MapDiagram; sel: string | null; onPick:
 
 /* ───────── 外殼＋說明區 ───────── */
 
-function Detail({ sel, topic, quotes, onOpenSource }: { sel: Selected | null; topic: Topic; quotes: readonly HermesTopicQuote[] | null; onOpenSource: (n: number, q: string) => void }) {
+function Detail({ sel, topic, quotes, onOpenSource, detailRef }: {
+  sel: Selected | null; topic: Topic; quotes: readonly HermesTopicQuote[] | null; onOpenSource: (n: number, q: string) => void
+  detailRef: RefObject<HTMLElement | null>
+}) {
   if (!sel) {
     return (
-      <aside className="kn-dg-detail" aria-live="polite">
-        <h4>點圖上任一格</h4>
-        <p className="kn-muted">會在這裡列出說明、證據有多扎實，以及出自哪幾份來源；再點來源就開出原文。</p>
+      <aside className="kn-dg-detail" aria-live="polite" ref={detailRef}>
+        <p className="kn-muted">點圖上任一格，這裡會列出說明與來源；再點來源就開出原文。</p>
       </aside>
     )
   }
   const count = new Set(sel.src).size
   return (
-    <aside className="kn-dg-detail" aria-live="polite">
+    <aside className="kn-dg-detail" aria-live="polite" ref={detailRef}>
       <h4>{sel.heading}</h4>
       <p className="kn-dg-ev" data-ev={sel.strength}><i className="kn-dg-sw" data-ev={sel.strength} />證據：{STRENGTH_TEXT[sel.strength]}{sel.strength === 'multi' ? `（${count} 份）` : ''}</p>
       {sel.sub && <p className="kn-dg-sub">{sel.sub}</p>}
@@ -273,7 +275,14 @@ function Detail({ sel, topic, quotes, onOpenSource }: { sel: Selected | null; to
 
 export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now }: Props) {
   const [sel, setSel] = useState<Selected | null>(null)
+  const detailRef = useRef<HTMLElement | null>(null)
   const clock = useMemo(() => now ?? new Date(), [now])
+  // 說明區在圖下方；選取改變後若不在畫面內就捲過去
+  useEffect(() => {
+    if (!sel) return
+    const el = detailRef.current
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [sel])
   let svg: ReactNode
   if (diagram.type === 'flow') svg = <FlowSvg d={diagram} sel={sel?.key ?? null} onPick={setSel} />
   else if (diagram.type === 'timeline') svg = <TimelineSvg d={diagram} now={clock} sel={sel?.key ?? null} onPick={setSel} />
@@ -284,7 +293,7 @@ export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now }: 
       <Legend type={diagram.type} />
       <div className="kn-dg-body">
         <div className="kn-dg-scroll">{svg}</div>
-        <Detail sel={sel} topic={topic} quotes={quotes} onOpenSource={onOpenSource} />
+        <Detail sel={sel} topic={topic} quotes={quotes} onOpenSource={onOpenSource} detailRef={detailRef} />
       </div>
     </section>
   )
