@@ -1896,8 +1896,8 @@ button.ms-col { cursor: pointer; }
   .kn-dg-body { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
   .kn-dg-detail { position: sticky; top: var(--sp-4); max-height: calc(100vh - 2 * var(--sp-4)); overflow-y: auto; }
 }
-.kn-dg-scroll { display: flex; justify-content: center; overflow-x: auto; max-width: 100%; min-width: 0; border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-surface); }
-.kn-dg-svg { display: block; width: 100%; height: auto; font-family: var(--font-body); }
+.kn-dg-scroll { overflow-x: auto; max-width: 100%; min-width: 0; border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-surface); }
+.kn-dg-svg { display: block; margin: 0 auto; width: 100%; height: auto; font-family: var(--font-body); }
 .kn-dg-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); font-size: var(--fs-sm); color: var(--c-ink-2); margin-bottom: var(--sp-2); }
 .kn-dg-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .kn-dg [data-ev="multi"] { --ev: var(--c-ok); --evw: 3px; --evd: none; }
