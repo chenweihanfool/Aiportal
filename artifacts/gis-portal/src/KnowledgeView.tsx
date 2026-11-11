@@ -323,29 +323,29 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, onOpen, onSelect, onV
       )}
       {parsed?.format === 'legacy' && <p className="kn-legacy-note">舊格式，之後會自動換成新版</p>}
 
-      {!parsed && <p className="kn-muted">這題還在累積素材，每週會挑幾題寫成頁面。</p>}
-      {parsed && (
-        <>
-          {parsed.summary && (
-            <section className="kn-summary" aria-label="一句話">
-              <h3>一句話</h3>
-              <p><BulletText b={parsed.summary} bid={bulletId('summary')} cited={cited} /></p>
-            </section>
-          )}
-          {showDiagram && t.diagram && <KnowledgeDiagram topic={t} diagram={t.diagram} quotes={quotes} onOpenSource={onViewQ} />}
-          {showDiagram ? (
+      {parsed && parsed.summary && (
+        <section className="kn-summary" aria-label="一句話">
+          <h3>一句話</h3>
+          <p><BulletText b={parsed.summary} bid={bulletId('summary')} cited={cited} /></p>
+        </section>
+      )}
+      {parsed && showDiagram && t.diagram && <KnowledgeDiagram topic={t} diagram={t.diagram} quotes={quotes} onOpenSource={onViewQ} />}
+
+      <div className="kn-reading">
+        <div className="kn-reading-main">
+          {!parsed && <p className="kn-muted">這題還在累積素材，每週會挑幾題寫成頁面。</p>}
+          {parsed && (showDiagram ? (
             <details className="kn-textfold" open={textOpen} onToggle={(e) => setTextOpen(e.currentTarget.open)}>
               <summary>文字版</summary>
               {body}
             </details>
-          ) : body}
-        </>
-      )}
-
-      <section className="kn-section" aria-label="來源">
-        <h3>來源</h3>
-        <SourceList t={t} hl={hl} onSelect={onSelect} onView={onView} />
-      </section>
+          ) : body)}
+        </div>
+        <section className="kn-section kn-sources-col" aria-label="來源">
+          <h3>來源</h3>
+          <SourceList t={t} hl={hl} onSelect={onSelect} onView={onView} />
+        </section>
+      </div>
     </article>
   )
 }

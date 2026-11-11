@@ -1706,15 +1706,22 @@ button.ms-col { cursor: pointer; }
 .kn-tnode:hover circle, .kn-tnode:focus-visible circle { fill: var(--c-accent); outline: none; }
 
 /* 中欄：題目頁 */
-.kn-page { max-width: 860px; }
+.kn-page { max-width: none; container-type: inline-size; }
+.kn-reading { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+.kn-reading-main { min-width: 0; max-width: 860px; }
+@container (min-width: 1180px) {
+  .kn-reading { grid-template-columns: minmax(0, 860px) minmax(280px, 1fr); }
+  .kn-sources-col { position: sticky; top: var(--sp-4); max-height: calc(100vh - 2 * var(--sp-4)); overflow-y: auto; margin-bottom: 0; padding-left: var(--sp-4); border-left: 1px solid var(--c-line); }
+}
+.kn-page[data-live="true"] .kn-reading-main { max-width: none; }
 .kn-crumb { margin: 0 0 var(--sp-1); font-size: 13px; color: var(--c-ink-3); }
 .kn-title { margin: 0 0 var(--sp-2); font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
-.kn-page .kn-why { display: block; font-size: 15px; line-height: 1.7; color: var(--c-ink-2); margin: 0 0 var(--sp-2); overflow-wrap: anywhere; }
+.kn-page .kn-why { display: block; max-width: 860px; font-size: 15px; line-height: 1.7; color: var(--c-ink-2); margin: 0 0 var(--sp-2); overflow-wrap: anywhere; }
 .kn-page .kn-meta { margin-bottom: var(--sp-4); }
 .kn-section { margin-bottom: var(--sp-5); min-width: 0; overflow-wrap: anywhere; font-size: 15px; line-height: 1.7; }
 .kn-section h3, .kn-summary h3 { margin: 0 0 var(--sp-2); font-size: 16px; font-weight: 700; color: var(--c-ink-2); }
 .kn-summary { margin-bottom: var(--sp-5); padding: var(--sp-4); background: var(--c-surface); border: 1px solid var(--c-line); border-left: 4px solid var(--c-accent); border-radius: var(--r-md); }
-.kn-summary p { margin: 0; font-size: 17px; line-height: 1.7; overflow-wrap: anywhere; }
+.kn-summary p { max-width: 60em; margin: 0; font-size: 17px; line-height: 1.7; overflow-wrap: anywhere; }
 .kn-plain { margin: 0; padding-left: var(--sp-5); color: var(--c-ink); }
 .kn-steps { list-style: none; margin: 0; padding: 0; }
 .kn-steps li { position: relative; display: flex; gap: var(--sp-3); padding-bottom: var(--sp-3); }
@@ -1830,7 +1837,7 @@ button.ms-col { cursor: pointer; }
 .hm-soc-suggest { margin: 0.6rem 0 0; font-size: 0.76rem; color: var(--c-ink); }
 
 /* ── 知識頁概念／方法分版（2.80.0）：翻牌誤解、勾選清單、現場模式、判斷點分岔、關係區 ── */
-.kn-legacy-note { margin: calc(var(--sp-2) * -1) 0 var(--sp-3); font-size: 12px; color: var(--c-ink-3); }
+.kn-legacy-note { max-width: 860px; margin: calc(var(--sp-2) * -1) 0 var(--sp-3); font-size: 12px; color: var(--c-ink-3); }
 .kn-live-btn { margin: 0 0 var(--sp-3); }
 .kn-myth-count { margin: 0 0 var(--sp-2); }
 .kn-myths, .kn-forks, .kn-checklist { list-style: none; margin: 0; padding: 0; }
@@ -1885,7 +1892,11 @@ button.ms-col { cursor: pointer; }
 /* ───────── 知識頁圖解（2.81.0）：kn-dg-* ───────── */
 .kn-dg { container-type: inline-size; margin: 0 0 var(--sp-5); min-width: 0; }
 .kn-dg-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
-.kn-dg-scroll { overflow-x: auto; max-width: 100%; min-width: 0; border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-surface); }
+@container (min-width: 1320px) {
+  .kn-dg-body { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+  .kn-dg-detail { position: sticky; top: var(--sp-4); max-height: calc(100vh - 2 * var(--sp-4)); overflow-y: auto; }
+}
+.kn-dg-scroll { display: flex; justify-content: center; overflow-x: auto; max-width: 100%; min-width: 0; border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-surface); }
 .kn-dg-svg { display: block; width: 100%; height: auto; font-family: var(--font-body); }
 .kn-dg-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); font-size: var(--fs-sm); color: var(--c-ink-2); margin-bottom: var(--sp-2); }
 .kn-dg-legend > span { display: inline-flex; align-items: center; gap: 6px; }
