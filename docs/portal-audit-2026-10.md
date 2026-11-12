@@ -811,6 +811,8 @@
 
 **知識自我生長（2026-11-05，使用者：「我的目標是讓知識自我生長 具有跨越長周期的概念與方法 洞察關係網絡 並且真的能用在工作與生活中 請根據這個目標 審視並改善優化現有管線以及入口網的呈現方式」，表外）**：③ 主題知識頁推進到上線前：題目探索 v3 素材純度（kb-pipeline#269，實機 64 題、RTK 首次成題、6 頁多來源比例 0.90～1.00）與 L4 素材讓位補位（#270）✅；題目登記簿＋`publish` 寫入 `Topics/`（#271）✅；每週增量掛 L5【TASK T】（#272，使用者選「掛在既有 L5 班次」「首批 15 題，其餘每週補」）✅；入口網知識頁 `#knowledge`（2.74.0：題目牆、單題頁、題目關係圖，feed `topics` v1）◐ 本 PR；kb-pipeline `topics-pusher.py` ◐ 同步進行。剩下：HERMES 部署、改 L5 prompt 一句（需使用者授權 jobs.json）、首批 15 題啟動。SQLite 遷移三個佇列模組都已切 primary（`queue_candidate` 2026-11-05），等首個完整週期回報。2026-11-06 知識頁改版（2.75.0）：使用者嫌字小、沒滿屏、題目牆糊成一團，改成三欄滿版、左側知識樹（領域→枝→題目）、中間圖文版題目頁、全樹視圖取代圓形關係圖；feed `topics` 增加 `tree`／`branch`／`path`／`monthCounts`。2026-11-06 依情境主動推播（2.76.0，使用者：「照規格開工」）：新 feed `topic-nudges` v1（kb-pipeline `vikunja-gantt-pusher.py` 順手推，不加 cron、不加模型呼叫），首頁「今天」卡附今天用得上的知識頁、🌙 明日報告區塊附報告那天用得上的、🫶 陪伴區塊加「🔁 一年前的這時候」喚回去年同期或固定季節用過、近 3 個月沒新紀錄的題目；Telegram 明日報告文字不變 ◐ 本 PR，待 HERMES 部署（api-server → kb-pipeline → gis-portal）與實機校準。
 
+**長期陪伴與自我生長（2026-11-12，使用者：「請幫我完整審視目前的架構 以『長期陪伴 自我生長』為原則強化或改造現有功能」「開始第一階段」「照你方案」，表外）**：第一階段地基＝知識頁條目帳本＋人工更正優先＋vault 還原演練。入口網端先做後端 ◐ 本 PR：新表 `knowledge_corrections`（只新增不修改，撤回也是新增一筆）、`GET`／`POST /api/knowledge/corrections`（管線帶管理密碼來拉，入口網不主動寫回知識庫，見 `docs/knowledge-corrections-api.md`）、feed `topics` 接受選用欄位 `claims`／`claimStats`／`appliedCorrections`，每題 `sources` 上限 40→120；沒有畫面變更、不升版號。kb-pipeline 端條目帳本與發布對帳同步進行。剩下：管線拉取並套用更正、知識頁每條的「不對／改寫／補一句」介面、vault 還原演練（等 HERMES 回報備份位置）。部署順序 api-server（含 db-migrate）→ kb-pipeline → gis-portal。
+
 
 ### P0（現在，低風險、不動資料源與部署設定）
 
