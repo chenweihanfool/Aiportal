@@ -984,9 +984,9 @@ export function saveChecks(store: CheckStore | null | undefined, key: string, ch
 
 /* ───────── 句子更正（2.85.0）：claims 配對、顯示清理、新鮮度、勾選鍵 ───────── */
 
-/** 各節的中文節名（送 add 時的 section） */
+/** 各節的中文節名（送 add 時的 section）：必須與知識頁的 `## ` 標題逐字相同，管線對不到節名會改放到最後一節 */
 export const SECTION_LABEL: Record<BulletSection, string> = {
-  summary: '一句話', what: '這件事到底在幹嘛', how: '怎麼做', caution: '要注意', unknown: '還不知道',
+  summary: '一句話', what: '這件事到底在幹嘛', how: '怎麼做', caution: '要注意什麼', unknown: '還不知道什麼',
   why: '為什麼存在', myths: '常見誤解', examples: '實例', prep: '開工前準備', steps: '步驟', decisions: '判斷點', pitfalls: '踩過的坑',
 }
 
