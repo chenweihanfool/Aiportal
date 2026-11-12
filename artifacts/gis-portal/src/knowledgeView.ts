@@ -41,7 +41,25 @@ export interface Topic {
   monthCounts: MonthCount[]
   /** 圖解；推送端還沒送、或內容不合法為 null（其餘欄位不受影響） */
   diagram: TopicDiagram | null
+  /** 句子帳本（2.85.0）：推送端還沒送、或形狀不對＝undefined（沒有帳本的題目不顯示更正按鈕） */
+  claims?: TopicClaim[]
+  claimStats?: ClaimStats
+  /** 知識庫已套用的更正 id */
+  appliedCorrections?: number[]
 }
+
+export interface TopicClaim {
+  id: string
+  section: string
+  status: 'active' | 'disputed'
+  origin: 'model' | 'user'
+  pinned: boolean
+  firstSeen: string
+  lastChanged: string
+  /** 與 body 裡那一行逐字相同，含開頭「- 」與 ⟦n⟧ */
+  text: string
+}
+export interface ClaimStats { active: number; retired: number; disputed: number; user: number }
 
 // ───────── 圖解 diagram（2.81.0）：feed 每題的選用欄位，三種 type；任何不合法整張丟掉（diagram＝null），其餘欄位照常 ─────────
 
@@ -300,7 +318,7 @@ function parseTopic(raw: unknown): Topic | null {
         .filter((r): r is { id: string; name: string; sharedDocs?: number; sharedCases?: number } => !!r && isStr((r as { id?: unknown }).id) && isStr((r as { name?: unknown }).name))
         .map((r) => ({ id: r.id, name: r.name, sharedDocs: isNum(r.sharedDocs) ? r.sharedDocs : 0, sharedCases: isNum(r.sharedCases) ? r.sharedCases : 0 }))
     : []
-  return {
+  const out: Topic = {
     id: t.id,
     name: t.name,
     kind: t.kind,
@@ -323,6 +341,36 @@ function parseTopic(raw: unknown): Topic | null {
     monthCounts,
     diagram: parseDiagram(t.diagram, sources.length),
   }
+  const claims = parseClaims(t.claims)
+  if (claims) out.claims = claims
+  const claimStats = parseClaimStats(t.claimStats)
+  if (claimStats) out.claimStats = claimStats
+  if (Array.isArray(t.appliedCorrections)) out.appliedCorrections = t.appliedCorrections.filter((n): n is number => isInt(n))
+  return out
+}
+
+/** claims：不是陣列＝undefined；單筆不合法略過那一筆（欄位缺少、status／origin 不認得、日期壞掉） */
+function parseClaims(raw: unknown): TopicClaim[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: TopicClaim[] = []
+  for (const c of raw) {
+    if (!isRec(c)) continue
+    if (!isStr(c.id) || !c.id || !isStr(c.section) || !isStr(c.text) || !c.text) continue
+    if (c.status !== 'active' && c.status !== 'disputed') continue
+    if (c.origin !== 'model' && c.origin !== 'user') continue
+    if (typeof c.pinned !== 'boolean') continue
+    if (!isStr(c.firstSeen) || !DATE_RE.test(c.firstSeen) || !isStr(c.lastChanged) || !DATE_RE.test(c.lastChanged)) continue
+    out.push({ id: c.id, section: c.section, status: c.status, origin: c.origin, pinned: c.pinned, firstSeen: c.firstSeen, lastChanged: c.lastChanged, text: c.text })
+  }
+  return out
+}
+
+function parseClaimStats(raw: unknown): ClaimStats | undefined {
+  if (!isRec(raw)) return undefined
+  const { active, retired, disputed, user } = raw
+  if (!isNum(active) || !isNum(retired) || !isNum(disputed) || !isNum(user)) return undefined
+  if (active < 0 || retired < 0 || disputed < 0 || user < 0) return undefined
+  return { active, retired, disputed, user }
 }
 
 function parseTree(raw: unknown): FeedTree | null {
@@ -932,4 +980,98 @@ export function saveChecks(store: CheckStore | null | undefined, key: string, ch
   } catch {
     return false
   }
+}
+
+/* ───────── 句子更正（2.85.0）：claims 配對、顯示清理、新鮮度、勾選鍵 ───────── */
+
+/** 各節的中文節名（送 add 時的 section） */
+export const SECTION_LABEL: Record<BulletSection, string> = {
+  summary: '一句話', what: '這件事到底在幹嘛', how: '怎麼做', caution: '要注意', unknown: '還不知道',
+  why: '為什麼存在', myths: '常見誤解', examples: '實例', prep: '開工前準備', steps: '步驟', decisions: '判斷點', pitfalls: '踩過的坑',
+}
+
+const WRONG_MARK_RE = /\s*（使用者標記有誤\s*(\d{4}-\d{2}-\d{2})\s*）\s*$/
+const ADD_MARK_RE = /\s*（使用者補充\s*(\d{4}-\d{2}-\d{2})\s*）\s*$/
+
+/** 拿掉句尾「（使用者標記有誤 日期）」「（使用者補充 日期）」（不動 ~~） */
+export function stripMarks(text: string): string {
+  return text.replace(WRONG_MARK_RE, '').replace(ADD_MARK_RE, '').trim()
+}
+
+function bulletsOfSection(parsed: ParsedBody, key: BulletSection): Array<{ bid: string; b: Bullet }> {
+  if (key === 'summary') return parsed.summary ? [{ bid: bulletId('summary'), b: parsed.summary }] : []
+  return parsed[key].map((b, i) => ({ bid: bulletId(key, i), b }))
+}
+
+function sameRefs(a: readonly number[], b: readonly number[]): boolean {
+  return a.length === b.length && a.every((n, i) => n === b[i])
+}
+
+/**
+ * 把 claims 配到 parsed 的 bullet：claim.text 去掉開頭「- 」後用同一套規則解析，和同一節內文字＋refs 相同的 bullet 一對一（依出現順序）配對。
+ * 配不到的 claim 不放進 Map。summary 一併配（「一句話」節；舊格式「幹嘛」第一條也是 summary）。
+ */
+export function matchClaims(parsed: ParsedBody, claims: readonly TopicClaim[]): Map<string, TopicClaim> {
+  const out = new Map<string, TopicClaim>()
+  const all: BulletSection[] = ['summary', 'what', 'how', 'caution', 'unknown', 'why', 'myths', 'examples', 'prep', 'steps', 'decisions', 'pitfalls']
+  for (const c of claims) {
+    const rest = c.text.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    const cb = makeBullet(rest)
+    const key = sectionOf(c.section)
+    let pool: Array<{ bid: string; b: Bullet }>
+    if (key === 'one') pool = bulletsOfSection(parsed, 'summary')
+    else if (key === 'what') pool = [...bulletsOfSection(parsed, 'summary'), ...bulletsOfSection(parsed, 'what')]
+    else if (key) pool = bulletsOfSection(parsed, key)
+    else pool = all.flatMap((k) => bulletsOfSection(parsed, k))
+    const hit = pool.find((x) => !out.has(x.bid) && x.b.text === cb.text && sameRefs(x.b.refs, cb.refs))
+    if (hit) out.set(hit.bid, c)
+  }
+  return out
+}
+
+export interface BulletDisplay {
+  text: string
+  /** 標記有誤／補充的日期；沒有標記為 null */
+  date: string | null
+  mark: 'disputed' | 'added' | null
+}
+
+/** 顯示用清理：disputed 去掉 ~~ 與句尾「（使用者標記有誤 日期）」；使用者補充去掉句尾「（使用者補充 日期）」；沒有 claim 原樣 */
+export function displayOf(bullet: Pick<Bullet, 'text'>, claim?: TopicClaim | null): BulletDisplay {
+  if (!claim) return { text: bullet.text, date: null, mark: null }
+  let text = bullet.text
+  if (claim.status === 'disputed') {
+    const m = WRONG_MARK_RE.exec(text)
+    if (m) text = text.replace(WRONG_MARK_RE, '')
+    return { text: text.replace(/~~/g, '').trim(), date: m ? m[1]! : null, mark: 'disputed' }
+  }
+  const m = ADD_MARK_RE.exec(text)
+  if (m) return { text: text.replace(ADD_MARK_RE, '').trim(), date: m[1]!, mark: 'added' }
+  return { text, date: null, mark: null }
+}
+
+/** firstSeen 在近 days 天內（含今天，台北日曆日） */
+export function isFresh(claim: Pick<TopicClaim, 'firstSeen'>, now: Date, days = 14): boolean {
+  if (!validDate(claim.firstSeen)) return false
+  const diff = dayDiff(taipeiDay(now), claim.firstSeen)
+  return diff >= 0 && diff <= days - 1
+}
+
+/** 題目頁標題區的統計行；數字 0 的項目省略，N（active）一定顯示 */
+export function formatClaimStats(s: ClaimStats): string {
+  const parts = [`${s.active} 條`]
+  if (s.user > 0) parts.push(`你更正 ${s.user} 條`)
+  if (s.disputed > 0) parts.push(`有誤 ${s.disputed} 條`)
+  if (s.retired > 0) parts.push(`已退役 ${s.retired} 條`)
+  return parts.join('・')
+}
+
+/** 方法頁勾選狀態的鍵：有 claims → kn-check:<id>（改版不清空）；沒有 → 舊的 kn-check:<id>:<revision> */
+export function checkKeyFor(t: Pick<Topic, 'id' | 'revision' | 'claims'>): string {
+  return t.claims ? `kn-check:${t.id}` : checkKey(t.id, t.revision)
+}
+
+/** 勾選用的條目 id：配到 claim 用 claim.id（c001…），沒配到（或沒有帳本）用 bulletId */
+export function checkIdFor(bid: string, claim?: Pick<TopicClaim, 'id'> | null): string {
+  return claim ? claim.id : bid
 }

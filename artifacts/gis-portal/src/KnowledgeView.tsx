@@ -2,13 +2,14 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
 import { SourceSearchResults } from './KnowledgeSearch'
 import { SourceList, TraceProvider, useTopicQuotes, type TraceCtx } from './KnowledgeTrace'
-import { BulletText, ConceptBody, MethodBody } from './KnowledgeParts'
+import { BulletText, ClaimBullet, ConceptBody, MethodBody, Section } from './KnowledgeParts'
+import { ClaimRow, ClaimText, ClaimsProvider, useClaimsController } from './KnowledgeClaimActions'
 import { KnowledgeDiagram } from './KnowledgeDiagram'
 import { KnowledgeGrowthTree } from './KnowledgeGrowthTree'
 import type { HermesTopicQuote } from './hermesDocApi'
 import { useAsync, useNow } from './homeHooks'
 import {
-  buildTree, bulletId, bulletsCiting, changesByDay, cleanGrowthText, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBodyWithMarkers, parseTopics, recentChangeOf, treeToLayoutInput,
+  buildTree, bulletId, bulletsCiting, changesByDay, cleanGrowthText, filterTopics, formatClaimStats, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBodyWithMarkers, parseTopics, recentChangeOf, treeToLayoutInput,
   type DayChanges,
   type ParsedBody,
   type BuiltTree, type Topic, type TopicChange, type TopicKind, type TopicsData,
@@ -290,11 +291,13 @@ function TreeOverview({ data, now, onOpen }: { data: TopicsData; now: Date; onOp
 
 /* ───────── 中欄：題目頁 ───────── */
 
-function TopicPage({ t, parsed, hl, cited, topics, quotes, onOpen, onSelect, onView, onViewQ }: {
+function TopicPage({ t, parsed, hl, cited, topics, quotes, pw, now, onOpen, onSelect, onView, onViewQ }: {
   t: Topic; parsed: ParsedBody | null; hl: number | null; cited: ReadonlySet<string>; topics: readonly Topic[]
   quotes: readonly HermesTopicQuote[] | null
+  pw: string; now: Date
   onOpen: (id: string) => void; onSelect: (n: number) => void; onView: (n: number) => void; onViewQ: (n: number, q: string) => void
 }) {
+  const claims = useClaimsController(pw, t, parsed, topics, now)
   const range = monthRange(t)
   const [live, setLive] = useState(false)
   const isMethod = parsed?.format === 'method'
@@ -306,37 +309,35 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, onOpen, onSelect, onV
           {parsed.format === 'concept' && <ConceptBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} />}
           {parsed.format === 'method' && <MethodBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} live={liveOn} />}
           {parsed.format === 'legacy' && parsed.what.length > 0 && (
-            <section className="kn-section" aria-label="這件事在幹嘛">
-              <h3>這件事在幹嘛</h3>
-              <ul className="kn-plain">{parsed.what.map((b, i) => <li key={i}><BulletText b={b} bid={bulletId('what', i)} cited={cited} /></li>)}</ul>
-            </section>
+            <Section label="這件事在幹嘛" addKey="what">
+              <ul className="kn-plain">{parsed.what.map((b, i) => <li key={i}><ClaimBullet b={b} bid={bulletId('what', i)} cited={cited} /></li>)}</ul>
+            </Section>
           )}
           {parsed.format === 'legacy' && parsed.how.length > 0 && (
-            <section className="kn-section" aria-label="怎麼做">
-              <h3>怎麼做</h3>
-              <ol className="kn-steps">{parsed.how.map((b, i) => <li key={i}><span className="kn-stepno" aria-hidden="true">{i + 1}</span><div><BulletText b={b} bid={bulletId('how', i)} cited={cited} /></div></li>)}</ol>
-            </section>
+            <Section label="怎麼做" addKey="how">
+              <ol className="kn-steps">{parsed.how.map((b, i) => <li key={i}><span className="kn-stepno" aria-hidden="true">{i + 1}</span><div><ClaimBullet b={b} bid={bulletId('how', i)} cited={cited} /></div></li>)}</ol>
+            </Section>
           )}
           {parsed.format === 'legacy' && parsed.caution.length > 0 && (
-            <section className="kn-section" aria-label="要注意">
-              <h3>要注意</h3>
-              <ul className="kn-cautions">{parsed.caution.map((b, i) => <li key={i}><span aria-hidden="true">⚠</span><div><BulletText b={b} bid={bulletId('caution', i)} cited={cited} /></div></li>)}</ul>
-            </section>
+            <Section label="要注意" addKey="caution">
+              <ul className="kn-cautions">{parsed.caution.map((b, i) => <li key={i}><span aria-hidden="true">⚠</span><div><ClaimBullet b={b} bid={bulletId('caution', i)} cited={cited} /></div></li>)}</ul>
+            </Section>
           )}
           {!liveOn && parsed.unknown.length > 0 && (
-            <section className="kn-section" aria-label="還不知道">
-              <h3>還不知道</h3>
-              <ul className="kn-unknowns">{parsed.unknown.map((b, i) => <li key={i}><span aria-hidden="true">？</span><div><BulletText b={b} bid={bulletId('unknown', i)} cited={cited} /></div></li>)}</ul>
-            </section>
+            <Section label="還不知道" addKey="unknown">
+              <ul className="kn-unknowns">{parsed.unknown.map((b, i) => <li key={i}><span aria-hidden="true">？</span><div><ClaimBullet b={b} bid={bulletId('unknown', i)} cited={cited} /></div></li>)}</ul>
+            </Section>
           )}
           {!liveOn && parsed.other && <section className="kn-section" aria-label="其他"><p className="kn-other">{parsed.other}</p></section>}
     </>
   ) : null
   return (
+    <ClaimsProvider value={claims}>
     <article className="kn-page" data-live={liveOn}>
       {!liveOn && t.path.length > 0 && <p className="kn-crumb">{t.path.join(' › ')}</p>}
       <h2 className="kn-title">{t.name} <span className="kn-kind" data-kind={t.kind}>{kindLabel(t.kind)}</span></h2>
       {isMethod && <button type="button" className="kn-btn kn-live-btn" aria-pressed={live} onClick={() => setLive((v) => !v)}>{live ? '離開現場模式' : '現場模式'}</button>}
+      {t.claimStats && <p className="kn-ca-stats">{formatClaimStats(t.claimStats)}</p>}
       {!liveOn && t.why && <p className="kn-why">{t.why}</p>}
       {!liveOn && (
         <p className="kn-meta">
@@ -351,7 +352,9 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, onOpen, onSelect, onV
       {parsed && parsed.summary && (
         <section className="kn-summary" aria-label="一句話">
           <h3>一句話</h3>
-          <p><BulletText b={parsed.summary} bid={bulletId('summary')} cited={cited} /></p>
+          <ClaimRow bid={bulletId('summary')} b={parsed.summary}>
+            {(v) => <p><ClaimText v={v}><BulletText b={v.override ? { ...parsed.summary!, refs: [], single: false } : parsed.summary!} bid={bulletId('summary')} cited={cited} text={v.text} /></ClaimText></p>}
+          </ClaimRow>
         </section>
       )}
       {parsed && showDiagram && t.diagram && <KnowledgeDiagram topic={t} diagram={t.diagram} quotes={quotes} onOpenSource={onViewQ} />}
@@ -372,6 +375,7 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, onOpen, onSelect, onV
         </section>
       </div>
     </article>
+    </ClaimsProvider>
   )
 }
 
@@ -494,7 +498,7 @@ function Layout({ data, now, topic, topicId, onOpen, onBack, pw }: {
     center = (
       <>
         <button type="button" className="kn-back" onClick={onBack}>← 全樹</button>
-        <TraceProvider value={trace}><TopicPage key={`${topic.id}:${topic.revision}`} t={topic} parsed={parsed} hl={hl} cited={cited} topics={data.topics} quotes={quotes} onOpen={open} onSelect={select} onView={viewSource} onViewQ={viewSourceQ} /></TraceProvider>
+        <TraceProvider value={trace}><TopicPage key={`${topic.id}:${topic.revision}`} t={topic} parsed={parsed} hl={hl} cited={cited} topics={data.topics} quotes={quotes} pw={pw} now={now} onOpen={open} onSelect={select} onView={viewSource} onViewQ={viewSourceQ} /></TraceProvider>
       </>
     )
   } else {
