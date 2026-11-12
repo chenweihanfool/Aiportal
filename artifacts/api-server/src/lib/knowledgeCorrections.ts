@@ -82,6 +82,7 @@ export function parseAfter(value: unknown): number | string {
   if (value === undefined) return 0;
   if (typeof value !== "string" || !/^[0-9]+$/.test(value)) return "after 必須是非負整數";
   const after = Number(value);
-  if (!Number.isSafeInteger(after)) return "after 必須是非負整數";
+  // id 是 serial（int4）；超過上限交給資料庫比較會報 out of range，在這裡先擋成 400。
+  if (!Number.isSafeInteger(after) || after > 2147483647) return "after 必須是非負整數";
   return after;
 }

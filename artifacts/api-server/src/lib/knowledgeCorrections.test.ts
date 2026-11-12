@@ -48,7 +48,8 @@ describe("parseCorrectionBody", () => {
       text: "補充",
     });
     expect(parseCorrectionBody({ topicId: TOPIC, kind: "add", claimId: null, text: "補充" })).toMatchObject({ claimId: null });
-    expect(typeof parseCorrectionBody({ topicId: TOPIC, kind: "add", claimId: "c123", text: "補充" })).toBe("string");
+    expect(parseCorrectionBody({ topicId: TOPIC, kind: "add", claimId: "c123", text: "補充" })).toMatchObject({ claimId: "c123" });
+    expect(typeof parseCorrectionBody({ topicId: TOPIC, kind: "add", claimId: "c1", text: "補充" })).toBe("string");
   });
 
   it("text：fix／add 必填、去頭尾空白後 1–500 字、不得含換行", () => {
@@ -89,5 +90,7 @@ describe("parseAfter", () => {
       expect(typeof parseAfter(bad), String(bad)).toBe("string");
     }
     expect(typeof parseAfter("99999999999999999999")).toBe("string");
+    expect(parseAfter("2147483647")).toBe(2147483647);
+    expect(typeof parseAfter("2147483648")).toBe("string");
   });
 });
