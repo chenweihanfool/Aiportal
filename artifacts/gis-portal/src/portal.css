@@ -20,6 +20,9 @@
   /* 分數色階的高分兩級（低分沿用 warn／concern／crit） */
   --c-score-good: #9cc44a;
   --c-score-great: #34c26b;
+  /* 知識星空樹的枝條漸層（由下往上：天藍 → 薄荷） */
+  --c-sky: #3b82f6;
+  --c-mint: #5eead4;
   /* 間距：4px 為一階 */
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;
@@ -1696,6 +1699,50 @@ button.ms-col { cursor: pointer; }
 /* 全樹 */
 .kn-fulltree { overflow: auto; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-2); max-width: 100%; }
 .kn-fulltree svg { display: block; }
+/* 星空生長樹（2.84.0） */
+.kn-gt-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-3); }
+.kn-gt { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.kn-gt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.kn-gt-play { font: inherit; font-size: 14px; color: var(--c-bg); background: var(--c-mint); border: 0; border-radius: var(--r-pill); padding: var(--sp-1) var(--sp-4); cursor: pointer; }
+.kn-gt-play[aria-pressed="true"] { background: var(--c-accent); }
+.kn-gt-month { font-family: var(--font-mono); font-size: 15px; color: var(--c-mint); min-width: 5.5em; }
+.kn-gt-slider { flex: 1 1 160px; min-width: 0; accent-color: var(--c-mint); }
+.kn-gt-count { font-size: 14px; color: var(--c-ink-2); }
+.kn-gt-count b { color: var(--c-ink); }
+.kn-gt-box { position: relative; overflow: hidden; border: 1px solid var(--c-line); border-radius: var(--r-md); max-width: 100%;
+  background: radial-gradient(ellipse at 50% 100%, rgba(59, 130, 246, 0.18), transparent 65%), radial-gradient(ellipse at 80% 0%, rgba(94, 234, 212, 0.08), transparent 55%), var(--c-bg); }
+.kn-gt-svg { display: block; width: 100%; height: auto; }
+.kn-gt-limb { fill: none; stroke: url(#kn-gt-grad); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; filter: url(#kn-gt-glow); }
+.kn-gt-limb.on { stroke-dashoffset: 0; }
+.kn-gt-limb[data-level="trunk"] { stroke-width: 12; }
+.kn-gt-limb[data-level="domain"] { stroke-width: 5.5; }
+.kn-gt-limb[data-level="branch"] { stroke-width: 3; }
+.kn-gt-limb[data-level="twig"] { stroke-width: 1.3; }
+.kn-gt-leaf { cursor: pointer; outline: none; }
+.kn-gt-leaf > * { transform-box: fill-box; transform-origin: center; transform: scale(0); }
+.kn-gt-leaf.on > * { transform: scale(1); }
+.kn-gt-leaf.on:hover > *, .kn-gt-leaf.on:focus-visible > * { transform: scale(1.35); }
+.kn-gt-dot { filter: url(#kn-gt-glow); }
+.kn-gt-leaf:focus-visible .kn-gt-dot { stroke: var(--c-ink); stroke-width: 2; }
+.kn-gt-halo { fill: none; stroke: var(--c-accent); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.kn-gt-label { font-weight: 700; paint-order: stroke; stroke: var(--c-bg); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+.kn-gt-tip { position: absolute; z-index: 2; pointer-events: none; display: flex; flex-direction: column; gap: 2px; max-width: 240px; padding: var(--sp-2) var(--sp-3); font-size: 13px; line-height: 1.5;
+  color: var(--c-ink); background: var(--c-raised); border: 1px solid var(--c-line-strong); border-radius: var(--r-md); transform: translate(12px, -50%); }
+.kn-gt-tip[data-flip="left"] { transform: translate(calc(-100% - 12px), -50%); }
+.kn-gt-tip span { color: var(--c-ink-2); font-size: 12px; }
+.kn-gt-legend { margin: 0; }
+.kn-gt-lg-fresh { color: var(--c-mint); }
+.kn-gt-lg-halo { color: var(--c-accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .kn-gt-limb { transition: stroke-dashoffset 1.1s cubic-bezier(0.3, 0.8, 0.3, 1); }
+  .kn-gt-limb[data-level="domain"] { transition-delay: 0.15s; }
+  .kn-gt-limb[data-level="branch"] { transition-delay: 0.3s; }
+  .kn-gt-limb[data-level="twig"] { transition-delay: 0.45s; }
+  .kn-gt-leaf > * { transition: transform 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) 0.5s; }
+  .kn-gt-leaf.on:hover > *, .kn-gt-leaf.on:focus-visible > * { transition-delay: 0s; }
+  .kn-gt-leaf.fresh .kn-gt-dot { animation: kn-gt-pulse 1.3s infinite; }
+  @keyframes kn-gt-pulse { 0%, 100% { stroke: #fff; stroke-width: 0; } 50% { stroke: #fff; stroke-width: 5; stroke-opacity: 0.35; } }
+}
 .kn-edge { fill: none; stroke: var(--c-line-strong); stroke-width: 1.2; }
 .kn-tnode { cursor: pointer; }
 .kn-tnode circle { fill: var(--c-raised); stroke: var(--c-accent); stroke-width: 1.5; }

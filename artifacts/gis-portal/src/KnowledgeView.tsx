@@ -250,15 +250,39 @@ function RecentChanges({ data, now, onOpen }: { data: TopicsData; now: Date; onO
   )
 }
 
+const TREE_VIEW_KEY = 'kn-tree-view'
+type TreeView = 'sky' | 'outline'
+
+function loadTreeView(): TreeView {
+  try {
+    return window.localStorage.getItem(TREE_VIEW_KEY) === 'outline' ? 'outline' : 'sky'
+  } catch {
+    return 'sky'
+  }
+}
+
 function TreeOverview({ data, now, onOpen }: { data: TopicsData; now: Date; onOpen: (id: string) => void }) {
   const built = useMemo(() => buildTree(data), [data])
+  const [view, setView] = useState<TreeView>(loadTreeView)
+  const pick = (v: TreeView) => {
+    setView(v)
+    try { window.localStorage.setItem(TREE_VIEW_KEY, v) } catch { /* 寫不進去就只在這次有效 */ }
+  }
   return (
     <>
       <Stats data={data} now={now} />
+      <div className="kn-gt-head">
+        <h2 className="kn-h2">全樹</h2>
+        <div className="kn-seg" role="group" aria-label="全樹檢視">
+          <button type="button" aria-pressed={view === 'sky'} onClick={() => pick('sky')}>🌌 星空</button>
+          <button type="button" aria-pressed={view === 'outline'} onClick={() => pick('outline')}>🗂 階層</button>
+        </div>
+      </div>
+      <p className="kn-muted">{view === 'sky' ? '亮點是題目，按「回放生長」看它一個月一個月長大，點亮點進入題目頁。' : '點領域或枝可收合，點題目進入題目頁。'}{!data.tree && '推送端還沒更新知識樹，題目暫時都在「未歸類」。'}</p>
+      {view === 'sky'
+        ? <KnowledgeGrowthTree built={built} topics={data.topics} now={now} onOpen={onOpen} />
+        : <FullTree built={built} onOpen={onOpen} />}
       <RecentChanges data={data} now={now} onOpen={onOpen} />
-      <h2 className="kn-h2">全樹</h2>
-      <p className="kn-muted">點領域或枝可收合，點題目進入題目頁。{!data.tree && '推送端還沒更新知識樹，題目暫時都在「未歸類」。'}</p>
-      <FullTree built={built} onOpen={onOpen} />
     </>
   )
 }
