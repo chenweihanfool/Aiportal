@@ -518,7 +518,7 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
               },
               sources: {
                 type: "array",
-                maxItems: 40,
+                maxItems: 120,
                 items: {
                   type: "object",
                   additionalProperties: false,
@@ -551,6 +551,38 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
               },
               // 選填：知識頁的圖解資料（2026-11-08 起）；舊推送不帶也合法。
               diagram: DIAGRAM,
+              // 選填：頁面上的每一條與統計、已套用的更正（2026-11-12 起）；舊推送不帶也合法。
+              claims: {
+                type: "array",
+                maxItems: 300,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["id", "section", "status", "origin", "pinned", "firstSeen", "lastChanged", "text"],
+                  properties: {
+                    id: { type: "string", pattern: "^c[0-9]{3,5}$" },
+                    section: { type: "string", minLength: 1, maxLength: 40 },
+                    status: { type: "string", enum: ["active", "disputed"] },
+                    origin: { type: "string", enum: ["model", "user"] },
+                    pinned: { type: "boolean" },
+                    firstSeen: { type: "string", pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+                    lastChanged: { type: "string", pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+                    text: { type: "string", minLength: 1, maxLength: 2000 },
+                  },
+                },
+              },
+              claimStats: {
+                type: "object",
+                additionalProperties: false,
+                required: ["active", "retired", "disputed", "user"],
+                properties: {
+                  active: { type: "integer", minimum: 0 },
+                  retired: { type: "integer", minimum: 0 },
+                  disputed: { type: "integer", minimum: 0 },
+                  user: { type: "integer", minimum: 0 },
+                },
+              },
+              appliedCorrections: { type: "array", maxItems: 200, items: { type: "integer", minimum: 1 } },
             },
           },
         },

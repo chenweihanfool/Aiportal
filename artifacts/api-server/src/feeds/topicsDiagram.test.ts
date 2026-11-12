@@ -126,6 +126,55 @@ function maxMap() {
   };
 }
 
+// topics 的選用欄位 claims／claimStats／appliedCorrections（2026-11-12 起，任務單 kb-claims-api）。
+const claim = {
+  id: "c123",
+  section: "重點",
+  status: "active",
+  origin: "model",
+  pinned: false,
+  firstSeen: "2026-01-01",
+  lastChanged: "2026-01-02",
+  text: "條文內容",
+};
+const claimsBody = (extra: Record<string, unknown>) => ({
+  schemaVersion: 1,
+  generatedAt: "2026-11-08",
+  payload: { ...base, topics: [{ ...topic(), ...extra }] },
+});
+
+describe("topics claims", () => {
+  it("舊形狀（沒有三個新欄位、sources ≤ 40）照常通過", () => {
+    const r = validateFeedRequest("topics", body());
+    expect(r.ok, r.ok ? "" : r.message).toBe(true);
+    const forty = Array.from({ length: 40 }, (_, i) => ({ id: `s${i}`, title: "來源" }));
+    expect(validateFeedRequest("topics", claimsBody({ sources: forty })).ok).toBe(true);
+  });
+
+  it("帶三個新欄位通過；sources 上限放寬到 120", () => {
+    const sources = Array.from({ length: 120 }, (_, i) => ({ id: `s${i}`, title: "來源" }));
+    const r = validateFeedRequest(
+      "topics",
+      claimsBody({ sources, claims: [claim], claimStats: { active: 1, retired: 0, disputed: 0, user: 1 }, appliedCorrections: [1, 2] }),
+    );
+    expect(r.ok, r.ok ? "" : r.message).toBe(true);
+    expect(validateFeedRequest("topics", claimsBody({ sources: [...sources, { id: "s120", title: "來源" }] })).ok).toBe(false);
+  });
+
+  it("claims 的 status／id／未知鍵、claimStats 缺鍵、appliedCorrections 的 0 各自被拒", () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ["status retired", { claims: [{ ...claim, status: "retired" }] }],
+      ["id c1", { claims: [{ ...claim, id: "c1" }] }],
+      ["未知鍵", { claims: [{ ...claim, extra: 1 }] }],
+      ["claimStats 缺 retired", { claimStats: { active: 1, disputed: 0, user: 1 } }],
+      ["appliedCorrections 0", { appliedCorrections: [0] }],
+    ];
+    for (const [name, extra] of cases) {
+      expect(validateFeedRequest("topics", claimsBody(extra)), name).toMatchObject({ ok: false, status: 400 });
+    }
+  });
+});
+
 describe("topics diagram", () => {
   it("舊 payload 沒有 diagram 照樣通過；diagram: null 也合法", () => {
     expect(validateFeedRequest("topics", body()).ok).toBe(true);

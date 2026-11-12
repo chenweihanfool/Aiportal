@@ -49,6 +49,13 @@
 - `case`：`string|null`，≤60 字（事件 frontmatter 的 case，去掉 `[[ ]]`）
 - `date`：`YYYY-MM-DD|null`（事件 frontmatter 的 date；筆記是 null）
 
+## topics 的 claims 選用欄位（v1 只加選填，舊 payload 照常通過）
+2026-11-12 起每題可多帶三個選用欄位（不帶也合法）：
+- `claims[]`：頁面上的每一條，最多 300 筆。每筆必填 `id`（`c` 加 3–5 位數字）、`section`（1–40 字）、`status`（`active|disputed`）、`origin`（`model|user`）、`pinned`（布林）、`firstSeen`／`lastChanged`（`YYYY-MM-DD`）、`text`（1–2000 字）。
+- `claimStats`：`{active, retired, disputed, user}` 四個非負整數，必填。
+- `appliedCorrections`：已套用的更正 id 陣列，最多 200 筆，每筆為 ≥ 1 的整數。
+同時把每題 `sources` 上限由 40 放寬到 120；`maxBytes` 維持 4 MiB。更正的來源是 `knowledge_corrections` 表（管線用 `GET /api/knowledge/corrections` 讀，見 `docs/knowledge-corrections-api.md`）。
+
 ## hermes-doc 的新 kind（內容層，`POST /api/admin/hermes-doc`，標頭 `x-admin-password`）
 - `source`：一個主題來源一筆。`key` 是來源 id（可能含 `/`，例如 `AI/工作/x`），`bodyMd` 是原文全文（UTF-8 截到 64 KiB），`sourcePath` 是 vault 相對路徑。`meta`＝`{type, case, date, originName, rawPath, textFrom, evidence, topics}`，`textFrom` 為 `original|diary|note|event|none`。
 - `topic`：一個已發布主題一筆。`key` 是主題 id，`bodyMd` 為空字串，`meta = {quotes: [{k, ref, text, fromOriginal, weak}]}`（`k` 是 feed `body` 裡第 k 個 `⟦n⟧` 標記）。

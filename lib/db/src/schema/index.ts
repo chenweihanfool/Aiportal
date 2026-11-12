@@ -19,3 +19,4 @@ export * from "./hermesTrips";
 export * from "./feedSnapshot";
 export * from "./hermesChat";
 export * from "./companionPersonActions";
+export * from "./knowledgeCorrections";
