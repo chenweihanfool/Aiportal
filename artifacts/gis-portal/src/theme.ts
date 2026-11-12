@@ -80,6 +80,9 @@ export const CSS_TOKENS: Record<string, string> = {
   // 分數色階的高分兩級（低分沿用 warn／concern／crit）
   '--c-score-good': SCORE_SCALE.good,
   '--c-score-great': SCORE_SCALE.great,
+  // 知識星空樹的枝條漸層（由下往上：天藍 → 薄荷）
+  '--c-sky': '#3b82f6',
+  '--c-mint': '#5eead4',
   // 間距：4px 為一階
   '--sp-1': '0.25rem',
   '--sp-2': '0.5rem',
