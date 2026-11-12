@@ -4,6 +4,7 @@ import { SourceSearchResults } from './KnowledgeSearch'
 import { SourceList, TraceProvider, useTopicQuotes, type TraceCtx } from './KnowledgeTrace'
 import { BulletText, ConceptBody, MethodBody } from './KnowledgeParts'
 import { KnowledgeDiagram } from './KnowledgeDiagram'
+import { KnowledgeGrowthTree } from './KnowledgeGrowthTree'
 import type { HermesTopicQuote } from './hermesDocApi'
 import { useAsync, useNow } from './homeHooks'
 import {
