@@ -573,8 +573,11 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
       const top = await page.evaluate(() => { const r = (sel) => { const e = document.querySelector(sel); return e ? e.getBoundingClientRect() : null }; const hd = r('.ip-head'), td = r('.hm-today'), dm = r('.hm-dimsec'), sc = r('.hm-score-n'), mt = r('.hm-score-meta'); return { headH: Math.round(hd.height), todayH: Math.round(td.height), dimsTop: Math.round(dm.top), scoreTop: Math.round(sc.top), metaTop: Math.round(mt.top), scoreRight: Math.round(sc.right), metaLeft: Math.round(mt.left) } })
       check(`${T}：頁首壓成一條（高 ${top.headH}px ≤ ${Math.round(h * 0.17)}px）`, top.headH <= h * 0.17, JSON.stringify(top))
       check(`${T}：① 今天卡不超過首屏 40%（${top.todayH}px）`, top.todayH <= h * 0.4, JSON.stringify(top))
-      // 2.86.0 起最上方多一條全站搜尋框（手機約 60px）：高度不到 800 的小手機只要求上緣在首屏內，其餘仍要露出至少 100px
-      check(`${T}：② 面向小卡的上緣在首屏內${h >= 800 ? '，且露出至少 100px' : ''}（${top.dimsTop}px）`, top.dimsTop + (h >= 800 ? 100 : 0) <= h, JSON.stringify(top))
+      // 2.87.0 起搜尋框下方多了「現在用得上」：手機首屏改成要求它的上緣在首屏內（使用者 2026-11-14 選「調整斷言」）；
+      // 面向小卡改由第 3 期整併進右欄狀態區後再訂首屏規則，這裡只要求它在 2 個螢幕高度內
+      const nowTop = await page.evaluate(() => Math.round(document.querySelector('[data-testid="now-section"]')?.getBoundingClientRect().top ?? 1e9))
+      check(`${T}：「現在用得上」的上緣在首屏內（${nowTop}px）`, nowTop < h, JSON.stringify({ nowTop }))
+      check(`${T}：② 面向小卡的上緣在 2 個螢幕高度內（${top.dimsTop}px）`, top.dimsTop <= h * 2, JSON.stringify(top))
       check(`${T}：分數與等級／差並排（同一列，分數在左）`, Math.abs(top.scoreTop - top.metaTop) < 60 && top.metaLeft >= top.scoreRight - 2, JSON.stringify(top))
       // 手機頁首跟著內容捲走（不釘在最上面）
       const sc = await page.evaluate(async () => { const sh = document.querySelector('.ip-shell'); sh.scrollTo({ top: 500 }); await new Promise((r) => setTimeout(r, 200)); const hd = document.querySelector('.ip-head').getBoundingClientRect(); return { top: Math.round(sh.scrollTop), headBottom: Math.round(hd.bottom) } })
