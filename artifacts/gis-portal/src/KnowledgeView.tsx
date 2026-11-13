@@ -252,14 +252,15 @@ function RecentChanges({ data, now, onOpen }: { data: TopicsData; now: Date; onO
   )
 }
 
-const TREE_VIEW_KEY = 'kn-tree-view'
+// 2.86.0：預設改回階層；鍵名換成 v2 讓舊的「記住的選擇」作廢一次，之後照常記住
+const TREE_VIEW_KEY = 'kn-tree-view-v2'
 type TreeView = 'sky' | 'outline'
 
 function loadTreeView(): TreeView {
   try {
-    return window.localStorage.getItem(TREE_VIEW_KEY) === 'outline' ? 'outline' : 'sky'
+    return window.localStorage.getItem(TREE_VIEW_KEY) === 'sky' ? 'sky' : 'outline'
   } catch {
-    return 'sky'
+    return 'outline'
   }
 }
 

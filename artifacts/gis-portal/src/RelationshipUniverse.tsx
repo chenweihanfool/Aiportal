@@ -1028,7 +1028,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
     cameraDistRef.current = Math.max(worldR * ZOOM_MIN_FACTOR, Math.min(worldR * ZOOM_MAX_FACTOR, cameraDistRef.current * factor))
   }, [])
 
-  // 主控台（App.tsx 的 CommandPalette）用 ⌘K/Ctrl+K 開全站搜尋，但這一頁
+  // 主控台首頁的全站搜尋（OmniSearch）用 ⌘K/Ctrl+K 聚焦搜尋框，但這一頁
   // 已經有自己專門搜人/事/案/物的搜尋框，不需要另一層 overlay——這裡接同
   // 一組快捷鍵，單純把焦點跟游標丟給既有的輸入框，兩邊快捷鍵記憶體感一致。
   useEffect(() => {
