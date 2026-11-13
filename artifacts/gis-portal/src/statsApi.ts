@@ -4,21 +4,24 @@ import { parseTopics, type TopicsData } from './knowledgeView'
 import { parsePushStats, parseRecent, parseSearchStats, type PushStats, type SearchStats } from './statusAside'
 
 const API_BASE = import.meta.env.BASE_URL ?? '/'
+/** 包一層：後端還沒部署（404）或內容不合法時 value 是 null——這跟「還在載入」（useAsync 的 data 是 null）要分得開 */
+export interface Maybe<T> { value: T | null }
+
 const auth = (pw: string) => ({ headers: { 'x-admin-password': pw } })
 
-/** 後端還沒部署（404）回 null；其他失敗丟例外 */
-export async function apiFetchSearchStats(pw: string, days: number): Promise<SearchStats | null> {
+/** 後端還沒部署（404）value 為 null；其他失敗丟例外 */
+export async function apiFetchSearchStats(pw: string, days: number): Promise<Maybe<SearchStats>> {
   const r = await fetch(`${API_BASE}api/search/stats?days=${days}`, auth(pw))
-  if (r.status === 404) return null
+  if (r.status === 404) return { value: null }
   if (!r.ok) throw new Error('Failed to fetch search stats')
-  return parseSearchStats(await r.json())
+  return { value: parseSearchStats(await r.json()) }
 }
 
-export async function apiFetchPushStats(pw: string, days: number): Promise<PushStats | null> {
+export async function apiFetchPushStats(pw: string, days: number): Promise<Maybe<PushStats>> {
   const r = await fetch(`${API_BASE}api/push/stats?days=${days}`, auth(pw))
-  if (r.status === 404) return null
+  if (r.status === 404) return { value: null }
   if (!r.ok) throw new Error('Failed to fetch push stats')
-  return parsePushStats(await r.json())
+  return { value: parsePushStats(await r.json()) }
 }
 
 /** 最近搜尋（新到舊、去重）；後端還沒部署（404）回空；其他失敗丟例外 */
@@ -30,10 +33,10 @@ export async function apiFetchRecentSearches(pw: string, limit = 5): Promise<str
 }
 
 /** 知識頁 feed；available＝false（還沒推）回 null */
-export async function apiFetchTopicsData(pw: string): Promise<TopicsData | null> {
+export async function apiFetchTopicsData(pw: string): Promise<Maybe<TopicsData>> {
   const r = await fetch(`${API_BASE}api/feed/topics`, auth(pw))
   if (!r.ok) throw new Error('Failed to fetch topics')
-  return parseTopics(await r.json())
+  return { value: parseTopics(await r.json()) }
 }
 
 // 模組層級常數：useAsync 以 fetcher 的參照當依賴，不能在 render 裡現做

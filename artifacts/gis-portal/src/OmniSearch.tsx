@@ -38,7 +38,7 @@ function glow(e: ReactMouseEvent<HTMLElement>) {
   e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`)
 }
 
-export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, onRequestUnlock }: {
+export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, onRequestUnlock, seed }: {
   /** 管理密碼；null＝未解鎖 */
   pw: string | null
   sites: SiteData[]
@@ -47,6 +47,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   /** 打開 HERMES 對話；帶 text 時一併放進輸入框 */
   onOpenChat: (text?: string) => void
   onRequestUnlock: () => void
+  /** 外部帶入搜尋詞（STATUS 的「最近」小籤）：n 每次加 1 就把 q 放進搜尋框並執行搜尋 */
+  seed?: { q: string; n: number }
 }) {
   const [raw, setRaw] = useState('')
   const [focused, setFocused] = useState(false)
@@ -68,6 +70,14 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   pwRef.current = pw
   const sitesRef = useRef(sites)
   sitesRef.current = sites
+
+  // 外部帶入（seed.n 變了才動作；同一個詞連點兩次 n 也會變）
+  useEffect(() => {
+    if (!seed || seed.n <= 0) return
+    setRaw(seed.q)
+    inputRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.n])
 
   const parsed = useMemo(() => parseQuery(raw), [raw])
   const searchQ = parsed.mode === 'search' ? parsed.q : ''

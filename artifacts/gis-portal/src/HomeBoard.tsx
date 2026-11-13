@@ -18,7 +18,13 @@ import { DIMENSIONS, dimensionSiteLinks } from './dimensions'
 import type { SiteData } from './portalApi'
 import { useAsync, useNow } from './homeHooks'
 import { PaidServicesPanel, PaidServicesSection } from './PaidServices'
-import { BriefSection, CompanionSection, DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection } from './HomeSections'
+import { BriefSection, CompanionSection, DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection, YearHeat } from './HomeSections'
+import { StateFrame } from './StateFrame'
+import { StatusAside } from './StatusAside'
+import { PushStatsPanel, SearchStatsPanel } from './StatsDrawers'
+import { apiFetchTopicsData, fetchPushStats14, fetchRecentSearches, fetchSearchStats7 } from './statsApi'
+import { serviceSummary, todayLine } from './statusAside'
+import type { HomeLayout } from './homeLayout'
 import { activityInsight, apiFetchCompanion, apiFetchPersonActions, bestMove } from './companion'
 import { apiFetchDailyLife } from './milestones'
 import { apiFetchReports, crowdOf, parseBrief, pickBrief } from './briefView'
@@ -35,13 +41,13 @@ import {
 // 獨立元件，props 與 DesktopBoard 類似；2.36.0 起是預設首頁的主區（App.tsx 的 InstrumentPanelView，左側欄的工具連結保留），舊版 DesktopBoard 在 #legacy。
 // 資料全部來自既有 API 與既有型別／函式，沒有任何示範值：拿不到就依 StateFrame 的狀態機顯示（未解鎖／載入中／空／過期／失敗）。
 
-type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc'
+type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc' | 'searchStats' | 'pushStats' | 'brief'
 
 const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
 // 面向小卡的 30 天迷你線：另外要 days=30（後端的 components 欄位只保證在這個呼叫裡；接口還沒部署時沒有該欄位，就不畫線）
 const fetchHistory30 = (pw: string) => fetchHhiHistoryStrict(pw, 30)
 
-export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, hhiError, toneOf, onRequestUnlock, hhiDetail, opsDetail, sites }: {
+export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, hhiError, toneOf, onRequestUnlock, hhiDetail, opsDetail, sites, layout = 'v3' }: {
   unlocked: boolean
   unlockedPassword: string | null
   /** /api/dashboard 的 hhi 摘要資料（App.tsx 的 hhiSummary?.data）；undefined＝還沒載入 */
@@ -58,12 +64,17 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   opsDetail: ReactNode
   /** 面向對應的子系統連結（/api/sites，要解鎖才有內容） */
   sites: SiteData[]
+  /** 'v3'＝新版三塊（搜尋｜現在用得上｜STATUS）；'classic'＝舊版首頁（九個區塊＋左側導覽，DOM 與 2.87.0 相同） */
+  layout?: HomeLayout
 }) {
   const pw = unlocked && unlockedPassword ? unlockedPassword : null
   const now = useNow()
   const nowMs = now.getTime()
   const todayIso = taipeiDate(now)
   const [drawer, setDrawer] = useState<DrawerKey | null>(null)
+  const v3 = layout === 'v3'
+  // 最近搜尋的詞帶回搜尋框：n 每點一次加 1（OmniSearch 的 seed 介面）
+  const [seed, setSeed] = useState({ q: '', n: 0 })
 
   const history = useAsync(pw, fetchHistory365)
   const history30 = useAsync(pw, fetchHistory30)
@@ -84,6 +95,12 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const gantt = useAsync(pw, apiFetchGantt)
   // 主題知識推播（給「現在用得上」區塊；失敗或沒資料時就沒有卡片，不併進既有區塊的狀態）
   const nudges = useAsync(pw, apiFetchTopicNudges)
+  // STATUS 右欄（v3）才用的讀取：舊版首頁不發這些請求
+  const pwV3 = v3 ? pw : null
+  const topicsFeed = useAsync(pwV3, apiFetchTopicsData)
+  const searchStats = useAsync(pwV3, fetchSearchStats7)
+  const pushStats = useAsync(pwV3, fetchPushStats14)
+  const recent = useAsync(pwV3, fetchRecentSearches)
 
   const dimLinks = useMemo(() => dimensionSiteLinks(sites), [sites])
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
@@ -197,6 +214,83 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
 
   // 全站搜尋（2.86.0）：工具連結沿用原指令面板的做法——解鎖後才有 sites，直接開第一個連結
   const openSite = (site: SiteData) => { const url = site.links[0]?.url; if (url) window.open(url, '_blank', 'noopener,noreferrer') }
+
+  // ── 新版首頁（v3）：搜尋框｜現在用得上｜STATUS 右欄。舊區塊整併去處見 docs 規格 S2：今天→STATUS 盒頭與標題列上方一行、明日報告→抽屜、
+  //    陪伴→歷年今天變卡片／洞察進幸福指數抽屜、成長軌跡→幸福指數抽屜與 STATUS、倉庫→戰情室抽屜、系統與付費服務與六個面向→STATUS ──
+  const hasComponents = (h: ReadonlyArray<{ components?: unknown }> | null) => !!h && h.some((x) => !!x.components)
+  const dimHistory = hasComponents(history30.data) ? history30.data : hasComponents(history.data) ? history.data : null
+  const svc = serviceSummary({ usage: usage.data, paid: paid.data, usageError: usage.error, paidError: paid.error })
+  const wantLine = (w: typeof wantEat) => (w ? { name: w.place.name, kind: w.place.kind, area: w.place.area, days: w.days } : null)
+
+  if (v3) {
+    const openIdeas = () => { if (on) setDrawer('ideas'); else onRequestUnlock() }
+    const insightBlock = (
+      <div className="st-dsec" data-testid="activity-insight">
+        <h3 className="hm-h3">🔍 什麼事讓你變好</h3>
+        {insight.lines.length > 0 && <ul className="hm-comp-list">{insight.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
+        {insight.pending !== '' && <p className="hm-muted">{insight.pending}</p>}
+      </div>
+    )
+    const growthBlock = (
+      <div className="st-dsec" data-testid="st-hhi-growth">
+        <h3 className="hm-h3">🌱 成長軌跡</h3>
+        <StateFrame status={heatSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={history.reload}
+          pendingText={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}>
+          <YearHeat heat={heat} toneOf={toneOf} />
+        </StateFrame>
+        <div className="hm-sub">里程碑</div>
+        <ul className="hm-miles" aria-label="里程碑">
+          {miles.badges.length === 0
+            ? <li className="hm-muted">{miles.next ? '還沒有達成的里程碑' : '資料累積到門檻才會出現（只列算得出來的）'}</li>
+            : miles.badges.map((m) => <li key={m.id} className="hm-mile" title={m.detail}><span aria-hidden>{m.icon}</span>{m.title}</li>)}
+        </ul>
+        {miles.next && <p className="hm-note"><span aria-hidden>{miles.next.icon}</span> {miles.next.text}（{Math.round(miles.next.ratio * 100)}%）</p>}
+      </div>
+    )
+    return (
+      <div className="st-root" data-sys={alert ? 'alert' : 'ok'} data-testid="st-root">
+        {alert && (
+          <button type="button" className="st-alert" data-testid="st-alert" data-level={light.level} onClick={() => setDrawer('ops')} aria-haspopup="dialog">
+            <span aria-hidden>⚠</span><span className="st-alert-t">{light.headline}</span><span className="st-alert-go">戰情室 →</span>
+          </button>
+        )}
+        <OmniSearch
+          pw={pw} sites={sites} onSelectSite={openSite} seed={seed}
+          onOpenIdeas={openIdeas}
+          onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
+          onRequestUnlock={onRequestUnlock} />
+        <div className="st-home">
+          <NowSection pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
+            briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
+            onActionsChange={personActions.reload}
+            todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
+          <StatusAside
+            on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
+            hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
+            topics={topicsFeed} searchStats={searchStats} pushStats={pushStats}
+            onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')}
+            sysSt={sysSt} light={light} onOpenOps={() => setDrawer('ops')}
+            svcSt={svcSt} svc={svc} onOpenSvc={() => setDrawer('svc')}
+            recent={recent.data ?? []} onPickRecent={(q) => setSeed((x) => ({ q, n: x.n + 1 }))}
+            ideasSt={ideasSt} topIdea={ideaTop[0] ?? null} foodSt={foodSt} wantEat={wantLine(wantEat)} wantGo={wantLine(wantGo)}
+            tripsSt={tripsSt} trip={trip} onOpenIdeas={openIdeas} />
+        </div>
+        {drawer === 'hhi' && <Drawer title="幸福指數詳情：活動洞察・雷達・30 天洞察・趨勢・六維度子系統・成長軌跡" onClose={closeDrawer}>{insightBlock}{hhiDetail}{growthBlock}</Drawer>}
+        {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} /></Drawer>}
+        {drawer === 'svc' && pw && <Drawer title="付費服務：用量與連結・Ollama 更新餘額" onClose={() => { closeDrawer(); usage.reload() }}><PaidServicesPanel pw={pw} usage={usage.data} paid={paid.data} /></Drawer>}
+        {drawer === 'searchStats' && pw && <Drawer title="搜尋統計：近 14 天" onClose={closeDrawer}><SearchStatsPanel pw={pw} /></Drawer>}
+        {drawer === 'pushStats' && pw && <Drawer title="推送統計：近 14 天" onClose={closeDrawer}><PushStatsPanel pw={pw} /></Drawer>}
+        {drawer === 'brief' && pw && <Drawer title="明日報告" onClose={closeDrawer}><BriefSection st={briefSt} brief={brief} parsed={briefParsed} crowd={briefCrowd} onRequestUnlock={onRequestUnlock} onRetry={reports.reload} /></Drawer>}
+        {pw && <ChatDock pw={pw} />}
+        {drawer === 'ops' && pw && (
+          <Drawer title="HERMES 戰情室：推送健康・關係網路・管線・硬碟・排程・活動・容器・趨勢・倉庫" onClose={closeDrawer}>
+            <PusherHealthPanel pw={pw} />{opsDetail}
+            <div className="st-dsec" data-testid="st-ops-repos"><ReposSection st={reposSt} data={repos.data} now={now} onRequestUnlock={onRequestUnlock} onRetry={repos.reload} /></div>
+          </Drawer>
+        )}
+      </div>
+    )
+  }
 
   return (
     <>

@@ -1,4 +1,6 @@
 // 入口網首頁：頁首、主區（新首頁或舊版首頁）與兩個抽屜的內容。
+import { useState } from 'react'
+import { CLASSIC_REMOVAL_NOTE, browserLayoutStore, readHomeLayout, writeHomeLayout, type HomeLayout } from './homeLayout'
 import { DesktopBoard } from './DesktopBoard'
 import { HomeBoard } from './HomeBoard'
 import { COLOR } from './theme'
@@ -36,6 +38,13 @@ export function InstrumentPanelView({
   onOpenAdmin?: () => void
 }) {
   const privateSites = sites.filter(s => s.isPrivate)
+  // 首頁版面（2.88.0）：新版三塊 v3 或舊版首頁 classic；切換立即生效並記在 localStorage（不記次數、不送 API）
+  const [layout, setLayout] = useState<HomeLayout>(() => readHomeLayout(browserLayoutStore()))
+  const toggleLayout = () => {
+    const next: HomeLayout = layout === 'classic' ? 'v3' : 'classic'
+    setLayout(next)
+    writeHomeLayout(browserLayoutStore(), next)
+  }
 
   // 有摘要的四個子系統（pf-cwh 等）在「六維度」卡上顯示儀表，連結（人生進度、健身追蹤、任務追蹤）
   // 2026-10-22 起也放在首頁六個面向卡上；工具連結區已拿掉。
@@ -87,6 +96,14 @@ export function InstrumentPanelView({
   return (
     <div className="ip-shell" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
       <TopBar portals={sites.length} legacy={legacy} onOpenAdmin={onOpenAdmin} />
+      {!legacy && (
+        <div className="st-layoutbar">
+          <button type="button" className="st-layout-toggle" data-testid="hm-layout-toggle" aria-pressed={layout === 'classic'} onClick={toggleLayout} title={CLASSIC_REMOVAL_NOTE}>
+            舊版首頁
+          </button>
+          <span className="st-layout-note">{CLASSIC_REMOVAL_NOTE}</span>
+        </div>
+      )}
 
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 'var(--sp-4) var(--sp-5) var(--sp-6)' }}>
         <div className="ip-layout">
@@ -102,7 +119,7 @@ export function InstrumentPanelView({
             ) : (
               <HomeBoard
                 unlocked={unlocked} unlockedPassword={unlockedPassword} hhiData={hhiSummary?.data ?? undefined} hhiFetchedAt={hhiSummary?.fetchedAt ?? null}
-                hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} hhiDetail={hhiDetail} opsDetail={opsDetail} sites={sites}
+                hhiError={hhiSummary?.status === 'error'} toneOf={hhiTone} onRequestUnlock={onRequestUnlock} hhiDetail={hhiDetail} opsDetail={opsDetail} sites={sites} layout={layout}
               />
             )}
           </div>

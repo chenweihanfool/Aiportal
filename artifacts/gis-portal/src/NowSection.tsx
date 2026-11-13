@@ -30,9 +30,26 @@ function writePending(list: Pending): void {
   } catch { /* 存不了就算了 */ }
 }
 
+/** 手機（≤860px）先只顯示前幾張卡，其餘收在「再看 N 則」後面，好讓下面的 STATUS 在 1.5 個螢幕內 */
+const NARROW_QUERY = '(max-width: 860px)'
+export const COLLAPSED_CARDS = 2
+
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(NARROW_QUERY).matches)
+  useEffect(() => {
+    const m = window.matchMedia?.(NARROW_QUERY)
+    if (!m) return
+    const f = () => setNarrow(m.matches)
+    f()
+    m.addEventListener?.('change', f)
+    return () => m.removeEventListener?.('change', f)
+  }, [])
+  return narrow
+}
+
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, onActionsChange }: {
+export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, onActionsChange, todayLine, onOpenBrief }: {
   /** null＝未解鎖：整個區塊不顯示 */
   pw: string | null
   nowMs: number
@@ -47,7 +64,14 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   briefInfo: { date: string; summary: string } | null
   /** 很久沒聯絡的動作寫入成功後，通知上層重新讀取陪伴資料 */
   onActionsChange: () => void
+  /** 新版首頁（v3）：今天的趨勢一句話＋下一步建議合成一行，放在標題列上方；沒給就不顯示 */
+  todayLine?: string | null
+  /** 新版首頁（v3）：明日報告卡的「看全文」改開抽屜；沒給就維持捲到頁面上的明日報告區塊（舊版首頁） */
+  onOpenBrief?: () => void
 }) {
+  const narrow = useNarrow()
+  const [expanded, setExpanded] = useState(false)
+  const pendingScroll = useRef<string | null>(null)
   const [day, setDay] = useState<NowDay>(() => defaultDay(nowMs))
   // 先補送上次沒送成功的「沒用」（全部結束），之後才讀 feedback，確保 GET 已包含那些鍵
   const [flushDone, setFlushDone] = useState(false)
@@ -132,8 +156,18 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   }
 
   const scrollToCard = (key: string) => {
-    cardEls.current.get(key)?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
+    const el = cardEls.current.get(key)
+    if (el) { el.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }); return }
+    // 這張卡還收在「再看 N 則」後面：先展開，下一輪渲染完再捲
+    pendingScroll.current = key
+    setExpanded(true)
   }
+  useEffect(() => {
+    const key = pendingScroll.current
+    if (!key || !expanded) return
+    pendingScroll.current = null
+    cardEls.current.get(key)?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
+  }, [expanded])
 
   const quietAct = async (card: NowCard, body: PersonActionBody) => {
     if (!pw || !card.person) return
@@ -153,10 +187,13 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
 
   const nowHour = day === 'today' ? ((nowMs + 8 * 3_600_000) % 86_400_000) / 3_600_000 : null
   const timed = cards.filter((c) => atHours(c.at) !== null)
+  const collapsed = narrow && !expanded && cards.length > COLLAPSED_CARDS
+  const shownCards = collapsed ? cards.slice(0, COLLAPSED_CARDS) : cards
   const emptyText = day === 'today' ? '今天沒有需要推給你的。' : '明天沒有需要推給你的。'
 
   return (
     <section className="nw-root" aria-labelledby="nw-h" data-testid="now-section">
+      {todayLine && <p className="nw-line1" data-testid="st-today-line">{todayLine}</p>}
       <div className="nw-head">
         <h2 id="nw-h" className="nw-title">現在用得上</h2>
         <span className="nw-lb" data-testid="now-count">{countLabel(cards.length)}</span>
@@ -184,12 +221,16 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
 
       {!ready ? <p className="nw-empty" data-testid="now-loading">整理中…</p> : cards.length === 0 ? <p className="nw-empty" data-testid="now-empty">{emptyText}</p> : (
         <div className="nw-list">
-          {cards.map((c) => (
+          {shownCards.map((c) => (
             <NowCardView key={c.key} card={c} hot={hot === c.key} gone={gone.includes(c.key)} setRef={(el) => { if (el) cardEls.current.set(c.key, el); else cardEls.current.delete(c.key) }}
               onHot={(on) => setHot(on ? c.key : null)} onShown={onShown}
               onOpened={() => send(c, 'opened')} onUseful={() => useful(c)} onLater={() => later(c)} onUseless={() => useless(c)}
-              onContacted={() => void quietAct(c, { action: 'contacted' })} onSnooze={() => void snooze(c)} onNever={() => void never(c)} />
+              onContacted={() => void quietAct(c, { action: 'contacted' })} onSnooze={() => void snooze(c)} onNever={() => void never(c)}
+              onOpenBrief={onOpenBrief} />
           ))}
+          {collapsed && (
+            <button type="button" className="nw-more" data-testid="now-more" onClick={() => setExpanded(true)}>再看 {cards.length - COLLAPSED_CARDS} 則</button>
+          )}
         </div>
       )}
       <div className="nw-toast" role="status" aria-live="polite">{toast}</div>
@@ -197,7 +238,7 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   )
 }
 
-function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUseful, onLater, onUseless, onContacted, onSnooze, onNever }: {
+function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUseful, onLater, onUseless, onContacted, onSnooze, onNever, onOpenBrief }: {
   card: NowCard
   hot: boolean
   gone: boolean
@@ -211,6 +252,7 @@ function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUsef
   onContacted: () => void
   onSnooze: () => void
   onNever: () => void
+  onOpenBrief?: () => void
 }) {
   const ref = useRef<HTMLElement | null>(null)
   useEffect(() => {
@@ -226,6 +268,7 @@ function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUsef
   const warn = card.rank <= 1 || card.kind === 'quiet'
   const scrollToBrief = () => {
     onOpened()
+    if (onOpenBrief) { onOpenBrief(); return }
     document.getElementById('sec-brief')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' })
   }
   return (
@@ -244,7 +287,7 @@ function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUsef
           <a className="nw-cta" href="#relations" onClick={onOpened}>看關係</a>
         ) : card.kind === 'brief' ? (
           <button type="button" className="nw-cta" onClick={scrollToBrief}>看全文</button>
-        ) : (
+        ) : card.kind === 'onthisday' ? null : (
           <>
             <button type="button" className="nw-cta" onClick={onContacted} aria-label={`已聯絡：${card.person}`}>已聯絡</button>
             <button type="button" className="nw-gh" onClick={onSnooze} aria-label={`暫緩 30 天：${card.person}`}>暫緩 30 天</button>
