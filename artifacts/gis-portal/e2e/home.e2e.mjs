@@ -560,6 +560,7 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
     const cl = await clippedCards(page); const ic = await innerClipped(page)
     check(`${T}：沒有內容被裁切`, cl.length === 0 && ic.length === 0, JSON.stringify([...cl, ...ic]))
     check(`${T}：熱圖 365 格`, (await page.locator('.hm-cell[data-date]').count()) === 365)
+    check(`${T}：「現在用得上」區塊在搜尋區之後、沒有推送時只有一行說明`, await page.evaluate(() => { const o = document.querySelector('.om-root'), n = document.querySelector('[data-testid="now-section"]'); return !!o && !!n && !!(o.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && /沒有需要推給你的/.test(n.textContent ?? '') && n.scrollWidth <= n.clientWidth + 1 }))
     check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
     // 手機的工具連結（頁面最下面）與頁首入口
     if (scn === 'normal') {
