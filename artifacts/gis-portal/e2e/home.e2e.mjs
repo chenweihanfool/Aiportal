@@ -708,7 +708,7 @@ for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
   await ctx.close()
 }
 
-// ═══ 6. 路由：#home 相容、#legacy 舊版首頁與退路、⌘K ═══
+// ═══ 6. 路由：#home 相容、#legacy 舊版首頁與退路、⌘K（全站搜尋）═══
 { // #home：進來就回預設首頁，hash 清掉
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'normal', { hash: '#home' })
   await page.waitForSelector('.hm-dim .hm-dim-num')
@@ -740,14 +740,15 @@ for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
   check('#legacy 手機：不橫向捲動、有退路連結', g.docW <= g.w && (await page.locator('.hm-legacy-back').isVisible()))
   await ctx.close()
 }
-// ⌘K：「舊版首頁」捷徑
+// ⌘K：聚焦首頁的全站搜尋框（2.86.0 起取代指令面板），`>舊版` 指令前往 #legacy
 {
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'normal')
   await page.waitForSelector('.hm-dim .hm-dim-num')
   await page.keyboard.press('Control+k')
-  await page.fill('input[placeholder^="搜尋工具連結"]', '舊版')
-  check('⌘K 輸入「舊版」→ 有「舊版首頁（退路）」捷徑；舊的「新首頁（預覽版）」不在', (await page.getByText('舊版首頁（退路）').count()) === 1 && (await page.getByText('新首頁（預覽版）').count()) === 0)
-  await page.getByText('舊版首頁（退路）').click()
+  check('⌘K → 聚焦全站搜尋框（.om-root 內的輸入框）', await page.evaluate(() => document.activeElement?.closest('.om-root') !== null && document.activeElement?.tagName === 'INPUT'))
+  await page.fill('.om-root input', '>舊版')
+  check('⌘K 輸入「>舊版」→ 指令清單有「舊版首頁」；舊的「新首頁（預覽版）」不在', (await page.locator('.om-root [role="option"]', { hasText: '舊版首頁' }).count()) === 1 && (await page.getByText('新首頁（預覽版）').count()) === 0)
+  await page.keyboard.press('Enter')
   await page.waitForSelector('.bd-card', { timeout: 10000 })
   check('⌘K 選「舊版首頁」→ 前往 #legacy', (await page.evaluate(() => location.hash)) === '#legacy')
   check('⌘K：沒有頁面錯誤', errors.length === 0, errors.join('|'))

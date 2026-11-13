@@ -1,4 +1,4 @@
-// 翰翰儀表板入口：解鎖狀態、網址路由（#graph／#food／#trips／#dim／#legacy）與指令面板。
+// 翰翰儀表板入口：解鎖狀態、網址路由（#graph／#food／#trips／#dim／#legacy）與全站搜尋（首頁 HomeBoard 的 OmniSearch）。
 import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
@@ -12,7 +12,6 @@ import { dimKeyFromHash } from './dimensionPage'
 import { YearReview } from './YearReview'
 import { yearFromHash } from './yearReview'
 import { COLOR } from './theme'
-import { CommandPalette } from './CommandPalette'
 import { AdminAuthModal, AdminPanel, PasswordModal } from './Dialogs'
 import { DimensionDetail, dimensionLinks } from './DimensionDetail'
 import { InstrumentPanelView } from './InstrumentPanelView'
@@ -131,7 +130,7 @@ export default function App() {
   if (hashRoute === '#graph/timeline') {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
   }
-  // 美食地圖（2026-10-15）：解鎖後讀知識庫的地點（/api/hermes-places），沒有資料才退回示範資料；入口見首頁按鈕與 ⌘K 輸入「美食」。
+  // 美食地圖（2026-10-15）：解鎖後讀知識庫的地點（/api/hermes-places），沒有資料才退回示範資料；入口見首頁按鈕與全站搜尋輸入 >美食。
   if (hashRoute === '#food') {
     return <FoodMapView onBack={() => { window.location.hash = '' }} unlockedPassword={unlockedPassword} />
   }
@@ -169,13 +168,6 @@ export default function App() {
           />
         )
       })()}
-
-      <CommandPalette
-        sites={sites}
-        unlocked={unlocked}
-        onSelect={handleSiteClick}
-        onNavigateGraph={() => { window.location.hash = 'graph' }}
-      />
 
       {unlockModal}
 

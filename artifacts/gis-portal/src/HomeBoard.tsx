@@ -3,6 +3,8 @@ import { apiFetchHermesGraph } from './hermesGraphApi'
 import { apiFetchRepos } from './repoApi'
 import { HomeNav } from './HomeNav'
 import { ChatDock } from './ChatPanel'
+import { OmniSearch } from './OmniSearch'
+import { prefillHermesChat } from './chatView'
 import { ReposSection } from './RepoSection'
 import { apiFetchPaidServices, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchIdeas, apiFetchUsage } from './boardApi'
 import { apiFetchFood } from './foodApi'
@@ -191,7 +193,16 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const dateLabel = new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', weekday: 'short' }).format(now)
   const closeDrawer = () => setDrawer(null)
 
+  // 全站搜尋（2.86.0）：工具連結沿用原指令面板的做法——解鎖後才有 sites，直接開第一個連結
+  const openSite = (site: SiteData) => { const url = site.links[0]?.url; if (url) window.open(url, '_blank', 'noopener,noreferrer') }
+
   return (
+    <>
+    <OmniSearch
+      pw={pw} sites={sites} onSelectSite={openSite}
+      onOpenIdeas={() => { if (on) setDrawer('ideas'); else onRequestUnlock() }}
+      onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
+      onRequestUnlock={onRequestUnlock} />
     <div className="hm-layout">
     <HomeNav onOpenIdeas={() => { if (on) setDrawer('ideas'); else onRequestUnlock() }} />
     <div className="hm-root" data-sys={alert ? 'alert' : 'ok'}>
@@ -218,5 +229,6 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       {drawer === 'ops' && pw && <Drawer title="HERMES 戰情室：推送健康・關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={closeDrawer}><PusherHealthPanel pw={pw} />{opsDetail}</Drawer>}
     </div>
     </div>
+    </>
   )
 }
