@@ -83,4 +83,40 @@ describe("feed registry", () => {
     expect(validateFeedRequest("companion", body({ ...old, quietPeople: [{ ...old.quietPeople[0], events: 0, lastEvent: null }] })).ok).toBe(true);
     expect(validateFeedRequest("companion", body({ ...old, quietPeople: [{ ...old.quietPeople[0], events: -1 }] })).ok).toBe(false);
   });
+
+  it("topic-nudges：新選填欄位（why／at／matchedBy／caseName／resumes）通過，舊格式仍合法，壞值或超量被擋", () => {
+    const body = (payload: unknown) => ({ schemaVersion: 1, generatedAt: "2026-11-13", payload });
+    const match = {
+      forDate: "2026-11-13", topicId: "T1", name: "鑑界", path: ["法務"], published: true, point: "重點",
+      triggers: [{ kind: "task", title: "送件", due: "2026-11-13" }], score: 80,
+    };
+    const old = { computedAt: "2026-11-13T10:00:00+08:00", date: "2026-11-13", matches: [match], recall: [] };
+    expect(validateFeedRequest("topic-nudges", body(old)).ok).toBe(true);
+
+    const resume = {
+      forDate: "2026-11-13", at: "09:30", caseName: "王案", quietDays: 3, why: "停了三天",
+      events: [{ date: "2026-11-10", title: "議價" }],
+    };
+    const next = {
+      ...old,
+      matches: [{ ...match, why: "今天要送件", at: "09:30", matchedBy: "case", caseName: "王案" }],
+      resumes: [resume, { ...resume, at: null }],
+    };
+    expect(validateFeedRequest("topic-nudges", body(next)).ok).toBe(true);
+    expect(validateFeedRequest("topic-nudges", body({ ...old, matches: Array(16).fill(match) })).ok).toBe(true);
+    expect(validateFeedRequest("topic-nudges", body({ ...old, matches: [{ ...match, matchedBy: "terms", at: null, caseName: null }] })).ok).toBe(true);
+
+    const m = (extra: object) => body({ ...old, matches: [{ ...match, ...extra }] });
+    expect(validateFeedRequest("topic-nudges", m({ at: "24:00" })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", m({ why: "x".repeat(161) })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", m({ why: "" })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", m({ matchedBy: "other" })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", m({ caseName: "" })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", body({ ...old, matches: Array(17).fill(match) })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", body({ ...next, resumes: Array(7).fill(resume) })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", body({ ...next, resumes: [{ ...resume, quietDays: -1 }] })).ok).toBe(false);
+    expect(validateFeedRequest("topic-nudges", body({ ...next, resumes: [{ ...resume, events: Array(4).fill({ date: "2026-11-10", title: "x" }) }] })).ok).toBe(false);
+    const missing = { forDate: resume.forDate, at: resume.at, caseName: resume.caseName, why: resume.why, events: resume.events };
+    expect(validateFeedRequest("topic-nudges", body({ ...next, resumes: [missing] })).ok).toBe(false);
+  });
 });

@@ -23,6 +23,7 @@ import hermesChatRouter from "./hermesChat";
 import companionActionsRouter from "./companionActions";
 import knowledgeCorrectionsRouter from "./knowledgeCorrections";
 import searchRouter from "./search";
+import pushFeedbackRouter from "./pushFeedback";
 import exportRouter from "./export";
 
 const router: IRouter = Router();
@@ -52,6 +53,7 @@ router.use(hermesChatRouter);
 router.use(companionActionsRouter);
 router.use(knowledgeCorrectionsRouter);
 router.use(searchRouter);
+router.use(pushFeedbackRouter);
 router.use(exportRouter);
 
 export default router;

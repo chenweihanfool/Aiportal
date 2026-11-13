@@ -591,6 +591,8 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
   },
   // 首頁主動推播主題知識：「今天」卡、明日報告區塊（依報告日）、陪伴區塊的「一年前的這時候」。
   // 推送端 kb-pipeline vikunja-gantt-pusher.py（每 10 分鐘）；matches 只有今天與明天（forDate＝date 或 date+1），recall 為週期喚回。
+  // 2026-11-13 起的選填欄位：matches 每筆可帶 why／at／matchedBy／caseName、頂層可帶 resumes（上限 8→16；
+  // 舊 payload 不帶這些仍合法，v1 不升版）。
   "topic-nudges": {
     version: 1,
     description: "首頁主動推播主題知識：今明兩天任務／日記相關的知識頁、去年同期喚回",
@@ -606,7 +608,7 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
         date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
         matches: {
           type: "array",
-          maxItems: 8,
+          maxItems: 16,
           items: {
             type: "object",
             additionalProperties: false,
@@ -634,6 +636,11 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
                 },
               },
               score: { type: "integer", minimum: 0, maximum: 100 },
+              // 以下四個為選填（2026-11-13 起；舊推送不帶也合法）。
+              why: { type: "string", minLength: 1, maxLength: 160 },
+              at: { type: ["string", "null"], pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+              matchedBy: { enum: ["case", "terms"] },
+              caseName: { type: ["string", "null"], minLength: 1, maxLength: 80 },
             },
           },
         },
@@ -653,6 +660,36 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
               reason: { type: "string", minLength: 1, maxLength: 80 },
               lastMonth: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}$" },
               years: { type: "array", maxItems: 10, items: { type: "integer", minimum: 2000, maximum: 2100 } },
+            },
+          },
+        },
+        // 選填（2026-11-13 起）：今日 resume 卡；舊推送不帶也合法。
+        resumes: {
+          type: "array",
+          maxItems: 6,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["forDate", "at", "caseName", "quietDays", "why", "events"],
+            properties: {
+              forDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              at: { type: ["string", "null"], pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+              caseName: { type: "string", minLength: 1, maxLength: 80 },
+              quietDays: { type: "integer", minimum: 0 },
+              why: { type: "string", minLength: 1, maxLength: 160 },
+              events: {
+                type: "array",
+                maxItems: 3,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["date", "title"],
+                  properties: {
+                    date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+                    title: { type: "string", minLength: 1, maxLength: 120 },
+                  },
+                },
+              },
             },
           },
         },
