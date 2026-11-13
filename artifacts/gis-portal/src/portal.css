@@ -2086,3 +2086,105 @@ button.ms-col { cursor: pointer; }
   .kn-ca-pop .kn-ca-item { white-space: normal; }
 }
 .kn-page[data-live="true"] .kn-ck-line { gap: var(--sp-4); }
+
+/* ─── 全站搜尋（OmniSearch，2.86.0）：一個框搜全部。class 一律 om- 開頭，顏色變數只定義在 .om-root（深色、青綠重點色），不動全站 :root token。 ─── */
+.om-root {
+  --om-card: #0e1317; --om-raise: #141b20; --om-ink: #e6eef0; --om-dim: #8a9aa0; --om-faint: #56646a;
+  --om-line: #1e2a30; --om-line2: #2b3a42; --om-ac: #3de0c2; --om-ac-soft: rgba(61, 224, 194, 0.1); --om-ac-ink: #8ff3df;
+  --om-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  position: relative; overflow: hidden; margin: 0 0 var(--sp-4); padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  background: #080b0e; color: var(--om-ink); border: 1px solid var(--om-line); border-radius: var(--r-lg);
+}
+.om-root::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(120, 170, 180, 0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 170, 180, 0.055) 1px, transparent 1px);
+  background-size: 36px 36px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 0%, #000 20%, transparent 75%); mask-image: radial-gradient(ellipse 70% 80% at 50% 0%, #000 20%, transparent 75%);
+}
+.om-root > * { position: relative; }
+.om-root button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+.om-root button:focus-visible, .om-root a:focus-visible, .om-root .om-n:focus-visible { outline: 2px solid var(--om-ac); outline-offset: 2px; border-radius: 6px; }
+.om-lb { font: 11.5px var(--om-mono); letter-spacing: 0.12em; color: var(--om-faint); text-transform: uppercase; margin: 0; font-weight: 400; }
+.om-dim { color: var(--om-dim); }
+.om-title { margin: 0.4rem 0 1rem; text-align: center; font-size: 1.5rem; font-weight: 500; letter-spacing: 0.04em; color: var(--om-ink); }
+.om-title em { font-style: normal; color: var(--om-ac); }
+.om-pulse { position: absolute; left: 50%; top: 3.4rem; width: 10px; height: 10px; border-radius: 50%; pointer-events: none; border: 1px solid var(--om-ac); opacity: 0; animation: om-pulse 0.7s ease-out; }
+@keyframes om-pulse { from { opacity: 0.5; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -50%) scale(70); } }
+@property --om-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes om-spin { to { --om-a: 360deg; } }
+.om-ask { position: relative; max-width: 760px; margin: 0 auto; border-radius: 12px; padding: 1px; background: var(--om-line2); }
+.om-ask.om-focus { background: var(--om-ac); background: conic-gradient(from var(--om-a, 0deg), var(--om-ac), transparent 30%, transparent 70%, var(--om-ac)); animation: om-spin 4s linear infinite; box-shadow: 0 0 34px var(--om-ac-soft); }
+.om-in { display: flex; align-items: center; gap: 12px; background: var(--om-card); border-radius: 11px; padding: 0 16px; }
+.om-pfx { font: 14px var(--om-mono); color: var(--om-ac); }
+.om-in input { flex: 1; min-width: 0; font: inherit; font-size: 17px; padding: 15px 0; border: 0; background: none; color: var(--om-ink); outline: none; }
+.om-in input::placeholder { color: var(--om-faint); }
+.om-in kbd { font: 11.5px var(--om-mono); color: var(--om-faint); border: 1px solid var(--om-line2); border-radius: 5px; padding: 1px 6px; }
+.om-modes, .om-recent { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 12px auto 0; max-width: 760px; }
+.om-root .om-mode { font: 12.5px var(--om-mono); color: var(--om-dim); border: 1px solid var(--om-line); border-radius: 6px; padding: 3px 9px; }
+.om-mode b { color: var(--om-ac); font-weight: 500; margin-right: 5px; }
+.om-root .om-mode:hover { border-color: var(--om-ac); color: var(--om-ink); }
+.om-root .om-chip { font-size: 13px; border: 1px solid var(--om-line); border-radius: 6px; padding: 2px 9px; color: var(--om-dim); }
+.om-root .om-chip:hover { border-color: var(--om-ac); color: var(--om-ac-ink); }
+.om-lock { max-width: 760px; margin: 10px auto 0; display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--om-dim); }
+.om-lock b { color: var(--om-ac); }
+.om-guess { max-width: 760px; margin: 14px auto 0; display: flex; align-items: center; gap: 10px; font-size: 14.5px; color: var(--om-dim); padding: 0 4px; }
+.om-guess[hidden] { display: none; }
+.om-guess .om-lb { white-space: nowrap; flex: 0 0 auto; }
+.om-ans { color: var(--om-ink); min-width: 0; overflow-wrap: anywhere; }
+.om-caret { display: inline-block; flex: 0 0 auto; width: 7px; height: 15px; background: var(--om-ac); animation: om-blink 1s steps(2) infinite; }
+@keyframes om-blink { 50% { opacity: 0.2; } }
+.om-toast { max-width: 760px; margin: 8px auto 0; font-size: 13.5px; color: var(--om-ac-ink); text-align: center; }
+.om-results { display: grid; margin: 14px auto 0; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr); gap: 14px; align-items: start; }
+.om-results-cmd { grid-template-columns: minmax(0, 1fr); max-width: 760px; }
+.om-panel { position: relative; background: var(--om-card); border: 1px solid var(--om-line); border-radius: 12px; overflow: hidden; }
+.om-panel::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s; background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), var(--om-ac-soft), transparent 70%); }
+.om-panel:hover::before { opacity: 1; }
+.om-panel > * { position: relative; }
+.om-rs { padding: 8px; max-height: 64vh; overflow: auto; }
+.om-rs.om-busy { opacity: 0.6; }
+.om-grp { display: flex; justify-content: space-between; padding: 10px 10px 4px; }
+.om-hit { display: flex; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; border-left: 2px solid transparent; opacity: 0; animation: om-rise 0.28s forwards; cursor: pointer; }
+@keyframes om-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.om-hit:hover { background: var(--om-raise); }
+.om-hit.om-on { background: var(--om-ac-soft); border-left-color: var(--om-ac); }
+.om-t { font-size: 15px; line-height: 1.4; color: var(--om-ink); }
+.om-s { font-size: 13px; color: var(--om-dim); line-height: 1.45; margin-top: 2px; overflow-wrap: anywhere; }
+.om-root mark { background: none; color: var(--om-ac-ink); font-weight: 600; }
+.om-kd { flex: 0 0 auto; align-self: flex-start; white-space: nowrap; display: inline-block; font: 11px var(--om-mono); border: 1px solid var(--om-line2); border-radius: 4px; padding: 0 6px; color: var(--om-dim); margin-top: 3px; }
+.om-none { padding: 30px 16px; text-align: center; color: var(--om-dim); overflow-wrap: anywhere; }
+.om-root .om-cta { display: inline-block; background: var(--om-ac); color: #04140f; border-radius: 6px; padding: 6px 16px; font-size: 14px; font-weight: 600; }
+.om-root .om-gh { display: inline-block; border-radius: 6px; padding: 5px 11px; font-size: 13.5px; color: var(--om-dim); border: 1px solid transparent; text-decoration: none; }
+.om-root .om-gh:hover { border-color: var(--om-line2); color: var(--om-ink); }
+.om-reader { padding: 20px 22px; min-height: 300px; }
+.om-reader h2 { margin: 6px 0 6px; font-size: 20px; font-weight: 600; color: var(--om-ink); overflow-wrap: anywhere; }
+.om-one { margin: 0 0 6px; font-size: 15.5px; color: var(--om-ink); }
+.om-one.om-dim { color: var(--om-dim); }
+.om-reader h3 { margin: 16px 0 6px; }
+.om-reader ul { margin: 0; padding: 0; list-style: none; }
+.om-reader li { position: relative; padding: 3px 0 3px 16px; font-size: 14.5px; color: var(--om-ink); overflow-wrap: anywhere; }
+.om-reader li::before { content: ""; position: absolute; left: 2px; top: 13px; width: 6px; height: 1px; background: var(--om-ac); }
+.om-src { font-size: 13.5px; color: var(--om-dim); }
+.om-ctx { width: 100%; height: 170px; display: block; margin-top: 2px; }
+.om-ctx line { stroke: var(--om-line2); stroke-width: 1; stroke-dasharray: 200; stroke-dashoffset: 200; animation: om-draw 0.6s forwards; }
+@keyframes om-draw { to { stroke-dashoffset: 0; } }
+.om-ctx .om-n { cursor: pointer; }
+.om-ctx .om-n circle { fill: var(--om-card); stroke: var(--om-line2); }
+.om-ctx .om-n:hover circle, .om-ctx .om-n:focus-visible circle { stroke: var(--om-ac); fill: var(--om-ac-soft); }
+.om-ctx .om-n text { fill: var(--om-dim); font-size: 12px; }
+.om-ctx .om-n:hover text { fill: var(--om-ink); }
+.om-ctx .om-c circle { fill: var(--om-ac); stroke: none; }
+.om-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; align-items: center; }
+.om-body { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--om-line); max-height: 50vh; overflow: auto; }
+@media (max-width: 820px) {
+  .om-results { grid-template-columns: minmax(0, 1fr); }
+  .om-title { font-size: 1.2rem; }
+  .om-in kbd { display: none; }
+  .om-rs { max-height: 48vh; }
+  .om-reader { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .om-root *, .om-root *::before, .om-root *::after { animation: none !important; transition: none !important; }
+  .om-hit { opacity: 1; }
+  .om-ctx line { stroke-dashoffset: 0; }
+  .om-pulse { display: none; }
+}
