@@ -4,7 +4,7 @@ import type { CompanionData, PersonAction, QuietPerson } from './companion'
 import { rotateQuiet, visibleQuietPeople } from './companion'
 import type { NudgeMatch, NudgeRecall, TopicNudges } from './topicNudges'
 
-export type CardKind = 'topic' | 'resume' | 'recall' | 'quiet' | 'brief'
+export type CardKind = 'topic' | 'resume' | 'recall' | 'quiet' | 'brief' | 'onthisday'
 export type NowDay = 'today' | 'tomorrow'
 
 export interface NowCard {
@@ -49,13 +49,15 @@ export function cardKeyOf(c: { kind: 'topic'; topicId: string; matchedBy?: strin
   | { kind: 'resume'; caseName: string }
   | { kind: 'recall'; topicId: string }
   | { kind: 'quiet'; name: string }
-  | { kind: 'brief'; date: string }): string {
+  | { kind: 'brief'; date: string }
+  | { kind: 'onthisday'; date: string; title: string }): string {
   switch (c.kind) {
     case 'topic': return `topic:${c.topicId}:${c.matchedBy || 'terms'}:${c.caseName || hash(c.firstTrigger)}`
     case 'resume': return `resume:${c.caseName}`
     case 'recall': return `recall:${c.topicId}`
     case 'quiet': return `quiet:${hash(c.name)}`
     case 'brief': return `brief:${c.date}`
+    case 'onthisday': return `onthisday:${c.date}:${hash(c.title)}`
   }
 }
 
@@ -89,7 +91,7 @@ export function railPos(at: string | number | null | undefined): number | null {
   return Math.round(((c - RAIL_START) / (RAIL_END - RAIL_START)) * 1000) / 10
 }
 
-const RANK = { topicCase: 0, resume: 1, topicTerms: 2, recall: 3, quiet: 4, brief: 5 } as const
+const RANK = { topicCase: 0, resume: 1, topicTerms: 2, recall: 3, quiet: 4, onthisday: 5, brief: 6 } as const
 
 function topicCard(m: NudgeMatch): NowCard {
   const first = m.triggers[0]?.title ?? ''
@@ -107,6 +109,15 @@ function recallCard(r: NudgeRecall, today: string): NowCard {
   return {
     key: cardKeyOf({ kind: 'recall', topicId: r.topicId }), kind: 'recall', forDate: today, at: null,
     why: r.reason, title: r.name, lines: r.path.length > 0 ? [r.path.join(' › ')] : [], point: r.point ?? '', rank: RANK.recall, topicId: r.topicId,
+  }
+}
+
+/** 歷年今天：date 是那件事發生的日期（YYYY-MM-DD），為什麼是現在＝「N 年前的今天」 */
+function onThisDayCard(e: { date: string; title: string }, today: string): NowCard {
+  const years = Number(today.slice(0, 4)) - Number(e.date.slice(0, 4))
+  return {
+    key: cardKeyOf({ kind: 'onthisday', date: e.date, title: e.title }), kind: 'onthisday', forDate: today, at: null,
+    why: years >= 1 ? `${years} 年前的今天` : '往年的今天', title: e.title, lines: [], point: '', rank: RANK.onthisday,
   }
 }
 
@@ -145,6 +156,16 @@ export function buildCards({ nudges, companion, personActions, brief, day, today
     if (companion && personActions) {
       for (const p of rotateQuiet(visibleQuietPeople(companion.quietPeople, personActions, todayIso), todayIso)) out.push(quietCard(p, todayIso))
     }
+    if (companion) {
+      const seen = new Set<string>()
+      for (const e of companion.onThisDay ?? []) {
+        if (!e || typeof e.date !== 'string' || typeof e.title !== 'string') continue
+        const c = onThisDayCard(e, todayIso)
+        if (seen.has(c.key)) continue
+        seen.add(c.key)
+        out.push(c)
+      }
+    }
   } else if (brief) {
     out.push({
       key: cardKeyOf({ kind: 'brief', date: brief.date }), kind: 'brief', forDate: brief.date, at: null,
@@ -166,14 +187,20 @@ export function sortCards(cards: readonly NowCard[]): NowCard[] {
   })
 }
 
-/** 濾掉 suppressed、尚未到期的 later、本機暫存的「沒用」，再取前 MAX_CARDS 則 */
+/** 歷年今天最多留 1 張 */
+export const MAX_ONTHISDAY = 1
+
+/** 濾掉 suppressed、尚未到期的 later、本機暫存的「沒用」，歷年今天最多留 1 張，再取前 MAX_CARDS 則 */
 export function visibleCards(cards: readonly NowCard[], feedback: FeedbackState | null, nowMs: number, pendingUseless: readonly string[] = []): NowCard[] {
   const gone = new Set([...(feedback?.suppressed ?? []), ...pendingUseless])
   const later = new Map((feedback?.later ?? []).map((l) => [l.cardKey, Date.parse(l.until)]))
+  let onThisDay = 0
   return cards.filter((c) => {
     if (gone.has(c.key)) return false
     const until = later.get(c.key)
-    return !(until !== undefined && !Number.isNaN(until) && nowMs < until)
+    if (until !== undefined && !Number.isNaN(until) && nowMs < until) return false
+    if (c.kind === 'onthisday' && ++onThisDay > MAX_ONTHISDAY) return false
+    return true
   }).slice(0, MAX_CARDS)
 }
 

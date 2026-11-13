@@ -98,6 +98,33 @@ const historyWithComponents = (shape = 'ok') => Array.from({ length: 30 }, (_, k
   return { date: tpDate(-i), finalScore: 70, displayedScore: 70, components: c }
 })
 
+// ── 新版首頁（v3，2.88.0）用的假資料：現在用得上的四個來源、最近搜尋、搜尋／推送統計、知識頁 feed ──
+const feedEnv = (name, payload) => ({ available: true, name, schemaVersion: 1, generatedAt: tpDate(0), receivedAt: iso(), payload })
+const v3Data = (name) => {
+  const cards5 = name === 'v3-cards5'
+  const otd3 = name === 'v3-otd3'
+  const match = (id, at) => ({ forDate: tpDate(0), topicId: id, name: `主題 ${id}`, path: ['測量', '鑑界'], published: true, point: '要點一句話', triggers: [{ kind: 'task', title: `任務 ${id}`, due: tpDate(0) }], score: 50, why: `任務「${id}」快到了`, at, matchedBy: 'terms', caseName: null })
+  const recall = (id) => ({ topicId: id, name: `回想 ${id}`, path: ['測量'], published: true, point: '去年這時候做過', reason: '去年同一時期做過', lastMonth: '2025-11', years: [2025] })
+  return {
+    nudges: cards5 ? feedEnv('topic-nudges', { computedAt: iso(), date: tpDate(0), matches: [match('M1', '10:00'), match('M2', '14:00')], recall: [recall('R1'), recall('R2')], resumes: [] }) : null,
+    companion: feedEnv('companion', {
+      computedAt: iso(), date: tpDate(0), socialDays: [],
+      onThisDay: otd3 ? [{ date: `${Number(tpDate(0).slice(0, 4)) - 1}${tpDate(0).slice(4)}`, kind: 'event', title: '去年的今天發生的事' }, { date: `${Number(tpDate(0).slice(0, 4)) - 2}${tpDate(0).slice(4)}`, kind: 'event', title: '前年的今天發生的事' }, { date: `${Number(tpDate(0).slice(0, 4)) - 3}${tpDate(0).slice(4)}`, kind: 'event', title: '三年前的今天發生的事' }] : [],
+      quietPeople: cards5 ? [{ name: '阿哲', lastDate: tpDate(-40), daysQuiet: 40, events: 3, usualGapDays: 14 }] : [],
+    }),
+    personActions: { actions: [] },
+    recent: { recent: ['鑑界', '地籍圖', 'HERMES'] },
+    searchStats: { days: 7, searches: 12, zero: 3, zeroRate: 0.25, clicked: 6, clickRate: 0.5, topZero: [{ q: '不存在的詞', count: 2 }, { q: '另一個', count: 1 }] },
+    pushStats: { days: 14, shown: 20, opened: 8, openRate: 0.4, useful: 5, useless: 3, uselessRate: 0.15, daysWithCards: 9, byKind: [{ kind: 'topic', shown: 12, opened: 6, useless: 1 }, { kind: 'onthisday', shown: 3, opened: 0, useless: 2 }] },
+    topics: feedEnv('topics', { computedAt: iso(), total: 2, published: 2, tree: null, topics: [
+      { id: 'T1', name: '鑑界流程', kind: 'method', why: '', firstSeen: tpDate(-30), revision: 2, docs: 5, newDocs: 1, monthsSpan: 2, growth: [{ date: tpDate(-2), text: '第一版頁面' }], sources: [], related: [], path: [], monthCounts: [],
+        claims: [{ id: 'c1', section: 'what', status: 'active', origin: 'model', pinned: false, firstSeen: tpDate(-1), lastChanged: tpDate(-1), text: '- 一句新的' }, { id: 'c2', section: 'what', status: 'active', origin: 'user', pinned: true, firstSeen: tpDate(-60), lastChanged: tpDate(-60), text: '- 舊句' }],
+        claimStats: { active: 2, retired: 0, disputed: 0, user: 1 } },
+      { id: 'T2', name: '契約概念', kind: 'concept', why: '', firstSeen: tpDate(-50), revision: 1, docs: 2, newDocs: 0, monthsSpan: 1, growth: [], sources: [], related: [], path: [], monthCounts: [], claimStats: { active: 1, retired: 0, disputed: 0, user: 2 } },
+    ] }),
+  }
+}
+
 // 場景：每個 API 路徑 → 回應（或 'fail' / 'delay'）
 function scenario(name) {
   const s = { dashboard: [hhi(), { subsystemId: 'mind-index', name: '心智指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { score: 72.4, conversion: 90, linkHealth: 80, vitality: 55, rhythm: 66, stale: false } },
@@ -105,7 +132,9 @@ function scenario(name) {
   { subsystemId: 'fitnessforge', name: '運動 APP 系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { weeklyScore: 1234, trendPct: 4.2, balanceScore: 62, coverageScore: 71, activityBonusPoints: 3, muscleComposites: [{ name: '胸', composite: 90 }], habitIndex: 55 } },
   { subsystemId: 'vikunja', name: '任務追蹤系統', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { overdueScore: 40, loadScore: 55, stagnationScore: 30, completionScore: 45, busyIndex: 42, stale: false, taskActions: { overdue: 3, dueToday: 2, dueNext7: 5, doneWeek: 7 } } },
   { subsystemId: 'travel', name: '旅遊生活', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { daysSinceLastTrip: 24, lastTripEndDate: '2026-09-23', recencyScore: 78, frequencyScore: 40, tripDaysLast180: 8, anticipationBonus: 0, hasUpcomingTrip: false, travelScore: 59 } },
-  { subsystemId: 'social-index', name: '社交指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { observedDayCount: 6, distinctPersonCount: 3, daysWithInteraction: 4, breadthScore: 60, intensityScore: 47, connectionRateScore: 67, socialScore: 55, personNames: ['小明', '阿華'] } }], history: { history: historyRows() }, graph: graph(), ideas: ideas(), food: food(), trips: trips(), pipeline: pipeline(), status: status(), usage: usage(), fail: new Set(), delayMs: 0, history30: null }
+  { subsystemId: 'social-index', name: '社交指標', isPrivate: true, status: 'ok', errorMessage: null, fetchedAt: iso(60e3), data: { observedDayCount: 6, distinctPersonCount: 3, daysWithInteraction: 4, breadthScore: 60, intensityScore: 47, connectionRateScore: 67, socialScore: 55, personNames: ['小明', '阿華'] } }], history: { history: historyRows() }, graph: graph(), ideas: ideas(), food: food(), trips: trips(), pipeline: pipeline(), status: status(), usage: usage(), fail: new Set(), delayMs: 0, history30: null, nudges: null, companion: null, personActions: null, recent: null, searchStats: null, pushStats: null, topics: null }
+  if (name.startsWith('v3')) Object.assign(s, v3Data(name), { history30: { history: historyWithComponents('ok') } })
+  if (name === 'v3-alert') { s.pipeline = pipeline({ L3: layer('crit', 'apply 失敗：磁碟寫入錯誤') }) }
   if (name === 'alert') {
     s.pipeline = pipeline({ L3: layer('crit', 'apply 失敗：磁碟寫入錯誤') })
     s.usage = usage({ level: 'warn', shortfallUsd: 21.4, daysUntilEmpty: 9, emptyDate: tpDate(9) })
@@ -139,10 +168,12 @@ function scenario(name) {
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })
-async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait = true } = {}) {
+// layout：'classic'（預設，既有段落全部照舊驗舊版首頁）或 'v3'（新版三塊）；只在還沒有選擇時寫入，所以點開關、重新整理後會維持最後一次的選擇
+async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait = true, layout = 'classic' } = {}) {
   const S = scenario(scn)
   const ctx = await browser.newContext({ viewport })
   if (unlocked) await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
+  if (layout) await ctx.addInitScript((v) => { if (localStorage.getItem('hm-layout') === null) localStorage.setItem('hm-layout', v) }, layout)
   const page = await ctx.newPage()
   const errors = []
   const calls = []
@@ -158,6 +189,10 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
     if (p === '/api/dashboard') return json({ summaries: S.dashboard, unlocked: authed })
     if (p === '/api/auth/me') return json({ message: 'none' }, 404)
     if (!authed) return json({ message: 'no' }, 403)
+    // 新版首頁（2.88.0）用的端點；場景沒給資料就回 404（＝後端還沒部署，各列自己顯示原因）
+    const v3Routes = { '/api/feed/topic-nudges': 'nudges', '/api/feed/companion': 'companion', '/api/companion/person-actions': 'personActions', '/api/search/recent': 'recent', '/api/search/stats': 'searchStats', '/api/push/stats': 'pushStats', '/api/feed/topics': 'topics' }
+    if (v3Routes[p]) { calls.push(p === '/api/search/stats' || p === '/api/push/stats' ? `${p}?days=${u.searchParams.get('days')}` : p); return S[v3Routes[p]] ? json(S[v3Routes[p]]) : json({ message: 'none' }, 404) }
+    if (p === '/api/push/feedback') { calls.push(`${route.request().method()} ${p}`); try { const b = JSON.parse(route.request().postData() || '{}'); if (b.action) calls.push(`feedback:${b.action}:${b.cardKind}`) } catch { /* 沒有 body 就算了 */ } return route.request().method() === 'POST' ? json({ ok: true }) : json({ suppressed: [], later: [] }) }
     const key = { '/api/happiness/history': 'history', '/api/hermes-graph': 'graph', '/api/hermes-ideas': 'ideas', '/api/hermes-places': 'food', '/api/hermes-trips': 'trips', '/api/hermes-pipeline': 'pipeline', '/api/hermes-status': 'status', '/api/hermes-usage': 'usage' }[p]
     if (key) {
       // 面向頁（#dim/…）與年度回顧（#year…）抓 365 天，假資料用「含 components 的那一份」（首頁的 365 天年熱圖仍用 S.history）
@@ -212,7 +247,7 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
     return json({}, 404)
   })
   await page.goto(BASE + '/' + hash)
-  if (wait) await page.waitForSelector('.hm-root', { timeout: 15000 })
+  if (wait) await page.waitForSelector(layout === 'v3' ? '.st-home' : '.hm-root', { timeout: 15000 })
   return { ctx, page, errors, calls }
 }
 const settle = async (page, ms = 1700) => { await page.waitForFunction(() => !document.querySelector('.hm-frame[aria-busy="true"]'), null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(ms) }
@@ -966,6 +1001,156 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   await u.page.waitForSelector('[data-testid="dp-gantt"]'); await u.page.waitForTimeout(600)
   check('甘特圖：未解鎖 → 🔒、不發甘特圖請求', (await u.page.locator('[data-testid="dp-gantt"] .hm-lock').count()) === 1 && !u.calls.includes('/api/feed/vikunja-gantt'))
   await u.ctx.close()
+}
+
+// ═══ 新版首頁 v3（2.88.0）：搜尋框｜現在用得上｜STATUS 右欄 ═══
+{
+  const top = (page, sel) => page.evaluate((s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().top) : null }, sel)
+  const noHScroll = (page) => page.evaluate(() => { const sc = document.querySelector('.ip-scroll'); return document.documentElement.scrollWidth <= window.innerWidth && sc.scrollWidth <= sc.clientWidth + 1 })
+
+  // ── 桌機 1440×900 ──
+  {
+    const { ctx, page, errors, calls } = await open({ width: 1440, height: 900 }, 'v3-otd3', { layout: 'v3' })
+    await page.waitForSelector('[data-testid="st-dim"]'); await settle(page)
+    const T = 'v3 桌機 1440×900'
+    const tops = { om: await top(page, '.om-root'), now: await top(page, '[data-testid="now-section"]'), aside: await top(page, '.st-aside') }
+    check(`${T}：搜尋框、現在用得上、STATUS 的上緣都在首屏內`, Object.values(tops).every((t) => t !== null && t < 900), JSON.stringify(tops))
+    check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
+    check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
+    check(`${T}：兩欄（左現在用得上、右 STATUS）`, await page.evaluate(() => { const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); return n.right <= a.left + 1 && a.width > 250 }))
+    check(`${T}：st-dims 有 6 格、盒頭有 STATUS 與整體分數 71`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && /STATUS/.test(await page.locator('[data-testid="st-dims"]').innerText()) && (await page.locator('[data-testid="st-hhi"]').innerText()) === '71')
+    const spark = await page.locator('[data-testid="st-spark"]').count()
+    check(`${T}：6 個面向都有 7 天迷你線（假資料有 30 天 components；travel 只有 1 天所以不畫）`, spark >= 4 && spark <= 5, String(spark))
+    const deltas = await page.evaluate(() => [...document.querySelectorAll('.st-dim-d')].map((e) => e.textContent.trim()))
+    check(`${T}：差值是 ▲n／▼n／—`, deltas.length === 6 && deltas.every((d) => /^(▲\d+|▼\d+|—)$/.test(d)), JSON.stringify(deltas))
+    check(`${T}：點面向小格 → 面向頁 #dim/<key>`, await (async () => { await page.locator('[data-testid="st-dim"]').first().click(); await page.waitForTimeout(200); return /^#dim\//.test(await page.evaluate(() => location.hash)) })())
+    await page.evaluate(() => { location.hash = '' }); await page.waitForSelector('.st-home')
+    const g = await page.locator('[data-testid="st-growth"]').innerText()
+    check(`${T}：成長與系統盒五列＋付費服務列（知識庫這週 +1 頁・+1 句、更正 3 筆、查無結果率 25%・本週 12 次、推送被點開 40%・沒用 3 則）`,
+      /知識庫這週\s*\+1 頁・\+1 句/.test(g) && /你的更正\s*3 筆已生效/.test(g) && /搜尋查無結果率\s*25%・本週 12 次/.test(g) && /推送被點開\s*40%・沒用 3 則/.test(g) && /系統/.test(g) && (await page.locator('[data-testid="st-svc"]').count()) === 1, g.replace(/\s+/g, ' '))
+    check(`${T}：知識庫兩列連到 #knowledge`, (await page.locator('[data-testid="st-kb"]').getAttribute('href')) === '#knowledge' && (await page.locator('[data-testid="st-fixes"]').getAttribute('href')) === '#knowledge')
+    await page.locator('[data-testid="st-search"]').click(); await page.waitForSelector('[data-testid="search-stats-panel"]')
+    const sp = await page.locator('[data-testid="search-stats-panel"]').innerText()
+    check(`${T}：點「搜尋查無結果率」開小抽屜（14 天、查無結果的詞）`, /查無結果最多的詞/.test(sp) && /不存在的詞/.test(sp) && calls.includes('/api/search/stats?days=14') && calls.includes('/api/search/stats?days=7'), sp.replace(/\s+/g, ' ').slice(0, 120))
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
+    await page.locator('[data-testid="st-push"]').click(); await page.waitForSelector('[data-testid="push-stats-panel"]')
+    const pp = await page.locator('[data-testid="push-stats-panel"]').innerText()
+    check(`${T}：點「推送被點開」開小抽屜（種類表含歷年今天）`, /歷年今天/.test(pp) && /主題知識/.test(pp) && calls.includes('/api/push/stats?days=14'), pp.replace(/\s+/g, ' ').slice(0, 120))
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
+    await page.locator('[data-testid="st-sys"]').click(); await page.waitForSelector('.bd-drawer')
+    check(`${T}：點「系統」開 HERMES 戰情室抽屜，裡面有倉庫段落`, /戰情室/.test(await page.locator('.bd-drawer-title').innerText()) && (await page.locator('[data-testid="st-ops-repos"] .hm-repo').count()) > 0)
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
+    await page.locator('[data-testid="st-svc"]').click(); await page.waitForSelector('.bd-drawer')
+    check(`${T}：點付費服務列開付費服務抽屜`, /付費服務/.test(await page.locator('.bd-drawer-title').innerText()))
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
+    await page.locator('[data-testid="st-dims"] .st-boxhead--btn').click(); await page.waitForSelector('.bd-drawer')
+    check(`${T}：點 STATUS 盒頭開幸福指數抽屜，最上面是活動洞察、後面有成長軌跡熱圖`, await page.evaluate(() => { const b = document.querySelector('.bd-drawer-body'); const i = b.querySelector('[data-testid="activity-insight"]'); const gr = b.querySelector('[data-testid="st-hhi-growth"]'); return !!i && !!gr && b.firstElementChild === i && !!(i.compareDocumentPosition(gr) & Node.DOCUMENT_POSITION_FOLLOWING) && !!gr.querySelector('.hm-cell[data-date]') }))
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
+    const sc = await page.locator('[data-testid="st-shortcuts"]').innerText()
+    check(`${T}：捷徑列（時間軸、想法庫、關係、知識）在 STATUS 最下面`, /時間軸/.test(sc) && /想法庫/.test(sc) && /關係/.test(sc) && /知識/.test(sc) && await page.evaluate(() => { const f = document.querySelector('[data-testid="st-fun"]'); const s = document.querySelector('[data-testid="st-shortcuts"]'); return !!(f.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) && s === document.querySelector('.st-aside').lastElementChild }))
+    await page.locator('[data-testid="st-shortcuts"] button').click(); await page.waitForSelector('.bd-drawer')
+    check(`${T}：捷徑「想法庫」開想法抽屜`, /想法庫/.test(await page.locator('.bd-drawer-title').innerText()))
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
+    const fun = await page.locator('[data-testid="st-fun"]').innerText()
+    check(`${T}：好玩的小盒四行（想法、想吃、想去、最近遊記）`, /想法/.test(fun) && /想吃/.test(fun) && /想去/.test(fun) && /最近遊記/.test(fun) && /台南三日散步/.test(fun), fun.replace(/\s+/g, ' '))
+    // 最近盒：點一個籤 → 搜尋框的值等於該詞
+    const chips = await page.locator('[data-testid="st-recent-chip"]').allInnerTexts()
+    await page.locator('[data-testid="st-recent-chip"]').nth(1).click(); await page.waitForTimeout(300)
+    check(`${T}：最近盒有 3 個籤；點第二個後搜尋框的值等於該詞`, chips.length === 3 && (await page.locator('.om-root input[type="text"]').inputValue()) === chips[1], JSON.stringify(chips))
+    // 歷年今天：3 筆 onThisDay → 今天分頁最多 1 張 onthisday 卡，why 寫「N 年前的今天」
+    const otd = await page.locator('[data-testid="now-card"][data-kind="onthisday"]').count()
+    check(`${T}：companion 有 3 筆歷年今天 → 今天分頁最多 1 張 onthisday 卡`, otd === 1, String(otd))
+    check(`${T}：onthisday 卡的 why 是「N 年前的今天」、有「沒用」按鈕`, /\d+ 年前的今天/.test(await page.locator('[data-testid="now-card"][data-kind="onthisday"] .nw-why').innerText()) && (await page.locator('[data-testid="now-card"][data-kind="onthisday"] button[aria-label^="沒用"]').count()) === 1)
+    await page.locator('[data-testid="now-card"][data-kind="onthisday"] button[aria-label^="沒用"]').click(); await page.waitForTimeout(800)
+    check(`${T}：按「沒用」送出 cardKind=onthisday 的回饋；那張卡離開，換下一張歷年今天（仍只有 1 張）`, calls.includes('feedback:useless:onthisday') && (await page.locator('[data-testid="now-card"][data-kind="onthisday"]').count()) === 1 && !/去年的今天發生的事/.test(await page.locator('[data-testid="now-card"][data-kind="onthisday"]').innerText()))
+    check(`${T}：今天的一行（趨勢＋建議）在現在用得上標題列上方`, await page.evaluate(() => { const l = document.querySelector('[data-testid="st-today-line"]'); const h = document.querySelector('.nw-head'); return !!l && !!(l.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) && l.textContent.trim().length > 0 }))
+    check(`${T}：沒有橫向捲動、沒有頁面錯誤`, (await noHScroll(page)) && errors.length === 0, errors.join(' | ').slice(0, 300))
+    await page.screenshot({ path: path.join(SHOTS, 'home-v3-1440.png') })
+    await ctx.close()
+  }
+
+  // ── 明日報告：明天分頁的「看全文」開抽屜 ──
+  {
+    const { ctx, page } = await open({ width: 1440, height: 900 }, 'v3-cards5', { layout: 'v3' })
+    await page.waitForSelector('[data-testid="now-card"]'); await settle(page)
+    check('v3：沒有明日報告區塊（改為抽屜）', (await page.locator('#sec-brief').count()) === 0)
+    await ctx.close()
+  }
+
+  // ── 切換：點開關出現 .hm-nav（classic），再點回 v3；重新整理後維持最後選擇 ──
+  {
+    const { ctx, page, calls } = await open({ width: 1440, height: 900 }, 'normal', { layout: 'v3' })
+    await page.waitForSelector('[data-testid="hm-layout-toggle"]')
+    const t = page.locator('[data-testid="hm-layout-toggle"]')
+    check('切換：預設是 v3（開關 aria-pressed=false、沒有 .hm-nav）、旁邊有「2027-01-31 後移除」的說明', (await t.getAttribute('aria-pressed')) === 'false' && (await page.locator('.hm-nav').count()) === 0 && /2027-01-31/.test(await page.locator('.st-layoutbar').innerText()))
+    const before = calls.length
+    await t.click(); await page.waitForSelector('.hm-nav'); await settle(page, 600)
+    check('切換：點開關立即出現舊版首頁（.hm-nav、.hm-today），aria-pressed=true，STATUS 消失', (await t.getAttribute('aria-pressed')) === 'true' && (await page.locator('.hm-nav, .hm-today').count()) >= 2 && (await page.locator('.st-aside').count()) === 0)
+    check('切換：寫進 localStorage（hm-layout=classic）', (await page.evaluate(() => localStorage.getItem('hm-layout'))) === 'classic')
+    check('切換：不送任何跟切換有關的 API（只有首頁資料請求）', !calls.slice(before).some((c) => /layout|toggle/i.test(c)))
+    await page.reload(); await page.waitForSelector('.hm-root')
+    check('切換：重新整理後維持舊版', (await page.locator('.hm-nav').count()) === 1 && (await page.locator('[data-testid="hm-layout-toggle"]').getAttribute('aria-pressed')) === 'true')
+    await page.locator('[data-testid="hm-layout-toggle"]').click(); await page.waitForSelector('.st-home')
+    check('切換：再點一次回到 v3，localStorage 變 v3', (await page.locator('.hm-nav').count()) === 0 && (await page.evaluate(() => localStorage.getItem('hm-layout'))) === 'v3')
+    await page.reload(); await page.waitForSelector('.st-home')
+    check('切換：重新整理後維持 v3', (await page.locator('.st-aside').count()) === 1)
+    await ctx.close()
+  }
+
+  // ── 系統燈黃／紅：搜尋框上方出警示帶 ──
+  {
+    const { ctx, page } = await open({ width: 1440, height: 900 }, 'v3-alert', { layout: 'v3' })
+    await page.waitForSelector('[data-testid="st-alert"]', { timeout: 10000 }); await settle(page)
+    check('v3 警示：系統燈異常時，搜尋框上方出現警示帶、根元素 data-sys=alert', await page.evaluate(() => { const a = document.querySelector('[data-testid="st-alert"]'); const o = document.querySelector('.om-root'); const r = document.querySelector('[data-testid="st-root"]'); return !!a && !!o && a.getBoundingClientRect().bottom <= o.getBoundingClientRect().top + 1 && r.getAttribute('data-sys') === 'alert' }))
+    await page.locator('[data-testid="st-alert"]').click(); await page.waitForSelector('.bd-drawer')
+    check('v3 警示：點警示帶開戰情室', /戰情室/.test(await page.locator('.bd-drawer-title').innerText()))
+    await ctx.close()
+  }
+
+  // ── 未解鎖：不發私領域請求、STATUS 各列寫 🔒 ──
+  {
+    const { ctx, page, calls } = await open({ width: 1440, height: 900 }, 'v3-cards5', { layout: 'v3', unlocked: false })
+    await page.waitForSelector('.st-aside'); await page.waitForTimeout(800)
+    const priv = calls.filter((c) => /search\/(recent|stats)|push\/stats|feed\/topics|push\/feedback/.test(c))
+    check('v3 未解鎖：不發最近搜尋、統計、知識頁、推送回饋請求', priv.length === 0, JSON.stringify(priv))
+    check('v3 未解鎖：最近盒不顯示、各列寫「解鎖後顯示」', (await page.locator('[data-testid="st-recent"]').count()) === 0 && /解鎖後顯示/.test(await page.locator('[data-testid="st-growth"]').innerText()))
+    await ctx.close()
+  }
+
+  // ── 手機：0 張與 5 張推送卡（規格 18、19）──
+  for (const [w, h, limit] of [[390, 844, 1266], [360, 740, 1110]]) {
+    for (const cards of [0, 5]) {
+      const { ctx, page, errors } = await open({ width: w, height: h }, `v3-cards${cards}`, { layout: 'v3' })
+      await page.waitForSelector('[data-testid="st-dim"]'); await settle(page)
+      const T = `v3 手機 ${w}×${h} ${cards} 張卡`
+      const nowTop = await top(page, '[data-testid="now-section"]')
+      const omTop = await top(page, '.om-root')
+      const dimsTop = await top(page, '[data-testid="st-dims"]')
+      const shownCards = await page.locator('[data-testid="now-card"]').count()
+      check(`${T}：搜尋框與「現在用得上」標題在首屏內（om ${omTop}、now ${nowTop} < ${h}）`, omTop !== null && omTop < h && nowTop !== null && nowTop < h)
+      check(`${T}：st-dims 的上緣 ${dimsTop} ≤ ${limit}（1.5 屏）`, dimsTop !== null && dimsTop <= limit, String(dimsTop))
+      check(`${T}：st-dims 有 6 格、3 欄 2 列`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && (await page.evaluate(() => new Set([...document.querySelectorAll('[data-testid="st-dim"]')].map((e) => Math.round(e.getBoundingClientRect().left))).size)) === 3)
+      check(`${T}：不橫向捲動、沒有頁面錯誤`, (await noHScroll(page)) && errors.length === 0, errors.join(' | ').slice(0, 300))
+      check(`${T}：STATUS 在「現在用得上」下面（單欄）`, await page.evaluate(() => document.querySelector('[data-testid="now-section"]').getBoundingClientRect().bottom <= document.querySelector('.st-aside').getBoundingClientRect().top + 1))
+      if (cards === 5) {
+        check(`${T}：5 張推送卡時先顯示 2 張，其餘收在「再看 3 則」（畫面上 ${shownCards} 張）`, shownCards === 2 && /再看 3 則/.test(await page.locator('[data-testid="now-more"]').innerText()), String(shownCards))
+        await page.locator('[data-testid="now-more"]').click(); await page.waitForTimeout(500)
+        const afterCards = await page.locator('[data-testid="now-card"]').count()
+        check(`${T}：按「再看 3 則」後 5 張全部出現、按鈕消失`, afterCards === 5 && (await page.locator('[data-testid="now-more"]').count()) === 0, String(afterCards))
+        if (w === 390) { await page.evaluate(() => document.querySelector('.ip-shell').scrollTo({ top: 0 })); await page.waitForTimeout(200) }
+      } else {
+        check(`${T}：沒有推送卡時只有一行說明`, /沒有需要推給你的/.test(await page.locator('[data-testid="now-section"]').innerText()) && shownCards === 0)
+      }
+      await ctx.close()
+    }
+  }
+  // 截圖：390×844 5 張卡的首屏（收合狀態）
+  {
+    const { ctx, page } = await open({ width: 390, height: 844 }, 'v3-cards5', { layout: 'v3' })
+    await page.waitForSelector('[data-testid="st-dim"]'); await settle(page)
+    await page.screenshot({ path: path.join(SHOTS, 'home-v3-390-5cards.png') })
+    await ctx.close()
+  }
 }
 
 await browser.close()
