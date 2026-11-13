@@ -60,7 +60,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 | recall | `recall:<topicId>` |
 | quiet | `quiet:<人名雜湊>` |
 | brief | `brief:<日期>` |
-| onthisday | `onthisday:<來源事件 id>` |
+| onthisday | `onthisday:<原日期 YYYY-MM-DD>:<標題雜湊>`（companion 的 onThisDay 沒有 id） |
 
 `cardKind` 必須是上表六種；`cardKey` 前綴與 `cardKind` 是否一致不在此端點驗證（前端自行遵守）。
 
