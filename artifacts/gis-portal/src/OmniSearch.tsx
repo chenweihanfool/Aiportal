@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent a
 import { apiSearch, apiSearchLog, apiSearchPreview } from './omniSearchApi'
 import {
   KIND_ORDER, PREFIX_HINTS, addRecent, commandAnswer, filterCommands, flattenHits, isAbandoned, kindLabel, loadRecent, logKey, moveIndex,
-  openAction, parseQuery, quickAnswer, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
+  keepKnownTools, openAction, parseQuery, quickAnswer, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
 } from './omniSearch'
 import { Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
 import type { SiteData } from './portalApi'
@@ -66,6 +66,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const lastLogKey = useRef<string | null>(null)
   const pwRef = useRef(pw)
   pwRef.current = pw
+  const sitesRef = useRef(sites)
+  sitesRef.current = sites
 
   const parsed = useMemo(() => parseQuery(raw), [raw])
   const searchQ = parsed.mode === 'search' ? parsed.q : ''
@@ -101,6 +103,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
         .then((r) => {
           if (ctl.signal.aborted) return
           if (r === null) { setStatus('offline'); setResp(null); return }
+          r = keepKnownTools(r, new Set(sitesRef.current.map((x) => String(x.id))))
           setResp(r)
           setStatus('ok')
           setSel(r.groups.length > 0 ? 0 : -1)
@@ -212,7 +215,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const answer =
     parsed.mode === 'empty' ? ''
     : parsed.mode === 'command' ? commandAnswer(cmds)
-    : !pw ? '解鎖後可搜尋知識庫'
+    : !pw ? ''
     : status === 'loading' ? '搜尋中…'
     : status === 'error' ? '搜尋暫時失敗，稍後再試。'
     : status === 'offline' ? '搜尋服務還沒上線'
@@ -269,7 +272,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
         </>
       )}
 
-      <div className="om-guess" aria-live="polite" hidden={!searching}>
+      <div className="om-guess" aria-live="polite" hidden={!searching || answer === ''}>
         <span className="om-lb">即答</span>
         <span className="om-ans">{shown}</span>
         <span className="om-caret" aria-hidden="true" />

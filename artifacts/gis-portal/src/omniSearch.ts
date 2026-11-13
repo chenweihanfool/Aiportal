@@ -84,7 +84,34 @@ export const COMMANDS: readonly OmniCommand[] = [
 export function filterCommands(q: string): OmniCommand[] {
   const s = q.trim().toLowerCase()
   if (!s) return [...COMMANDS]
-  return COMMANDS.filter(c => c.label.toLowerCase().includes(s) || c.hint.toLowerCase().includes(s) || c.keywords.some(k => k.toLowerCase().includes(s) || s.includes(k.toLowerCase())))
+  const hits = COMMANDS.filter(c => c.label.toLowerCase().includes(s) || c.hint.toLowerCase().includes(s) || c.keywords.some(k => k.toLowerCase().includes(s) || s.includes(k.toLowerCase())))
+  // 名稱完全相同 → 名稱以輸入開頭 → 其他；同級維持原順序（「關係宇宙」不會被「關係」搶走）
+  const rank = (c: OmniCommand) => { const l = c.label.toLowerCase(); return l === s ? 0 : l.startsWith(s) ? 1 : 2 }
+  return hits.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map(x => x.c)
+}
+
+/** 摘要去掉 markdown 標記（標題 #、條列 -、粗體、[[連結]]、⟦n⟧、句尾 ^c001），只留文字 */
+export function cleanSnippet(text: string): string {
+  return text
+    .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1').replace(/\[\[([^\]]*)\]\]/g, '$1')
+    .replace(/⟦\d+⟧/g, '').replace(/\s\^c\d+/g, '').replace(/\*\*/g, '')
+    .replace(/(^|\s)#{1,6}\s+/g, '$1').replace(/(^|\s)[-*]\s+/g, '$1')
+    .replace(/\s+/g, ' ').trim()
+}
+
+/** 工具連結只留前端真的開得了的（sites 清單裡有的）；組空了就拿掉，總數跟著扣 */
+export function keepKnownTools(resp: SearchResponse, siteIds: ReadonlySet<string>): SearchResponse {
+  let dropped = 0
+  const groups: SearchGroup[] = []
+  for (const g of resp.groups) {
+    if (g.kind !== 'tool') { groups.push(g); continue }
+    const items = g.items.filter(h => siteIds.has(h.id))
+    dropped += g.count - items.length
+    if (items.length > 0) groups.push({ ...g, count: items.length, items })
+  }
+  if (dropped === 0) return resp
+  const best = resp.best && resp.best.kind === 'tool' && !siteIds.has(resp.best.id) ? (groups[0]?.items[0] ?? null) : resp.best
+  return { ...resp, groups, total: Math.max(0, resp.total - dropped), best }
 }
 
 /** 各 kind 的「開啟」去處（F8） */
@@ -113,7 +140,7 @@ function parseHit(raw: unknown): SearchHit | null {
   const id = str(raw.id)
   const title = str(raw.title)
   if (!isSearchKind(raw.kind) || id === null || id === '' || title === null || title === '') return null
-  return { kind: raw.kind, id, title, snippet: str(raw.snippet) ?? '', date: str(raw.date) }
+  return { kind: raw.kind, id, title, snippet: cleanSnippet(str(raw.snippet) ?? ''), date: str(raw.date) }
 }
 
 const EMPTY_RESPONSE: SearchResponse = { q: '', total: 0, tookMs: 0, groups: [], best: null }

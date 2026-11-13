@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ABANDON_MS, COMMANDS, CTX_H, CTX_W, KIND_ORDER, RECENT_KEY, addRecent, commandAnswer, contextLayout, ctxLabel, filterCommands, flattenHits,
+  ABANDON_MS, COMMANDS, CTX_H, CTX_W, KIND_ORDER, RECENT_KEY, addRecent, cleanSnippet, commandAnswer, contextLayout, ctxLabel, filterCommands, flattenHits, keepKnownTools,
   highlightSegments, isAbandoned, kindLabel, loadRecent, logKey, moveIndex, openAction, parsePreview, parseQuery, parseSearchResponse,
   quickAnswer, saveRecent, shouldLog, type SearchGroup, type SearchHit,
 } from './omniSearch'
@@ -26,6 +26,25 @@ describe('parseQuery', () => {
 })
 
 describe('指令', () => {
+  it('名稱完全相同的指令排最前面', () => {
+    expect(filterCommands('關係宇宙')[0]?.id).toBe('graph')
+    expect(filterCommands('知識庫架構')[0]?.id).toBe('architecture')
+    expect(filterCommands('關係')[0]?.id).toBe('relations')
+  })
+  it('摘要去掉 markdown 標記', () => {
+    expect(cleanSnippet('## 這是什麼 鑑界流程 - 備妥 [[權狀|所有權狀]] 與 [[圖]]⟦2⟧ **重點** ^c001')).toBe('這是什麼 鑑界流程 備妥 所有權狀 與 圖 重點')
+    expect(cleanSnippet('C# 語言 a-b')).toBe('C# 語言 a-b')
+  })
+  it('工具連結只留 sites 清單裡有的', () => {
+    const hit = (kind: 'tool' | 'case', id: string) => ({ kind, id, title: id, snippet: '', date: null })
+    const resp = { q: 'x', total: 4, tookMs: 1, best: hit('tool', '9'), groups: [{ kind: 'case' as const, count: 1, items: [hit('case', 'A')] }, { kind: 'tool' as const, count: 3, items: [hit('tool', '9'), hit('tool', '1')] }] }
+    const r = keepKnownTools(resp, new Set(['1']))
+    expect(r.groups[1]).toEqual({ kind: 'tool', count: 1, items: [hit('tool', '1')] })
+    expect(r.total).toBe(2)
+    expect(r.best).toEqual(hit('case', 'A'))
+    expect(keepKnownTools(resp, new Set()).groups.map(g => g.kind)).toEqual(['case'])
+    expect(keepKnownTools({ ...resp, groups: [resp.groups[0]!] }, new Set())).toMatchObject({ total: 4 })
+  })
   it('沒有字回全部', () => expect(filterCommands('')).toHaveLength(COMMANDS.length))
   it('依名稱、關鍵字過濾（不分大小寫）', () => {
     expect(filterCommands('時間').map(c => c.id)).toEqual(['timeline'])

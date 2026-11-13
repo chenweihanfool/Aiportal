@@ -2147,7 +2147,8 @@ button.ms-col { cursor: pointer; }
 @keyframes om-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .om-hit:hover { background: var(--om-raise); }
 .om-hit.om-on { background: var(--om-ac-soft); border-left-color: var(--om-ac); }
-.om-t { font-size: 15px; line-height: 1.4; color: var(--om-ink); }
+.om-t { font-size: 15px; line-height: 1.4; color: var(--om-ink); overflow-wrap: anywhere; }
+.om-hit > :last-child { min-width: 0; }
 .om-s { font-size: 13px; color: var(--om-dim); line-height: 1.45; margin-top: 2px; overflow-wrap: anywhere; }
 .om-root mark { background: none; color: var(--om-ac-ink); font-weight: 600; }
 .om-kd { flex: 0 0 auto; align-self: flex-start; white-space: nowrap; display: inline-block; font: 11px var(--om-mono); border: 1px solid var(--om-line2); border-radius: 4px; padding: 0 6px; color: var(--om-dim); margin-top: 3px; }
@@ -2187,4 +2188,11 @@ button.ms-col { cursor: pointer; }
   .om-hit { opacity: 1; }
   .om-ctx line { stroke-dashoffset: 0; }
   .om-pulse { display: none; }
+}
+/* 手機：沒在搜尋時只留一條搜尋框（標題收起；前綴鈕與最近找過聚焦才出現），不把下面的卡片擠出首屏 */
+@media (max-width: 699px) {
+  .om-root { padding: var(--sp-2); margin-bottom: var(--sp-2); }
+  .om-root[data-searching="false"] .om-title { display: none; }
+  .om-root[data-searching="false"]:not(:focus-within) .om-modes, .om-root[data-searching="false"]:not(:focus-within) .om-recent { display: none; }
+  .om-in input { font-size: 16px; padding: 11px 0; }
 }
