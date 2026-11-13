@@ -10,7 +10,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 | 欄位 | 規則 |
 |---|---|
 | `cardKey` | 字串，trim 後 1～200 字 |
-| `cardKind` | `topic｜resume｜recall｜quiet｜brief` |
+| `cardKind` | `topic｜resume｜recall｜quiet｜brief｜onthisday` |
 | `action` | `shown｜opened｜useful｜useless｜later` |
 | `forDate` | `^\d{4}-\d{2}-\d{2}$` 且是真實日曆日（擋 `2026-02-30`） |
 
@@ -47,7 +47,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 
 - `shown`／`opened`／`useful`／`useless`＝範圍內各 action 筆數（shown 本來就同一 `(cardKey, forDate)` 只一筆）。
 - `openRate`＝opened÷shown、`uselessRate`＝useless÷shown：0～1、四捨五入到小數 3 位；分母 0 時為 0；大於 1 截為 1。
-- `byKind`：五種 kind 固定順序 `topic, resume, recall, quiet, brief` 全列（0 也列）。
+- `byKind`：六種 kind 固定順序 `topic, resume, recall, quiet, brief, onthisday` 全列（0 也列）。
 - `daysWithCards`：範圍內有 shown 的不同 `for_date` 數。
 
 ## cardKey 組法
@@ -60,15 +60,16 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 | recall | `recall:<topicId>` |
 | quiet | `quiet:<人名雜湊>` |
 | brief | `brief:<日期>` |
+| onthisday | `onthisday:<來源事件 id>` |
 
-`cardKind` 必須是上表五種；`cardKey` 前綴與 `cardKind` 是否一致不在此端點驗證（前端自行遵守）。
+`cardKind` 必須是上表六種；`cardKey` 前綴與 `cardKind` 是否一致不在此端點驗證（前端自行遵守）。
 
 ## 表 `push_feedback`（只新增）
 | 欄位 | 型別 | 說明 |
 |---|---|---|
 | `id` | serial pk | |
 | `card_key` | text not null | 見上表 |
-| `card_kind` | text not null | 五種 kind |
+| `card_kind` | text not null | 六種 kind |
 | `action` | text not null | 五種 action |
 | `for_date` | text not null | 卡片代表的日期 `YYYY-MM-DD` |
 | `created_at` | timestamptz not null default now() | |

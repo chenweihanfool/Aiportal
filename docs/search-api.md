@@ -1,6 +1,6 @@
 # 入口網搜尋 API（omni-search，2026-11-13）
 
-首頁「一個框搜全部」的後端。四個端點都要 `x-admin-password`（`isAuthorized`），沒有或不對回 **403** `{"message":"需要解鎖私領域才能查看"}`。程式：`artifacts/api-server/src/routes/search.ts`，純邏輯在 `src/lib/search.ts`（搜尋、驗證、stats、快取）與 `src/lib/searchPreview.ts`（預覽）。
+首頁「一個框搜全部」的後端。五個端點都要 `x-admin-password`（`isAuthorized`），沒有或不對回 **403** `{"message":"需要解鎖私領域才能查看"}`。程式：`artifacts/api-server/src/routes/search.ts`，純邏輯在 `src/lib/search.ts`（搜尋、驗證、stats、快取）與 `src/lib/searchPreview.ts`（預覽）。
 
 ## S1 `GET /api/search?q=&kind=&limit=`
 - `q`：去頭尾空白後 1～50 字（否則 400）。以空白（含全形）切詞，最多 5 詞，每個詞都要命中（不分大小寫子字串，標題或內文）。
@@ -36,6 +36,12 @@ body：`{ q(1～50), kind|null, total(整數>=0), clickedKind|null, clickedId|nu
 
 ## S4 `GET /api/search/stats?days=`
 `days` 1～90，預設 7。回應 `{ days, searches, zero, zeroRate, clicked, clickRate, topZero:[{q,count}] }`；rate 為 0～1、四捨五入到小數 3 位，searches 為 0 時 rate 為 0；topZero 最多 10 筆。
+
+## S5 `GET /api/search/recent?limit=`
+最近搜尋的詞（首頁右欄 STATUS 的「最近」小盒）。`limit` 選填，1～20 的整數，預設 5；`0`、`21`、`abc`、`1.5`、空字串 → 400 `{"message":"limit 必須是 1～20 的整數"}`。
+- 回應：`{ "recent": ["詞1", "詞2", ...] }`。只回詞（字串陣列），不回 id、時間、筆數。
+- 依 `q` 去重（完全相同字串才算重複），每個詞用它**最後一次**出現的 `created_at` 排序，新到舊，最多 `limit` 個（SQL `group by q order by max(created_at) desc, q limit n`）。
+- 表是空的 → `{ "recent": [] }`。
 
 ## 部署
 新增資料表 `search_log`（migration `0029_*`），**部署要先跑 db-migrate**，再重建 api-server，最後才是 gis-portal。kb-pipeline 不用動。
