@@ -211,6 +211,13 @@
       "when": 1794558988533,
       "tag": "0029_dusty_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794566387428,
+      "tag": "0030_ancient_war_machine",
+      "breakpoints": true
     }
   ]
 }
