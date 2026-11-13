@@ -173,3 +173,51 @@ describe('remainingPending（補送後 pending 何時移除）', () => {
     expect(remainingPending(p, new Set(['a|2026-11-14']))).toEqual(p)
   })
 })
+
+describe('歷年今天（onthisday）', () => {
+  const withOtd = (list: Array<{ date: string; title: string }>): CompanionData => ({
+    ...companion([]), onThisDay: list.map((e) => ({ ...e, kind: 'event' as const })),
+  })
+  const three = [
+    { date: '2025-11-13', title: '去年的事' },
+    { date: '2024-11-13', title: '前年的事' },
+    { date: '2021-11-13', title: '五年前的事' },
+  ]
+  it('鍵：onthisday:<date>:<hash(title)>，標題原文不進鍵', () => {
+    const k = cardKeyOf({ kind: 'onthisday', date: '2025-11-13', title: '去年的事' })
+    expect(k).toBe(`onthisday:2025-11-13:${hash('去年的事')}`)
+    expect(k).not.toContain('去年的事')
+  })
+  it('今天分頁：每筆做成一張卡，why 是「N 年前的今天」，排在 quiet 之後', () => {
+    const c = { ...withOtd(three), quietPeople: quietPeople(['甲']) }
+    const cards = buildCards({ ...base, companion: c })
+    expect(cards.map((x) => x.kind)).toEqual(['quiet', 'onthisday', 'onthisday', 'onthisday'])
+    expect(cards.filter((x) => x.kind === 'onthisday').map((x) => x.why)).toEqual(['1 年前的今天', '2 年前的今天', '5 年前的今天'])
+    expect(cards.filter((x) => x.kind === 'onthisday').every((x) => x.forDate === TODAY && x.rank > cards[0]!.rank)).toBe(true)
+  })
+  it('明天分頁不出歷年今天；沒有 companion 也不出', () => {
+    expect(buildCards({ ...base, companion: withOtd(three), day: 'tomorrow' }).some((x) => x.kind === 'onthisday')).toBe(false)
+    expect(buildCards({ ...base, companion: null }).some((x) => x.kind === 'onthisday')).toBe(false)
+  })
+  it('person-actions 沒讀到時仍可推歷年今天（它不需要提醒設定）', () => {
+    expect(buildCards({ ...base, companion: withOtd(three), personActions: null }).filter((x) => x.kind === 'onthisday')).toHaveLength(3)
+  })
+  it('同日同標題只出一張', () => {
+    expect(buildCards({ ...base, companion: withOtd([three[0]!, three[0]!]) }).filter((x) => x.kind === 'onthisday')).toHaveLength(1)
+  })
+  it('visibleCards：最多保留 1 張歷年今天，其餘卡片遞補', () => {
+    const now = Date.parse('2026-11-13T05:00:00Z')
+    const all = buildCards({ ...base, companion: { ...withOtd(three), quietPeople: quietPeople(['甲', '乙']) } })
+    const v = visibleCards(all, null, now)
+    expect(v.filter((x) => x.kind === 'onthisday')).toHaveLength(1)
+    expect(v.find((x) => x.kind === 'onthisday')!.title).toBe('去年的事')
+  })
+  it('第一張被按「沒用」後，下一張歷年今天遞補（仍只留 1 張）', () => {
+    const now = Date.parse('2026-11-13T05:00:00Z')
+    const all = buildCards({ ...base, companion: withOtd(three) })
+    const first = all[0]!
+    const v = visibleCards(all, { suppressed: [first.key], later: [] }, now)
+    expect(v).toHaveLength(1)
+    expect(v[0]!.title).toBe('前年的事')
+  })
+})
