@@ -426,6 +426,18 @@ export function parseStatsDays(raw: unknown): number | null {
   return n >= 1 && n <= STATS_MAX_DAYS ? n : null;
 }
 
+// ── S5 recent ──────────────────────────────────────────────────────────────
+export const RECENT_DEFAULT_LIMIT = 5;
+export const RECENT_MAX_LIMIT = 20;
+
+/** limit：1～20 的整數字串，未給＝5；不合法回 null（路由回 400）。 */
+export function parseRecentLimit(raw: unknown): number | null {
+  if (raw === undefined) return RECENT_DEFAULT_LIMIT;
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= 1 && n <= RECENT_MAX_LIMIT ? n : null;
+}
+
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
 export interface SearchStats {

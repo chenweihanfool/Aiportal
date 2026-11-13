@@ -9,7 +9,7 @@ import { logger } from "../lib/logger";
 import { escapeLike } from "../lib/hermesDocSearch";
 import {
   DOC_KINDS, buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, isDocKind,
-  parseSearchLogBody, parseStatsDays, placesToCandidates, runSearch, sitesToCandidates, topicsToCandidates,
+  parseRecentLimit, parseSearchLogBody, parseStatsDays, placesToCandidates, runSearch, sitesToCandidates, topicsToCandidates,
   tripsToCandidates, validateSearchParams, type Candidate, type SearchKind,
 } from "../lib/search";
 import {
@@ -199,6 +199,21 @@ router.get("/search/stats", async (req: Request, res: Response) => {
     .orderBy(sql`count(*) desc`, searchLogTable.q)
     .limit(10);
   return res.json(buildStats(days, agg?.searches ?? 0, agg?.zero ?? 0, agg?.clicked ?? 0, zeroQueries));
+});
+
+// ── S5 ────────────────────────────────────────────────────────────────────
+// 最近搜尋的詞（首頁右欄 STATUS 的「最近」小盒）：依 q 去重，用每個詞最後一次出現的時間新到舊。
+router.get("/search/recent", async (req: Request, res: Response) => {
+  if (!isAuthorized(req.headers["x-admin-password"])) return res.status(403).json(FORBIDDEN);
+  const limit = parseRecentLimit(req.query["limit"]);
+  if (limit === null) return res.status(400).json({ message: "limit 必須是 1～20 的整數" });
+  const rows = await db
+    .select({ q: searchLogTable.q })
+    .from(searchLogTable)
+    .groupBy(searchLogTable.q)
+    .orderBy(sql`max(${searchLogTable.createdAt}) desc`, searchLogTable.q)
+    .limit(limit);
+  return res.json({ recent: rows.map((r) => r.q) });
 });
 
 export default router;

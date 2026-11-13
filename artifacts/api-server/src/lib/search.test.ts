@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, makeSnippet, parseSearchLogBody,
-  parseStatsDays, placesToCandidates, rankOf, runSearch, sitesToCandidates, splitTerms, topicsToCandidates,
+  parseRecentLimit, parseStatsDays, placesToCandidates, rankOf, runSearch, sitesToCandidates, splitTerms, topicsToCandidates,
   tripsToCandidates, validateSearchParams, SEARCH_KINDS, type Candidate,
 } from "./search";
 
@@ -188,6 +188,15 @@ describe("stats", () => {
   });
   it("searches=0 時 rate 為 0", () => {
     expect(buildStats(30, 0, 0, 0, [])).toEqual({ days: 30, searches: 0, zero: 0, zeroRate: 0, clicked: 0, clickRate: 0, topZero: [] });
+  });
+});
+
+describe("recent", () => {
+  it("limit 驗證（未給＝5；數字型別不合法）", () => {
+    expect(parseRecentLimit(undefined)).toBe(5);
+    expect(parseRecentLimit("1")).toBe(1);
+    expect(parseRecentLimit("20")).toBe(20);
+    for (const bad of ["0", "21", "abc", "1.5", "", 5]) expect(parseRecentLimit(bad), JSON.stringify(bad)).toBeNull();
   });
 });
 

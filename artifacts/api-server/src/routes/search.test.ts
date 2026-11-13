@@ -23,8 +23,8 @@ describe("search 路由：未授權與參數驗證", () => {
 
   const authed = { "x-admin-password": PWD };
 
-  it("四個端點沒有密碼一律 403", async () => {
-    for (const [m, p] of [["GET", "/search?q=a"], ["GET", "/search/preview?kind=case&id=a"], ["POST", "/search/log"], ["GET", "/search/stats"]] as const) {
+  it("五個端點沒有密碼一律 403", async () => {
+    for (const [m, p] of [["GET", "/search?q=a"], ["GET", "/search/preview?kind=case&id=a"], ["POST", "/search/log"], ["GET", "/search/stats"], ["GET", "/search/recent"]] as const) {
       const r = await fetch(base + p, { method: m });
       expect(r.status, p).toBe(403);
       expect(((await r.json()) as { message: string }).message).toBe("需要解鎖私領域才能查看");
@@ -35,12 +35,15 @@ describe("search 路由：未授權與參數驗證", () => {
       expect((await fetch(`${base}/search?${qs}`, { headers: authed })).status, qs).toBe(400);
     }
   });
-  it("S2／S3／S4 參數不合法回 400", async () => {
+  it("S2／S3／S4／S5 參數不合法回 400", async () => {
     expect((await fetch(`${base}/search/preview?kind=zzz&id=a`, { headers: authed })).status).toBe(400);
     expect((await fetch(`${base}/search/preview?kind=case`, { headers: authed })).status).toBe(400);
     const post = (body: unknown) => fetch(`${base}/search/log`, { method: "POST", headers: { ...authed, "content-type": "application/json" }, body: JSON.stringify(body) });
     expect((await post({ q: "", kind: null, total: 0, clickedKind: null, clickedId: null })).status).toBe(400);
     expect((await post({ q: "a", kind: null, total: -1, clickedKind: null, clickedId: null })).status).toBe(400);
     expect((await fetch(`${base}/search/stats?days=91`, { headers: authed })).status).toBe(400);
+    for (const qs of ["limit=0", "limit=21", "limit=abc", "limit=1.5", "limit="]) {
+      expect((await fetch(`${base}/search/recent?${qs}`, { headers: authed })).status, qs).toBe(400);
+    }
   });
 });
