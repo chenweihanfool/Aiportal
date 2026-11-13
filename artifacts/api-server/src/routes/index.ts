@@ -22,6 +22,7 @@ import hermesMediaRouter from "./hermesMedia";
 import hermesChatRouter from "./hermesChat";
 import companionActionsRouter from "./companionActions";
 import knowledgeCorrectionsRouter from "./knowledgeCorrections";
+import searchRouter from "./search";
 import exportRouter from "./export";
 
 const router: IRouter = Router();
@@ -50,6 +51,7 @@ router.use(hermesMediaRouter);
 router.use(hermesChatRouter);
 router.use(companionActionsRouter);
 router.use(knowledgeCorrectionsRouter);
+router.use(searchRouter);
 router.use(exportRouter);
 
 export default router;
