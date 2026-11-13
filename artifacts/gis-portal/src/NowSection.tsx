@@ -3,7 +3,7 @@ import { apiPutPersonAction, type PersonAction, type CompanionData, type PersonA
 import { useAsync } from './homeHooks'
 import { apiFetchFeedback, apiPostFeedback, type FeedbackAction, type FeedbackBody } from './nowCardsApi'
 import {
-  RAIL_TICKS, addDays, atHours, buildCards, countLabel, defaultDay, railPos, visibleCards, type FeedbackState, type NowCard, type NowDay,
+  RAIL_TICKS, addDays, atHours, buildCards, countLabel, defaultDay, nowReady, railPos, remainingPending, visibleCards, type FeedbackState, type NowCard, type NowDay,
 } from './nowCards'
 import { knowledgeHref, type TopicNudges } from './topicNudges'
 
@@ -32,7 +32,7 @@ function writePending(list: Pending): void {
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, briefInfo, onActionsChange }: {
+export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, onActionsChange }: {
   /** null＝未解鎖：整個區塊不顯示 */
   pw: string | null
   nowMs: number
@@ -41,13 +41,17 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   companion: CompanionData | null
   /** null＝提醒設定還沒讀到 */
   personActions: PersonAction[] | null
+  /** topic-nudges、companion、person-actions 三個來源都已結束（成功或失敗）；沒結束前不渲染卡片、不送 shown */
+  sourcesSettled: boolean
   /** 明日報告：date＝報告日、summary＝一行摘要；沒有就 null */
   briefInfo: { date: string; summary: string } | null
   /** 很久沒聯絡的動作寫入成功後，通知上層重新讀取陪伴資料 */
   onActionsChange: () => void
 }) {
   const [day, setDay] = useState<NowDay>(() => defaultDay(nowMs))
-  const feedback = useAsync(pw, apiFetchFeedback)
+  // 先補送上次沒送成功的「沒用」（全部結束），之後才讀 feedback，確保 GET 已包含那些鍵
+  const [flushDone, setFlushDone] = useState(false)
+  const feedback = useAsync(flushDone ? pw : null, apiFetchFeedback)
   const [localSuppressed, setLocalSuppressed] = useState<string[]>([])
   const [localLater, setLocalLater] = useState<string[]>([])
   const [pending, setPending] = useState<Pending>(() => readPending())
@@ -65,21 +69,21 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   }, [])
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
-  // 上次送失敗的「沒用」：載入時先重送，成功才刪
   useEffect(() => {
-    if (!pw) return
+    if (!pw) { setFlushDone(false); return }
     const list = readPending()
-    if (list.length === 0) return
+    if (list.length === 0) { setFlushDone(true); return }
     let cancelled = false
     void (async () => {
-      for (const p of list) {
-        try {
-          await apiPostFeedback(pw, { ...p, action: 'useless' })
-          const left = readPending().filter((x) => !(x.cardKey === p.cardKey && x.forDate === p.forDate))
-          writePending(left)
-          if (!cancelled) setPending(left)
-        } catch { /* 留著，下次再送 */ }
-      }
+      const results = await Promise.all(list.map((p) => apiPostFeedback(pw, { ...p, action: 'useless' }).then(() => true, () => false)))
+      const ok = new Set(list.filter((_, i) => results[i]).map((p) => `${p.cardKey}|${p.forDate}`))
+      const left = remainingPending(readPending(), ok)
+      writePending(left)
+      if (cancelled) return
+      setPending(left)
+      // 成功補送的鍵本機也先記成 suppressed，即使之後 GET 失敗也不會冒出來
+      setLocalSuppressed((l) => [...l, ...list.filter((_, i) => results[i]).map((p) => p.cardKey)])
+      setFlushDone(true)
     })()
     return () => { cancelled = true }
   }, [pw])
@@ -96,7 +100,8 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
       later: [...server.later, ...localLater.map((cardKey) => ({ cardKey, until: LATER_FOREVER }))],
     }
   }, [feedback.data, localSuppressed, localLater])
-  const cards = useMemo(() => visibleCards(all, fb, nowMs, pending.map((p) => p.cardKey)), [all, fb, nowMs, pending])
+  const ready = sourcesSettled && flushDone && nowReady([feedback])
+  const cards = useMemo(() => (ready ? visibleCards(all, fb, nowMs, pending.map((p) => p.cardKey)) : []), [ready, all, fb, nowMs, pending])
 
   const send = useCallback((card: NowCard, action: FeedbackAction) => {
     if (!pw) return
@@ -161,7 +166,7 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
         </div>
       </div>
 
-      {timed.length > 0 && (
+      {ready && timed.length > 0 && (
         <div className="nw-rail" data-testid="now-rail" role="group" aria-label="時間軌">
           <div className="nw-bar" />
           {RAIL_TICKS.map((h, i) => (
@@ -177,7 +182,7 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
         </div>
       )}
 
-      {cards.length === 0 ? <p className="nw-empty" data-testid="now-empty">{emptyText}</p> : (
+      {!ready ? <p className="nw-empty" data-testid="now-loading">整理中…</p> : cards.length === 0 ? <p className="nw-empty" data-testid="now-empty">{emptyText}</p> : (
         <div className="nw-list">
           {cards.map((c) => (
             <NowCardView key={c.key} card={c} hot={hot === c.key} gone={gone.includes(c.key)} setRef={(el) => { if (el) cardEls.current.set(c.key, el); else cardEls.current.delete(c.key) }}

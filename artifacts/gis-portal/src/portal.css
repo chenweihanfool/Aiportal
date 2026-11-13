@@ -2204,8 +2204,8 @@ button.ms-col { cursor: pointer; }
   background: var(--nw-bg); color: var(--nw-ink); border: 1px solid var(--nw-line); border-radius: var(--r-lg);
   overflow-x: clip;
 }
-.nw-root button, .nw-root a { font: inherit; }
-.nw-root button { color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+:where(.nw-root) button, :where(.nw-root) a { font: inherit; }
+:where(.nw-root) button { color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 .nw-root button:focus-visible, .nw-root a:focus-visible { outline: 2px solid var(--nw-ac); outline-offset: 2px; border-radius: 6px; }
 .nw-head { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; }
 .nw-title { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--nw-ink); }

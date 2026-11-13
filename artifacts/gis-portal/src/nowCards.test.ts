@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addDays, atHours, buildCards, cardKeyOf, countLabel, defaultDay, hash, railPos, sortCards, visibleCards, type NowCard,
+  addDays, atHours, buildCards, cardKeyOf, countLabel, defaultDay, hash, nowReady, railPos, remainingPending, settled, sortCards, visibleCards, type NowCard,
 } from './nowCards'
 import type { CompanionData, PersonAction } from './companion'
 import type { NudgeMatch, TopicNudges } from './topicNudges'
@@ -144,5 +144,32 @@ describe('其他', () => {
   })
   it('addDays', () => {
     expect(addDays('2026-11-30', 1)).toBe('2026-12-01')
+  })
+})
+
+describe('nowReady／settled（資料沒結束前不渲染、不送 shown）', () => {
+  const loading = { loadedAt: null, error: false }
+  const ok = { loadedAt: 1, error: false }
+  const failed = { loadedAt: null, error: true }
+  it('任何一個還在載入就不能渲染', () => {
+    expect(nowReady([ok, ok, ok, loading])).toBe(false)
+    expect(nowReady([loading, ok, ok, ok])).toBe(false)
+  })
+  it('成功或失敗都算結束（失敗當空）', () => {
+    expect(settled(ok)).toBe(true)
+    expect(settled(failed)).toBe(true)
+    expect(nowReady([ok, failed, ok, ok])).toBe(true)
+  })
+})
+
+describe('remainingPending（補送後 pending 何時移除）', () => {
+  const p = [{ cardKey: 'a', forDate: TODAY }, { cardKey: 'b', forDate: TODAY }]
+  it('只有 POST 成功的才移除，失敗的留著', () => {
+    expect(remainingPending(p, new Set([`a|${TODAY}`]))).toEqual([{ cardKey: 'b', forDate: TODAY }])
+    expect(remainingPending(p, new Set())).toEqual(p)
+    expect(remainingPending(p, new Set([`a|${TODAY}`, `b|${TODAY}`]))).toEqual([])
+  })
+  it('日期不同的同鍵不會被誤移除', () => {
+    expect(remainingPending(p, new Set(['a|2026-11-14']))).toEqual(p)
   })
 })

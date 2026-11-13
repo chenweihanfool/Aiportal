@@ -25,6 +25,7 @@ import { apiFetchReports, crowdOf, parseBrief, pickBrief } from './briefView'
 import { apiFetchGantt } from './taskGantt'
 import { apiFetchTopicNudges } from './topicNudges'
 import { NowSection } from './NowSection'
+import { nowReady } from './nowCards'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
   oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus, type DimSeries,
@@ -204,7 +205,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       onOpenIdeas={() => { if (on) setDrawer('ideas'); else onRequestUnlock() }}
       onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
       onRequestUnlock={onRequestUnlock} />
-    <NowSection pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data}
+    <NowSection pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
       briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
       onActionsChange={personActions.reload} />
     <div className="hm-layout">

@@ -179,3 +179,14 @@ export function visibleCards(cards: readonly NowCard[], feedback: FeedbackState 
 
 /** 標題列右側的「NN / 05」 */
 export const countLabel = (n: number): string => `${String(n).padStart(2, '0')} / ${String(MAX_CARDS).padStart(2, '0')}`
+
+/** 一個資料來源「已結束」：成功（含 404 回 null）或失敗都算；還在等才是 false */
+export const settled = (s: { loadedAt: number | null; error: boolean }): boolean => s.loadedAt !== null || s.error
+
+/** 四個來源（topic-nudges、companion、person-actions、push feedback）都結束了才能渲染卡片與送 shown；失敗當空 */
+export const nowReady = (parts: ReadonlyArray<{ loadedAt: number | null; error: boolean }>): boolean => parts.every(settled)
+
+/** 補送完畢後仍要留在 pending 的鍵：只有 POST 成功的才移除 */
+export function remainingPending<T extends { cardKey: string; forDate: string }>(pending: readonly T[], okKeys: ReadonlySet<string>): T[] {
+  return pending.filter((p) => !okKeys.has(`${p.cardKey}|${p.forDate}`))
+}
