@@ -110,6 +110,9 @@ export const CSS_TOKENS: Record<string, string> = {
   // 半透明疊層（卡片 hover、分隔格）：深色加亮、淺色加暗
   '--c-wash': 'rgba(255, 255, 255, 0.04)',
   // 分數色階的高分兩級（低分沿用 warn／concern／crit）
+  '--c-score-crit': SCORE_SCALE.crit,
+  '--c-score-concern': SCORE_SCALE.concern,
+  '--c-score-warn': SCORE_SCALE.warn,
   '--c-score-good': SCORE_SCALE.good,
   '--c-score-great': SCORE_SCALE.great,
   // 知識星空樹的枝條漸層（由下往上：天藍 → 薄荷）
@@ -161,9 +164,30 @@ export const CSS_TOKENS_LIGHT: Record<string, string> = {
   '--c-crit': '#b83a30',
   '--c-grid': 'rgba(20, 60, 70, 0.05)',
   '--c-wash': 'rgba(16, 26, 30, 0.045)',
+  '--c-score-crit': '#b83a30',
+  '--c-score-concern': '#a8480a',
+  '--c-score-warn': '#8f5608',
+  '--c-score-good': '#587a12',
+  '--c-score-great': '#1b7f45',
   '--c-sky': '#2563eb',
   '--c-mint': '#0f9f8a',
 }
 
 /** 把任何顏色（hex 或 var(--c-…)）調成指定百分比的半透明：取代以前的 `${hex}33` 拼接，深淺主題都能用。 */
 export const alpha = (color: string, pct: number): string => `color-mix(in srgb, ${color} ${pct}%, transparent)`
+
+const SCORE_VAR: Record<string, string> = {
+  [SCORE_SCALE.crit]: 'var(--c-score-crit)',
+  [SCORE_SCALE.concern]: 'var(--c-score-concern)',
+  [SCORE_SCALE.warn]: 'var(--c-score-warn)',
+  [SCORE_SCALE.good]: 'var(--c-score-good)',
+  [SCORE_SCALE.great]: 'var(--c-score-great)',
+}
+/** SCORE_SCALE 的 5 個 hex → var(--c-score-…)（淺色主題會換成較深的值）；其他值原樣回傳。給 scoreColor／tone.color 當文字色或細線色時用。 */
+export const scoreVar = (hex: string): string => SCORE_VAR[hex.toLowerCase()] ?? hex
+
+const COLOR_VAR: Record<string, string> = Object.fromEntries(
+  (Object.keys(COLOR) as (keyof typeof COLOR)[]).filter((k) => !(COLOR[k] in SCORE_VAR)).map((k) => [COLOR[k], CV[k]]),
+)
+/** 分數色或 COLOR 的 hex → 對應的 CSS 變數（深淺主題都對）；其他值原樣回傳。給「拿到 hex 才上色」的地方用。 */
+export const themedColor = (hex: string): string => SCORE_VAR[hex.toLowerCase()] ?? COLOR_VAR[hex.toLowerCase()] ?? hex

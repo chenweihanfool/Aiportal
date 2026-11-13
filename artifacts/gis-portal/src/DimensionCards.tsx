@@ -1,6 +1,6 @@
 // 六個面向的摘要內容與卡片（財務／身體／從容／旅遊的 *SummaryBody，心智、社交的明細與卡片）。#dim/<key> 面向頁也用這裡的明細元件。
 import { useMemo, useState } from 'react'
-import { CV, FONT } from './theme'
+import { CV, FONT, themedColor } from './theme'
 import { DIMENSIONS, dimensionOf, type DimensionDef } from './dimensions'
 import { Gauge } from './Gauge'
 import { rawToScoreText } from './dimensionPage'
@@ -141,7 +141,7 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   const diagItem = (label: string, score: number | null, formula: string) => {
     const tone = heroTone(score, true)
-    return { label, value: score !== null ? String(score) : '—', formula, color: score !== null ? tone.color : undefined, tier: score !== null ? tone.label : undefined }
+    return { label, value: score !== null ? String(score) : '—', formula, color: score !== null ? themedColor(tone.color) : undefined, tier: score !== null ? tone.label : undefined }
   }
 
   const items = [
@@ -282,7 +282,7 @@ export function DimensionGauge({
         padding: '1rem 0.9rem 0.9rem', background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px',
       }}
     >
-      <Gauge value={normalizedScore} color={tone.color} />
+      <Gauge value={normalizedScore} color={themedColor(tone.color)} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink, textAlign: 'center' }}>{site.name}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, letterSpacing: '0.04em' }}>
         {normalizedScore !== null ? tone.label : (summary.status === 'pending' ? '資料準備中' : '暫時無法取得資料')}
@@ -379,7 +379,7 @@ export function MindIndexCard({
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
       padding: '1rem 0.9rem 0.9rem', background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px',
     }}>
-      <Gauge value={normalizedScore} color={tone.color} />
+      <Gauge value={normalizedScore} color={themedColor(tone.color)} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink }}>{dimensionOf('mind')!.label}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>
         {normalizedScore !== null ? tone.label : (hhiSummary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
@@ -530,7 +530,7 @@ export function SocialIndexCard({
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
       padding: '1rem 0.9rem 0.9rem', background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px',
     }}>
-      <Gauge value={normalizedScore} color={tone.color} />
+      <Gauge value={normalizedScore} color={themedColor(tone.color)} />
       <div style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink }}>{dimensionOf('social')!.label}</div>
       <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>
         {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 14 天沒有日記可供觀測') : tone.label}

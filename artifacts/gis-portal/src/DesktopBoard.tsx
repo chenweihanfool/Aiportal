@@ -1,5 +1,5 @@
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { CV, FONT, alpha } from './theme'
+import { CV, FONT, alpha, themedColor } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
@@ -660,25 +660,25 @@ function HhiCard({ pw, data, toneOf }: { pw: string; data: Record<string, unknow
   }
   const tone = toneOf(b.displayed)
   const drag = biggestDrag(b.rows)
-  const barColor = (v: number) => toneOf(v).color
+  const barColor = (v: number) => themedColor(toneOf(v).color)
   return (
     <Card
       title="翰翰仔幸福指數：這個分數怎麼來" area="bd-hhi" action={more}
       tag={!b.isFinal ? <Chip color={CV.warn}>今日暫定</Chip> : b.stale ? <Chip color={CV.warn}>部分為最近可用值</Chip> : undefined}
-      style={{ background: `radial-gradient(ellipse 55% 75% at 14% 45%, ${tone.color}1f, transparent 70%), ${CV.panel}` }}
+      style={{ background: `radial-gradient(ellipse 55% 75% at 14% 45%, ${alpha(themedColor(tone.color), 12)}, transparent 70%), ${CV.panel}` }}
     >
       <div className="bd-hhi-body">
         <div className="bd-hhi-left">
-          <Ring value={b.displayed} color={tone.color} />
-          <div style={{ fontSize: '0.92rem', fontWeight: 700, color: tone.color, letterSpacing: '0.04em' }}>{tone.label}</div>
+          <Ring value={b.displayed} color={themedColor(tone.color)} />
+          <div style={{ fontSize: '0.92rem', fontWeight: 700, color: themedColor(tone.color), letterSpacing: '0.04em' }}>{tone.label}</div>
           <div className="bd-chain">
             <span title="六個維度 今日值×權重 的加總">加權平均 <b>{b.base !== null ? b.base.toFixed(1) : '—'}</b></span>
             <i>→</i>
             <span title={`最弱項${b.weakestLabel ? `（${b.weakestLabel}）` : ''} ${b.weakestScore ?? '—'} 分拉低後`}>短板修正{b.day && b.day.adjust !== 0 ? `＋日分 ${b.day.adjust}` : ''} <b>{b.afterPenalty ?? '—'}</b></span>
             <i>→</i>
-            <span title="與前幾天平滑後的顯示值">顯示 <b style={{ color: tone.color }}>{b.displayed}</b></span>
+            <span title="與前幾天平滑後的顯示值">顯示 <b style={{ color: themedColor(tone.color) }}>{b.displayed}</b></span>
           </div>
-          <Spark points={hist.data ?? []} color={tone.color} />
+          <Spark points={hist.data ?? []} color={themedColor(tone.color)} />
         </div>
 
         <div className="bd-hhi-rows" role="table" aria-label="六維度：今日值 × 權重 ＝ 貢獻分">

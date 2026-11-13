@@ -1,6 +1,6 @@
 // 翰翰仔幸福指數主卡（舊版首頁與幸福指數抽屜用）。
 import { useEffect, useState } from 'react'
-import { CV, FONT } from './theme'
+import { CV, FONT, themedColor } from './theme'
 import { DIMENSIONS } from './dimensions'
 import { Gauge } from './Gauge'
 import { formatMinutesAgo, hhiTone } from './format'
@@ -71,13 +71,13 @@ export function HappinessHeroCard({
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2rem', alignItems: 'center' }} className="ip-primary-grid">
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
-          <Gauge value={displayedScore} size="primary" color={tone.color} />
-          <div style={{ fontSize: '0.95rem', fontWeight: 600, color: tone.color }}>{tone.label}</div>
+          <Gauge value={displayedScore} size="primary" color={themedColor(tone.color)} />
+          <div style={{ fontSize: '0.95rem', fontWeight: 600, color: themedColor(tone.color) }}>{tone.label}</div>
           {!isSnapshotFinal && (
             <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.warn, border: `1px solid ${CV.warn}`, borderRadius: '999px', padding: '1px 8px' }}>今日暫定</span>
           )}
         </div>
-        <LabeledRadarChart axes={radarAxes} maxValue={100} size={230} color={tone.color} />
+        <LabeledRadarChart axes={radarAxes} maxValue={100} size={230} color={themedColor(tone.color)} />
       </div>
 
       {/* 權重佔比——雷達圖只畫得出分數，這行補上每個維度實際佔幸福指數的
@@ -155,7 +155,7 @@ export function HappinessHeroCard({
           ) : history === null ? (
             <div style={{ fontSize: '0.72rem', color: CV.steelDim }}>載入中…</div>
           ) : (
-            <TrendLineChart points={history.map(h => ({ date: h.date, value: h.displayedScore }))} color={tone.color} />
+            <TrendLineChart points={history.map(h => ({ date: h.date, value: h.displayedScore }))} color={themedColor(tone.color)} />
           )}
         </div>
       )}

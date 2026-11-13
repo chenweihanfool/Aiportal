@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { type DiskHistoryPoint, HermesDiskPanel } from './HermesDiskPanel'
 import { type HermesGraphData, apiFetchHermesGraph } from './hermesGraphApi'
 import { type KbCell, kbHealthCells } from './kbHealth'
-import { CV, FONT } from './theme'
+import { CV, FONT, themedColor } from './theme'
 import { HermesPipelinePanel } from './PipelineFlow'
 import { formatGb, formatMinutesAgo, pctTone } from './format'
 import { CollapsibleSubPanel, StatCell, SubLabel, SubPanel, TrendLineChart } from './panelUi'
@@ -288,13 +288,13 @@ export function HermesWarRoomSection({
             const containersOk = availableStatus.containers.filter(c => !isContainerFailed(c)).length
             return (
               <div className="ip-stat-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: CV.line, border: `1px solid ${CV.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
-                <StatCell label="CPU 負載" value={availableStatus.cpuPercent !== null ? `${Math.round(availableStatus.cpuPercent)}%` : '—'} valueColor={pctTone(availableStatus.cpuPercent)} />
-                <StatCell label="記憶體" value={availableStatus.memPercent !== null ? `${Math.round(availableStatus.memPercent)}%` : '—'} valueColor={pctTone(availableStatus.memPercent)} />
+                <StatCell label="CPU 負載" value={availableStatus.cpuPercent !== null ? `${Math.round(availableStatus.cpuPercent)}%` : '—'} valueColor={themedColor(pctTone(availableStatus.cpuPercent))} />
+                <StatCell label="記憶體" value={availableStatus.memPercent !== null ? `${Math.round(availableStatus.memPercent)}%` : '—'} valueColor={themedColor(pctTone(availableStatus.memPercent))} />
                 <StatCell
                   label={worstDisk ? `磁碟 ${worstDisk.drive}` : '磁碟'}
                   value={worstDisk ? `${Math.round(worstDisk.percentUsed)}%` : '—'}
                   sub={worstDisk ? `剩餘 ${formatGb(worstDisk.freeGb)}${availableStatus.diskForecast?.daysUntilFull != null ? ` · 約 ${availableStatus.diskForecast.daysUntilFull} 天後滿` : ''}` : undefined}
-                  valueColor={worstDisk ? pctTone(worstDisk.percentUsed) : undefined}
+                  valueColor={worstDisk ? themedColor(pctTone(worstDisk.percentUsed)) : undefined}
                 />
                 <StatCell
                   label="容器健康"

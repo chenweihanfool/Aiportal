@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CV, FONT, SCORE_SCALE } from './theme'
+import { CV, FONT, SCORE_SCALE, scoreVar } from './theme'
 import { GraphShell } from './GraphShell'
 import { MarkdownView } from './MarkdownView'
 import { ReportBody } from './ReportBody'
@@ -22,7 +22,7 @@ const LEVEL_KEY = 'kb.timeline.level'
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
 // 與熱圖、六面向同一份分數色階（SCORE_SCALE，越綠越好）；時間軸的 ok 就是色階的 good（黃綠）。
 const SCORE_TONE: Record<ScoreTone, string> = {
-  great: SCORE_SCALE.great, ok: SCORE_SCALE.good, warn: SCORE_SCALE.warn, concern: SCORE_SCALE.concern, crit: SCORE_SCALE.crit,
+  great: scoreVar(SCORE_SCALE.great), ok: scoreVar(SCORE_SCALE.good), warn: scoreVar(SCORE_SCALE.warn), concern: scoreVar(SCORE_SCALE.concern), crit: scoreVar(SCORE_SCALE.crit),
 }
 const BADGE_STYLE = { fontFamily: FONT.mono, fontSize: '0.82rem', borderRadius: 4, padding: '0 0.35rem', whiteSpace: 'nowrap' } as const
 const MOBILE_BADGE = { fontSize: '0.7rem', padding: '0 0.2rem' } as const   // 手機寬度不夠，徽章縮小以保留摘要的可讀寬度

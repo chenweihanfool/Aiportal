@@ -8,7 +8,7 @@ import { EXPECTED_EVERY_MIN, blockState, buildDimensionHeatmap, dimensionSeries,
 import { YearHeat } from './HomeSections'
 import { Skeleton, StateFrame } from './StateFrame'
 import { TaskGantt } from './TaskGantt'
-import { CV, FONT } from './theme'
+import { CV, FONT, themedColor } from './theme'
 
 // 面向頁（#dim/<key>）：從首頁點某個面向進來，看這一個面向自己的東西——
 // 現在的分數與權重、近 30／90 天走勢與統計、這個分數怎麼來（原始數據與算法）、相關連結。
@@ -105,10 +105,10 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                     {row && row.value !== null && tone && (
                       <div className="dp-hero-body">
                         <div className="dp-score" aria-label={`${dim.label} ${Math.round(row.value)} 分，${tone.label}`}>
-                          <span className="dp-score-n" style={{ color }}>{Math.round(row.value)}</span><span className="dp-score-of">/100</span>
+                          <span className="dp-score-n" style={{ color: `color-mix(in srgb, ${color} 55%, var(--c-ink))` }}>{Math.round(row.value)}</span><span className="dp-score-of">/100</span>
                         </div>
                         <div className="dp-meta">
-                          <span className="dp-tone" style={{ color: tone.color }}>{tone.label}</span>
+                          <span className="dp-tone" style={{ color: themedColor(tone.color) }}>{tone.label}</span>
                           {delta && <span className="dp-delta" title="與前一個有資料的日子相比" style={{ color: (series?.delta ?? 0) > 0 ? CV.ok : (series?.delta ?? 0) < 0 ? CV.concern : CV.steelDim }}>{delta}</span>}
                           <span className="dp-wt">權重 {row.weightPct}%・貢獻 {row.points ?? '—'} 分</span>
                         </div>

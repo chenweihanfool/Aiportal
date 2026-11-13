@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CV } from './theme'
+import { CV, themedColor } from './theme'
 import type { HhiBreakdown } from './boardView'
 import type { IdeaItem } from './boardApi'
 import { categoryColor } from './ideasView'
@@ -67,12 +67,12 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
           {breakdown && tone && (
             <div className="hm-today-body">
               <button type="button" className="hm-score" onClick={onOpen} aria-label={`幸福指數 ${breakdown.displayed}，${tone.label}，點開看詳情`}>
-                <span className="hm-score-n" style={{ color: tone.color }}>{shown ?? breakdown.displayed}</span>
+                <span className="hm-score-n" style={{ color: themedColor(tone.color) }}>{shown ?? breakdown.displayed}</span>
                 <span className="hm-score-of">/100</span>
               </button>
               <div className="hm-today-text">
                 <div className="hm-score-meta">
-                  <span className="hm-tone" style={{ color: tone.color }}>{tone.label}</span>
+                  <span className="hm-tone" style={{ color: themedColor(tone.color) }}>{tone.label}</span>
                   {trendNote === null && d !== null && (
                     <span className="hm-delta" style={{ color: d > 0 ? CV.ok : d < 0 ? CV.concern : CV.steelDim }} title="與昨天的差">
                       {d > 0 ? `▲ ${d}` : d < 0 ? `▼ ${-d}` : '— 持平'}

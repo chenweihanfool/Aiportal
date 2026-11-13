@@ -6,7 +6,7 @@ import { useAsync, useNow } from './homeHooks'
 import { taipeiDate } from './homeView'
 import { dimensionsYear, hhiYear, placesYear, tripsYear } from './yearReview'
 import { Skeleton } from './StateFrame'
-import { CV, FONT } from './theme'
+import { CV, FONT, themedColor } from './theme'
 
 // 年度回顧頁（#year／#year/<年>，P2-1）：這一年的幸福指數、六個面向、旅行、去過的地點。
 // 全部由既有接口算出來（/api/happiness/history、遊記、美食地圖），沒有新後端。
@@ -71,7 +71,7 @@ export function YearReview({ year, unlocked, unlockedPassword, toneOf, onRequest
                 ) : (
                   <>
                     <dl className="dp-stats" data-testid="yr-hhi-stats">
-                      <div><dt>年平均</dt><dd style={{ color: toneOf(hhi.avg ?? 0).color }}>{hhi.avg}</dd></div>
+                      <div><dt>年平均</dt><dd style={{ color: themedColor(toneOf(hhi.avg ?? 0).color) }}>{hhi.avg}</dd></div>
                       <div><dt>最好的一天</dt><dd>{hhi.best!.value}<small>{hhi.best!.date.slice(5)}</small></dd></div>
                       <div><dt>最低的一天</dt><dd>{hhi.worst!.value}<small>{hhi.worst!.date.slice(5)}</small></dd></div>
                       <div><dt>有紀錄</dt><dd>{hhi.count}<small>天</small></dd></div>
