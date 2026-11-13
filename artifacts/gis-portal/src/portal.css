@@ -2321,13 +2321,17 @@ button.ms-col { cursor: pointer; }
 .st-home > * { min-width: 0; }
 .st-home > .nw-root { margin: 0; }
 
-/* 頂欄下的版面開關 */
-.st-layoutbar { flex-shrink: 0; display: flex; align-items: center; gap: var(--sp-3); padding: 4px var(--sp-5); border-bottom: 1px solid var(--c-line); background: var(--c-bg); font-size: 0.72rem; color: var(--c-ink-3); min-width: 0; }
-.st-layout-toggle { flex: 0 0 auto; font: inherit; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 999px; padding: 2px 11px; cursor: pointer; }
-.st-layout-toggle:hover { color: var(--c-ink); border-color: var(--c-line-strong); }
-.st-layout-toggle[aria-pressed="true"] { color: var(--c-bg); background: var(--c-accent); border-color: var(--c-accent); font-weight: 700; }
-.st-layout-toggle:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
-.st-layout-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 頂欄的版面開關與主題切換（2.89.0 起搬進 TopBar 同一排） */
+.tb-layout { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.72rem; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 2px 11px; cursor: pointer; white-space: nowrap; }
+.tb-layout:hover { color: var(--c-ink); border-color: var(--c-line-strong); }
+.tb-layout[aria-pressed="true"] { color: var(--c-bg); background: var(--c-accent); border-color: var(--c-accent); font-weight: 700; }
+.tb-layout:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.tb-seg { flex: 0 0 auto; display: inline-flex; border: 1px solid var(--c-line); border-radius: var(--r-sm); overflow: hidden; background: var(--c-surface); }
+.tb-seg-btn { font: 12px var(--font-mono); padding: 3px 9px; color: var(--c-ink-2); background: none; border: 0; cursor: pointer; white-space: nowrap; }
+.tb-seg-btn:hover { color: var(--c-ink); }
+.tb-seg-btn[aria-pressed="true"] { color: var(--c-accent-ink); background: var(--c-accent-soft); }
+.tb-seg-btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+@media (max-width: 640px) { .tb-layout-tx { display: none; } .tb-layout { width: 28px; height: 28px; justify-content: center; padding: 0; } .tb-layout-ic { font-size: 0.95rem; } }
 
 /* 系統燈黃／紅時，搜尋框上方的警示帶 */
 .st-alert { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 var(--sp-3); padding: 8px 14px; font: inherit; font-size: 0.86rem; text-align: left; color: var(--c-ink); background: var(--c-bg); border: 1px solid var(--c-warn); border-radius: var(--r-lg); cursor: pointer; min-width: 0; }
@@ -2401,7 +2405,6 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 
 @media (max-width: 860px) {
   .st-home { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
-  .st-layoutbar { padding: 3px var(--sp-4); }
   .st-box { padding: 10px 12px; }
   .nw-root { padding: var(--sp-3); margin-bottom: var(--sp-2); }
   .nw-head { margin-bottom: 6px; }
@@ -2413,4 +2416,9 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
   .nw-act { margin-top: 8px; gap: 4px; }
   .nw-gh { padding: 4px 8px; }
   .nw-toast { margin-top: 4px; }
+}
+
+/* ─── 減少動態（2.89.0）：使用者要求時，全站關掉動畫與過場（含搜尋框流光、脈衝、骨架閃爍）。 ─── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

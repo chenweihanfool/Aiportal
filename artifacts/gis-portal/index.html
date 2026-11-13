@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="color-scheme" content="dark light" />
     <title>翰翰儀表板</title>
+    <script>
+      // 渲染前先套用使用者選的主題（localStorage hm-theme：dark／light；system 或沒值就不設，交給 prefers-color-scheme），避免閃白。邏輯同 src/themeMode.ts。
+      try { var t = localStorage.getItem('hm-theme'); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t) } catch (e) {}
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
