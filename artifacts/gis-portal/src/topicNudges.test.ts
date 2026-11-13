@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { knowledgeHref, nudgeLabel, nudgesFor, parseTopicNudges, triggerTitles, type NudgeMatch, type TopicNudges } from './topicNudges'
+import { knowledgeHref, parseTopicNudges, type NudgeMatch, type TopicNudges } from './topicNudges'
 
 const match = (forDate: string, topicId: string, titles: string[] = ['寫報告']): NudgeMatch => ({
   forDate,
@@ -35,17 +35,6 @@ describe('parseTopicNudges', () => {
   })
 })
 
-describe('nudgesFor', () => {
-  it('只回指定日期的 matches，保持原順序', () => {
-    expect(nudgesFor(payload, '2026-11-06').map((m) => m.topicId)).toEqual(['A', 'C'])
-    expect(nudgesFor(payload, '2026-11-07').map((m) => m.topicId)).toEqual(['B'])
-    expect(nudgesFor(payload, '2026-11-08')).toEqual([])
-  })
-  it('data 為 null 回空陣列', () => {
-    expect(nudgesFor(null, '2026-11-06')).toEqual([])
-  })
-})
-
 describe('knowledgeHref', () => {
   it('encodeURIComponent 處理中文與斜線', () => {
     expect(knowledgeHref('機率/統計')).toBe(`#knowledge/${encodeURIComponent('機率/統計')}`)
@@ -54,15 +43,14 @@ describe('knowledgeHref', () => {
   })
 })
 
-describe('nudgeLabel', () => {
-  it('同一天是「今天用得上」，否則是「明天用得上」', () => {
-    expect(nudgeLabel('2026-11-06', '2026-11-06')).toBe('今天用得上')
-    expect(nudgeLabel('2026-11-07', '2026-11-06')).toBe('明天用得上')
-  })
-})
-
-describe('triggerTitles', () => {
-  it('觸發來源以「、」連接', () => {
-    expect(triggerTitles(match('2026-11-06', 'A', ['寫報告', '買菜']))).toBe('寫報告、買菜')
+describe('新欄位（2026-11-13）', () => {
+  it('resumes 與 matches 的選填欄位原樣通過；舊格式沒有這些欄位也通過', () => {
+    const withNew: TopicNudges = {
+      ...payload,
+      matches: [{ ...match('2026-11-06', 'A'), why: '任務到期', at: '14:00', matchedBy: 'case', caseName: '王案' }],
+      resumes: [{ forDate: '2026-11-06', at: null, caseName: '王案', quietDays: 39, why: '停了 39 天', events: [{ date: '2026-10-05', title: '電話聯絡' }] }],
+    }
+    expect(parseTopicNudges({ available: true, payload: withNew })).toEqual(withNew)
+    expect(parseTopicNudges({ available: true, payload })?.resumes).toBeUndefined()
   })
 })

@@ -1,5 +1,5 @@
 // 首頁主動推播主題知識（feed topic-nudges v1，契約見 kb-pipeline）：純函式（網路只有 apiFetchTopicNudges）。
-// 今天卡（今天用得上）、明日報告區塊（報告那天用得上）、陪伴區塊（🔁 一年前的這時候）都從這裡取資料。
+// 首頁「現在用得上」區塊（NowSection／nowCards.ts）從這裡取資料。
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 export interface NudgeTrigger { kind: 'task' | 'diary'; title: string; due: string | null }
@@ -13,6 +13,21 @@ export interface NudgeMatch {
   point: string
   triggers: NudgeTrigger[]
   score: number
+  /** 以下為 2026-11-13 起的選填欄位（舊格式沒有） */
+  why?: string
+  /** HH:MM；沒有時間是 null */
+  at?: string | null
+  matchedBy?: 'case' | 'terms'
+  caseName?: string | null
+}
+
+export interface NudgeResume {
+  forDate: string
+  at: string | null
+  caseName: string
+  quietDays: number
+  why: string
+  events: Array<{ date: string; title: string }>
 }
 
 export interface NudgeRecall {
@@ -31,6 +46,8 @@ export interface TopicNudges {
   date: string
   matches: NudgeMatch[]
   recall: NudgeRecall[]
+  /** 2026-11-13 起的選填欄位：案件停了一陣子、今天要回頭做 */
+  resumes?: NudgeResume[]
 }
 
 export function parseTopicNudges(raw: unknown): TopicNudges | null {
@@ -49,15 +66,4 @@ export async function apiFetchTopicNudges(pw: string): Promise<TopicNudges | nul
   return parseTopicNudges(await r.json())
 }
 
-/** 某一天的情境推播（保持原順序）；沒有資料回 [] */
-export function nudgesFor(data: TopicNudges | null, date: string): NudgeMatch[] {
-  if (!data) return []
-  return data.matches.filter((m) => m.forDate === date)
-}
-
 export const knowledgeHref = (topicId: string): string => `#knowledge/${encodeURIComponent(topicId)}`
-
-/** 推播的觸發來源（任務標題、日記標題以「、」連接） */
-export const triggerTitles = (m: Pick<NudgeMatch, 'triggers'>): string => m.triggers.map((t) => t.title).join('、')
-
-export const nudgeLabel = (forDate: string, todayIso: string): string => (forDate === todayIso ? '今天用得上' : '明天用得上')
