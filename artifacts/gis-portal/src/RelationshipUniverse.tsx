@@ -26,7 +26,7 @@
 // 彈簧追目標（有慣性、會小幅回彈，但永遠收斂）；選取節點時宇宙時間漸停，拖曳鬆手有慣性。
 // ─────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { COLOR, FONT } from './theme'
+import { COLOR, CV, FONT } from './theme'
 import {
   apiFetchHermesGraph, type HermesGraphData, type HermesGraphAbstractionNode,
   type HermesGraphConceptEdge, type HermesGraphMethodEdge,
@@ -353,7 +353,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
   useEffect(() => { clearTimelineReturn() }, [])
   const backToTimeline = timelineReturn
     ? <button type="button" data-testid="back-to-timeline" onClick={() => { saveTimelineReturn(timelineReturn); window.location.hash = '#graph/timeline' }}
-        style={{ cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.78rem', padding: '0.25rem 0.8rem', borderRadius: 999, color: COLOR.amber, background: COLOR.panelRaised, border: `1px solid ${COLOR.amber}` }}>← 返回時間軸</button>
+        style={{ cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.78rem', padding: '0.25rem 0.8rem', borderRadius: 999, color: CV.amber, background: CV.panelRaised, border: `1px solid ${CV.amber}` }}>← 返回時間軸</button>
     : undefined
   const [data, setData] = useState<HermesGraphData | null>(null)
   const [error, setError] = useState(false)
@@ -785,7 +785,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
           const lit = isLit(a.id) && isLit(b.id)
           ctx.lineWidth = onPath ? 2 : 1
           if (onPath) {
-            ctx.strokeStyle = `rgba(245,166,35,${(Math.min(a.opacity, b.opacity) * 0.95).toFixed(3)})`
+            ctx.strokeStyle = `rgba(61,224,194,${(Math.min(a.opacity, b.opacity) * 0.95).toFixed(3)})`
           } else {
             const op = Math.min(a.opacity, b.opacity) * (lit ? 0.3 : 0.04)
             ctx.strokeStyle = `rgba(150,161,180,${op.toFixed(3)})`
@@ -810,8 +810,8 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         if (selected) {
           // 選取用光暈表示，不畫外框（節點一律無邊框）
           const glow = ctx.createRadialGradient(n.sx, n.sy, 0, n.sx, n.sy, r * 3.4)
-          glow.addColorStop(0, 'rgba(245,166,35,0.40)')
-          glow.addColorStop(1, 'rgba(245,166,35,0)')
+          glow.addColorStop(0, 'rgba(61,224,194,0.40)')
+          glow.addColorStop(1, 'rgba(61,224,194,0)')
           ctx.globalAlpha = 1
           ctx.fillStyle = glow
           ctx.beginPath()
@@ -1088,14 +1088,14 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
 
   return (
     <GraphShell tab="universe" onBack={onBack} extra={backToTimeline}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center', padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center', padding: '0.9rem 1.2rem', borderBottom: `1px solid ${CV.line}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
           {coreChoices.map(k => (
             <button key={k} type="button" onClick={() => setCoreKind(k)} disabled={!ready} style={{
               padding: '0.4rem 0.9rem', borderRadius: '999px', cursor: ready ? 'pointer' : 'default', fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.06em', whiteSpace: 'nowrap',
-              background: coreKind === k ? 'rgba(245,166,35,0.16)' : 'transparent',
-              border: `1px solid ${coreKind === k ? COLOR.amber : COLOR.line}`,
-              color: coreKind === k ? COLOR.amber : COLOR.steelDim, opacity: ready ? 1 : 0.4,
+              background: coreKind === k ? 'color-mix(in srgb, var(--c-accent) 16%, transparent)' : 'transparent',
+              border: `1px solid ${coreKind === k ? CV.amber : CV.line}`,
+              color: coreKind === k ? CV.amber : CV.steelDim, opacity: ready ? 1 : 0.4,
             }}>{coreLabel[k]}為核心</button>
           ))}
         </div>
@@ -1108,24 +1108,24 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
               placeholder="搜尋人／事／案件／物件／概念／方法…"
               style={{
                 width: '100%', padding: '0.4rem 0.7rem', borderRadius: '999px',
-                background: COLOR.panel, border: `1px solid ${searchQuery ? COLOR.amberDim : COLOR.line}`,
-                color: COLOR.ink, fontFamily: FONT.body, fontSize: '0.7rem', outline: 'none',
+                background: CV.panel, border: `1px solid ${searchQuery ? CV.amberDim : CV.line}`,
+                color: CV.ink, fontFamily: FONT.body, fontSize: '0.7rem', outline: 'none',
               }}
             />
             {searchHits.length > 0 && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 5px)', left: 0, right: 0, zIndex: 10,
                 maxHeight: '19rem', overflowY: 'auto',
-                background: 'rgba(18,19,25,0.98)', border: `1px solid ${COLOR.line}`, borderRadius: '6px',
+                background: 'color-mix(in srgb, var(--c-bg) 98%, transparent)', border: `1px solid ${CV.line}`, borderRadius: '6px',
               }}>
                 {searchHits.map(hit => (
                   <div
                     key={hit.id}
                     onClick={() => { selectNode({ kind: hit.kind, id: hit.id }); setSearchQuery('') }}
-                    style={{ padding: '0.4rem 0.7rem', cursor: 'pointer', borderBottom: `1px solid ${COLOR.line}` }}
+                    style={{ padding: '0.4rem 0.7rem', cursor: 'pointer', borderBottom: `1px solid ${CV.line}` }}
                   >
-                    <div style={{ fontSize: '0.7rem', color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hit.label}</div>
-                    <div style={{ fontFamily: FONT.mono, fontSize: '0.58rem', color: COLOR.steelDim }}>{hit.sub}</div>
+                    <div style={{ fontSize: '0.7rem', color: CV.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hit.label}</div>
+                    <div style={{ fontFamily: FONT.mono, fontSize: '0.58rem', color: CV.steelDim }}>{hit.sub}</div>
                   </div>
                 ))}
               </div>
@@ -1138,14 +1138,14 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
             {activity && activityTotal > 0 && (
               <button type="button" onClick={() => setActivityDismissed(v => !v)} title="再次顯示／收起「最近新增」面板" style={{
                 padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
-                background: !activityDismissed ? 'rgba(245,166,35,0.1)' : 'transparent',
-                border: `1px solid ${!activityDismissed ? COLOR.amberDim : COLOR.line}`, color: !activityDismissed ? COLOR.amber : COLOR.steelDim,
+                background: !activityDismissed ? 'color-mix(in srgb, var(--c-accent) 10%, transparent)' : 'transparent',
+                border: `1px solid ${!activityDismissed ? CV.amberDim : CV.line}`, color: !activityDismissed ? CV.amber : CV.steelDim,
               }}>最近新增 · {activityTotal}</button>
             )}
             <button type="button" onClick={() => setShowIsolatedEvents(v => !v)} style={{
               padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
-              background: showIsolatedEvents ? 'rgba(245,166,35,0.1)' : 'transparent',
-              border: `1px solid ${showIsolatedEvents ? COLOR.amberDim : COLOR.line}`, color: showIsolatedEvents ? COLOR.amber : COLOR.steelDim,
+              background: showIsolatedEvents ? 'color-mix(in srgb, var(--c-accent) 10%, transparent)' : 'transparent',
+              border: `1px solid ${showIsolatedEvents ? CV.amberDim : CV.line}`, color: showIsolatedEvents ? CV.amber : CV.steelDim,
             }}>孤立事件 · {isolatedCount}</button>
             {hasAbstractions && (
               <button type="button" onClick={() => {
@@ -1155,17 +1155,17 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
               }} title="概念／方法：從事件萃取出的想法與做法（半透明薄框、在最外圈）" style={{
                 padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
                 background: showAbstractions ? 'rgba(127,166,220,0.12)' : 'transparent',
-                border: `1px solid ${showAbstractions ? NON_CORE_COLOR.concept : COLOR.line}`, color: showAbstractions ? NON_CORE_COLOR.concept : COLOR.steelDim,
+                border: `1px solid ${showAbstractions ? NON_CORE_COLOR.concept : CV.line}`, color: showAbstractions ? NON_CORE_COLOR.concept : CV.steelDim,
               }}>概念／方法層</button>
             )}
             {hasAbstractions && showAbstractions && (
               <button type="button" onClick={() => setShowCandidates(v => !v)} title="候選＝只在 1 個事件出現、尚未被重複驗證的概念／方法（虛線、較淡）" style={{
                 padding: '0.35rem 0.7rem', borderRadius: '999px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.62rem',
-                background: showCandidates ? 'rgba(245,166,35,0.1)' : 'transparent',
-                border: `1px solid ${showCandidates ? COLOR.amberDim : COLOR.line}`, color: showCandidates ? COLOR.amber : COLOR.steelDim,
+                background: showCandidates ? 'color-mix(in srgb, var(--c-accent) 10%, transparent)' : 'transparent',
+                border: `1px solid ${showCandidates ? CV.amberDim : CV.line}`, color: showCandidates ? CV.amber : CV.steelDim,
               }}>顯示候選 · {candidateTotal}</button>
             )}
-            <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim, display: 'flex', gap: '0.9rem' }}>
+            <div style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: CV.steelDim, display: 'flex', gap: '0.9rem' }}>
               <span><span style={{ color: nodeColor('person', coreKind) }}>●</span> 人 {m.peopleCount}</span>
               <span><span style={{ color: nodeColor('event', coreKind) }}>●</span> 事 {m.eventsCount}</span>
               <span><span style={{ color: nodeColor('case', coreKind) }}>●</span> 案 {m.casesCount}</span>
@@ -1181,7 +1181,7 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         )}
       </div>
 
-      <div ref={containerRef} style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+      <div ref={containerRef} style={{ position: 'relative', flex: 1, minHeight: 0, background: COLOR.panelDeep }}>
         <canvas
           ref={canvasRef}
           style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none', cursor: 'grab' }}
@@ -1219,13 +1219,13 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
         {ready && pathIds && pathIds.length > 1 && g && (
           <div style={{
             position: 'absolute', left: '1.2rem', top: '1rem', width: 'min(520px, calc(100% - 2.4rem))',
-            padding: '0.6rem 0.85rem', background: 'rgba(18,19,25,0.96)', border: `1px solid ${COLOR.amberDim}`, borderRadius: '6px',
+            padding: '0.6rem 0.85rem', background: 'color-mix(in srgb, var(--c-bg) 96%, transparent)', border: `1px solid ${CV.amberDim}`, borderRadius: '6px',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.amber, letterSpacing: '0.06em' }}>
+              <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.amber, letterSpacing: '0.06em' }}>
                 關聯路徑 · {pathIds.length - 1} 步
               </span>
-              <span onClick={() => setPathAnchor(null)} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.75rem' }}>✕</span>
+              <span onClick={() => setPathAnchor(null)} style={{ cursor: 'pointer', color: CV.steelDim, fontSize: '0.75rem' }}>✕</span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginTop: '5px' }}>
               {pathIds.map((id, i) => {
@@ -1236,11 +1236,11 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
                 const short = label.length > 16 ? `${label.slice(0, 15)}…` : label
                 return (
                   <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    {i > 0 && <span style={{ color: COLOR.steelDim, fontSize: '0.65rem' }}>→</span>}
+                    {i > 0 && <span style={{ color: CV.steelDim, fontSize: '0.65rem' }}>→</span>}
                     <span
                       onClick={() => selectNode({ kind, id })}
                       title={label}
-                      style={{ cursor: 'pointer', fontSize: '0.66rem', color: COLOR.ink, borderBottom: `1px dotted ${COLOR.steelDim}` }}
+                      style={{ cursor: 'pointer', fontSize: '0.66rem', color: CV.ink, borderBottom: `1px dotted ${CV.steelDim}` }}
                     >{short}</span>
                   </span>
                 )
@@ -1254,13 +1254,13 @@ export function RelationshipUniverse({ unlockedPassword, onBack }: { unlockedPas
             {([['＋', 0.8, '放大'], ['－', 1.25, '縮小']] as const).map(([label, factor, aria]) => (
               <button key={aria} type="button" aria-label={aria} onClick={() => zoomBy(factor)} style={{
                 width: '44px', height: '44px', borderRadius: '50%', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1,
-                background: 'rgba(26,28,34,0.92)', border: `1px solid ${COLOR.lineBright}`, color: COLOR.ink, touchAction: 'manipulation',
+                background: 'color-mix(in srgb, var(--c-surface) 92%, transparent)', border: `1px solid ${CV.lineBright}`, color: CV.ink, touchAction: 'manipulation',
               }}>{label}</button>
             ))}
           </div>
         )}
 
-        <div style={{ position: 'absolute', right: '1rem', bottom: '1rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, opacity: 0.75, textAlign: 'right', lineHeight: 1.6 }}>
+        <div style={{ position: 'absolute', right: '1rem', bottom: '1rem', fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, opacity: 0.75, textAlign: 'right', lineHeight: 1.6 }}>
           {ready && (
             <div title="索引節點（人／案／物／概念／方法）的顏色越深，代表關聯的事件越多；圓內的數字是關聯事件數">
               顏色越深＝關聯越多{' '}
@@ -1303,17 +1303,17 @@ function RecentActivityPanel({
       position: 'absolute', right: '1.2rem', top: '1rem', width: 'min(340px, calc(100% - 2.4rem))',
       // 下方留給右下角的 ＋／－ 縮放鈕（兩顆 44px ＋間距＋離底 3.2rem），面板不蓋到它們
       maxHeight: 'calc(100% - 12rem)', display: 'flex', flexDirection: 'column',
-      padding: '0.7rem 0.85rem', background: 'rgba(18,19,25,0.97)', border: `1px solid ${COLOR.amberDim}`, borderRadius: '6px',
+      padding: '0.7rem 0.85rem', background: 'color-mix(in srgb, var(--c-bg) 97%, transparent)', border: `1px solid ${CV.amberDim}`, borderRadius: '6px',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.amber, letterSpacing: '0.06em' }}>最近新增 · 共 {total} 項</span>
-        <span onClick={onDismiss} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: '0.75rem' }}>✕</span>
+        <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.amber, letterSpacing: '0.06em' }}>最近新增 · 共 {total} 項</span>
+        <span onClick={onDismiss} style={{ cursor: 'pointer', color: CV.steelDim, fontSize: '0.75rem' }}>✕</span>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       {itemSections.filter(s => s.items.length > 0).map(s => (
         <div key={s.kind} style={{ marginTop: '0.5rem' }}>
-          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim, marginBottom: '4px' }}>{RECENT_KIND_LABEL[s.kind]} · {s.items.length}</div>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: CV.steelDim, marginBottom: '4px' }}>{RECENT_KIND_LABEL[s.kind]} · {s.items.length}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             {s.items.slice(0, 20).map(it => (
               <span
@@ -1322,26 +1322,26 @@ function RecentActivityPanel({
                 title={`${it.label}（${it.date}）`}
                 style={{
                   cursor: 'pointer', fontSize: '0.64rem', padding: '2px 7px', borderRadius: '999px',
-                  background: 'rgba(255,255,255,0.04)', border: `1px solid ${COLOR.line}`, color: COLOR.ink,
+                  background: 'var(--c-wash)', border: `1px solid ${CV.line}`, color: CV.ink,
                   maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}
               >{it.label}</span>
             ))}
-            {s.items.length > 20 && <span style={{ fontSize: '0.6rem', color: COLOR.steelDim, alignSelf: 'center' }}>+{s.items.length - 20}</span>}
+            {s.items.length > 20 && <span style={{ fontSize: '0.6rem', color: CV.steelDim, alignSelf: 'center' }}>+{s.items.length - 20}</span>}
           </div>
         </div>
       ))}
 
       {activity.newNarratives.length > 0 && (
         <div style={{ marginTop: '0.5rem' }}>
-          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim, marginBottom: '4px' }}>新敘事 · {activity.newNarratives.length}</div>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: CV.steelDim, marginBottom: '4px' }}>新敘事 · {activity.newNarratives.length}</div>
           {activity.newNarratives.slice(0, 6).map((n, i) => (
             <div
               key={`${n.hub}-${n.date}-${i}`}
               onClick={() => onSelect({ kind: n.kind, id: hubNodeId(n.kind, n.hub) })}
-              style={{ cursor: 'pointer', fontSize: '0.62rem', color: COLOR.steel, lineHeight: 1.5, marginBottom: '3px' }}
+              style={{ cursor: 'pointer', fontSize: '0.62rem', color: CV.steel, lineHeight: 1.5, marginBottom: '3px' }}
             >
-              <span style={{ color: COLOR.amberDim }}>{n.hub}</span>：{n.text.length > 36 ? `${n.text.slice(0, 35)}…` : n.text}
+              <span style={{ color: CV.amberDim }}>{n.hub}</span>：{n.text.length > 36 ? `${n.text.slice(0, 35)}…` : n.text}
             </div>
           ))}
         </div>
@@ -1349,7 +1349,7 @@ function RecentActivityPanel({
 
       {activity.refreshedAssessments.length > 0 && (
         <div style={{ marginTop: '0.5rem' }}>
-          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim, marginBottom: '4px' }}>評價剛更新 · {activity.refreshedAssessments.length}</div>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.56rem', color: CV.steelDim, marginBottom: '4px' }}>評價剛更新 · {activity.refreshedAssessments.length}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             {activity.refreshedAssessments.map(a => (
               <span
@@ -1358,7 +1358,7 @@ function RecentActivityPanel({
                 title={`${a.hub}（${a.date}）`}
                 style={{
                   cursor: 'pointer', fontSize: '0.64rem', padding: '2px 7px', borderRadius: '999px',
-                  background: 'rgba(255,255,255,0.04)', border: `1px solid ${COLOR.line}`, color: COLOR.ink,
+                  background: 'var(--c-wash)', border: `1px solid ${CV.line}`, color: CV.ink,
                 }}
               >{a.hub}</span>
             ))}
@@ -1372,7 +1372,7 @@ function RecentActivityPanel({
         onClick={onDismiss}
         style={{
           flexShrink: 0, marginTop: '0.65rem', textAlign: 'center', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.6rem',
-          color: COLOR.amberDim, padding: '0.32rem', border: `1px solid ${COLOR.amberDim}`, borderRadius: '999px',
+          color: CV.amberDim, padding: '0.32rem', border: `1px solid ${CV.amberDim}`, borderRadius: '999px',
         }}
       >知道了（可由上方「最近新增」再叫出）</div>
     </div>
@@ -1380,5 +1380,5 @@ function RecentActivityPanel({
 }
 
 function CenterMessage({ children }: { children: React.ReactNode }) {
-  return <div style={{ margin: 'auto', color: COLOR.steelDim, fontSize: '0.8rem' }}>{children}</div>
+  return <div style={{ margin: 'auto', color: CV.steelDim, fontSize: '0.8rem' }}>{children}</div>
 }

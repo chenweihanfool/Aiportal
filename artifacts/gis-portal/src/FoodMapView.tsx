@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import {
   FOOD_STATUS_ICON, FOOD_STATUS_LABEL, KIND_ICON, areaCounts, oldestWantSortLabel, wantFilterLabel, bearingLabel, coverPhoto, daysBetween, filterPlaces, foodStats, foodStatusMessage, formatDistance, isBeen,
   navigateUrl, nearbyPlaces, nextFoodStatuses, priceLabel, projectPlaces, sortPlaces, stars, statusLabelFor, tagCounts,
@@ -23,7 +23,7 @@ import { apiFetchFood, formatReceivedAt } from './foodApi'
 // ─────────────────────────────────────────────
 
 const STATUS_COLOR: Record<FoodStatus, string> = {
-  want: COLOR.amber, visited: COLOR.ok, favorite: '#f06292', skip: COLOR.steelDim,
+  want: CV.amber, visited: CV.ok, favorite: '#f06292', skip: CV.steelDim,
 }
 
 const filtersFor = (kind: PlaceKind | 'all' | undefined): Array<[FoodStatusFilter, string]> => [['all', '全部'], ['want', wantFilterLabel(kind)], ['been', '✅ 去過'], ['favorite', '❤️ 愛店'], ['skip', '🚫 不再去']]
@@ -31,9 +31,9 @@ const KIND_FILTERS: Array<[PlaceKind | 'all', string]> = [['all', '全部'], ['f
 const RADII: Array<[number | null, string]> = [[500, '500 m'], [1000, '1 km'], [3000, '3 km'], [10000, '10 km'], [null, '不限']]
 const sortsFor = (kind: PlaceKind | 'all' | undefined): Array<[FoodSort, string]> => [['oldestWant', oldestWantSortLabel(kind)], ['recent', '最近'], ['rating', '評分']]
 
-const pill = (active: boolean, color: string = COLOR.amber): CSSProperties => ({
+const pill = (active: boolean, color: string = CV.amber): CSSProperties => ({
   fontFamily: FONT.mono, fontSize: '0.68rem', padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-  color: active ? COLOR.panelDeep : color, background: active ? color : 'transparent', border: `1px solid ${color}`, whiteSpace: 'nowrap',
+  color: active ? CV.panelDeep : color, background: active ? color : 'transparent', border: `1px solid ${color}`, whiteSpace: 'nowrap',
 })
 
 async function copyText(text: string): Promise<boolean> {
@@ -77,14 +77,14 @@ function FoodMapCanvas({ places, selected, onSelect }: { places: FoodPlace[]; se
   // 選取的點畫在最上層
   const ordered = [...proj.points].sort((a, b) => (a.id === selected ? 1 : 0) - (b.id === selected ? 1 : 0))
   return (
-    <div ref={ref} className="fm-map" style={{ position: 'relative', background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 10, overflow: 'hidden' }}>
+    <div ref={ref} className="fm-map" style={{ position: 'relative', background: CV.panel, border: `1px solid ${CV.line}`, borderRadius: 10, overflow: 'hidden' }}>
       <svg width={box.w} height={box.h} role="img" aria-label="美食地圖" style={{ position: 'absolute', inset: 0, display: 'block' }}>
         <defs>
-          <radialGradient id="fmGlow"><stop offset="0%" stopColor={COLOR.amber} stopOpacity={0.12} /><stop offset="100%" stopColor={COLOR.amber} stopOpacity={0} /></radialGradient>
+          <radialGradient id="fmGlow"><stop offset="0%" stopColor={CV.amber} stopOpacity={0.12} /><stop offset="100%" stopColor={CV.amber} stopOpacity={0} /></radialGradient>
         </defs>
         <rect width={box.w} height={box.h} fill="url(#fmGlow)" />
         {Array.from({ length: 9 }, (_, i) => (
-          <g key={i} stroke={COLOR.line} strokeWidth={1} opacity={0.35}>
+          <g key={i} stroke={CV.line} strokeWidth={1} opacity={0.35}>
             <line x1={(box.w / 8) * i} x2={(box.w / 8) * i} y1={0} y2={box.h} />
             <line y1={(box.h / 8) * i} y2={(box.h / 8) * i} x1={0} x2={box.w} />
           </g>
@@ -98,22 +98,22 @@ function FoodMapCanvas({ places, selected, onSelect }: { places: FoodPlace[]; se
               role="button" tabIndex={0} aria-label={`${p.name}（${statusLabelFor(p.kind, p.status)}）`}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(pt.id) } }}>
               {on && <circle r={16} fill="none" stroke={c} strokeWidth={1.5} className="fm-pulse" />}
-              <circle r={on ? 8 : 6} fill={c} stroke={COLOR.panelDeep} strokeWidth={2} opacity={pt.status === 'skip' ? 0.6 : 1} />
+              <circle r={on ? 8 : 6} fill={c} stroke={CV.panelDeep} strokeWidth={2} opacity={pt.status === 'skip' ? 0.6 : 1} />
               {pt.status === 'favorite' && <text y={-11} textAnchor="middle" fontSize={10}>❤️</text>}
               {on && (
-                <text x={12} y={4} fontSize={12} fontFamily={FONT.body} fill={COLOR.ink} paintOrder="stroke" stroke={COLOR.panelDeep} strokeWidth={3}>{p.name}</text>
+                <text x={12} y={4} fontSize={12} fontFamily={FONT.body} fill={CV.ink} paintOrder="stroke" stroke={CV.panelDeep} strokeWidth={3}>{p.name}</text>
               )}
             </g>
           )
         })}
       </svg>
-      <div style={{ position: 'absolute', left: 10, bottom: 8, display: 'flex', gap: 10, flexWrap: 'wrap', fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim }}>
+      <div style={{ position: 'absolute', left: 10, bottom: 8, display: 'flex', gap: 10, flexWrap: 'wrap', fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim }}>
         {(['want', 'visited', 'favorite', 'skip'] as FoodStatus[]).map(s => (
           <span key={s}><i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: STATUS_COLOR[s], marginRight: 4 }} />{FOOD_STATUS_LABEL[s]}</span>
         ))}
-        {unmapped > 0 && <span style={{ color: COLOR.warn }}>· {unmapped} 家還沒有座標（只在清單）</span>}
+        {unmapped > 0 && <span style={{ color: CV.warn }}>· {unmapped} 家還沒有座標（只在清單）</span>}
       </div>
-      <div style={{ position: 'absolute', right: 10, top: 8, fontFamily: FONT.mono, fontSize: '0.56rem', color: COLOR.steelDim }}>底圖載入失敗或瀏覽器不支援 WebGL：只示意相對位置</div>
+      <div style={{ position: 'absolute', right: 10, top: 8, fontFamily: FONT.mono, fontSize: '0.56rem', color: CV.steelDim }}>底圖載入失敗或瀏覽器不支援 WebGL：只示意相對位置</div>
     </div>
   )
 }
@@ -129,42 +129,42 @@ function PlaceDetail({ p, now, meters }: { p: FoodPlace; now: Date; meters: numb
   }
   const wantDays = daysBetween(p.addedAt, now)
   return (
-    <div className="fm-detail" style={{ border: `1px solid ${STATUS_COLOR[p.status]}`, borderRadius: 10, padding: '0.8rem 0.95rem', background: COLOR.panelRaised, display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className="fm-detail" style={{ border: `1px solid ${STATUS_COLOR[p.status]}`, borderRadius: 10, padding: '0.8rem 0.95rem', background: CV.panelRaised, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>{p.id}</span>
-        <b style={{ color: COLOR.ink, fontSize: '1rem' }}>{p.name}</b>
+        <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>{p.id}</span>
+        <b style={{ color: CV.ink, fontSize: '1rem' }}>{p.name}</b>
         <span style={{ fontSize: '0.72rem', color: STATUS_COLOR[p.status] }}>{FOOD_STATUS_ICON[p.status]} {statusLabelFor(p.kind, p.status)}</span>
         {meters !== null && <span style={{ fontFamily: FONT.mono, fontSize: '0.72rem', color: '#2f80ff' }}>📍 {formatDistance(meters)}</span>}
         {navigateUrl(p) && <a href={navigateUrl(p)!} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', ...pill(true, '#2f80ff'), textDecoration: 'none' }}>🧭 導航</a>}
       </div>
-      <div style={{ fontSize: '0.74rem', color: COLOR.steel, lineHeight: 1.6 }}>
+      <div style={{ fontSize: '0.74rem', color: CV.steel, lineHeight: 1.6 }}>
         {[p.area, p.cuisine, priceLabel(p.priceLevel)].filter(Boolean).join(' · ')}
         {p.status === 'want' ? ` · ${statusLabelFor(p.kind, 'want')} ${wantDays} 天了` : p.visitedAt ? ` · ${p.visitedAt} 去過 · ${stars(p.rating)}` : ''}
       </div>
       <PhotoGallery photos={p.photos} label={p.name} resetKey={p.id} />
-      {p.why && <div style={{ fontSize: '0.76rem', color: COLOR.ink, lineHeight: 1.6 }}>💭 {p.why}{p.source ? <span style={{ color: COLOR.steelDim }}>（{p.source}）</span> : null}</div>}
-      {p.mustTry.length > 0 && <div style={{ fontSize: '0.74rem', color: COLOR.steel }}>👉 必點：{p.mustTry.join('、')}</div>}
-      <div style={{ fontSize: '0.68rem', color: COLOR.steelDim }}>出現在日記：{p.days.join('、') || '—'}{p.mapUrl && <> · <a href={p.mapUrl} target="_blank" rel="noopener noreferrer" style={{ color: COLOR.amberDim }}>地圖連結 ↗</a></>}</div>
-      <div style={{ borderTop: `1px dashed ${COLOR.line}`, paddingTop: 8, marginTop: 2, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontSize: '0.72rem', color: COLOR.ink }}>要更新？按一下複製，貼到 Telegram 給 HERMES：</div>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: '0.7rem', color: COLOR.steelDim }} role="radiogroup" aria-label="評分">
+      {p.why && <div style={{ fontSize: '0.76rem', color: CV.ink, lineHeight: 1.6 }}>💭 {p.why}{p.source ? <span style={{ color: CV.steelDim }}>（{p.source}）</span> : null}</div>}
+      {p.mustTry.length > 0 && <div style={{ fontSize: '0.74rem', color: CV.steel }}>👉 必點：{p.mustTry.join('、')}</div>}
+      <div style={{ fontSize: '0.68rem', color: CV.steelDim }}>出現在日記：{p.days.join('、') || '—'}{p.mapUrl && <> · <a href={p.mapUrl} target="_blank" rel="noopener noreferrer" style={{ color: CV.amberDim }}>地圖連結 ↗</a></>}</div>
+      <div style={{ borderTop: `1px dashed ${CV.line}`, paddingTop: 8, marginTop: 2, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontSize: '0.72rem', color: CV.ink }}>要更新？按一下複製，貼到 Telegram 給 HERMES：</div>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: '0.7rem', color: CV.steelDim }} role="radiogroup" aria-label="評分">
           評分
           {[1, 2, 3, 4, 5].map(n => (
             <button key={n} type="button" role="radio" aria-checked={rating === n} onClick={() => setRating(rating === n ? null : n)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '0.95rem', color: rating !== null && n <= rating ? COLOR.amber : COLOR.steelDim }}>★</button>
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '0.95rem', color: rating !== null && n <= rating ? CV.amber : CV.steelDim }}>★</button>
           ))}
         </div>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="（選填）補充，例如：湯頭偏鹹、要排 30 分鐘" aria-label="補充說明"
-          style={{ background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: 4, color: COLOR.ink, padding: '5px 8px', fontSize: '0.72rem' }} />
+          style={{ background: CV.panelDeep, border: `1px solid ${CV.line}`, borderRadius: 4, color: CV.ink, padding: '5px 8px', fontSize: '0.72rem' }} />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {nextFoodStatuses(p.status).map(s => (
             <button key={s} type="button" style={pill(false, STATUS_COLOR[s])} onClick={() => void copy(s)}>{FOOD_STATUS_ICON[s]} 改成{FOOD_STATUS_LABEL[s]}</button>
           ))}
         </div>
         {copied && (
-          <div role="status" style={{ fontSize: '0.7rem', color: copied.ok ? COLOR.ok : COLOR.warn }}>
+          <div role="status" style={{ fontSize: '0.7rem', color: copied.ok ? CV.ok : CV.warn }}>
             {copied.ok ? '已複製：' : '瀏覽器不允許自動複製，請手動選取：'}
-            <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontFamily: FONT.mono, color: COLOR.ink }}>{copied.text}</pre>
+            <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontFamily: FONT.mono, color: CV.ink }}>{copied.text}</pre>
           </div>
         )}
       </div>
@@ -245,9 +245,9 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
   }, [])
 
   const statTiles: Array<[string, string, string?]> = [
-    ['想吃', String(stats.wantEat), COLOR.amber],
-    ['想去', String(stats.wantGo), COLOR.amber],
-    ['去過', String(stats.been), COLOR.ok],
+    ['想吃', String(stats.wantEat), CV.amber],
+    ['想去', String(stats.wantGo), CV.amber],
+    ['去過', String(stats.been), CV.ok],
     ['實現率', stats.conversionPct !== null ? `${stats.conversionPct}%` : '—'],
     ['今年吃了', `${stats.beenThisYear} 家`],
   ]
@@ -255,31 +255,31 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
   // 載入中：只顯示標題列與「載入中…」，不先畫示範資料
   if (dataProp === undefined && src.loading) {
     return (
-      <div className="fm-page" style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
-          <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
+      <div className="fm-page" style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${CV.line}` }}>
+          <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
           <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
         </header>
-        <div role="status" style={{ flex: 1, display: 'grid', placeItems: 'center', color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: '0.8rem' }}>載入中…</div>
+        <div role="status" style={{ flex: 1, display: 'grid', placeItems: 'center', color: CV.steelDim, fontFamily: FONT.mono, fontSize: '0.8rem' }}>載入中…</div>
       </div>
     )
   }
 
   return (
-    <div className={`fm-page${nearbyOn ? ' is-nearby' : ''}`} style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}`, flexWrap: 'wrap' }}>
-        <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
+    <div className={`fm-page${nearbyOn ? ' is-nearby' : ''}`} style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${CV.line}`, flexWrap: 'wrap' }}>
+        <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
         <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
         <a href="#trips" data-testid="food-to-trips" onClick={e => { e.preventDefault(); window.location.hash = 'trips' }}
-          style={{ ...pill(false, COLOR.amberDim), textDecoration: 'none' }}>📖 遊記</a>
-        {isSample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
-        {src.note && <span data-testid="food-source-note" style={{ fontSize: '0.66rem', color: COLOR.steelDim }}>{src.note}</span>}
-        {receivedLabel && <span data-testid="food-received" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>資料：{receivedLabel}</span>}
+          style={{ ...pill(false, CV.amberDim), textDecoration: 'none' }}>📖 遊記</a>
+        {isSample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.warn, border: `1px solid ${CV.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
+        {src.note && <span data-testid="food-source-note" style={{ fontSize: '0.66rem', color: CV.steelDim }}>{src.note}</span>}
+        {receivedLabel && <span data-testid="food-received" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>資料：{receivedLabel}</span>}
         {(stats.oldestWantEat || stats.oldestWantGo) && (
-          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: COLOR.steel, display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
+          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: CV.steel, display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
             {([['想吃最久', stats.oldestWantEat], ['想去最久', stats.oldestWantGo]] as const).map(([label, o]) => o && (
               <span key={label} data-testid={label === '想吃最久' ? 'food-oldest-eat' : 'food-oldest-go'}>
-                {label}：<b style={{ color: COLOR.amber, cursor: 'pointer' }} onClick={() => pick(o.place.id)}>{o.place.name}</b>（{o.days} 天）
+                {label}：<b style={{ color: CV.amber, cursor: 'pointer' }} onClick={() => pick(o.place.id)}>{o.place.name}</b>（{o.days} 天）
               </span>
             ))}
           </span>
@@ -289,9 +289,9 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
       <div className="fm-body" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0.9rem 1.2rem 1.4rem' }}>
         <div className="fm-stats">
           {statTiles.map(([k, v, c]) => (
-            <div key={k} style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 8, padding: '0.55rem 0.8rem' }}>
-              <div style={{ fontFamily: FONT.mono, fontSize: '0.58rem', letterSpacing: '0.12em', color: COLOR.steelDim }}>{k}</div>
-              <div style={{ fontFamily: FONT.mono, fontSize: '1.4rem', fontWeight: 600, color: c ?? COLOR.ink }}>{v}</div>
+            <div key={k} style={{ background: CV.panel, border: `1px solid ${CV.line}`, borderRadius: 8, padding: '0.55rem 0.8rem' }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.58rem', letterSpacing: '0.12em', color: CV.steelDim }}>{k}</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: '1.4rem', fontWeight: 600, color: c ?? CV.ink }}>{v}</div>
             </div>
           ))}
         </div>
@@ -302,27 +302,27 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
           </button>
           {nearbyOn && (
             <>
-              {RADII.map(([r, l]) => <button key={l} type="button" style={pill(radiusM === r, COLOR.steel)} onClick={() => setRadiusM(r)}>{l}</button>)}
-              <label style={{ fontSize: '0.68rem', color: COLOR.steel, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {RADII.map(([r, l]) => <button key={l} type="button" style={pill(radiusM === r, CV.steel)} onClick={() => setRadiusM(r)}>{l}</button>)}
+              <label style={{ fontSize: '0.68rem', color: CV.steel, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <input type="checkbox" checked={wishOnly} onChange={e => setWishOnly(e.target.checked)} /> 只看還沒去的
               </label>
             </>
           )}
-          {geo.message && <span role="alert" style={{ fontSize: '0.68rem', color: COLOR.warn }}>{geo.message}</span>}
-          {nearbyOn && geo.accuracyM !== null && geo.accuracyM > 200 && <span style={{ fontSize: '0.66rem', color: COLOR.warn }}>定位誤差偏大，距離僅供參考</span>}
+          {geo.message && <span role="alert" style={{ fontSize: '0.68rem', color: CV.warn }}>{geo.message}</span>}
+          {nearbyOn && geo.accuracyM !== null && geo.accuracyM > 200 && <span style={{ fontSize: '0.66rem', color: CV.warn }}>定位誤差偏大，距離僅供參考</span>}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '0 0 0.5rem' }}>
-          {KIND_FILTERS.map(([k, l]) => <button key={k} type="button" style={pill((filter.kind ?? 'all') === k, COLOR.steel)} onClick={() => setFilter(f => ({ ...f, kind: k }))}>{l}</button>)}
+          {KIND_FILTERS.map(([k, l]) => <button key={k} type="button" style={pill((filter.kind ?? 'all') === k, CV.steel)} onClick={() => setFilter(f => ({ ...f, kind: k }))}>{l}</button>)}
           <span style={{ width: 8 }} />
           {filtersFor(filter.kind).map(([k, l]) => <button key={k} type="button" style={pill(filter.status === k)} onClick={() => setFilter(f => ({ ...f, status: k }))}>{l}</button>)}
           <input value={filter.query} onChange={e => setFilter(f => ({ ...f, query: e.target.value }))} placeholder="搜尋店名、菜、景點、推薦人…" aria-label="搜尋地點"
-            style={{ flex: '1 1 160px', minWidth: 0, background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 999, color: COLOR.ink, padding: '5px 12px', fontSize: '0.74rem' }} />
+            style={{ flex: '1 1 160px', minWidth: 0, background: CV.panel, border: `1px solid ${CV.line}`, borderRadius: 999, color: CV.ink, padding: '5px 12px', fontSize: '0.74rem' }} />
         </div>
         <div className="fm-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.8rem' }}>
-          {tags.map(([t, n]) => <button key={t} type="button" style={pill(filter.tag === t, COLOR.steel)} onClick={() => setFilter(f => ({ ...f, tag: f.tag === t ? null : t }))}>#{t} {n}</button>)}
+          {tags.map(([t, n]) => <button key={t} type="button" style={pill(filter.tag === t, CV.steel)} onClick={() => setFilter(f => ({ ...f, tag: f.tag === t ? null : t }))}>#{t} {n}</button>)}
           {areas.length > 1 && (
             <select value={filter.area ?? ''} onChange={e => setFilter(f => ({ ...f, area: e.target.value || null }))} aria-label="地區"
-              style={{ background: COLOR.panel, color: COLOR.steel, border: `1px solid ${COLOR.line}`, borderRadius: 999, padding: '3px 10px', fontSize: '0.68rem' }}>
+              style={{ background: CV.panel, color: CV.steel, border: `1px solid ${CV.line}`, borderRadius: 999, padding: '3px 10px', fontSize: '0.68rem' }}>
               <option value="">全部地區</option>
               {areas.map(([a, n]) => <option key={a} value={a}>{a}（{n}）</option>)}
             </select>
@@ -335,15 +335,15 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
             : <FoodMapGL places={list} selected={selected} onSelect={pick} onFail={() => setGlFailed(true)} origin={geo.pos} />}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, minHeight: 0 }}>
             {sel && <PlaceDetail p={sel} now={now} meters={meterOf.get(sel.id)?.meters ?? null} />}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.66rem', color: COLOR.steelDim }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.66rem', color: CV.steelDim }}>
               <span style={{ flex: 1 }}>
                 {nearby ? `${list.length} 個在 ${radiusM === null ? '不限距離' : formatDistance(radiusM)} 內` : `${list.length} / ${data.places.length} 個`}
                 {nearby && nearby.unmapped > 0 ? `・另有 ${nearby.unmapped} 個沒座標，算不出距離` : ''}
               </span>
-              {!nearby && sortsFor(filter.kind).map(([k, l]) => <button key={k} type="button" style={pill(sort === k, COLOR.steel)} onClick={() => setSort(k)}>{l}</button>)}
+              {!nearby && sortsFor(filter.kind).map(([k, l]) => <button key={k} type="button" style={pill(sort === k, CV.steel)} onClick={() => setSort(k)}>{l}</button>)}
             </div>
             {list.length === 0 ? (
-              <div style={{ color: COLOR.steelDim, fontSize: '0.78rem', padding: '1rem 0' }}>
+              <div style={{ color: CV.steelDim, fontSize: '0.78rem', padding: '1rem 0' }}>
                 {data.places.length === 0 ? '還沒有紀錄。HERMES 在日記寫下 ### HH:MM 🍜 店名 後，下一班 L1 就會出現在這裡。' : nearby ? '這個範圍內沒有符合的地點，試試放大距離或取消「只看還沒去的」' : '沒有符合的地點'}
               </div>
             ) : (
@@ -356,13 +356,13 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
                         ? <AuthImage className="fm-row-photo" src={coverPhoto(p)!} alt="" loading="lazy" decoding="async" style={{ borderColor: STATUS_COLOR[p.status] }} />
                         : <span style={{ fontSize: '1rem', textAlign: 'center' }} aria-hidden>{p.kind === 'food' ? FOOD_STATUS_ICON[p.status] : KIND_ICON[p.kind]}</span>}
                       <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
-                        <span style={{ color: COLOR.ink, fontWeight: 600, fontSize: '0.82rem' }}>{p.name}{p.kind !== 'food' && <span style={{ marginLeft: 6, fontSize: '0.6rem', color: COLOR.steelDim }}>{statusLabelFor(p.kind, p.status)}</span>}</span>
-                        <span style={{ color: COLOR.steelDim, fontSize: '0.66rem' }}>
+                        <span style={{ color: CV.ink, fontWeight: 600, fontSize: '0.82rem' }}>{p.name}{p.kind !== 'food' && <span style={{ marginLeft: 6, fontSize: '0.6rem', color: CV.steelDim }}>{statusLabelFor(p.kind, p.status)}</span>}</span>
+                        <span style={{ color: CV.steelDim, fontSize: '0.66rem' }}>
                           {[p.area ?? '地點未知', p.cuisine, priceLabel(p.priceLevel)].filter(Boolean).join(' · ')}
                           {isBeen(p.status) && p.rating !== null ? ` · ${'★'.repeat(p.rating)}` : ''}
                         </span>
                       </span>
-                      <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, whiteSpace: 'nowrap' }}>
                         {meterOf.get(p.id)
                           ? <b style={{ color: '#2f80ff', fontSize: '0.74rem' }}>{formatDistance(meterOf.get(p.id)!.meters)}<br />{bearingLabel(meterOf.get(p.id)!.bearing)}</b>
                           : p.status === 'want' ? `${daysBetween(p.addedAt, now)} 天` : p.visitedAt?.slice(5) ?? ''}

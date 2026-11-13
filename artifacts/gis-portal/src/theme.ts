@@ -164,3 +164,6 @@ export const CSS_TOKENS_LIGHT: Record<string, string> = {
   '--c-sky': '#2563eb',
   '--c-mint': '#0f9f8a',
 }
+
+/** 把任何顏色（hex 或 var(--c-…)）調成指定百分比的半透明：取代以前的 `${hex}33` 拼接，深淺主題都能用。 */
+export const alpha = (color: string, pct: number): string => `color-mix(in srgb, ${color} ${pct}%, transparent)`

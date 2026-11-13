@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { COLOR } from './theme'
+import { COLOR, CV } from './theme'
 import { FOOD_STATUS_ICON, coverPhoto, statusLabelFor, type FoodPlace, type FoodStatus, type LatLng } from './foodMap'
 
 // ─────────────────────────────────────────────
@@ -160,7 +160,7 @@ export function FoodMapGL({ places, selected, onSelect, onFail, origin = null }:
 
   const unmapped = places.length - mapped.length
   return (
-    <div className="fm-map" style={{ position: 'relative', border: `1px solid ${COLOR.line}`, borderRadius: 10, overflow: 'hidden', background: COLOR.panel }}>
+    <div className="fm-map" style={{ position: 'relative', border: `1px solid ${CV.line}`, borderRadius: 10, overflow: 'hidden', background: CV.panel }}>
       <div ref={box} style={{ position: 'absolute', inset: 0 }} role="region" aria-label="美食地圖" />
       {unmapped > 0 && (
         <div style={{ position: 'absolute', left: 10, bottom: 8, zIndex: 2, background: 'rgba(20,22,28,.85)', borderRadius: 6, padding: '3px 8px', fontSize: '0.64rem', color: COLOR.warn }}>

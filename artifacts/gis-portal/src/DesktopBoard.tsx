@@ -1,5 +1,5 @@
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT, alpha } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
@@ -18,8 +18,8 @@ import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, format
 // 不再接在下面，而是收進卡片右上「詳細」打開的側邊抽屜（Drawer），功能一個都沒少，主畫面不用捲。
 // 抽屜內容由 App.tsx 傳進來（那些元件都在 App.tsx，這裡不 import 它，避免循環匯入）。
 
-const levelColor = (l: 'ok' | 'warn' | 'crit') => (l === 'crit' ? COLOR.crit : l === 'warn' ? COLOR.warn : COLOR.ok)
-const pctColor = (p: number | null) => (p === null ? COLOR.steelDim : p >= 90 ? COLOR.crit : p >= 75 ? COLOR.warn : COLOR.ok)
+const levelColor = (l: 'ok' | 'warn' | 'crit') => (l === 'crit' ? CV.crit : l === 'warn' ? CV.warn : CV.ok)
+const pctColor = (p: number | null) => (p === null ? CV.steelDim : p >= 90 ? CV.crit : p >= 75 ? CV.warn : CV.ok)
 
 function minutesAgo(ts: number | null): string {
   if (ts === null) return '—'
@@ -32,8 +32,8 @@ function minutesAgo(ts: number | null): string {
 
 function Card({ title, tag, area, action, style, children }: { title: string; tag?: ReactNode; area: string; action?: ReactNode; style?: CSSProperties; children: ReactNode }) {
   return (
-    <section className={`bd-card ${area}`} style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 10, ...style }}>
-      <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT.display, fontWeight: 700, fontSize: '0.84rem', color: COLOR.ink, letterSpacing: '0.02em' }}>
+    <section className={`bd-card ${area}`} style={{ background: CV.panel, border: `1px solid ${CV.line}`, borderRadius: 10, ...style }}>
+      <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT.display, fontWeight: 700, fontSize: '0.84rem', color: CV.ink, letterSpacing: '0.02em' }}>
         <span className="bd-dot" aria-hidden />
         <span className="bd-title" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
         {tag}
@@ -58,7 +58,7 @@ class DrawerBoundary extends Component<{ children: ReactNode }, { failed: boolea
   static getDerivedStateFromError() { return { failed: true } }
   render() {
     return this.state.failed
-      ? <div style={{ color: COLOR.steelDim, fontSize: '0.85rem', padding: '1rem 0' }}>這一區暫時無法顯示（資料格式不完整），關掉抽屜不影響首頁其他卡片。</div>
+      ? <div style={{ color: CV.steelDim, fontSize: '0.85rem', padding: '1rem 0' }}>這一區暫時無法顯示（資料格式不完整），關掉抽屜不影響首頁其他卡片。</div>
       : this.props.children
   }
 }
@@ -75,10 +75,10 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
   return (
     <div className="bd-drawer-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <aside className="bd-drawer" role="dialog" aria-modal="true" aria-label={title}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1.2rem', borderBottom: `1px solid ${COLOR.line}` }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1.2rem', borderBottom: `1px solid ${CV.line}` }}>
           <span className="bd-dot" aria-hidden />
-          <h2 className="bd-drawer-title" style={{ margin: 0, flex: 1, fontFamily: FONT.display, fontSize: '1.05rem', color: COLOR.ink }}>{title}</h2>
-          <span className="bd-drawer-esc" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>ESC 關閉</span>
+          <h2 className="bd-drawer-title" style={{ margin: 0, flex: 1, fontFamily: FONT.display, fontSize: '1.05rem', color: CV.ink }}>{title}</h2>
+          <span className="bd-drawer-esc" style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>ESC 關閉</span>
           <button ref={closeRef} type="button" className="bd-more" onClick={onClose} aria-label="關閉">✕</button>
         </header>
         <div className="bd-drawer-body" style={{ flex: 1, overflowY: 'auto', padding: '1.1rem 1.3rem 2rem' }}><DrawerBoundary>{children}</DrawerBoundary></div>
@@ -106,14 +106,14 @@ function useCountUp(target: number, ms = 900): number {
 }
 
 const Label = ({ children }: { children: ReactNode }) => (
-  <span style={{ fontFamily: FONT.mono, fontSize: '0.58rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: COLOR.steelDim }}>{children}</span>
+  <span style={{ fontFamily: FONT.mono, fontSize: '0.58rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: CV.steelDim }}>{children}</span>
 )
 
-const Chip = ({ children, color = COLOR.steelDim }: { children: ReactNode; color?: string }) => (
+const Chip = ({ children, color = CV.steelDim }: { children: ReactNode; color?: string }) => (
   <span style={{ fontFamily: FONT.mono, fontSize: '0.56rem', letterSpacing: '0.06em', color, border: `1px solid ${color}`, borderRadius: 4, padding: '2px 5px', whiteSpace: 'nowrap' }}>{children}</span>
 )
 
-const Muted = ({ children }: { children: ReactNode }) => <div style={{ fontSize: '0.72rem', color: COLOR.steelDim }}>{children}</div>
+const Muted = ({ children }: { children: ReactNode }) => <div style={{ fontSize: '0.72rem', color: CV.steelDim }}>{children}</div>
 
 /** 量元素實際像素大小，圖表用它算座標（不用 preserveAspectRatio="none" 拉伸，字才不會變形）。 */
 function useBox(minW = 240, minH = 90): [(el: HTMLDivElement | null) => void, { w: number; h: number }] {
@@ -199,8 +199,8 @@ export function OllamaPanel({ pw }: { pw: string }) {
   const models = useMemo(() => Object.entries(data?.last7Days ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 4), [data])
   const maxModel = models.length ? Math.max(...models.map(m => m[1])) : 0
 
-  const sourceTag = f?.source === 'observed' ? <Chip color={COLOR.ok}>依餘額實測</Chip>
-    : f?.source === 'estimated' ? <Chip color={COLOR.warn}>粗估（請求數×單價）</Chip>
+  const sourceTag = f?.source === 'observed' ? <Chip color={CV.ok}>依餘額實測</Chip>
+    : f?.source === 'estimated' ? <Chip color={CV.warn}>粗估（請求數×單價）</Chip>
     : <Chip>尚無預估</Chip>
 
   return (
@@ -212,17 +212,17 @@ export function OllamaPanel({ pw }: { pw: string }) {
             {bal ? (
               <>
                 <div style={{ fontFamily: FONT.mono, fontWeight: 600, fontSize: '2.6rem', lineHeight: 1, color: levelColor(f?.level ?? 'ok') }}>
-                  {formatUsd(bal.balanceUsd)}<span style={{ fontSize: '0.8rem', color: COLOR.steelDim, fontWeight: 400 }}> / ${cap}</span>
+                  {formatUsd(bal.balanceUsd)}<span style={{ fontSize: '0.8rem', color: CV.steelDim, fontWeight: 400 }}> / ${cap}</span>
                 </div>
-                <div style={{ height: 6, borderRadius: 3, background: COLOR.panelRaised, overflow: 'hidden' }}>
+                <div style={{ height: 6, borderRadius: 3, background: CV.panelRaised, overflow: 'hidden' }}>
                   <div style={{ width: `${Math.min(100, Math.max(0, (bal.balanceUsd / cap) * 100))}%`, height: '100%', background: levelColor(f?.level ?? 'ok') }} />
                 </div>
-                <div style={{ fontSize: '0.64rem', color: COLOR.steelDim }}>
+                <div style={{ fontSize: '0.64rem', color: CV.steelDim }}>
                   {minutesAgo(Date.parse(bal.enteredAt))}輸入{bal.refillAt ? ` · ${bal.refillAt} 補點` : ''}
                 </div>
               </>
             ) : (
-              <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>還沒輸入餘額。ollama.com 沒有可自動讀取的額度，輸入一次就能算出每天花多少、哪天用完。</div>
+              <div style={{ fontSize: '0.78rem', color: CV.steel, lineHeight: 1.6 }}>還沒輸入餘額。ollama.com 沒有可自動讀取的額度，輸入一次就能算出每天花多少、哪天用完。</div>
             )}
             <div className="bd-kv">
               <div><span>HERMES 近 7 日 / 日</span><b>{f?.callsPerDay != null ? `${formatCalls(f.callsPerDay)} 次` : '—'}</b></div>
@@ -231,10 +231,10 @@ export function OllamaPanel({ pw }: { pw: string }) {
               {bal?.monthUsedUsd != null && <div><span>本月已用</span><b>{formatUsd(bal.monthUsedUsd)}</b></div>}
             </div>
             {f && f.daysUntilEmpty !== null && (
-              <div style={{ border: `1px solid ${levelColor(f.level)}`, borderRadius: 6, padding: '7px 9px', fontSize: '0.76rem', lineHeight: 1.55, color: COLOR.steel }}>
+              <div style={{ border: `1px solid ${levelColor(f.level)}`, borderRadius: 6, padding: '7px 9px', fontSize: '0.76rem', lineHeight: 1.55, color: CV.steel }}>
                 {f.shortfallUsd !== null
                   ? <><b style={{ color: levelColor(f.level) }}>會在補點前用完。</b>照這個速度補點日前約缺 {formatUsd(f.shortfallUsd, 0)}；自動補點每次 +$5。</>
-                  : <><b style={{ color: COLOR.ok }}>用量安全。</b>照這個速度，餘額撐得過補點日。</>}
+                  : <><b style={{ color: CV.ok }}>用量安全。</b>照這個速度，餘額撐得過補點日。</>}
               </div>
             )}
             {!formOpen ? (
@@ -245,9 +245,9 @@ export function OllamaPanel({ pw }: { pw: string }) {
                 <label style={fld}>本月已用 $<input id="bd-used" value={fUsed} onChange={e => setFUsed(e.target.value)} inputMode="decimal" style={inp} /></label>
                 <label style={fld}>補點日<input id="bd-refill" value={fRefill} onChange={e => setFRefill(e.target.value)} placeholder="2026-10-29" style={inp} /></label>
                 <label style={fld}>補點上限 $<input id="bd-cap" value={fCap} onChange={e => setFCap(e.target.value)} inputMode="decimal" style={inp} /></label>
-                {formError && <div style={{ gridColumn: '1 / -1', color: COLOR.crit, fontSize: '0.68rem' }}>{formError}</div>}
+                {formError && <div style={{ gridColumn: '1 / -1', color: CV.crit, fontSize: '0.68rem' }}>{formError}</div>}
                 <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6 }}>
-                  <button type="submit" disabled={saving} style={{ ...btn, background: COLOR.amber, color: COLOR.panelDeep, borderColor: COLOR.amber }}>{saving ? '儲存中…' : '儲存'}</button>
+                  <button type="submit" disabled={saving} style={{ ...btn, background: CV.amber, color: CV.panelDeep, borderColor: CV.amber }}>{saving ? '儲存中…' : '儲存'}</button>
                   <button type="button" onClick={() => setFormOpen(false)} style={btn}>取消</button>
                 </div>
               </form>
@@ -261,24 +261,24 @@ export function OllamaPanel({ pw }: { pw: string }) {
                 <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} role="img" aria-label="餘額走勢與預測" style={{ position: 'absolute', inset: 0, display: 'block' }}>
                   {geo.yTicks.map(t => (
                     <g key={t.v}>
-                      <line x1={PAD.l} x2={box.w - PAD.r} y1={t.y} y2={t.y} stroke={COLOR.line} strokeWidth={1} />
-                      <text x={PAD.l - 6} y={t.y + 3} textAnchor="end" fontSize={10} fontFamily={FONT.mono} fill={COLOR.steelDim}>${Math.round(t.v)}</text>
+                      <line x1={PAD.l} x2={box.w - PAD.r} y1={t.y} y2={t.y} stroke={CV.line} strokeWidth={1} />
+                      <text x={PAD.l - 6} y={t.y + 3} textAnchor="end" fontSize={10} fontFamily={FONT.mono} fill={CV.steelDim}>${Math.round(t.v)}</text>
                     </g>
                   ))}
-                  <line x1={geo.todayX} x2={geo.todayX} y1={PAD.t} y2={box.h - PAD.b} stroke={COLOR.steelDim} strokeDasharray="2 3" />
-                  <text x={geo.todayX} y={box.h - 6} textAnchor="middle" fontSize={10} fontFamily={FONT.mono} fill={COLOR.steelDim}>今天</text>
+                  <line x1={geo.todayX} x2={geo.todayX} y1={PAD.t} y2={box.h - PAD.b} stroke={CV.steelDim} strokeDasharray="2 3" />
+                  <text x={geo.todayX} y={box.h - 6} textAnchor="middle" fontSize={10} fontFamily={FONT.mono} fill={CV.steelDim}>今天</text>
                   {geo.refillX !== null && (
                     <>
-                      <line x1={geo.refillX} x2={geo.refillX} y1={PAD.t} y2={box.h - PAD.b} stroke={COLOR.ok} strokeDasharray="2 3" />
-                      <text x={geo.refillX - 4} y={PAD.t + 10} textAnchor="end" fontSize={10} fontFamily={FONT.mono} fill={COLOR.ok}>補點</text>
+                      <line x1={geo.refillX} x2={geo.refillX} y1={PAD.t} y2={box.h - PAD.b} stroke={CV.ok} strokeDasharray="2 3" />
+                      <text x={geo.refillX - 4} y={PAD.t + 10} textAnchor="end" fontSize={10} fontFamily={FONT.mono} fill={CV.ok}>補點</text>
                     </>
                   )}
                   {geo.forecast && <line x1={geo.forecast.x1} y1={geo.forecast.y1} x2={geo.forecast.x2} y2={geo.forecast.y2} stroke={levelColor(f?.level ?? 'ok')} strokeWidth={2.5} strokeDasharray="6 4" />}
-                  {geo.dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r={4} fill={COLOR.amber} />)}
+                  {geo.dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r={4} fill={CV.amber} />)}
                   {geo.zero && (
                     <>
-                      <circle cx={geo.zero.x} cy={geo.zero.y} r={5} fill={COLOR.crit} />
-                      <text x={geo.zero.x - 8} y={geo.zero.y - 9} textAnchor="end" fontSize={11} fontFamily={FONT.mono} fill={COLOR.crit}>用完</text>
+                      <circle cx={geo.zero.x} cy={geo.zero.y} r={5} fill={CV.crit} />
+                      <text x={geo.zero.x - 8} y={geo.zero.y - 9} textAnchor="end" fontSize={11} fontFamily={FONT.mono} fill={CV.crit}>用完</text>
                     </>
                   )}
                 </svg>
@@ -288,20 +288,20 @@ export function OllamaPanel({ pw }: { pw: string }) {
             <Label>HERMES 近 14 天每日請求數</Label>
             <div className="bd-oll-bars" style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: '16%', minHeight: 40 }} role="img" aria-label="近 14 天每日請求數">
               {bars.length === 0 ? <Muted>尚無資料（pusher 還沒推）</Muted> : bars.map(b => (
-                <div key={b.date} title={`${b.date}：${b.calls} 次`} style={{ flex: 1, height: `${Math.max(4, b.ratio * 100)}%`, background: b.date === data.today ? COLOR.amber : COLOR.steelDim, borderRadius: '2px 2px 0 0', opacity: b.date === data.today ? 1 : 0.8 }} />
+                <div key={b.date} title={`${b.date}：${b.calls} 次`} style={{ flex: 1, height: `${Math.max(4, b.ratio * 100)}%`, background: b.date === data.today ? CV.amber : CV.steelDim, borderRadius: '2px 2px 0 0', opacity: b.date === data.today ? 1 : 0.8 }} />
               ))}
             </div>
 
             <div style={{ display: 'grid', gap: 3, fontFamily: FONT.mono, fontSize: '0.64rem' }}>
               {models.map(([name, n]) => (
-                <div key={name} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,150px) minmax(0,1fr) 52px', gap: 8, alignItems: 'center', color: COLOR.steelDim }}>
+                <div key={name} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,150px) minmax(0,1fr) 52px', gap: 8, alignItems: 'center', color: CV.steelDim }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                  <span style={{ height: 5, background: COLOR.panelRaised, borderRadius: 3 }}><i style={{ display: 'block', height: '100%', width: `${maxModel ? Math.max(2, (n / maxModel) * 100) : 0}%`, background: '#5f9bf0', borderRadius: 3 }} /></span>
-                  <span style={{ textAlign: 'right', color: COLOR.ink }}>{n.toLocaleString()}</span>
+                  <span style={{ height: 5, background: CV.panelRaised, borderRadius: 3 }}><i style={{ display: 'block', height: '100%', width: `${maxModel ? Math.max(2, (n / maxModel) * 100) : 0}%`, background: '#5f9bf0', borderRadius: 3 }} /></span>
+                  <span style={{ textAlign: 'right', color: CV.ink }}>{n.toLocaleString()}</span>
                 </div>
               ))}
             </div>
-            <div style={{ fontSize: '0.58rem', color: COLOR.steelDim, lineHeight: 1.4 }}>請求數只含 HERMES 這台 VPS（近 7 天）；Ollama 帳號還有其他用量來源，所以餘額與金額以你輸入的為準。</div>
+            <div style={{ fontSize: '0.58rem', color: CV.steelDim, lineHeight: 1.4 }}>請求數只含 HERMES 這台 VPS（近 7 天）；Ollama 帳號還有其他用量來源，所以餘額與金額以你輸入的為準。</div>
           </div>
         </div>
       )}
@@ -317,27 +317,27 @@ function OllamaMiniCard({ pw, refreshKey }: { pw: string; refreshKey: number }) 
   const cap = bal?.capUsd ?? 60
   const tone = levelColor(f?.level ?? 'ok')
   return (
-    <Card title="Ollama" area="bd-oll" tag={f?.source === 'estimated' ? <Chip color={COLOR.warn}>粗估</Chip> : undefined} action={<MoreBtn onClick={() => open('oll')}>更新</MoreBtn>}>
+    <Card title="Ollama" area="bd-oll" tag={f?.source === 'estimated' ? <Chip color={CV.warn}>粗估</Chip> : undefined} action={<MoreBtn onClick={() => open('oll')}>更新</MoreBtn>}>
       {error ? <Muted>暫時無法取得用量資料</Muted> : data === null ? <Muted>載入中…</Muted> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0, justifyContent: 'center' }}>
           {bal ? (
             <>
               <div className="bd-big" style={{ color: tone, fontSize: 'clamp(1.4rem, 3.4vh, 2.3rem)' }}>
-                {formatUsd(bal.balanceUsd)}<span style={{ fontSize: '0.45em', color: COLOR.steelDim, fontWeight: 400 }}> / ${cap}</span>
+                {formatUsd(bal.balanceUsd)}<span style={{ fontSize: '0.45em', color: CV.steelDim, fontWeight: 400 }}> / ${cap}</span>
               </div>
-              <div style={{ height: 6, borderRadius: 3, background: COLOR.panelRaised, overflow: 'hidden' }}>
+              <div style={{ height: 6, borderRadius: 3, background: CV.panelRaised, overflow: 'hidden' }}>
                 <div style={{ width: `${Math.min(100, Math.max(0, (bal.balanceUsd / cap) * 100))}%`, height: '100%', background: tone }} />
               </div>
             </>
           ) : (
-            <div style={{ fontSize: '0.72rem', color: COLOR.steel, lineHeight: 1.5 }}>還沒輸入餘額。按「更新」輸入一次就能預估哪天用完。</div>
+            <div style={{ fontSize: '0.72rem', color: CV.steel, lineHeight: 1.5 }}>還沒輸入餘額。按「更新」輸入一次就能預估哪天用完。</div>
           )}
           <div className="bd-kv">
             <div><span>預估每天</span><b>{f?.usdPerDay != null ? formatUsd(f.usdPerDay) : '—'}</b></div>
             <div><span>預估用完</span><b>{formatEmptyDay(f?.emptyDate ?? null, f?.daysUntilEmpty ?? null)}</b></div>
           </div>
           {f && f.daysUntilEmpty !== null && (
-            <div style={{ fontSize: '0.7rem', lineHeight: 1.45, color: f.shortfallUsd !== null ? tone : COLOR.ok }}>
+            <div style={{ fontSize: '0.7rem', lineHeight: 1.45, color: f.shortfallUsd !== null ? tone : CV.ok }}>
               {f.shortfallUsd !== null ? `會在補點前用完（約缺 ${formatUsd(f.shortfallUsd, 0)}）` : '用量安全，撐得過補點日'}
             </div>
           )}
@@ -352,7 +352,7 @@ function OllamaMiniCard({ pw, refreshKey }: { pw: string; refreshKey: number }) 
 // api-server 再乘「補短板」；系統／工作改善類也一起排，只用徽章標出類別（使用者 2026-10-09 裁定）。
 const CatBadge = ({ category }: { category: string | null }) => {
   const c = categoryColor(category)
-  return <span className="bd-cat" style={{ color: c, borderColor: c, background: `${c}1a` }}>{category ?? '未分類'}</span>
+  return <span className="bd-cat" style={{ color: c, borderColor: c, background: alpha(c, 10) }}>{category ?? '未分類'}</span>
 }
 
 function IdeasCard({ pw }: { pw: string }) {
@@ -365,10 +365,10 @@ function IdeasCard({ pw }: { pw: string }) {
   const maxW = Math.max(1, ...weeks.map(w => Math.max(w.born, w.done)))
   return (
     <Card title="想法庫：最值得先做的前三名" area="bd-idea"
-      tag={counts ? <Chip color={COLOR.amber}>{counts.open} 個開放中</Chip> : undefined}
+      tag={counts ? <Chip color={CV.amber}>{counts.open} 個開放中</Chip> : undefined}
       action={<MoreBtn onClick={() => open('ideas')}>全部想法</MoreBtn>}>
       {error ? <Muted>暫時無法取得想法庫</Muted> : data === null ? <Muted>載入中…</Muted> : !data.available || data.ideas.length === 0 ? (
-        <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
+        <div style={{ fontSize: '0.78rem', color: CV.steel, lineHeight: 1.6 }}>
           還沒有想法。HERMES 在日記寫下 <code>### HH:MM 💡 標題</code> 後，下一班 L1（10:30／20:30）就會出現在這裡。
         </div>
       ) : (
@@ -377,14 +377,14 @@ function IdeasCard({ pw }: { pw: string }) {
             {top.length === 0 && <Muted>目前沒有開放中的想法</Muted>}
             {top.map((it, i) => (
               <li key={it.id} className="bd-idea-row" title={it.scoreWhy.join('\n')}>
-                <span className="bd-idea-rank" style={{ color: i === 0 ? COLOR.amber : COLOR.steel }}>{i + 1}</span>
+                <span className="bd-idea-rank" style={{ color: i === 0 ? CV.amber : CV.steel }}>{i + 1}</span>
                 <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <div className="bd-idea-title">{it.status === 'doing' && <span aria-label="進行中">🚀 </span>}{it.title}</div>
                   <div className="bd-idea-meta">
                     <CatBadge category={it.category} />
                     <span title="價值">價值 <b>{pips(it.value)}</b></span>
                     <span title="難度">難度 <b>{pips(it.effort)}</b></span>
-                    {it.weakBoost && <Chip color={COLOR.ok}>補短板</Chip>}
+                    {it.weakBoost && <Chip color={CV.ok}>補短板</Chip>}
                     {absorbBadges(it).absorbed && <span data-testid="idea-absorbed">{absorbBadges(it).absorbed}</span>}
                   </div>
                   {it.why && <div className="bd-idea-why">{it.why}</div>}
@@ -397,15 +397,15 @@ function IdeasCard({ pw }: { pw: string }) {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 34, flex: '0 0 46%' }} role="img" aria-label="近 8 週新想法與實行數">
               {weeks.map(w => (
                 <div key={w.weekStart} title={`${w.weekStart} 起一週：新想法 ${w.born}、實行 ${w.done}`} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', gap: 1 }}>
-                  <i style={{ flex: 1, height: `${Math.max(4, (w.born / maxW) * 100)}%`, background: COLOR.amber, opacity: w.born ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
-                  <i style={{ flex: 1, height: `${Math.max(4, (w.done / maxW) * 100)}%`, background: COLOR.ok, opacity: w.done ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
+                  <i style={{ flex: 1, height: `${Math.max(4, (w.born / maxW) * 100)}%`, background: CV.amber, opacity: w.born ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
+                  <i style={{ flex: 1, height: `${Math.max(4, (w.done / maxW) * 100)}%`, background: CV.ok, opacity: w.done ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
                 </div>
               ))}
             </div>
-            <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, lineHeight: 1.5 }}>
-              本週 新想法 <b style={{ color: COLOR.amber, fontFamily: FONT.mono }}>{thisWeek?.born ?? 0}</b> · 實行 <b style={{ color: COLOR.ok, fontFamily: FONT.mono }}>{thisWeek?.done ?? 0}</b>
+            <div style={{ fontSize: '0.68rem', color: CV.steelDim, lineHeight: 1.5 }}>
+              本週 新想法 <b style={{ color: CV.amber, fontFamily: FONT.mono }}>{thisWeek?.born ?? 0}</b> · 實行 <b style={{ color: CV.ok, fontFamily: FONT.mono }}>{thisWeek?.done ?? 0}</b>
               <br />共 {counts!.total} 個 · 進行中 {counts!.doing} · 已實行 {counts!.done}
-              {data.mindCombined?.score != null && <><br /><span data-testid="ideas-card-mind" title="心智分數＝想法分數 × 80% ＋ 最新日報分數 × 20%（計入幸福指數）">心智 <b style={{ color: COLOR.ink, fontFamily: FONT.mono }}>{data.mindCombined.score.toFixed(1)}</b></span></>}
+              {data.mindCombined?.score != null && <><br /><span data-testid="ideas-card-mind" title="心智分數＝想法分數 × 80% ＋ 最新日報分數 × 20%（計入幸福指數）">心智 <b style={{ color: CV.ink, fontFamily: FONT.mono }}>{data.mindCombined.score.toFixed(1)}</b></span></>}
             </div>
           </div>
         </div>
@@ -444,7 +444,7 @@ function CopyToHermes({ idea }: { idea: IdeaItem }) {
   }
   return (
     <div className="bd-idea-copy">
-      <div style={{ color: COLOR.ink, fontWeight: 500 }}>要更新進度？按一下帶到 HERMES 對話框：</div>
+      <div style={{ color: CV.ink, fontWeight: 500 }}>要更新進度？按一下帶到 HERMES 對話框：</div>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder="（選填）想補充的話，例如：花了三個晚上，效果不錯" style={{ ...inp, maxWidth: 520 }} aria-label="補充說明" />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {nextStatuses(idea.status).map(s => (
@@ -452,7 +452,7 @@ function CopyToHermes({ idea }: { idea: IdeaItem }) {
         ))}
       </div>
       {copied && (
-        <div role="status" style={{ fontSize: '0.72rem', color: copied.ok ? COLOR.ok : COLOR.warn }}>
+        <div role="status" style={{ fontSize: '0.72rem', color: copied.ok ? CV.ok : CV.warn }}>
           {copied.chat ? '已帶到對話框，按送出即可：' : copied.ok ? '已複製，貼給 HERMES 即可：' : '瀏覽器不允許自動複製，請手動選取下面這段：'}
           <pre className="bd-idea-copytext">{copied.text}</pre>
         </div>
@@ -474,14 +474,14 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
   const li = line('ideas'), lc = line('combined')
   const rep = combined?.report ?? null
   return (
-    <section className="bd-mind" style={{ border: `1px solid ${COLOR.line}`, borderRadius: 8, padding: '10px 12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: 14 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: COLOR.steel, lineHeight: 1.6 }}>
-        <div data-testid="mind-combined" style={{ color: COLOR.ink, fontWeight: 600 }}>🧮 心智分數<span style={{ fontFamily: FONT.mono, color: COLOR.amber, fontSize: '1.2rem', marginLeft: 8 }}>{combined?.score != null ? combined.score.toFixed(1) : '—'}</span>
-          <Chip color={COLOR.ok}>計入幸福指數</Chip></div>
+    <section className="bd-mind" style={{ border: `1px solid ${CV.line}`, borderRadius: 8, padding: '10px 12px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.76rem', color: CV.steel, lineHeight: 1.6 }}>
+        <div data-testid="mind-combined" style={{ color: CV.ink, fontWeight: 600 }}>🧮 心智分數<span style={{ fontFamily: FONT.mono, color: CV.amber, fontSize: '1.2rem', marginLeft: 8 }}>{combined?.score != null ? combined.score.toFixed(1) : '—'}</span>
+          <Chip color={CV.ok}>計入幸福指數</Chip></div>
         <div>＝ 想法 {mind.score.toFixed(1)} × 80%{rep ? ` ＋ 日報 ${rep.total} × 20%` : '（還沒有日報分數，只用想法分數）'}</div>
-        <div style={{ color: COLOR.steelDim }}>想法：產生 {mind.birth.score.toFixed(0)} × 40%（近 7 天新想法 <b style={{ color: COLOR.ink }}>{mind.birth.born7}</b> 個，{mind.birth.half} 個＝50 分）＋ 實行 {mind.action.score.toFixed(0)} × 60%（近 28 天實行 <b style={{ color: COLOR.ink }}>{mind.action.done28}</b> 個，{mind.action.half} 個＝50 分）；回補的舊想法不算</div>
+        <div style={{ color: CV.steelDim }}>想法：產生 {mind.birth.score.toFixed(0)} × 40%（近 7 天新想法 <b style={{ color: CV.ink }}>{mind.birth.born7}</b> 個，{mind.birth.half} 個＝50 分）＋ 實行 {mind.action.score.toFixed(0)} × 60%（近 28 天實行 <b style={{ color: CV.ink }}>{mind.action.done28}</b> 個，{mind.action.half} 個＝50 分）；回補的舊想法不算</div>
         {rep && (
-          <div data-testid="mind-report" style={{ color: COLOR.steelDim }} title={rep.parts.map(p => `${p.label} ${p.value}：${p.note}`).join('\n')}>
+          <div data-testid="mind-report" style={{ color: CV.steelDim }} title={rep.parts.map(p => `${p.label} ${p.value}：${p.note}`).join('\n')}>
             📊 日報（{rep.date.slice(5)}）{rep.parts.map(p => `${p.label} ${p.value}`).join('・')}</div>
         )}
       </div>
@@ -490,12 +490,12 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
         <div ref={ref} style={{ flex: 1, minHeight: 70, position: 'relative' }}>
           {li || lc ? (
             <svg width={box.w} height={box.h} style={{ position: 'absolute', inset: 0 }} role="img" aria-label="心智分數與想法分數">
-              {li && <polyline points={li} fill="none" stroke={COLOR.steelDim} strokeWidth={1.5} strokeDasharray="4 3" />}
-              {lc && <polyline points={lc} fill="none" stroke={COLOR.amber} strokeWidth={2} />}
+              {li && <polyline points={li} fill="none" stroke={CV.steelDim} strokeWidth={1.5} strokeDasharray="4 3" />}
+              {lc && <polyline points={lc} fill="none" stroke={CV.amber} strokeWidth={2} />}
             </svg>
           ) : <Muted>每晚 23:55 記一筆，累積兩天以上會畫出線</Muted>}
         </div>
-        <div style={{ fontSize: '0.62rem', color: COLOR.steelDim }}><span style={{ color: COLOR.amber }}>━</span> 心智分數　<span>┅</span> 想法分數</div>
+        <div style={{ fontSize: '0.62rem', color: CV.steelDim }}><span style={{ color: CV.amber }}>━</span> 心智分數　<span>┅</span> 想法分數</div>
       </div>
     </section>
   )
@@ -516,33 +516,33 @@ export function IdeasPanel({ pw }: { pw: string }) {
   const nowMs = useMemo(() => Date.now(), [data])
   if (error) return <Muted>暫時無法取得想法庫</Muted>
   if (data === null) return <Muted>載入中…</Muted>
-  const pill = (active: boolean, color: string = COLOR.amber): CSSProperties => ({
-    ...btn, color: active ? COLOR.panelDeep : color, background: active ? color : 'transparent', borderColor: color,
+  const pill = (active: boolean, color: string = CV.amber): CSSProperties => ({
+    ...btn, color: active ? CV.panelDeep : color, background: active ? color : 'transparent', borderColor: color,
   })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {data.mind && <IdeasMindSection mind={data.mind} combined={data.mindCombined ?? null} shadow={data.mindShadow ?? []} />}
-      <div style={{ fontSize: '0.78rem', color: COLOR.steel, lineHeight: 1.6 }}>
+      <div style={{ fontSize: '0.78rem', color: CV.steel, lineHeight: 1.6 }}>
         優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 進行中 1.1。
         入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕，把一句話帶到 HERMES 對話框送出，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
         {data.receivedAt && <> · 最後更新 {minutesAgo(Date.parse(data.receivedAt))}</>}
       </div>
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋想法：標題、編號、原因、類別（空白分隔多個詞）" aria-label="搜尋想法" data-testid="idea-search"
-        style={{ width: '100%', boxSizing: 'border-box', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: 6, color: COLOR.ink, padding: '8px 10px', fontFamily: FONT.body, fontSize: '0.84rem' }} />
+        style={{ width: '100%', boxSizing: 'border-box', background: CV.panelDeep, border: `1px solid ${CV.line}`, borderRadius: 6, color: CV.ink, padding: '8px 10px', fontFamily: FONT.body, fontSize: '0.84rem' }} />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {([['open', '開放中'], ['done', '已實行'], ['closed', '擱置／放棄'], ['merged', `🔀 有合併過 ${mergedCount}`], ['all', '全部']] as Array<[StatusFilter, string]>).map(([k, l]) => (
           <button key={k} type="button" style={pill(st === k)} onClick={() => setSt(k)}>{l}</button>
         ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        <button type="button" style={pill(cat === null, COLOR.steel)} onClick={() => setCat(null)}>全部類別</button>
+        <button type="button" style={pill(cat === null, CV.steel)} onClick={() => setCat(null)}>全部類別</button>
         {cats.map(([c, n]) => (
           <button key={c} type="button" style={pill(cat === c, categoryColor(c === '未分類' ? null : c))} onClick={() => setCat(cat === c ? null : c)}>{c} {n}</button>
         ))}
       </div>
       <IdeaLifeSummary ideas={data.ideas} nowMs={nowMs} />
       <details className="bd-idea-item" data-testid="idea-scatter-box">
-        <summary style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}><span style={{ color: COLOR.ink, fontWeight: 600 }}>價值 × 難度：該先做哪個（目前篩選的 {list.length} 個）</span></summary>
+        <summary style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}><span style={{ color: CV.ink, fontWeight: 600 }}>價值 × 難度：該先做哪個（目前篩選的 {list.length} 個）</span></summary>
         <div className="bd-idea-detail" style={{ paddingLeft: 12 }}><IdeaScatter ideas={list} /></div>
       </details>
       {list.length === 0 ? <Muted>{q.trim() ? `沒有符合「${q.trim()}」的想法（目前篩選：${st === 'all' ? '全部' : st}）` : '沒有符合的想法'}</Muted> : (
@@ -552,7 +552,7 @@ export function IdeasPanel({ pw }: { pw: string }) {
               <summary>
                 <span className="bd-idea-id">{it.id}</span>
                 <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span style={{ color: COLOR.ink, fontWeight: 600 }}>{topSet.has(it.id) && <span style={{ color: COLOR.amber }}>★ </span>}{it.title}</span>
+                  <span style={{ color: CV.ink, fontWeight: 600 }}>{topSet.has(it.id) && <span style={{ color: CV.amber }}>★ </span>}{it.title}</span>
                   <span className="bd-idea-meta">
                     <CatBadge category={it.category} />
                     {it.mergedInto
@@ -585,9 +585,9 @@ export function IdeasPanel({ pw }: { pw: string }) {
   )
 }
 
-const btn: CSSProperties = { fontFamily: FONT.mono, fontSize: '0.68rem', padding: '5px 10px', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: COLOR.amber, border: `1px solid ${COLOR.amberDim}` }
-const fld: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2, fontSize: '0.62rem', color: COLOR.steelDim, fontFamily: FONT.mono }
-const inp: CSSProperties = { width: '100%', background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: 4, color: COLOR.ink, padding: '4px 6px', fontFamily: FONT.mono, fontSize: '0.72rem' }
+const btn: CSSProperties = { fontFamily: FONT.mono, fontSize: '0.68rem', padding: '5px 10px', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: CV.amber, border: `1px solid ${CV.amberDim}` }
+const fld: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2, fontSize: '0.62rem', color: CV.steelDim, fontFamily: FONT.mono }
+const inp: CSSProperties = { width: '100%', background: CV.panelDeep, border: `1px solid ${CV.line}`, borderRadius: 4, color: CV.ink, padding: '4px 6px', fontFamily: FONT.mono, fontSize: '0.72rem' }
 
 // ── 幸福指數：這個分數怎麼來（首頁主體）──────────────
 function Ring({ value, color }: { value: number; color: string }) {
@@ -608,13 +608,13 @@ function Ring({ value, color }: { value: number; color: string }) {
       {ticks.map(i => {
         const a = (i / 40) * 2 * Math.PI - Math.PI / 2
         const on = i / 40 <= frac
-        return <line key={i} x1={70 + 62 * Math.cos(a)} y1={70 + 62 * Math.sin(a)} x2={70 + 66 * Math.cos(a)} y2={70 + 66 * Math.sin(a)} stroke={on ? color : COLOR.line} strokeWidth={1.4} opacity={on ? 0.9 : 0.6} />
+        return <line key={i} x1={70 + 62 * Math.cos(a)} y1={70 + 62 * Math.sin(a)} x2={70 + 66 * Math.cos(a)} y2={70 + 66 * Math.sin(a)} stroke={on ? color : CV.line} strokeWidth={1.4} opacity={on ? 0.9 : 0.6} />
       })}
-      <circle cx={70} cy={70} r={R} fill="none" stroke={COLOR.panelRaised} strokeWidth={11} />
+      <circle cx={70} cy={70} r={R} fill="none" stroke={CV.panelRaised} strokeWidth={11} />
       <circle cx={70} cy={70} r={R} fill="none" stroke={color} strokeWidth={11} strokeLinecap="round" strokeDasharray={`${C * frac} ${C}`} transform="rotate(-90 70 70)" filter="url(#bdRingGlow)" opacity={0.55} />
       <circle cx={70} cy={70} r={R} fill="none" stroke="url(#bdRingGrad)" strokeWidth={11} strokeLinecap="round" strokeDasharray={`${C * frac} ${C}`} transform="rotate(-90 70 70)" />
-      <text x={70} y={78} textAnchor="middle" fontFamily={FONT.mono} fontWeight={600} fontSize={36} fill={COLOR.ink}>{shown}</text>
-      <text x={70} y={97} textAnchor="middle" fontFamily={FONT.mono} fontSize={9} fill={COLOR.steelDim} letterSpacing={2}>/ 100</text>
+      <text x={70} y={78} textAnchor="middle" fontFamily={FONT.mono} fontWeight={600} fontSize={36} fill={CV.ink}>{shown}</text>
+      <text x={70} y={97} textAnchor="middle" fontFamily={FONT.mono} fontSize={9} fill={CV.steelDim} letterSpacing={2}>/ 100</text>
     </svg>
   )
 }
@@ -635,9 +635,9 @@ function Spark({ points, color }: { points: HhiHistoryPoint[]; color: string }) 
   const diff = lastV - first
   return (
     <div className="bd-spark">
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim }}>
         <span>近 {points.length} 天</span>
-        <span style={{ color: diff > 0 ? COLOR.ok : diff < 0 ? COLOR.warn : COLOR.steelDim }}>{diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} {Math.abs(diff)}</span>
+        <span style={{ color: diff > 0 ? CV.ok : diff < 0 ? CV.warn : CV.steelDim }}>{diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} {Math.abs(diff)}</span>
       </div>
       <div ref={ref} style={{ flex: 1, minHeight: 16, position: 'relative', overflow: 'hidden' }}>
         <svg width={w} height={h} style={{ position: 'absolute', inset: 0 }} role="img" aria-label="幸福指數近 30 天趨勢">
@@ -664,8 +664,8 @@ function HhiCard({ pw, data, toneOf }: { pw: string; data: Record<string, unknow
   return (
     <Card
       title="翰翰仔幸福指數：這個分數怎麼來" area="bd-hhi" action={more}
-      tag={!b.isFinal ? <Chip color={COLOR.warn}>今日暫定</Chip> : b.stale ? <Chip color={COLOR.warn}>部分為最近可用值</Chip> : undefined}
-      style={{ background: `radial-gradient(ellipse 55% 75% at 14% 45%, ${tone.color}1f, transparent 70%), ${COLOR.panel}` }}
+      tag={!b.isFinal ? <Chip color={CV.warn}>今日暫定</Chip> : b.stale ? <Chip color={CV.warn}>部分為最近可用值</Chip> : undefined}
+      style={{ background: `radial-gradient(ellipse 55% 75% at 14% 45%, ${tone.color}1f, transparent 70%), ${CV.panel}` }}
     >
       <div className="bd-hhi-body">
         <div className="bd-hhi-left">
@@ -689,9 +689,9 @@ function HhiCard({ pw, data, toneOf }: { pw: string; data: Record<string, unknow
             const isDrag = drag?.key === r.key
             return (
               <button key={r.key} type="button" className={`bd-hrow${isDrag ? ' is-drag' : ''}`} role="row" onClick={() => open('hhi')} title={`${r.label}：${r.value ?? '—'} × ${r.weightPct}% ＝ ${r.points !== null ? r.points.toFixed(1) : '—'} 分（點開看六維度詳情）`}>
-                <span className="bd-hlabel" style={{ color: isDrag ? COLOR.warn : COLOR.ink }}>{r.label}</span>
-                <span className="bd-hval" style={{ color: r.value !== null ? barColor(r.value) : COLOR.steelDim }}>{r.value !== null ? r.value : '—'}</span>
-                <span className="bd-htrack"><i style={{ width: `${r.value !== null ? Math.max(2, r.value) : 0}%`, background: r.value !== null ? barColor(r.value) : COLOR.line }} /></span>
+                <span className="bd-hlabel" style={{ color: isDrag ? CV.warn : CV.ink }}>{r.label}</span>
+                <span className="bd-hval" style={{ color: r.value !== null ? barColor(r.value) : CV.steelDim }}>{r.value !== null ? r.value : '—'}</span>
+                <span className="bd-htrack"><i style={{ width: `${r.value !== null ? Math.max(2, r.value) : 0}%`, background: r.value !== null ? barColor(r.value) : CV.line }} /></span>
                 <span className="bd-hw">×{r.weightPct}%</span>
                 <span className="bd-hpts">{r.points !== null ? r.points.toFixed(1) : '—'}</span>
               </button>
@@ -702,7 +702,7 @@ function HhiCard({ pw, data, toneOf }: { pw: string; data: Record<string, unknow
           </div>
           {drag && (
             <div className="bd-hdrag">
-              拉低總分最多：<b style={{ color: COLOR.warn }}>{drag.label}</b>　離滿分差 {100 - (drag.value ?? 0)} × 權重 {drag.weightPct}% ＝ 少 <b style={{ color: COLOR.warn }}>{(((100 - (drag.value ?? 0)) * drag.weightPct) / 100).toFixed(1)}</b> 分
+              拉低總分最多：<b style={{ color: CV.warn }}>{drag.label}</b>　離滿分差 {100 - (drag.value ?? 0)} × 權重 {drag.weightPct}% ＝ 少 <b style={{ color: CV.warn }}>{(((100 - (drag.value ?? 0)) * drag.weightPct) / 100).toFixed(1)}</b> 分
             </div>
           )}
         </div>
@@ -726,15 +726,15 @@ function NetworkCard({ pw }: { pw: string }) {
         <>
           <div className="bd-tiles">
             {tiles.map(([k, v, s]) => (
-              <div key={k} className="bd-tile" style={{ background: COLOR.panelRaised, borderRadius: 6 }}>
+              <div key={k} className="bd-tile" style={{ background: CV.panelRaised, borderRadius: 6 }}>
                 <Label>{k}</Label>
-                <div className="bd-big" style={{ color: k === '真孤兒事件率' && m.trueOrphanEventRatioPct >= 50 ? COLOR.warn : COLOR.ink }}>{v}</div>
-                {s && <div style={{ fontSize: '0.62rem', color: COLOR.steelDim }}>{s}</div>}
+                <div className="bd-big" style={{ color: k === '真孤兒事件率' && m.trueOrphanEventRatioPct >= 50 ? CV.warn : CV.ink }}>{v}</div>
+                {s && <div style={{ fontSize: '0.62rem', color: CV.steelDim }}>{s}</div>}
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: '0.7rem', color: COLOR.steel }}>
-            <span>{m.mostActivePerson ? <>這陣子最活躍：<b style={{ color: COLOR.amber }}>{m.mostActivePerson.name}</b><span style={{ color: COLOR.steelDim }}>（{m.mostActivePerson.eventCount} 個事件）</span></> : ''}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: '0.7rem', color: CV.steel }}>
+            <span>{m.mostActivePerson ? <>這陣子最活躍：<b style={{ color: CV.amber }}>{m.mostActivePerson.name}</b><span style={{ color: CV.steelDim }}>（{m.mostActivePerson.eventCount} 個事件）</span></> : ''}</span>
             <button type="button" onClick={() => { window.location.hash = 'graph' }} style={btn}>完整關係宇宙 →</button>
           </div>
         </>
@@ -759,13 +759,13 @@ function PipelineCard({ pw }: { pw: string }) {
           {layers.map(k => {
             const l = data.layers[k]
             const sched = l.schedule && l.schedule.length ? l.schedule.join(' · ') : PIPE_STATIC[k][1]
-            const color = l.health === 'ok' ? COLOR.ok : l.health === 'crit' ? COLOR.crit : COLOR.steelDim
+            const color = l.health === 'ok' ? CV.ok : l.health === 'crit' ? CV.crit : CV.steelDim
             return (
-              <div key={k} className="bd-pipe-row" style={{ background: COLOR.panelRaised }}>
-                <b className="bd-pipe-k" style={{ color: COLOR.amber }}>{k}</b>
+              <div key={k} className="bd-pipe-row" style={{ background: CV.panelRaised }}>
+                <b className="bd-pipe-k" style={{ color: CV.amber }}>{k}</b>
                 <div style={{ minWidth: 0 }}>
-                  <div className="bd-pipe-main" style={{ color: COLOR.steel }}>{PIPE_STATIC[k][0]} · {sched}</div>
-                  <div className="bd-pipe-sub" style={{ color: l.errorSummary ? COLOR.crit : COLOR.steelDim }}>{l.errorSummary ?? `上次 ${minutesAgo(l.lastRunTs !== null ? l.lastRunTs : null)}`}</div>
+                  <div className="bd-pipe-main" style={{ color: CV.steel }}>{PIPE_STATIC[k][0]} · {sched}</div>
+                  <div className="bd-pipe-sub" style={{ color: l.errorSummary ? CV.crit : CV.steelDim }}>{l.errorSummary ?? `上次 ${minutesAgo(l.lastRunTs !== null ? l.lastRunTs : null)}`}</div>
                 </div>
                 <span title={l.health} style={{ width: 9, height: 9, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}` }} />
               </div>
@@ -784,15 +784,15 @@ function DiskBlock({ pw, status }: { pw: string; status: BoardStatus }) {
   if (!worst) return null
   const usedGb = worst.totalGb - worst.freeGb
   const f = describeForecast(status.diskForecast ?? null)
-  const tone = { ok: COLOR.ok, warn: COLOR.warn, crit: COLOR.crit, dim: COLOR.steelDim }[f.tone]
+  const tone = { ok: CV.ok, warn: CV.warn, crit: CV.crit, dim: CV.steelDim }[f.tone]
   const points = (hist.data ?? []).filter((h): h is BoardDiskPoint & { diskUsedGb: number } => h.diskUsedGb !== null).map(h => ({ date: h.date, value: h.diskUsedGb }))
   const shares = storageShares(status.storage ?? [], usedGb * 1e9, null).slice(0, 3)
   return (
-    <div className="bd-disk" style={{ background: COLOR.panelRaised, borderRadius: 6, padding: '0.5rem 0.7rem', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0, overflow: 'hidden' }}>
+    <div className="bd-disk" style={{ background: CV.panelRaised, borderRadius: 6, padding: '0.5rem 0.7rem', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem 0.8rem', flexWrap: 'wrap' }}>
         <Label>硬碟容量 {worst.drive}</Label>
         <span style={{ fontFamily: FONT.mono, fontSize: '1.15rem', fontWeight: 600, color: pctColor(worst.percentUsed) }}>{Math.round(worst.percentUsed)}%</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: '0.7rem', color: COLOR.steel }}>已用 {usedGb.toFixed(1)} / {worst.totalGb.toFixed(1)} GB · 剩 {worst.freeGb.toFixed(1)} GB</span>
+        <span style={{ fontFamily: FONT.mono, fontSize: '0.7rem', color: CV.steel }}>已用 {usedGb.toFixed(1)} / {worst.totalGb.toFixed(1)} GB · 剩 {worst.freeGb.toFixed(1)} GB</span>
       </div>
       <div style={{ fontSize: '0.7rem', color: tone, lineHeight: 1.45 }}>{f.text}</div>
       <div className="bd-disk-detail">
@@ -801,11 +801,11 @@ function DiskBlock({ pw, status }: { pw: string; status: BoardStatus }) {
           {shares.length === 0 ? <Muted>尚無分項資料</Muted> : shares.map(sh => (
             <div key={sh.label}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontFamily: FONT.mono, fontSize: '0.64rem' }}>
-                <span style={{ color: COLOR.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sh.label}</span>
-                <span style={{ color: COLOR.steel, flexShrink: 0 }}>{formatBytes(sh.bytes)}</span>
+                <span style={{ color: CV.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sh.label}</span>
+                <span style={{ color: CV.steel, flexShrink: 0 }}>{formatBytes(sh.bytes)}</span>
               </div>
-              <div style={{ height: 4, background: COLOR.line, borderRadius: 2, marginTop: 2 }}>
-                <div style={{ width: `${Math.min(100, Math.max(1, sh.share * 100))}%`, height: '100%', background: sh.label.startsWith('其他') ? COLOR.steelDim : COLOR.amber, borderRadius: 2 }} />
+              <div style={{ height: 4, background: CV.line, borderRadius: 2, marginTop: 2 }}>
+                <div style={{ width: `${Math.min(100, Math.max(1, sh.share * 100))}%`, height: '100%', background: sh.label.startsWith('其他') ? CV.steelDim : CV.amber, borderRadius: 2 }} />
               </div>
             </div>
           ))}
@@ -838,17 +838,17 @@ export function PusherHealthPanel({ pw }: { pw: string }) {
   return (
     <section style={{ marginBottom: '1.4rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <h3 style={{ margin: 0, fontFamily: FONT.display, fontSize: '0.95rem', color: COLOR.ink }}>入口網推送健康</h3>
+        <h3 style={{ margin: 0, fontFamily: FONT.display, fontSize: '0.95rem', color: CV.ink }}>入口網推送健康</h3>
         <Chip color={levelColor(sum.level)}>{sum.bad ? `${sum.bad} 項需要注意` : `${sum.total} 項都正常`}</Chip>
-        <span style={{ fontSize: '0.7rem', color: COLOR.steelDim }}>VPS 推給入口網的每種資料，最後一次成功的時間（主機狀態每 10 分鐘帶上來）</span>
+        <span style={{ fontSize: '0.7rem', color: CV.steelDim }}>VPS 推給入口網的每種資料，最後一次成功的時間（主機狀態每 10 分鐘帶上來）</span>
       </div>
       <div className="bd-push-table" role="table" aria-label="入口網推送健康">
         {rows.map(r => (
           <div key={r.feed} role="row" className="bd-push-row">
             <span role="cell" className="bd-push-name"><i className="bd-push-dot" style={{ background: levelColor(r.level) }} />{FEED_LABEL[r.feed] ?? r.feed}</span>
             <span role="cell" className="bd-push-dim">{fmtEvery(r.expectedEveryMin)}</span>
-            <span role="cell" className="bd-push-age" style={r.level === 'ok' ? (r.lastOk ? undefined : { color: COLOR.steel, fontWeight: 400 }) : { color: levelColor(r.level) }}>{r.lastOk ? fmtAge(r.ageMin) : '還沒推過'}</span>
-            <span role="cell" className="bd-push-dim">成功 <b>{r.okCount}</b>・失敗 <b style={r.failCount ? { color: COLOR.crit } : undefined}>{r.failCount}</b></span>
+            <span role="cell" className="bd-push-age" style={r.level === 'ok' ? (r.lastOk ? undefined : { color: CV.steel, fontWeight: 400 }) : { color: levelColor(r.level) }}>{r.lastOk ? fmtAge(r.ageMin) : '還沒推過'}</span>
+            <span role="cell" className="bd-push-dim">成功 <b>{r.okCount}</b>・失敗 <b style={r.failCount ? { color: CV.crit } : undefined}>{r.failCount}</b></span>
             <span role="cell" className="bd-push-err" title={r.lastError ?? ''}>{r.lastError ?? ''}</span>
           </div>
         ))}
@@ -865,11 +865,11 @@ function SystemCard({ pw }: { pw: string }) {
   const cells: Array<[string, string, string]> = ok ? [
     ['CPU', ok.cpuPercent !== null ? `${Math.round(ok.cpuPercent)}%` : '—', pctColor(ok.cpuPercent)],
     ['記憶體', ok.memPercent !== null ? `${Math.round(ok.memPercent)}%` : '—', pctColor(ok.memPercent)],
-    ['容器健康', ok.containers.length ? `${cOk} / ${ok.containers.length}` : '—', ok.containers.length === 0 ? COLOR.steelDim : cOk < ok.containers.length ? COLOR.warn : COLOR.ok],
+    ['容器健康', ok.containers.length ? `${cOk} / ${ok.containers.length}` : '—', ok.containers.length === 0 ? CV.steelDim : cOk < ok.containers.length ? CV.warn : CV.ok],
   ] : []
   return (
     <Card title="主機健康與硬碟容量" area="bd-sys"
-      tag={ok?.stale ? <Chip color={COLOR.warn}>資料已過期</Chip> : (() => {
+      tag={ok?.stale ? <Chip color={CV.warn}>資料已過期</Chip> : (() => {
         const ps = pusherSummary(ok?.pushers)
         return ps && ps.level !== 'ok' ? <Chip color={levelColor(ps.level)}>推送 {ps.bad} 項落後</Chip> : undefined
       })()}
@@ -878,7 +878,7 @@ function SystemCard({ pw }: { pw: string }) {
         <div className="bd-sys-wrap" style={{ opacity: ok.stale ? 0.55 : 1 }}>
           <div className="bd-sys-grid">
             {cells.map(([k, v, c]) => (
-              <div key={k} className="bd-tile" style={{ background: COLOR.panelRaised, borderRadius: 6 }}>
+              <div key={k} className="bd-tile" style={{ background: CV.panelRaised, borderRadius: 6 }}>
                 <Label>{k}</Label>
                 <div className="bd-big" style={{ color: c }}>{v}</div>
               </div>

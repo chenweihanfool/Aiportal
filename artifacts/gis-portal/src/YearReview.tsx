@@ -6,7 +6,7 @@ import { useAsync, useNow } from './homeHooks'
 import { taipeiDate } from './homeView'
 import { dimensionsYear, hhiYear, placesYear, tripsYear } from './yearReview'
 import { Skeleton } from './StateFrame'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 
 // 年度回顧頁（#year／#year/<年>，P2-1）：這一年的幸福指數、六個面向、旅行、去過的地點。
 // 全部由既有接口算出來（/api/happiness/history、遊記、美食地圖），沒有新後端。
@@ -46,7 +46,7 @@ export function YearReview({ year, unlocked, unlockedPassword, toneOf, onRequest
 
   return (
     <div className="dp-page yr-page" data-testid="year-page" data-year={year}
-      style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
+      style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
       <header className="dp-head">
         <a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); window.location.hash = '' }}>← 首頁</a>
         <nav className="yr-nav" aria-label="切換年份">

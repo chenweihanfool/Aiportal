@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { CLASSIC_REMOVAL_NOTE, browserLayoutStore, readHomeLayout, writeHomeLayout, type HomeLayout } from './homeLayout'
 import { DesktopBoard } from './DesktopBoard'
 import { HomeBoard } from './HomeBoard'
-import { COLOR } from './theme'
+import { CV } from './theme'
 import { DimensionGauge, MindIndexCard, SUMMARY_BODIES, SocialIndexCard } from './DimensionCards'
 import { HappinessHeroCard } from './HappinessHero'
 import { TopBar } from './TopBar'
@@ -94,7 +94,7 @@ export function InstrumentPanelView({
   const opsDetail = <HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
 
   return (
-    <div className="ip-shell" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
+    <div className="ip-shell" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: CV.panelDeep }}>
       <TopBar portals={sites.length} legacy={legacy} onOpenAdmin={onOpenAdmin} />
       {!legacy && (
         <div className="st-layoutbar">

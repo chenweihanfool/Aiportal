@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { type DiskHistoryPoint, HermesDiskPanel } from './HermesDiskPanel'
 import { type HermesGraphData, apiFetchHermesGraph } from './hermesGraphApi'
 import { type KbCell, kbHealthCells } from './kbHealth'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import { HermesPipelinePanel } from './PipelineFlow'
 import { formatGb, formatMinutesAgo, pctTone } from './format'
 import { CollapsibleSubPanel, StatCell, SubLabel, SubPanel, TrendLineChart } from './panelUi'
@@ -31,25 +31,25 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
   return (
     <SubPanel title="事人物關係網路" sub="HERMES 事人物三實體架構（Events/People/Cases/Objects）· 不計入幸福指數">
       {error ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
       ) : data === null ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>載入中…</div>
       ) : !data.available || !data.graph || !data.metrics ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>資料準備中，collect.ps1 還沒掃過 Events/</div>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>資料準備中，collect.ps1 還沒掃過 Events/</div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '1px', background: CV.line, border: `1px solid ${CV.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
             <StatCell label="人物數量" value={String(data.metrics.peopleCount)} />
             <StatCell label="事件數量" value={String(data.metrics.eventsCount)} />
             <StatCell label="案件數量" value={String(data.metrics.casesCount)} sub={`${data.metrics.activeCasesCount} 進行中`} />
             <StatCell label="物件數量" value={String(data.metrics.objectsCount)} />
             <StatCell label="平均關聯人數" value={data.metrics.avgParticipantsPerEvent.toFixed(1)} sub="每事件" />
-            <StatCell label="真孤兒事件率" value={`${data.metrics.trueOrphanEventRatioPct}%`} valueColor={data.metrics.trueOrphanEventRatioPct >= 50 ? COLOR.warn : undefined} sub={`無人物且無案件（孤兒 ${data.metrics.orphanEventRatioPct}%）`} />
+            <StatCell label="真孤兒事件率" value={`${data.metrics.trueOrphanEventRatioPct}%`} valueColor={data.metrics.trueOrphanEventRatioPct >= 50 ? CV.warn : undefined} sub={`無人物且無案件（孤兒 ${data.metrics.orphanEventRatioPct}%）`} />
           </div>
           {data.metrics.mostActivePerson && (
-            <div style={{ fontSize: '0.76rem', color: COLOR.steel, marginBottom: '0.9rem' }}>
-              這陣子最活躍：<span style={{ color: COLOR.amber, fontWeight: 600 }}>{data.metrics.mostActivePerson.name}</span>
-              <span style={{ color: COLOR.steelDim }}>（{data.metrics.mostActivePerson.eventCount} 個事件）</span>
+            <div style={{ fontSize: '0.76rem', color: CV.steel, marginBottom: '0.9rem' }}>
+              這陣子最活躍：<span style={{ color: CV.amber, fontWeight: 600 }}>{data.metrics.mostActivePerson.name}</span>
+              <span style={{ color: CV.steelDim }}>（{data.metrics.mostActivePerson.eventCount} 個事件）</span>
             </div>
           )}
           <button
@@ -57,10 +57,10 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
             onClick={() => { window.location.hash = 'graph' }}
             style={{
               width: '100%', padding: '0.7rem', borderRadius: '5px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.74rem', letterSpacing: '0.06em',
-              background: 'rgba(245,166,35,0.08)', border: `1px solid ${COLOR.amberDim}`, color: COLOR.amber,
+              background: 'color-mix(in srgb, var(--c-accent) 8%, transparent)', border: `1px solid ${CV.amberDim}`, color: CV.amber,
             }}
           >展開完整關係宇宙 →</button>
-          <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>
             {data.computedAt ? formatMinutesAgo(data.computedAt) : ''}
           </div>
         </>
@@ -94,13 +94,13 @@ function HermesTaskRow({ name, lastRunTime, lastTaskResult, schedule }: HermesSc
   const dotClass = isRunning ? 'dot-run' : isFailed ? 'dot-warn' : 'dot-ok'
   const statusSuffix = isRunning ? ' · 執行中' : isPending ? ' · 尚未觸發過' : isFailed ? ` · 失敗 (${lastTaskResult})` : ''
   return (
-    <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${COLOR.line}` }}>
+    <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${CV.line}` }}>
       <span className={`dot ${dotClass}`} />
-      <span style={{ color: COLOR.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ color: CV.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {name}
-        {schedule && <span style={{ color: COLOR.steelDim, fontSize: '0.62rem', marginLeft: '8px' }}>{schedule}</span>}
+        {schedule && <span style={{ color: CV.steelDim, fontSize: '0.62rem', marginLeft: '8px' }}>{schedule}</span>}
       </span>
-      <span style={{ color: COLOR.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>
+      <span style={{ color: CV.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>
         {lastRunTime ? formatMinutesAgo(lastRunTime) : '尚未執行'}{statusSuffix}
       </span>
     </div>
@@ -109,11 +109,11 @@ function HermesTaskRow({ name, lastRunTime, lastTaskResult, schedule }: HermesSc
 
 function HermesActivityRow({ occurredAt, source, message }: HermesActivityEntry) {
   return (
-    <div className="list-item" style={{ display: 'flex', alignItems: 'baseline', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${COLOR.line}` }}>
-      <span style={{ color: COLOR.ink, flex: 1, minWidth: 0 }}>
-        <span style={{ color: COLOR.amber, fontWeight: 600 }}>{source}</span> {message}
+    <div className="list-item" style={{ display: 'flex', alignItems: 'baseline', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${CV.line}` }}>
+      <span style={{ color: CV.ink, flex: 1, minWidth: 0 }}>
+        <span style={{ color: CV.amber, fontWeight: 600 }}>{source}</span> {message}
       </span>
-      <span style={{ color: COLOR.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>{formatMinutesAgo(occurredAt)}</span>
+      <span style={{ color: CV.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>{formatMinutesAgo(occurredAt)}</span>
     </div>
   )
 }
@@ -121,10 +121,10 @@ function HermesActivityRow({ occurredAt, source, message }: HermesActivityEntry)
 function HermesContainerRow({ name, status, health }: HermesContainerInfo) {
   const dotClass = isContainerFailed({ status, health }) ? 'dot-warn' : 'dot-ok'
   return (
-    <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${COLOR.line}` }}>
+    <div className="list-item" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.5rem 0.1rem', fontFamily: FONT.mono, fontSize: '0.72rem', borderTop: `1px solid ${CV.line}` }}>
       <span className={`dot ${dotClass}`} />
-      <span style={{ color: COLOR.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-      <span style={{ color: COLOR.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>{status}{health ? ` · ${health}` : ''}</span>
+      <span style={{ color: CV.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+      <span style={{ color: CV.steelDim, fontSize: '0.64rem', flexShrink: 0 }}>{status}{health ? ` · ${health}` : ''}</span>
     </div>
   )
 }
@@ -146,9 +146,9 @@ function HermesTrendPanel({ unlockedPassword }: { unlockedPassword: string | nul
     return () => { cancelled = true }
   }, [unlockedPassword])
 
-  if (error) return <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
-  if (history === null) return <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
-  if (history.length < 2) return <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>還沒有足夠的歷史資料（每天累積一筆，過幾天回來看就有線了）</div>
+  if (error) return <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
+  if (history === null) return <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+  if (history.length < 2) return <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>還沒有足夠的歷史資料（每天累積一筆，過幾天回來看就有線了）</div>
 
   const cpuPoints = history.filter((h): h is HermesStatusHistoryPoint & { cpuPercent: number } => h.cpuPercent !== null).map(h => ({ date: h.date, value: Math.round(h.cpuPercent) }))
   const memPoints = history.filter((h): h is HermesStatusHistoryPoint & { memPercent: number } => h.memPercent !== null).map(h => ({ date: h.date, value: Math.round(h.memPercent) }))
@@ -160,15 +160,15 @@ function HermesTrendPanel({ unlockedPassword }: { unlockedPassword: string | nul
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem 1.4rem' }}>
       <div>
         <SubLabel>CPU 負載</SubLabel>
-        <TrendLineChart points={cpuPoints} color={COLOR.amber} height={64} />
+        <TrendLineChart points={cpuPoints} color={CV.amber} height={64} />
       </div>
       <div>
         <SubLabel>記憶體</SubLabel>
-        <TrendLineChart points={memPoints} color={COLOR.amber} height={64} />
+        <TrendLineChart points={memPoints} color={CV.amber} height={64} />
       </div>
       <div>
         <SubLabel>容器健康比例（%）</SubLabel>
-        <TrendLineChart points={healthPoints} color={COLOR.ok} height={64} />
+        <TrendLineChart points={healthPoints} color={CV.ok} height={64} />
       </div>
     </div>
   )
@@ -206,15 +206,15 @@ function KbHealthPanel({ unlockedPassword }: { unlockedPassword: string | null }
     mind,
     now: Date.now(),
   })
-  const toneColor = (t: KbCell['tone']) => (t === 'crit' ? COLOR.crit : t === 'warn' ? COLOR.warn : t === 'dim' ? COLOR.steelDim : undefined)
+  const toneColor = (t: KbCell['tone']) => (t === 'crit' ? CV.crit : t === 'warn' ? CV.warn : t === 'dim' ? CV.steelDim : undefined)
   return (
     <SubPanel title="知識庫體檢" sub="新架構的原始數字 · 健康分（四項）每天 04:00 計算，量的是佇列吞吐、Events／People 的連結與活動量">
       {!allLoaded ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>載入中…</div>
       ) : allFailed ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
       ) : (
-        <div data-testid="kb-health" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden' }}>
+        <div data-testid="kb-health" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1px', background: CV.line, border: `1px solid ${CV.line}`, borderRadius: '5px', overflow: 'hidden' }}>
           {cells.map(c => <StatCell key={c.key} label={c.label} value={c.value} sub={c.sub ?? undefined} valueColor={toneColor(c.tone)} />)}
         </div>
       )}
@@ -255,7 +255,7 @@ export function HermesWarRoomSection({
   if (!unlocked) {
     return (
       <div onClick={onRequestUnlock} style={{ cursor: 'pointer', padding: '1rem 0.2rem' }}>
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.7rem', color: COLOR.warn }}>🔒 解鎖後顯示</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.7rem', color: CV.warn }}>🔒 解鎖後顯示</div>
       </div>
     )
   }
@@ -276,7 +276,7 @@ export function HermesWarRoomSection({
 
       <div style={{ marginTop: '0.9rem' }}>
       {availableStatus === null ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '1rem 0.2rem' }}>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '1rem 0.2rem' }}>
           {statusError ? 'HERMES 戰情室：暫時無法取得資料' : 'HERMES 戰情室：尚無資料，collect.ps1 還沒在主機上跑過'}
         </div>
       ) : (
@@ -287,7 +287,7 @@ export function HermesWarRoomSection({
             )
             const containersOk = availableStatus.containers.filter(c => !isContainerFailed(c)).length
             return (
-              <div className="ip-stat-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
+              <div className="ip-stat-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: CV.line, border: `1px solid ${CV.line}`, borderRadius: '5px', overflow: 'hidden', marginBottom: '0.9rem' }}>
                 <StatCell label="CPU 負載" value={availableStatus.cpuPercent !== null ? `${Math.round(availableStatus.cpuPercent)}%` : '—'} valueColor={pctTone(availableStatus.cpuPercent)} />
                 <StatCell label="記憶體" value={availableStatus.memPercent !== null ? `${Math.round(availableStatus.memPercent)}%` : '—'} valueColor={pctTone(availableStatus.memPercent)} />
                 <StatCell
@@ -300,7 +300,7 @@ export function HermesWarRoomSection({
                   label="容器健康"
                   value={availableStatus.containers.length === 0 ? '—' : `${containersOk} / ${availableStatus.containers.length}`}
                   sub={availableStatus.containers.length === 0 ? '尚未取得（需主機端收集）' : containersOk < availableStatus.containers.length ? '有容器異常' : undefined}
-                  valueColor={availableStatus.containers.length === 0 ? COLOR.steelDim : containersOk < availableStatus.containers.length ? COLOR.warn : COLOR.ok}
+                  valueColor={availableStatus.containers.length === 0 ? CV.steelDim : containersOk < availableStatus.containers.length ? CV.warn : CV.ok}
                 />
               </div>
             )
@@ -328,16 +328,16 @@ export function HermesWarRoomSection({
               hasAlert={availableStatus.scheduledTasks.some(isTaskFailed)}
             >
               {availableStatus.scheduledTasks.length === 0
-                ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無排程任務資料</div>
+                ? <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>尚無排程任務資料</div>
                 : availableStatus.scheduledTasks.map(t => <HermesTaskRow key={t.name} {...t} />)}
             </CollapsibleSubPanel>
             <CollapsibleSubPanel title="近期活動" sub="部署 / 容器重建 / 備份">
               {activityError
-                ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>活動紀錄讀取失敗</div>
+                ? <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>活動紀錄讀取失敗</div>
                 : activity === null
-                  ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+                  ? <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>載入中…</div>
                   : activity.length === 0
-                    ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無活動紀錄</div>
+                    ? <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>尚無活動紀錄</div>
                     : activity.map(a => <HermesActivityRow key={a.id} {...a} />)}
             </CollapsibleSubPanel>
           </div>
@@ -348,7 +348,7 @@ export function HermesWarRoomSection({
               hasAlert={availableStatus.containers.some(isContainerFailed)}
             >
               {availableStatus.containers.length === 0
-                ? <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>尚無容器資料（宿主機的 host-stats 還沒回報，或回報已超過 30 分鐘）</div>
+                ? <div style={{ fontSize: '0.7rem', color: CV.steelDim, padding: '0.6rem 0' }}>尚無容器資料（宿主機的 host-stats 還沒回報，或回報已超過 30 分鐘）</div>
                 : availableStatus.containers.map(c => <HermesContainerRow key={c.name} {...c} />)}
             </CollapsibleSubPanel>
           </div>
@@ -359,9 +359,9 @@ export function HermesWarRoomSection({
             </CollapsibleSubPanel>
           </div>
 
-          <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, marginTop: '0.7rem', textAlign: 'right' }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, marginTop: '0.7rem', textAlign: 'right' }}>
             {availableStatus.computedAt ? formatMinutesAgo(availableStatus.computedAt) : ''}
-            {availableStatus.stale ? <span style={{ color: COLOR.warn, marginLeft: '8px' }}>· 資料已超過 30 分鐘未更新</span> : null}
+            {availableStatus.stale ? <span style={{ color: CV.warn, marginLeft: '8px' }}>· 資料已超過 30 分鐘未更新</span> : null}
           </div>
         </div>
       )}

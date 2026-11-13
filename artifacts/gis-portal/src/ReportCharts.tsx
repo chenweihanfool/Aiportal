@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { COLOR } from './theme'
+import { CV } from './theme'
 import type { PeriodReport } from './periodStats'
 import type { ReportScore } from './timelineApi'
 import { HALF_POINTS, IDEA_DONE_POINTS, SOCIAL_POINTS, lifeDetail, type DailyScore } from './dailyScore'
@@ -11,7 +11,7 @@ import {
 // 週報／月報的圖表帶（時間軸報告對話框的上半部）。圖全是 SVG／CSS，不引入圖表套件。
 // 資料由 periodStats.ts 依報告期間現算；旅遊只算有趟次檔的旅程（使用者 2026-10-22 裁定）。
 
-const PIN_COLOR = { visited: COLOR.ok, favorite: COLOR.amber, want: COLOR.steel } as const
+const PIN_COLOR = { visited: CV.ok, favorite: CV.amber, want: CV.steel } as const
 const PIN_LABEL = { visited: '吃過', favorite: '愛店', want: '想吃' } as const
 
 function Stat({ icon, title, value, unit, d, sub }: { icon: string; title: string; value: number; unit: string; d: Delta; sub?: string }) {

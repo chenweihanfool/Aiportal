@@ -1,6 +1,6 @@
 // 面板共用的小元件：區塊外框、鎖頭卡、公式說明、統計格、子面板、折線圖、雷達圖。
 import { useState } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT, alpha } from './theme'
 import { Gauge } from './Gauge'
 
 // ─────────────────────────────────────────────
@@ -13,20 +13,20 @@ export function Unit({ code, title, children, className }: { code?: string; titl
   return (
     <section className={className} style={{
       position: 'relative',
-      background: `linear-gradient(180deg, ${COLOR.panelRaised}, ${COLOR.panel})`,
-      border: `1px solid ${COLOR.line}`,
+      background: `linear-gradient(180deg, ${CV.panelRaised}, ${CV.panel})`,
+      border: `1px solid ${CV.line}`,
       borderRadius: '6px',
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 22px rgba(0,0,0,0.35)',
+      boxShadow: 'inset 0 1px 0 var(--c-wash), 0 8px 22px rgba(0,0,0,0.35)',
       padding: '1.6rem 1.7rem 1.5rem',
       marginBottom: '1.1rem',
     }}>
       <div style={{
         fontFamily: FONT.mono, fontSize: '0.66rem', letterSpacing: '0.2em', textTransform: 'uppercase',
-        color: COLOR.steelDim, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.2rem',
+        color: CV.steelDim, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.2rem',
       }}>
-        {code && <span style={{ color: COLOR.amberDim }}>{code}</span>}
-        <span style={{ fontFamily: FONT.body, fontSize: '0.72rem', letterSpacing: '0.08em', color: COLOR.steel, textTransform: 'none' }}>{title}</span>
-        <span style={{ flex: 1, height: '1px', background: COLOR.line }} />
+        {code && <span style={{ color: CV.amberDim }}>{code}</span>}
+        <span style={{ fontFamily: FONT.body, fontSize: '0.72rem', letterSpacing: '0.08em', color: CV.steel, textTransform: 'none' }}>{title}</span>
+        <span style={{ flex: 1, height: '1px', background: CV.line }} />
       </div>
       {children}
     </section>
@@ -35,7 +35,7 @@ export function Unit({ code, title, children, className }: { code?: string; titl
 
 export function SubLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: '0.6rem', fontFamily: FONT.mono }}>
+    <div style={{ fontSize: '0.68rem', color: CV.steelDim, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: '0.6rem', fontFamily: FONT.mono }}>
       {children}
     </div>
   )
@@ -48,15 +48,15 @@ export function LockedGaugeCard({ size = 'small', label, sub, onRequestUnlock }:
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
         padding: size === 'primary' ? '0 0 0.5rem' : '1rem 0.6rem 0.9rem',
-        background: size === 'primary' ? 'transparent' : COLOR.panelRaised,
-        border: size === 'primary' ? 'none' : `1px solid ${COLOR.line}`,
+        background: size === 'primary' ? 'transparent' : CV.panelRaised,
+        border: size === 'primary' ? 'none' : `1px solid ${CV.line}`,
         borderRadius: '5px', cursor: 'pointer',
       }}
     >
       <Gauge value={null} size={size} locked />
-      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: COLOR.ink }}>{label}</div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>{sub}</div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.68rem', color: COLOR.warn, letterSpacing: '0.05em' }}>🔒 解鎖後顯示</div>
+      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: CV.ink }}>{label}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>{sub}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.68rem', color: CV.warn, letterSpacing: '0.05em' }}>🔒 解鎖後顯示</div>
     </div>
   )
 }
@@ -77,7 +77,7 @@ export function FormulaToggle({
   return (
     <div
       onClick={onToggle}
-      style={{ marginTop: '0.6rem', textAlign: 'right', fontSize: '0.68rem', fontFamily: FONT.mono, color: COLOR.amberDim, cursor: 'pointer' }}
+      style={{ marginTop: '0.6rem', textAlign: 'right', fontSize: '0.68rem', fontFamily: FONT.mono, color: CV.amberDim, cursor: 'pointer' }}
     >
       {expanded ? labelExpanded : labelCollapsed}
     </div>
@@ -89,9 +89,9 @@ export function SupportStats({ items }: { items: Array<{ label: string; value: s
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.4rem 2rem' }}>
       {items.map(it => (
         <div key={it.label}>
-          <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}</div>
+          <div style={{ fontSize: '0.7rem', color: CV.steelDim, letterSpacing: '0.05em', marginBottom: '3px' }}>{it.label}</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontFamily: FONT.mono, fontSize: '1.05rem', fontWeight: 600, color: it.color ?? COLOR.ink, fontVariantNumeric: 'tabular-nums' }}>{it.value}</span>
+            <span style={{ fontFamily: FONT.mono, fontSize: '1.05rem', fontWeight: 600, color: it.color ?? CV.ink, fontVariantNumeric: 'tabular-nums' }}>{it.value}</span>
             {it.tier && <span style={{ fontSize: '0.66rem', fontWeight: 600, color: it.color }}>{it.tier}</span>}
           </div>
         </div>
@@ -104,11 +104,11 @@ export function FormulaPanel({ rows }: { rows: Array<{ label: string; formula?: 
   const withFormula = rows.filter((r): r is { label: string; formula: string } => !!r.formula)
   if (withFormula.length === 0) return null
   return (
-    <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: `1px dashed ${COLOR.line}`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ marginTop: '0.6rem', paddingTop: '0.7rem', borderTop: `1px dashed ${CV.line}`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {withFormula.map(r => (
         <div key={r.label} style={{ fontSize: '0.68rem' }}>
-          <div style={{ color: COLOR.steel, fontWeight: 600, marginBottom: '2px' }}>{r.label}</div>
-          <div style={{ color: COLOR.steelDim, lineHeight: 1.6 }}>{r.formula}</div>
+          <div style={{ color: CV.steel, fontWeight: 600, marginBottom: '2px' }}>{r.label}</div>
+          <div style={{ color: CV.steelDim, lineHeight: 1.6 }}>{r.formula}</div>
         </div>
       ))}
     </div>
@@ -117,10 +117,10 @@ export function FormulaPanel({ rows }: { rows: Array<{ label: string; formula?: 
 
 // Lightweight custom SVG line chart for 30-day trend panels — area fill +
 // line + faint value labels, same instrument-mono treatment as the gauges.
-export function TrendLineChart({ points, color = COLOR.amber, height = 90 }: { points: Array<{ date: string; value: number }>; color?: string; height?: number }) {
+export function TrendLineChart({ points, color = CV.amber, height = 90 }: { points: Array<{ date: string; value: number }>; color?: string; height?: number }) {
   if (points.length < 2) {
     return (
-      <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>
+      <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>
         還沒有足夠的歷史資料可畫趨勢線（目前 {points.length} 天，至少需要 2 天）——每天會自動多記一筆，過幾天回來看就有線了
       </div>
     )
@@ -146,12 +146,12 @@ export function TrendLineChart({ points, color = COLOR.amber, height = 90 }: { p
   return (
     <div>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-        <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke={COLOR.line} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+        <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke={CV.line} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
         <path d={areaPath} fill={color} fillOpacity={0.12} stroke="none" />
         <path d={linePath} fill="none" stroke={color} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
         <circle cx={last[0]} cy={last[1]} r={2} fill={color} vectorEffect="non-scaling-stroke" />
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.62rem', fontFamily: FONT.mono, color: COLOR.steelDim, marginTop: '4px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.62rem', fontFamily: FONT.mono, color: CV.steelDim, marginTop: '4px' }}>
         <span>{points[0]!.date}</span>
         <span>最低 {minV} · 最高 {maxV}</span>
         <span>{points[points.length - 1]!.date}</span>
@@ -190,23 +190,23 @@ export function LabeledRadarChart({
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0, overflow: 'visible' }}>
-      <polygon points={ringPoints(1)} fill="none" stroke={COLOR.line} strokeWidth={1} />
-      <polygon points={ringPoints(0.5)} fill="none" stroke={COLOR.line} strokeWidth={1} />
+      <polygon points={ringPoints(1)} fill="none" stroke={CV.line} strokeWidth={1} />
+      <polygon points={ringPoints(0.5)} fill="none" stroke={CV.line} strokeWidth={1} />
       {baselineFraction !== undefined && (
-        <polygon points={ringPoints(baselineFraction)} fill="none" stroke={COLOR.steel} strokeWidth={1.3} strokeDasharray="4 3" />
+        <polygon points={ringPoints(baselineFraction)} fill="none" stroke={CV.steel} strokeWidth={1.3} strokeDasharray="4 3" />
       )}
       {axes.map((_, i) => {
         const [x, y] = pointAt(i, r)
-        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={COLOR.line} strokeWidth={1} />
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={CV.line} strokeWidth={1} />
       })}
-      <polygon points={dataPoints} fill={`${color}33`} stroke={color} strokeWidth={2} />
+      <polygon points={dataPoints} fill={alpha(color, 20)} stroke={color} strokeWidth={2} />
       {axes.map((a, i) => {
         const ang = angleAt(i)
         const [x, y] = pointAt(i, r + 20)
         const cos = Math.cos(ang)
         const anchor = cos > 0.35 ? 'start' : cos < -0.35 ? 'end' : 'middle'
         return (
-          <text key={a.label} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fontSize="11" fontFamily={FONT.body} fill={COLOR.steel}>
+          <text key={a.label} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fontSize="11" fontFamily={FONT.body} fill={CV.steel}>
             {a.label}{a.value !== null ? ` ${Math.round(a.value)}` : ''}
           </text>
         )
@@ -217,20 +217,20 @@ export function LabeledRadarChart({
 
 export function StatCell({ label, value, sub, valueColor }: { label: string; value: string; sub?: string; valueColor?: string }) {
   return (
-    <div style={{ background: COLOR.panelRaised, padding: '0.85rem 1rem' }}>
-      <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: COLOR.steelDim, marginBottom: '0.35rem', display: 'block' }}>{label}</span>
-      <span style={{ fontFamily: FONT.mono, fontSize: '1.3rem', fontWeight: 600, color: valueColor ?? COLOR.ink, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-      {sub && <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, marginTop: '2px' }}>{sub}</div>}
+    <div style={{ background: CV.panelRaised, padding: '0.85rem 1rem' }}>
+      <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: CV.steelDim, marginBottom: '0.35rem', display: 'block' }}>{label}</span>
+      <span style={{ fontFamily: FONT.mono, fontSize: '1.3rem', fontWeight: 600, color: valueColor ?? CV.ink, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      {sub && <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, marginTop: '2px' }}>{sub}</div>}
     </div>
   )
 }
 export function SubPanel({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
   return (
     <div style={{
-      background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px', padding: '1rem 1.1rem',
+      background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px', padding: '1rem 1.1rem',
     }}>
-      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: COLOR.ink, marginBottom: '2px' }}>{title}</div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, marginBottom: '0.7rem' }}>{sub}</div>
+      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: CV.ink, marginBottom: '2px' }}>{title}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, marginBottom: '0.7rem' }}>{sub}</div>
       {children}
     </div>
   )
@@ -248,20 +248,20 @@ export function CollapsibleSubPanel({
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div style={{
-      background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px', padding: '1rem 1.1rem',
+      background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px', padding: '1rem 1.1rem',
     }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: COLOR.ink }}>{title}</span>
+        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: CV.ink }}>{title}</span>
         {hasAlert && (
           <span
             title="有異常狀況，建議展開查看"
-            style={{ width: '7px', height: '7px', borderRadius: '50%', background: COLOR.crit, boxShadow: `0 0 5px ${COLOR.crit}`, flexShrink: 0 }}
+            style={{ width: '7px', height: '7px', borderRadius: '50%', background: CV.crit, boxShadow: `0 0 5px ${CV.crit}`, flexShrink: 0 }}
           />
         )}
         <span style={{ flex: 1 }} />
-        <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', color: COLOR.amberDim, fontSize: '0.7rem' }}>▶</span>
+        <span style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', color: CV.amberDim, fontSize: '0.7rem' }}>▶</span>
       </div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, marginTop: '2px', marginBottom: open ? '0.7rem' : 0 }}>{sub}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, marginTop: '2px', marginBottom: open ? '0.7rem' : 0 }}>{sub}</div>
       {open && children}
     </div>
   )

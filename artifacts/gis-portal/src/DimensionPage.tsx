@@ -8,7 +8,7 @@ import { EXPECTED_EVERY_MIN, blockState, buildDimensionHeatmap, dimensionSeries,
 import { YearHeat } from './HomeSections'
 import { Skeleton, StateFrame } from './StateFrame'
 import { TaskGantt } from './TaskGantt'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 
 // 面向頁（#dim/<key>）：從首頁點某個面向進來，看這一個面向自己的東西——
 // 現在的分數與權重、近 30／90 天走勢與統計、這個分數怎麼來（原始數據與算法）、相關連結。
@@ -82,7 +82,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
   if (!dim) {
     return (
       <Shell title="面向" dimKey={dimKey}>
-        <div className="dp-body"><div className="dp-wrap"><p className="hm-note">找不到這個面向。<a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = '' }} style={{ color: COLOR.amber }}>回首頁</a></p></div></div>
+        <div className="dp-body"><div className="dp-wrap"><p className="hm-note">找不到這個面向。<a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = '' }} style={{ color: CV.amber }}>回首頁</a></p></div></div>
       </Shell>
     )
   }
@@ -109,7 +109,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                         </div>
                         <div className="dp-meta">
                           <span className="dp-tone" style={{ color: tone.color }}>{tone.label}</span>
-                          {delta && <span className="dp-delta" title="與前一個有資料的日子相比" style={{ color: (series?.delta ?? 0) > 0 ? COLOR.ok : (series?.delta ?? 0) < 0 ? COLOR.concern : COLOR.steelDim }}>{delta}</span>}
+                          {delta && <span className="dp-delta" title="與前一個有資料的日子相比" style={{ color: (series?.delta ?? 0) > 0 ? CV.ok : (series?.delta ?? 0) < 0 ? CV.concern : CV.steelDim }}>{delta}</span>}
                           <span className="dp-wt">權重 {row.weightPct}%・貢獻 {row.points ?? '—'} 分</span>
                         </div>
                       </div>
@@ -138,7 +138,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                         <div><dt>平均</dt><dd>{stats.avg}</dd></div>
                         <div><dt>最高</dt><dd>{stats.max.value}<small>{stats.max.date.slice(5)}</small></dd></div>
                         <div><dt>最低</dt><dd>{stats.min.value}<small>{stats.min.date.slice(5)}</small></dd></div>
-                        <div><dt>區間變化</dt><dd style={{ color: stats.change === null ? undefined : stats.change > 0 ? COLOR.ok : stats.change < 0 ? COLOR.concern : undefined }}>{stats.change === null ? '—' : stats.change > 0 ? `+${stats.change}` : String(stats.change)}<small>{stats.firstDate.slice(5)} 起</small></dd></div>
+                        <div><dt>區間變化</dt><dd style={{ color: stats.change === null ? undefined : stats.change > 0 ? CV.ok : stats.change < 0 ? CV.concern : undefined }}>{stats.change === null ? '—' : stats.change > 0 ? `+${stats.change}` : String(stats.change)}<small>{stats.firstDate.slice(5)} 起</small></dd></div>
                       </dl>
                       <p className="dp-note">有資料 {stats.count} 天；沒有資料的日子斷線，不補 0。</p>
                     </>
@@ -208,9 +208,9 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                   <StateFrame status={trendSt} source="幸福指數歷史" onRequestUnlock={onRequestUnlock} onRetry={history.reload} skeleton={<Skeleton lines={4} />} className="dp-recent-frame">
                     {digest ? (
                       <dl className="dp-kv">
-                        <div><dt>近 7 天平均</dt><dd>{digest.last7 ?? '—'}{digest.weekChange !== null && <small style={{ color: digest.weekChange > 0 ? COLOR.ok : digest.weekChange < 0 ? COLOR.concern : undefined }}>{digest.weekChange > 0 ? `▲ ${digest.weekChange}` : digest.weekChange < 0 ? `▼ ${-digest.weekChange}` : '持平'}　前 7 天 {digest.prev7}</small>}</dd></div>
+                        <div><dt>近 7 天平均</dt><dd>{digest.last7 ?? '—'}{digest.weekChange !== null && <small style={{ color: digest.weekChange > 0 ? CV.ok : digest.weekChange < 0 ? CV.concern : undefined }}>{digest.weekChange > 0 ? `▲ ${digest.weekChange}` : digest.weekChange < 0 ? `▼ ${-digest.weekChange}` : '持平'}　前 7 天 {digest.prev7}</small>}</dd></div>
                         <div><dt>最新一天在近 90 天</dt><dd>第 {digest.rank.pos} 高<small>共 {digest.rank.of} 天・{digest.rank.date.slice(5)} 為 {digest.rank.value}</small></dd></div>
-                        <div><dt>連續{digest.streak.side === 'above' ? '高於' : '低於'}平均</dt><dd style={{ color: digest.streak.side === 'above' ? COLOR.ok : COLOR.concern }}>{digest.streak.days} 天<small>90 天平均 {digest.avg90}</small></dd></div>
+                        <div><dt>連續{digest.streak.side === 'above' ? '高於' : '低於'}平均</dt><dd style={{ color: digest.streak.side === 'above' ? CV.ok : CV.concern }}>{digest.streak.days} 天<small>90 天平均 {digest.avg90}</small></dd></div>
                         {digest.weekday && <div><dt>星期幾規律</dt><dd className="dp-kv-wd">週{digest.weekday.best.day}最高<small>{digest.weekday.best.avg}・週{digest.weekday.worst.day}最低 {digest.weekday.worst.avg}</small></dd></div>}
                       </dl>
                     ) : (
@@ -245,7 +245,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
 
 function Shell({ title, dimKey, children }: { title: string; dimKey: string; children: ReactNode }) {
   return (
-    <div className="dp-page" style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: COLOR.ink, fontFamily: FONT.body }}>
+    <div className="dp-page" style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
       <header className="dp-head">
         <a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); window.location.hash = '' }}>← 首頁</a>
         <nav className="dp-nav" aria-label="六個面向">
@@ -288,8 +288,8 @@ function DimChart({ series, color, avg }: { series: DimSeries; color: string; av
     <svg ref={ref} className="dp-chart" viewBox={`0 0 ${W} ${H}`} style={{ aspectRatio: `${W} / ${H}` }} role="img" aria-label={`近 ${series.days.length} 天走勢，最新 ${Math.round(series.last.value)} 分`} data-testid="dp-chart">
       {[g.hi, (g.hi + g.lo) / 2, g.lo].map((v, i) => (
         <g key={i}>
-          <line x1={PL} x2={W - PR} y1={yOf(v)} y2={yOf(v)} stroke="#2a2d36" strokeWidth={1} />
-          <text x={PL - 6} y={yOf(v) + 3} fontSize="10" textAnchor="end" fill="#5b6270" fontFamily="IBM Plex Mono, monospace">{Math.round(v)}</text>
+          <line x1={PL} x2={W - PR} y1={yOf(v)} y2={yOf(v)} stroke={CV.line} strokeWidth={1} />
+          <text x={PL - 6} y={yOf(v) + 3} fontSize="10" textAnchor="end" fill={CV.steelDim} fontFamily="IBM Plex Mono, monospace">{Math.round(v)}</text>
         </g>
       ))}
       <line x1={PL} x2={W - PR} y1={yOf(avg)} y2={yOf(avg)} stroke={color} strokeOpacity={0.55} strokeWidth={1} strokeDasharray="4 4" />
@@ -297,9 +297,9 @@ function DimChart({ series, color, avg }: { series: DimSeries; color: string; av
         <polyline key={i} points={ln.map((p) => `${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       ))}
       {g.dots.map((p, i) => <circle key={i} cx={x(p.x)} cy={y(p.y)} r={2.5} fill={color} />)}
-      <circle cx={x(g.end.x)} cy={y(g.end.y)} r={4.5} fill={color} stroke="#1a1c22" strokeWidth={2} />
-      <text x={PL} y={H - 6} fontSize="10" fill="#5b6270" fontFamily="IBM Plex Mono, monospace">{first.slice(5)}</text>
-      <text x={W - PR} y={H - 6} fontSize="10" textAnchor="end" fill="#5b6270" fontFamily="IBM Plex Mono, monospace">{lastDay.slice(5)}</text>
+      <circle cx={x(g.end.x)} cy={y(g.end.y)} r={4.5} fill={color} stroke={CV.panel} strokeWidth={2} />
+      <text x={PL} y={H - 6} fontSize="10" fill={CV.steelDim} fontFamily="IBM Plex Mono, monospace">{first.slice(5)}</text>
+      <text x={W - PR} y={H - 6} fontSize="10" textAnchor="end" fill={CV.steelDim} fontFamily="IBM Plex Mono, monospace">{lastDay.slice(5)}</text>
     </svg>
   )
 }

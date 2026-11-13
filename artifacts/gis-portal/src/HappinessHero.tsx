@@ -1,6 +1,6 @@
 // 翰翰仔幸福指數主卡（舊版首頁與幸福指數抽屜用）。
 import { useEffect, useState } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import { DIMENSIONS } from './dimensions'
 import { Gauge } from './Gauge'
 import { formatMinutesAgo, hhiTone } from './format'
@@ -54,7 +54,7 @@ export function HappinessHeroCard({
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
         <Gauge value={null} size="primary" />
-        <div style={{ fontSize: '0.85rem', color: COLOR.steelDim }}>資料準備中…</div>
+        <div style={{ fontSize: '0.85rem', color: CV.steelDim }}>資料準備中…</div>
       </div>
     )
   }
@@ -74,7 +74,7 @@ export function HappinessHeroCard({
           <Gauge value={displayedScore} size="primary" color={tone.color} />
           <div style={{ fontSize: '0.95rem', fontWeight: 600, color: tone.color }}>{tone.label}</div>
           {!isSnapshotFinal && (
-            <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.warn, border: `1px solid ${COLOR.warn}`, borderRadius: '999px', padding: '1px 8px' }}>今日暫定</span>
+            <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.warn, border: `1px solid ${CV.warn}`, borderRadius: '999px', padding: '1px 8px' }}>今日暫定</span>
           )}
         </div>
         <LabeledRadarChart axes={radarAxes} maxValue={100} size={230} color={tone.color} />
@@ -82,15 +82,15 @@ export function HappinessHeroCard({
 
       {/* 權重佔比——雷達圖只畫得出分數，這行補上每個維度實際佔幸福指數的
           百分比，雷達圖看不出來的資訊。 */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem 1.2rem', justifyContent: 'center', marginTop: '1rem', fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem 1.2rem', justifyContent: 'center', marginTop: '1rem', fontFamily: FONT.mono, fontSize: '0.66rem', color: CV.steelDim }}>
         {contributions.map(c => (
-          <span key={c.label}>{c.label} <span style={{ color: COLOR.steel }}>{c.weightPct}%</span></span>
+          <span key={c.label}>{c.label} <span style={{ color: CV.steel }}>{c.weightPct}%</span></span>
         ))}
       </div>
 
       {weakestComponent && (
-        <div style={{ fontSize: '0.78rem', color: COLOR.steel, marginTop: '1rem' }}>
-          目前最需要照顧：<span style={{ color: COLOR.warn, fontWeight: 600 }}>{weakestComponent}</span>
+        <div style={{ fontSize: '0.78rem', color: CV.steel, marginTop: '1rem' }}>
+          目前最需要照顧：<span style={{ color: CV.warn, fontWeight: 600 }}>{weakestComponent}</span>
         </div>
       )}
 
@@ -114,16 +114,16 @@ export function HappinessHeroCard({
         }
         if (rows.length === 0) return null
         return (
-          <div style={{ marginTop: '1rem', paddingTop: '0.9rem', borderTop: `1px solid ${COLOR.line}` }}>
+          <div style={{ marginTop: '1rem', paddingTop: '0.9rem', borderTop: `1px solid ${CV.line}` }}>
             <SubLabel>近 30 天洞察</SubLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {rows.map(r => <div key={r} style={{ fontSize: '0.76rem', color: COLOR.steel, lineHeight: 1.6 }}>{r}</div>)}
+              {rows.map(r => <div key={r} style={{ fontSize: '0.76rem', color: CV.steel, lineHeight: 1.6 }}>{r}</div>)}
             </div>
           </div>
         )
       })()}
 
-      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `1px dashed ${COLOR.line}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `1px dashed ${CV.line}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {[
           ['基礎分（加權平均）', baseScore !== null ? baseScore.toFixed(2) : '—'],
           ['最弱項分數', weakestScore !== null ? weakestScore.toFixed(2) : '—'],
@@ -131,29 +131,29 @@ export function HappinessHeroCard({
           ['平滑後（目前顯示值）', String(displayedScore)],
         ].map(([label, value]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-            <span style={{ color: COLOR.steelDim }}>{label}</span>
-            <span style={{ color: COLOR.steel, fontWeight: 500, fontFamily: FONT.mono }}>{value}</span>
+            <span style={{ color: CV.steelDim }}>{label}</span>
+            <span style={{ color: CV.steel, fontWeight: 500, fontFamily: FONT.mono }}>{value}</span>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.7rem', marginTop: '0.8rem', borderTop: `1px solid ${COLOR.line}` }}>
-        <span style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steelDim }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.7rem', marginTop: '0.8rem', borderTop: `1px solid ${CV.line}` }}>
+        <span style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: CV.steelDim }}>
           {formatMinutesAgo(summary?.fetchedAt ?? null)}
-          {usingStaleData ? <span style={{ color: COLOR.warn, marginLeft: '8px' }}>· 部分資料為最近可用值</span> : null}
+          {usingStaleData ? <span style={{ color: CV.warn, marginLeft: '8px' }}>· 部分資料為最近可用值</span> : null}
         </span>
-        <span onClick={() => setExpanded(x => !x)} style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.amberDim, cursor: 'pointer' }}>
+        <span onClick={() => setExpanded(x => !x)} style={{ fontFamily: FONT.mono, fontSize: '0.66rem', color: CV.amberDim, cursor: 'pointer' }}>
           {expanded ? '收起趨勢圖 ▲' : '歷史趨勢圖 ▼'}
         </span>
       </div>
 
       {expanded && (
-        <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: `1px dashed ${COLOR.line}` }}>
+        <div style={{ marginTop: '0.6rem', paddingTop: '0.8rem', borderTop: `1px dashed ${CV.line}` }}>
           <SubLabel>近 30 天趨勢（每日顯示值）</SubLabel>
           {historyError ? (
-            <div style={{ fontSize: '0.72rem', color: COLOR.steelDim }}>趨勢資料讀取失敗</div>
+            <div style={{ fontSize: '0.72rem', color: CV.steelDim }}>趨勢資料讀取失敗</div>
           ) : history === null ? (
-            <div style={{ fontSize: '0.72rem', color: COLOR.steelDim }}>載入中…</div>
+            <div style={{ fontSize: '0.72rem', color: CV.steelDim }}>載入中…</div>
           ) : (
             <TrendLineChart points={history.map(h => ({ date: h.date, value: h.displayedScore }))} color={tone.color} />
           )}

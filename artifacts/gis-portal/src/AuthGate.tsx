@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import { GOOGLE_SESSION_SENTINEL, interpretMe, loginErrorMessage, type AuthStatus } from './authView'
 
 // 整站入口：先問 /api/auth/me。
@@ -49,7 +49,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [])
 
-  if (status.kind === 'loading') return <div style={{ minHeight: '100vh', background: COLOR.panelDeep }} />
+  if (status.kind === 'loading') return <div style={{ minHeight: '100vh', background: CV.panelDeep }} />
   if (status.kind === 'login-required') return <LoginPage configured={status.configured} error={error} />
 
   const logout = async () => {
@@ -69,7 +69,7 @@ export function AccountBadge() {
   const { status, logout } = useContext(AuthContext)
   if (status.kind === 'loading' || status.kind === 'login-required') return null
   return (
-    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'flex-end', maxWidth: '100%', fontFamily: FONT.mono, fontSize: '0.66rem', color: COLOR.steel }}>
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'flex-end', maxWidth: '100%', fontFamily: FONT.mono, fontSize: '0.66rem', color: CV.steel }}>
       {status.kind === 'in'
         ? (<>
             <span title={status.email} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>👤 {status.email}</span>
@@ -80,19 +80,19 @@ export function AccountBadge() {
   )
 }
 
-const linkBtn = { background: 'none', border: 'none', padding: 0, color: COLOR.amberDim, cursor: 'pointer', font: 'inherit' } as const
+const linkBtn = { background: 'none', border: 'none', padding: 0, color: CV.amberDim, cursor: 'pointer', font: 'inherit' } as const
 
 function LoginPage({ configured, error }: { configured: boolean; error: string | null }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLOR.panelDeep, padding: '16px' }}>
-      <div style={{ background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: 8, padding: '2.2rem 2.4rem', width: 'min(360px, 100%)', color: COLOR.ink, fontFamily: FONT.body, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.amberDim, letterSpacing: '0.2em', marginBottom: 14 }}>🔒 PERSONAL PORTAL</div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: CV.panelDeep, padding: '16px' }}>
+      <div style={{ background: CV.panel, border: `1px solid ${CV.line}`, borderRadius: 8, padding: '2.2rem 2.4rem', width: 'min(360px, 100%)', color: CV.ink, fontFamily: FONT.body, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.amberDim, letterSpacing: '0.2em', marginBottom: 14 }}>🔒 PERSONAL PORTAL</div>
         <div style={{ fontSize: '1.15rem', fontWeight: 600, marginBottom: 8 }}>需要登入</div>
-        <div style={{ fontSize: '0.75rem', color: COLOR.steelDim, marginBottom: '1.4rem', lineHeight: 1.6 }}>這是個人使用、不公開的入口網站。請以白名單內的 Google 帳號登入。</div>
-        {error && <div role="alert" style={{ fontSize: '0.74rem', color: COLOR.crit, marginBottom: 14, lineHeight: 1.6 }}>{error}</div>}
+        <div style={{ fontSize: '0.75rem', color: CV.steelDim, marginBottom: '1.4rem', lineHeight: 1.6 }}>這是個人使用、不公開的入口網站。請以白名單內的 Google 帳號登入。</div>
+        {error && <div role="alert" style={{ fontSize: '0.74rem', color: CV.crit, marginBottom: 14, lineHeight: 1.6 }}>{error}</div>}
         {configured
-          ? <a href={loginUrl()} style={{ display: 'block', textAlign: 'center', padding: '0.7rem', background: 'rgba(245,166,35,0.1)', border: `1px solid ${COLOR.amberDim}`, borderRadius: 5, color: COLOR.amber, fontSize: '0.84rem', fontWeight: 600, textDecoration: 'none' }}>以 Google 帳號登入</a>
-          : <div style={{ fontSize: '0.74rem', color: COLOR.warn, lineHeight: 1.6 }}>伺服器尚未設定 Google 登入，請管理者檢查 .env（見 docs/google-login.md）。</div>}
+          ? <a href={loginUrl()} style={{ display: 'block', textAlign: 'center', padding: '0.7rem', background: 'color-mix(in srgb, var(--c-accent) 10%, transparent)', border: `1px solid ${CV.amberDim}`, borderRadius: 5, color: CV.amber, fontSize: '0.84rem', fontWeight: 600, textDecoration: 'none' }}>以 Google 帳號登入</a>
+          : <div style={{ fontSize: '0.74rem', color: CV.warn, lineHeight: 1.6 }}>伺服器尚未設定 Google 登入，請管理者檢查 .env（見 docs/google-login.md）。</div>}
       </div>
     </div>
   )

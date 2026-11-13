@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FoodPhoto } from './foodMap'
 import { AuthImage } from './AuthImage'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 
 // ─────────────────────────────────────────────
 // 相片牆＋燈箱（美食地圖與遊記共用）。原本在 FoodMapView.tsx 裡叫 Gallery，抽出來後行為不變。
@@ -43,7 +43,7 @@ export function PhotoGallery({ photos, label, resetKey }: { photos: FoodPhoto[];
           </div>
           <div className="fm-lightbox-cap" onClick={e => e.stopPropagation()}>
             {cur.caption ?? label}{cur.takenAt ? ` · ${cur.takenAt}` : ''} · {open! + 1}/{photos.length}
-            <button type="button" onClick={() => setOpen(null)} style={{ marginLeft: 12, fontFamily: FONT.mono, fontSize: '0.68rem', padding: '4px 10px', borderRadius: 999, cursor: 'pointer', color: COLOR.steel, background: 'transparent', border: `1px solid ${COLOR.steel}`, whiteSpace: 'nowrap' }}>關閉</button>
+            <button type="button" onClick={() => setOpen(null)} style={{ marginLeft: 12, fontFamily: FONT.mono, fontSize: '0.68rem', padding: '4px 10px', borderRadius: 999, cursor: 'pointer', color: CV.steel, background: 'transparent', border: `1px solid ${CV.steel}`, whiteSpace: 'nowrap' }}>關閉</button>
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 // 付費服務卡：Ollama、Claude Pro、JEV、Tavily、DeepSeek 一列一個，能自動讀到額度的直接顯示，其餘放連結。
 // 首頁是一條細列（點開看詳情），詳情在抽屜：每個服務的用量與連結，下面接 Ollama 的走勢與「更新餘額」表單。
-import { COLOR } from './theme'
+import { CV } from './theme'
 import { HomeCard } from './HomeCard'
 import { StateFrame, Skeleton } from './StateFrame'
 import type { BlockStatus } from './homeView'
@@ -9,7 +9,7 @@ import { buildServiceRows, type ServiceRow, type ServiceTone } from './paidServi
 import type { UsageData } from './boardApi'
 import type { PaidServicesData } from './paidServicesView'
 
-const TONE: Record<ServiceTone, string> = { ok: COLOR.ok, warn: COLOR.warn, crit: COLOR.crit, none: COLOR.steelDim }
+const TONE: Record<ServiceTone, string> = { ok: CV.ok, warn: CV.warn, crit: CV.crit, none: CV.steelDim }
 
 export function PaidServicesSection({ st, usage, paid, onOpen, onRequestUnlock }: {
   st: BlockStatus
