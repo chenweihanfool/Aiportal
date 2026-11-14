@@ -16,7 +16,7 @@ import { AdminAuthModal, AdminPanel, PasswordModal } from './Dialogs'
 import { DimensionDetail, dimensionLinks } from './DimensionDetail'
 import { InstrumentPanelView } from './InstrumentPanelView'
 import { hhiTone } from './format'
-import { UNLOCK_KEY, apiFetchDashboard, apiFetchSites, type DashboardSummary, type SiteData } from './portalApi'
+import { apiFetchDashboard, apiFetchSites, clearUnlock, readUnlock, type DashboardSummary, type SiteData } from './portalApi'
 import './portal.css'
 
 /** #trips/<id> 的 id（網址編碼還原；格式壞掉就當作找不到） */
@@ -29,7 +29,7 @@ function tripIdFromHash(hash: string): string {
 export default function App() {
   const [sites, setSites] = useState<SiteData[]>([])
   const [dashboard, setDashboard] = useState<DashboardSummary[]>([])
-  const [unlockedPassword, setUnlockedPassword] = useState<string | null>(() => localStorage.getItem(UNLOCK_KEY))
+  const [unlockedPassword, setUnlockedPassword] = useState<string | null>(() => readUnlock())
   const unlocked = !!unlockedPassword
   const [modal, setModal] = useState<{ visible: boolean; pendingUrl: string }>({ visible: false, pendingUrl: '' })
   const [adminAuth, setAdminAuth] = useState(false)
@@ -67,7 +67,7 @@ export default function App() {
       .then(({ summaries, unlocked }) => {
         setDashboard(summaries)
         if (unlockedPassword && !unlocked) {
-          localStorage.removeItem(UNLOCK_KEY)
+          clearUnlock()
           setUnlockedPassword(null)
         }
       })

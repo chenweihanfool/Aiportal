@@ -9,6 +9,21 @@ import { type DiskAlertLevel, type DiskForecastInfo, type StorageItem } from './
 // 的只是底下存的憑證種類（見 apiVerifyPassword 的說明）。
 export const UNLOCK_KEY = 'portal_unlocked'
 
+// 瀏覽器封鎖網站儲存（例如某些無痕模式）時 localStorage 會丟例外；全站讀寫
+// 解鎖狀態一律走這三支，讀不到＝視為未解鎖、寫不進＝這次仍解鎖成功（只是
+// 下次要重來），不讓例外把整個頁面打掉。
+export function readUnlock(): string | null {
+  try { return localStorage.getItem(UNLOCK_KEY) } catch { return null }
+}
+
+export function writeUnlock(v: string): void {
+  try { localStorage.setItem(UNLOCK_KEY, v) } catch { /* 寫不進去就只在這次有效 */ }
+}
+
+export function clearUnlock(): void {
+  try { localStorage.removeItem(UNLOCK_KEY) } catch { /* 清不掉也只影響下次解鎖與否 */ }
+}
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
