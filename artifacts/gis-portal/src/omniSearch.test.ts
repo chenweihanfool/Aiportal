@@ -236,6 +236,12 @@ describe('倉庫清單與 meta', () => {
     const hits = recentRepoHits([repo('good', '2026-01-01'), repo('evil', '2026-02-01', {}, 'javascript:alert(1)')])
     expect(hits.map((h) => h.id)).toEqual(['good'])
   })
+  it('recentRepoHits：先略過壞網址再取前 10（壞的排最前也仍湊滿 10）', () => {
+    const many = Array.from({ length: 11 }, (_, i) => repo(`r${i}`, `2026-10-${String(i + 1).padStart(2, '0')}`))
+    const hits = recentRepoHits([repo('evil', '2026-11-30', {}, 'javascript:alert(1)'), ...many])
+    expect(hits).toHaveLength(REPO_LIST_MAX)
+    expect(hits.map((h) => h.id)).not.toContain('evil')
+  })
 })
 
 describe('highlightSegments', () => {

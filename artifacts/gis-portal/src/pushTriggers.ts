@@ -206,6 +206,6 @@ export interface PinTarget { targetKind: PinTargetKind; targetId: string; title:
 export function pinTargetFor(item: { kind: SearchKind; id: string; title: string }): PinTarget | null {
   const a = openAction(item.kind, item.id)
   const href = a.type === 'hash' ? `#${a.hash}` : a.type === 'dossier' ? dossierHref(a.kind, a.name) : null
-  if (!href || item.kind === 'tool' || item.kind === 'diary') return null
+  if (!href || item.kind === 'tool' || item.kind === 'diary' || item.kind === 'repo') return null
   return { targetKind: item.kind, targetId: item.id, title: item.title, href }
 }

@@ -162,10 +162,10 @@ export function recentRepoHits(repos: readonly RepoItem[], max = REPO_LIST_MAX):
     return Number.isFinite(ms) ? ms : -Infinity
   }
   return [...repos]
+    .filter((r) => typeof r.url === 'string' && HTTP_RE.test(r.url))
     .sort((a, b) => t(b) - t(a) || a.name.localeCompare(b.name))
     .slice(0, max)
     .flatMap((r): SearchHit[] => {
-      if (typeof r.url !== 'string' || !HTTP_RE.test(r.url)) return []
       const date = r.pushedAt ? r.pushedAt.slice(0, 10) : null
       return [{
         kind: 'repo', id: r.name, title: r.name, snippet: r.description ?? '', date,
