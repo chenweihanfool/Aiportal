@@ -151,6 +151,9 @@ describe('開啟去處', () => {
   })
   it('每個 kind 都有中文標籤', () => {
     for (const k of KIND_ORDER) expect(kindLabel(k)).not.toBe('')
+    expect(kindLabel('diary')).toBe('日記')
+    expect(KIND_ORDER.indexOf('diary')).toBe(KIND_ORDER.indexOf('source') + 1)
+    expect(openAction('diary', '2026-03-09')).toEqual({ type: 'expand' })
   })
 })
 

@@ -1,4 +1,6 @@
 import { MarkdownView } from './MarkdownView'
+import { PinButton } from './PinButton'
+import { pinTargetFor } from './pushTriggers'
 import { CTX_H, CTX_W, contextLayout, ctxLabel, highlightSegments, kindLabel, openAction, type PreviewRelated, type SearchKind, type SearchPreview } from './omniSearch'
 
 // 全站搜尋的右側閱讀面板（類型、標題、一句話、重點、脈絡圖、出處、開啟）。狀態都由 OmniSearch.tsx 傳進來。
@@ -45,7 +47,7 @@ function ContextMap({ related, onJump }: { related: PreviewRelated[]; onJump: (r
   )
 }
 
-export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, onOpen, onJump }: {
+export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, onOpen, onJump, pw }: {
   item: ReaderItem | null
   preview: PreviewState | null
   q: string
@@ -53,6 +55,8 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
   onToggleExpand: () => void
   onOpen: () => void
   onJump: (r: PreviewRelated) => void
+  /** 解鎖後的密碼；有給才會顯示 📌 需要時提醒我 */
+  pw?: string | null
 }) {
   if (!item) return <div className="om-none om-lb">NO PREVIEW</div>
   const data = preview && preview.kind === item.kind && preview.id === item.id ? preview : null
@@ -88,6 +92,7 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
         {p?.bodyMd != null && !inPanel && (
           <button type="button" className="om-gh" onClick={onToggleExpand}>{expanded ? '收合全文' : '展開全文'}</button>
         )}
+        <PinButton pw={pw ?? null} target={pinTargetFor(item)} />
         {item.kind === 'topic' && <a className="om-gh" href={`#knowledge/${encodeURIComponent(item.id)}`}>✎ 這頁有錯</a>}
       </div>
       {expanded && p?.bodyMd != null && (

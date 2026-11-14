@@ -12,6 +12,7 @@ import {
   relatedRanked, relatedTopics, type DossierKind, type DossierRoute,
 } from './dossier'
 import { DossierIndex } from './DossierIndex'
+import { PinButton } from './PinButton'
 import './dossier.css'
 
 const go = (hash: string) => { window.location.hash = hash }
@@ -34,7 +35,7 @@ function useGraph(pw: string | null): { load: Load; retry: () => void } {
   return { load, retry: () => setTick(n => n + 1) }
 }
 
-function EventRow({ id, date, title, pw }: { id: string; date: string; title: string; pw: string }) {
+function EventRow({ id, date, title, pw, diary }: { id: string; date: string; title: string; pw: string; diary?: boolean }) {
   const [open, setOpen] = useState(false)
   const [prev, setPrev] = useState<{ state: 'loading' | 'ok' | 'missing' | 'error'; data: SearchPreview | null }>({ state: 'loading', data: null })
   useEffect(() => {
@@ -51,6 +52,7 @@ function EventRow({ id, date, title, pw }: { id: string; date: string; title: st
       <button type="button" className="dz-ev-btn" aria-expanded={open} onClick={() => setOpen(o => !o)}>
         <time>{date ? date.slice(5) : '日期不明'}</time><span>{title}</span>
       </button>
+      {diary && <DiaryPeek date={date} pw={pw} />}
       {open && (
         <div className="dz-ev-body">
           {prev.state === 'loading' && '讀取中…'}
@@ -60,6 +62,34 @@ function EventRow({ id, date, title, pw }: { id: string; date: string; title: st
         </div>
       )}
     </li>
+  )
+}
+
+/** 時間軸某天的日記：點了在該處內聯展開；404 顯示「那天沒有日記」 */
+function DiaryPeek({ date, pw }: { date: string; pw: string }) {
+  const [open, setOpen] = useState(false)
+  const [prev, setPrev] = useState<{ state: 'loading' | 'ok' | 'missing' | 'error'; data: SearchPreview | null }>({ state: 'loading', data: null })
+  useEffect(() => {
+    if (!open) return
+    const ctl = new AbortController()
+    setPrev({ state: 'loading', data: null })
+    apiSearchPreview(pw, 'diary', date, ctl.signal)
+      .then(d => { if (!ctl.signal.aborted) setPrev({ state: d ? 'ok' : 'missing', data: d }) })
+      .catch(() => { if (!ctl.signal.aborted) setPrev({ state: 'error', data: null }) })
+    return () => ctl.abort()
+  }, [open, pw, date])
+  return (
+    <>
+      <button type="button" className="dz-diary-btn" aria-expanded={open} onClick={() => setOpen(o => !o)}>看當天日記</button>
+      {open && (
+        <div className="dz-diary" role="status">
+          {prev.state === 'loading' && '讀取中…'}
+          {prev.state === 'missing' && '那天沒有日記'}
+          {prev.state === 'error' && '日記讀取失敗。'}
+          {prev.state === 'ok' && prev.data && (prev.data.bodyMd ? <MarkdownView text={prev.data.bodyMd} /> : <span>{prev.data.one || prev.data.title}</span>)}
+        </div>
+      )}
+    </>
   )
 }
 
@@ -85,6 +115,9 @@ function Dossier({ index, kind, name, pw, nudges }: { index: GraphIndex; kind: D
         <div className="dz-stats">
           {stat(sum.events, '事件數')}{stat(sum.first ?? '—', '首次')}{stat(sum.last ?? '—', '最近')}{stat(sum.people, '相關人數')}
         </div>
+        <div className="dz-pinrow">
+          <PinButton pw={pw} target={{ targetKind: kind, targetId: name, title: name, href: dossierHref(kind, name) }} />
+        </div>
       </header>
       <div className="dz-cols">
         <section className="dz-card" aria-label="時間軸">
@@ -97,7 +130,7 @@ function Dossier({ index, kind, name, pw, nudges }: { index: GraphIndex; kind: D
                 <button type="button" className="dz-mhead" aria-expanded={open} onClick={() => setOpenMonths(s => ({ ...s, [g.ym]: !open }))}>
                   {g.ym || '日期不明'} <span>（{g.n} 件）{open ? '' : ' ▸'}</span>
                 </button>
-                {open && <ul className="dz-evs">{g.rows.map(r => <EventRow key={r.id} id={r.id} date={r.date} title={r.title} pw={pw} />)}</ul>}
+                {open && <ul className="dz-evs">{g.rows.map((r, i) => <EventRow key={r.id} id={r.id} date={r.date} title={r.title} pw={pw} diary={/^\d{4}-\d{2}-\d{2}$/.test(r.date) && g.rows.findIndex(x => x.date === r.date) === i} />)}</ul>}
               </div>
             )
           })}

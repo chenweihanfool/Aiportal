@@ -1,14 +1,14 @@
 // 首頁「一個框搜全部」的純邏輯（2.86.0）：不碰 DOM、不打網路（網路在 omniSearchApi.ts，畫面在 OmniSearch.tsx）。
 // 契約（S1～S3）見 docs/search-api.md 與規格；這裡的解析一律寬容：欄位不對的項目略過，整體不丟錯。
 
-export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'tool'
+export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'tool' | 'diary'
 
 /** 結果分組的固定順序（與後端 groups 順序一致） */
-export const KIND_ORDER: readonly SearchKind[] = ['case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'idea', 'place', 'trip', 'tool']
+export const KIND_ORDER: readonly SearchKind[] = ['case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'diary', 'idea', 'place', 'trip', 'tool']
 
 const KIND_LABEL: Record<SearchKind, string> = {
   case: '案件', topic: '知識', person: '人', object: '物', event: '事件', concept: '概念',
-  method: '方法', source: '原文', idea: '想法', place: '地點', trip: '遊記', tool: '工具',
+  method: '方法', source: '原文', idea: '想法', place: '地點', trip: '遊記', tool: '工具', diary: '日記',
 }
 
 export function isSearchKind(v: unknown): v is SearchKind {
@@ -126,7 +126,7 @@ export function openAction(kind: SearchKind, id: string): OpenAction {
     case 'case': return { type: 'dossier', kind: 'case', name: id }
     case 'person': return { type: 'dossier', kind: 'person', name: id }
     case 'object': return { type: 'dossier', kind: 'object', name: id }
-    case 'event': case 'concept': case 'method': case 'source': return { type: 'expand' }
+    case 'event': case 'concept': case 'method': case 'source': case 'diary': return { type: 'expand' }
   }
 }
 

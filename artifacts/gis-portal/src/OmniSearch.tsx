@@ -427,7 +427,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
           </div>
           {parsed.mode === 'search' && (
             <div className="om-panel om-reader" onMouseMove={glow}>
-              <OmniSearchReader
+              <OmniSearchReader pw={pw}
                 item={status === 'ok' ? cur : null} preview={prev} q={searchQ} expanded={expanded}
                 onToggleExpand={() => setExpanded((v) => !v)} onOpen={() => { if (cur) openItem(cur) }} onJump={jump}
               />
