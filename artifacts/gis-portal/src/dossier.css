@@ -1,5 +1,5 @@
 /* 卷宗頁（#dossier）樣式：class 一律 .dz- 開頭，只用 --c-* token */
-.dz-page { min-height: 100vh; background: var(--c-bg); color: var(--c-ink); padding: 16px; box-sizing: border-box; overflow-x: hidden; }
+.dz-page { height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--c-bg); color: var(--c-ink); padding: 16px; box-sizing: border-box; overflow-x: hidden; }
 .dz-wrap { max-width: 1180px; margin: 0 auto; }
 .dz-nav { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 0.85rem; }
 .dz-nav a, .dz-link { color: var(--c-accent-ink); text-decoration: none; }
