@@ -258,13 +258,17 @@ export interface InsightLeaf {
   angle: number
   shade: number
   age: InsightAge
-  /** 在主枝上的位置 0（樹幹）～1（枝梢）：同主題的葉依日期由內往外單調遞增 */
+  /** 所屬脈絡細枝從主枝分出的位置 0（樹幹）～1（枝梢）：隨脈絡第一則的日期由內往外單調遞增 */
   bt: number
+  /** 沿所在細枝的位置 0～1（同脈絡內由舊到新遞增，最新在細枝梢） */
+  tw: number
   /** 從樹幹到這片葉子的整條路徑上的枝段 id（滑過葉子時整條亮起） */
   path: string[]
 }
 /** 總覽時被聚合的一叢葉子 */
 export interface InsightClump { id: string; clusterIndex: number; x: number; y: number; r: number; count: number; bt: number }
+/** 一條畫出來的脈絡細枝：分出點、理想末端、與主枝切線的夾角（度）、長度 */
+export interface InsightTwig { id: string; clusterIndex: number; fx: number; fy: number; ex: number; ey: number; angle: number; length: number }
 export interface BranchTick { label: string; t: number; x: number; y: number }
 export interface InsightClusterOut {
   id: string
@@ -278,6 +282,8 @@ export interface InsightClusterOut {
   ax: number
   ay: number
   side: 1 | -1
+  /** 主枝長度（接點到枝梢的直線距離） */
+  len: number
   firstDate: string
   /** 膠囊的中心與大小 */
   lx: number
@@ -301,6 +307,7 @@ export interface InsightTreeLayout {
   limbs: InsightLimb[]
   leaves: InsightLeaf[]
   clumps: InsightClump[]
+  twigs: InsightTwig[]
   /** 依「該主題第一次出現」由舊到新排序（最早的在樹幹最下面）；與資料的群順序可能不同 */
   clusters: InsightClusterOut[]
   /** 總覽元素數（枝＋葉＋葉叢＋樹幹） */
@@ -451,8 +458,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   const span = yBottom - yTop
   const step = span / Math.max(4, nc)
   const attachY = (k: number): number => yBottom - step * (k + 0.5)
-  const rise = Math.min(step * 0.7, 90)
-  const maxLen = W / 2 - PAD - (compact ? 4 : 10) - trunkW0 / 2
+    const maxLen = W / 2 - PAD - (compact ? 4 : 10) - trunkW0 / 2
   const minLen = Math.min(maxLen * 0.45, 90)
   const clear = (r: number): number => trunkW0 / 2 + TRUNK_BEND + r + 3
   const ls = clamp((2 * step) / 110, 0.5, 1) // 脈絡細枝橫向（離主枝）距離的縮放
@@ -464,11 +470,16 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const n = its.length
     const spanDays = dayNumber(its[n - 1]!.date) - dayNumber(its[0]!.date)
     const frac = 0.6 * clamp(Math.log(1 + n) / Math.log(41), 0, 1) + 0.4 * clamp(spanDays / 1095, 0, 1)
-    const len = minLen + (maxLen - minLen) * frac
+    // 樹冠接近橢圓：中段的主枝長、上下兩端的短
+    const u = nc <= 1 ? 0 : (k / (nc - 1)) * 2 - 1
+    const ell = 0.62 + 0.38 * Math.sqrt(Math.max(0, 1 - u * u))
+    const len = (minLen + (maxLen - minLen) * frac) * ell
     const s: 1 | -1 = k % 2 === 0 ? 1 : -1
     const y0 = attachY(k)
+    // 主枝從樹幹往外上方彎：同側相鄰主枝的接點差 2 步，爬升不超過 1.15 步，彼此不穿過
+    const rise = Math.min(step * 1.15, len * 0.55)
     const b: Br = {
-      p0: [cx, y0], p1: [cx + s * len * 0.33, y0 - rise * 0.05], p2: [cx + s * len * 0.7, y0 - rise * 0.45], p3: [cx + s * len, y0 - rise], side: s, tc: 0.06, len,
+      p0: [cx, y0], p1: [cx + s * len * 0.22, y0 - rise * 0.3], p2: [cx + s * len * 0.58, y0 - rise * 0.75], p3: [cx + s * len, y0 - rise], side: s, tc: 0.06, len,
     }
     const need = clear(LEAF_R.reinforce * rs)
     let t = 0.06
@@ -508,7 +519,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   }
 
   // ── 每片葉的位置（與輸出哪些無關） ──
-  interface Rec { ins: Insight; k: number; bt: number; x: number; y: number; r: number; shade: number; thread: string; lane: number }
+  interface Rec { ins: Insight; k: number; bt: number; tw: number; x: number; y: number; r: number; shade: number; thread: string; lane: number }
   const recById = new Map<string, Rec>()
   const threadItems = new Map<string, Insight[]>() // thread → items（全部資料，依日期）
   for (const i of all) {
@@ -517,38 +528,93 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   }
   const ownerCluster = new Map<string, string>()
   for (const i of all) if (!ownerCluster.has(i.thread)) ownerCluster.set(i.thread, i.cluster)
-  const LANES = [1, -1, 2, -2, 3, -3]
-  const laneOf = new Map<string, number>() // thread → lane
-  const shadeOf = new Map<string, number>()
+  const clusterRank = new Map<string, number>() // 在群內的名次
+  for (let k = 0; k < nc; k++) itemsOf.get(cids[k]!)!.forEach((it, i) => clusterRank.set(it.id, i))
+  // 脈絡細枝：從主枝上「脈絡第一則日期的位置」以 26°～50° 斜斜分出，朝外上方（或外下方）長，長度依則數 log 縮放、短於主枝；葉子沿細枝由舊到新
+  interface Geo { k: number; F: P; end: P; L: number; tf: number; angle: number }
+  const geoOf = new Map<string, Geo>()
+  const tiOf = new Map<string, number>()
   for (let k = 0; k < nc; k++) {
     const ths = [...threadItems.keys()].filter((t) => ownerCluster.get(t) === cids[k])
     ths.sort((a, b) => (threadItems.get(a)![0]!.date < threadItems.get(b)![0]!.date ? -1 : threadItems.get(a)![0]!.date > threadItems.get(b)![0]!.date ? 1 : a < b ? -1 : 1))
-    ths.forEach((t, ti) => { laneOf.set(t, LANES[ti % 6]!); shadeOf.set(t, ti % 3) })
+    ths.forEach((t, ti) => tiOf.set(t, ti))
   }
-  const clusterRank = new Map<string, number>() // 在群內的名次
-  for (let k = 0; k < nc; k++) itemsOf.get(cids[k]!)!.forEach((it, i) => clusterRank.set(it.id, i))
+  const byCluster: Rec[][] = cids.map(() => [])
   for (const [th, items] of threadItems) {
-    const k = cidx.get(ownerCluster.get(th)!)!
-    const lane = laneOf.get(th)!
+    const kk = cidx.get(ownerCluster.get(th)!)!
+    const ti = tiOf.get(th)!
+    const b = br[kk]!
+    const tf = tOfIndex(kk, clusterRank.get(items[0]!.id)!, dayNumber(items[0]!.date))
+    const F = pointOn(kk, tf)
+    const dd = cubicDir(b.p0, b.p1, b.p2, b.p3, tf)
+    const dl = Math.hypot(dd[0], dd[1]) || 1
+    const tau: P = [dd[0] / dl, dd[1] / dl]
+    const un = upNormal(kk, tf)
+    const upSide = ti % 2 === 0
+    const phiDeg = upSide ? 50 - 4 * (ti % 3) : 28 + 3 * (ti % 3)
+    const phi = (phiDeg * Math.PI) / 180
+    const sg = upSide ? 1 : -1
+    const dir: P = [tau[0] * Math.cos(phi) + un[0] * Math.sin(phi) * sg, tau[1] * Math.cos(phi) + un[1] * Math.sin(phi) * sg]
+    const m = items.length
+    const L = Math.min(b.len * 0.5, 1.3 * step, Math.max(22 * rs, (28 + 18 * Math.log2(1 + m)) * rs))
+    const perp: P = [-dir[1], dir[0]]
+    const end: P = [F[0] + dir[0] * L, F[1] + dir[1] * L]
+    const ang = (Math.acos(clamp(tau[0] * dir[0] + tau[1] * dir[1], -1, 1)) * 180) / Math.PI
+    geoOf.set(th, { k: kk, F, end, L, tf, angle: ang })
     items.forEach((it, j) => {
-      const kk = cidx.get(it.cluster)!
-      const bt = tOfIndex(kk, clusterRank.get(it.id)!, dayNumber(it.date))
-      const f = items.length <= 1 ? 1 : j / (items.length - 1)
-      const mag = (20 + 12 * (Math.abs(lane) - 1)) * ls * (0.6 + 0.4 * f)
-      const pt = pointOn(kk, bt)
-      const un = upNormal(kk, bt)
-      const sg = lane > 0 ? 1 : -1
       const r = LEAF_R[it.relation] * rs
-      let x = pt[0] + un[0] * mag * sg
-      let y = pt[1] + un[1] * mag * sg
+      const tw = m === 1 ? 1 : 0.3 + (0.7 * j) / (m - 1)
+      const z = m > 1 ? (j % 2 === 0 ? 1 : -1) * r * 0.8 : 0
+      let x = F[0] + dir[0] * L * tw + perp[0] * z
+      let y = F[1] + dir[1] * L * tw + perp[1] * z
       const need = clear(r)
-      if (Math.abs(x - cx) < need) x = cx + (br[kk]!.side) * need
+      if (Math.abs(x - cx) < need) x = cx + b.side * need
       x = clamp(x, PAD + r, W - PAD - r)
       y = clamp(y, PAD + r, ground - r)
-      recById.set(it.id, { ins: it, k: kk, bt, x: A1(x), y: A1(y), r, shade: shadeOf.get(th) ?? 0, thread: th, lane })
+      const rec: Rec = { ins: it, k: cidx.get(it.cluster) ?? kk, bt: tf, tw, x, y, r, shade: ti % 3, thread: th, lane: 0 }
+      recById.set(it.id, rec)
+      byCluster[rec.k]!.push(rec)
     })
-
   }
+  // 葉子不重疊：同一群內把過近的葉子沿連線推開（高度與日期順序由細枝決定，這裡只做小幅修正），再夾回畫布與離開樹幹
+  for (let k = 0; k < nc; k++) {
+    const arr = byCluster[k]!
+    if (arr.length < 2) continue
+    const need = clear(LEAF_R.reinforce * rs)
+    for (let pass = 0; pass < 80; pass++) {
+      arr.sort((p, q) => p.x - q.x)
+      let moved = false
+      for (let i = 0; i < arr.length; i++) {
+        const a = arr[i]!
+        for (let j = i + 1; j < arr.length; j++) {
+          const c = arr[j]!
+          if (c.x - a.x > (a.r + c.r) * 1.2 + 2) break
+          const dx = c.x - a.x
+          const dy = c.y - a.y
+          const m = (a.r + c.r) * 0.95 + 1.5
+          if (Math.abs(dx) >= m || Math.abs(dy) >= m) continue
+          // 方框重疊：沿重疊較淺的那個軸把兩片推開
+          const ox = m - Math.abs(dx)
+          const oy = m - Math.abs(dy)
+          if (ox <= oy) {
+            const sx = dx === 0 ? (hash01(`${a.ins.id}|${c.ins.id}`) < 0.5 ? -1 : 1) : Math.sign(dx)
+            a.x -= (sx * ox) / 2 + sx * 0.1; c.x += (sx * ox) / 2 + sx * 0.1
+          } else {
+            const sy = dy === 0 ? (hash01(`${c.ins.id}|${a.ins.id}`) < 0.5 ? -1 : 1) : Math.sign(dy)
+            a.y -= (sy * oy) / 2 + sy * 0.1; c.y += (sy * oy) / 2 + sy * 0.1
+          }
+          moved = true
+        }
+      }
+      for (const r of arr) {
+        r.x = clamp(r.x, PAD + r.r, W - PAD - r.r)
+        if (Math.abs(r.x - cx) < need) r.x = cx + br[k]!.side * need
+        r.y = clamp(r.y, PAD + r.r, ground - r.r)
+      }
+      if (!moved) break
+    }
+  }
+  for (const r of recById.values()) { r.x = A1(r.x); r.y = A1(r.y) }
 
   // ── 可見的部分與取捨（總覽：每群約 24 片葉，其餘聚成葉叢） ──
   const vis = all.filter(isVisible)
@@ -628,6 +694,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   const basePathOf = (k: number, bt: number): string[] => ['trunk', ...chunkIds[k]!.filter((_, c) => chunkT0[k]![c]! <= bt + 1e-9)]
 
   // 脈絡細枝：從主枝上「脈絡第一則的日期位置」分出，沿主枝並行，葉子由舊到新
+  const twigs: InsightTwig[] = []
   const threadsVis = new Map<string, Insight[]>()
   for (const i of vis) {
     if (!keep.has(i.id)) continue
@@ -639,16 +706,17 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const first = recById.get(items[0]!.id)!
     const fk = first.k
     const kk = fk
-    const startPt = pointOn(kk, Math.max(br[kk]!.tc * 0.6, first.bt - 0.04))
+    const startPt = geoOf.get(th)!.F
     const detailed = kk === focusK
-    const shade = shadeOf.get(th) ?? 0
+    { const g = geoOf.get(th)!; twigs.push({ id: th, clusterIndex: kk, fx: A1(g.F[0]), fy: A1(g.F[1]), ex: A1(g.end[0]), ey: A1(g.end[1]), angle: A1(g.angle), length: A1(g.L) }) }
+    const shade = (tiOf.get(th) ?? 0) % 3
     const anchors = new Map<string, P>()
     const posOf = (i: Insight): P => { const r = recById.get(i.id)!; return [r.x, r.y] }
     const reinf = items.filter((x) => x.relation === 'reinforce').length
     const wTh = threadWidth(reinf)
     const n = items.length
     const wAt = (j: number): number => wTh * (1 - 0.5 * (j / n))
-    const base = basePathOf(kk, first.bt)
+    const base = basePathOf(kk, geoOf.get(th)!.tf)
     // 每片葉的「出發點」：refine＝parent 葉（同脈絡且在圖上）；其餘＝前一片葉（第一片從主枝出發）
     const start: P[] = []
     const startOf: Array<string | null> = []
@@ -691,7 +759,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
         const parentPath = startOf[j] === null ? base : leafPath.get(startOf[j]!) ?? base
         leafPath.set(it.id, [...parentPath, id])
         const dir: P = [anchors.get(it.id)![0] - start[j]![0], anchors.get(it.id)![1] - start[j]![1]]
-        leafAngle.set(it.id, Math.round(angleOf(dir) + (it.relation === 'overturn' ? 38 * (laneOf.get(th)! > 0 ? 1 : -1) : 0)))
+        leafAngle.set(it.id, Math.round(angleOf(dir) + (it.relation === 'overturn' ? 38 * ((tiOf.get(th) ?? 0) % 2 === 0 ? 1 : -1) : 0)))
       }
     } else {
       // 總覽：整條細枝一個輪廓
@@ -709,7 +777,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
       items.forEach((it, j) => {
         leafPath.set(it.id, [...base, id])
         const dir: P = [anchors.get(it.id)![0] - start[j]![0], anchors.get(it.id)![1] - start[j]![1]]
-        leafAngle.set(it.id, Math.round(angleOf(dir) + (it.relation === 'overturn' ? 38 * (laneOf.get(th)! > 0 ? 1 : -1) : 0)))
+        leafAngle.set(it.id, Math.round(angleOf(dir) + (it.relation === 'overturn' ? 38 * ((tiOf.get(th) ?? 0) % 2 === 0 ? 1 : -1) : 0)))
       })
     }
   }
@@ -740,7 +808,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const days = todayN - dayNumber(i.date)
     return {
       id: i.id, x: r.x, y: r.y, r: A1(r.r), clusterIndex: r.k, glow: days <= GLOW_DAYS, withered: witheredLeaf.has(i.id), relation: i.relation,
-      angle: leafAngle.get(i.id) ?? 0, shade: r.shade, age: leafAge(days), bt: A1(r.bt * 1000) / 1000, path: leafPath.get(i.id) ?? ['trunk'],
+      angle: leafAngle.get(i.id) ?? 0, shade: r.shade, age: leafAge(days), bt: A1(r.bt * 1000) / 1000, tw: A1(r.tw * 1000) / 1000, path: leafPath.get(i.id) ?? ['trunk'],
     }
   })
 
@@ -757,7 +825,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const lh = fs + 9
     const tip = br[k]!.p3
     return {
-      id, name, count: cnt, x: A1(tip[0]), y: A1(tip[1]), ax: A1(br[k]!.p0[0]), ay: A1(br[k]!.p0[1]), side: br[k]!.side, firstDate: firstOf.get(id)!.date,
+      id, name, count: cnt, x: A1(tip[0]), y: A1(tip[1]), ax: A1(br[k]!.p0[0]), ay: A1(br[k]!.p0[1]), side: br[k]!.side, len: A1(Math.hypot(br[k]!.p3[0] - br[k]!.p0[0], br[k]!.p3[1] - br[k]!.p0[1])), firstDate: firstOf.get(id)!.date,
       lx: A1(tip[0]), ly: A1(tip[1]), lw: A1(lw), lh: A1(lh), labelShown: false, text: t, showCount: sc, bbox: { x0: tip[0], y0: tip[1], x1: tip[0], y1: tip[1] }, ticks: [],
     }
   })
@@ -816,7 +884,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
         const t = tOfDay(k, mk.dn)
         const p = pointOn(k, t)
         const un = upNormal(k, t)
-        const off = -(14 + 6 * (compact ? 0.8 : 1))
+        const off = 0 // 年份標在主枝上（白色描邊讓字清楚），不壓到兩側的細枝與葉
         const x = clamp(p[0] + un[0] * off, PAD + 16, W - PAD - 16)
         const yy = clamp(p[1] + un[1] * off, PAD + 8, ground - 4)
         grow(x, yy, 14)
@@ -827,7 +895,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   })
 
   const elementCount = 1 + limbs.length + leaves.length + clumps.length
-  return { width: W, height: H, compact, trunk, limbs, leaves, clumps, clusters, elementCount, axis: { x: cx, ground, top: yTop, bottom: yBottom, trunkTop: A1(trunkTop), cx } }
+  return { width: W, height: H, compact, trunk, limbs, leaves, clumps, twigs, clusters, elementCount, axis: { x: cx, ground, top: yTop, bottom: yBottom, trunkTop: A1(trunkTop), cx } }
 }
 
 /** 群標籤顯示文字（太長截短） */
@@ -845,7 +913,7 @@ export function focusViewBox(layout: Pick<InsightTreeLayout, 'width' | 'height' 
   const bw = c.bbox.x1 - c.bbox.x0 + 2 * m
   const bh = c.bbox.y1 - c.bbox.y0 + 2 * m
   const aspect = W / H
-  let w = Math.max(bw, bh * aspect, W * 0.42)
+  let w = Math.max(bw, bh * aspect, W * 0.5)
   let h = w / aspect
   if (w > W) { w = W; h = H }
   const x = clamp((c.bbox.x0 + c.bbox.x1) / 2 - w / 2, 0, W - w)
