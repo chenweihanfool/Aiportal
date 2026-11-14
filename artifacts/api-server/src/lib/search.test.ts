@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, makeSnippet, matchesMonth,
   monthFacets, parseSearchLogBody,
-  parseRecentLimit, parseStatsDays, placesToCandidates, rankOf, runSearch, sitesToCandidates, splitTerms, topicsToCandidates,
-  tripsToCandidates, validateSearchParams, SEARCH_KINDS, type Candidate,
+  parseRecentLimit, parseStatsDays, placesToCandidates, rankOf, reposToCandidates, runSearch, sitesToCandidates, splitTerms,
+  topicsToCandidates, tripsToCandidates, validateSearchParams, SEARCH_KINDS, type Candidate,
 } from "./search";
 
 const cand = (over: Partial<Candidate> & { title: string }): Candidate => ({
@@ -20,11 +20,12 @@ describe("validateSearchParams", () => {
     const ok = validateSearchParams("  " + "a".repeat(50) + " ", undefined, undefined);
     expect(ok.ok).toBe(true);
   });
-  it("kind 只接受 13 種（diary 在 source 之後）；limit 1～20 整數、預設 5", () => {
+  it("kind 只接受 14 種（diary 在 source 之後、repo 在 tool 之前）；limit 1～20 整數、預設 5", () => {
     expect(validateSearchParams("x", "nope", undefined).ok).toBe(false);
     for (const k of SEARCH_KINDS) expect(validateSearchParams("x", k, undefined).ok).toBe(true);
     expect(SEARCH_KINDS).toContain("diary");
     expect(SEARCH_KINDS.indexOf("diary")).toBe(SEARCH_KINDS.indexOf("source") + 1);
+    expect(SEARCH_KINDS.indexOf("repo")).toBe(SEARCH_KINDS.indexOf("tool") - 1);
     expect(validateSearchParams("a", "diary", undefined).ok).toBe(true);
     expect(validateSearchParams("x", undefined, "0").ok).toBe(false);
     expect(validateSearchParams("x", undefined, "21").ok).toBe(false);
@@ -236,6 +237,55 @@ describe("各 kind 轉換", () => {
     expect(sitesToCandidates([{ id: {}, name: "x" }])).toEqual([]);
     expect(graphToCandidates({ events: "x", cases: 3, hubNarratives: {} })).toEqual([]);
     expect(graphToCandidates({ events: [{ id: "e", date: "bad", title: "t", case: "A" }] })).toEqual([]);
+  });
+});
+
+describe("reposToCandidates", () => {
+  const repo = (over: Record<string, unknown> = {}) => ({
+    name: "kc2", fullName: "chenweihanfool/kc2", description: "土地鑑界工具",
+    url: "https://github.com/chenweihanfool/kc2", homepage: null, private: false, fork: false, archived: false,
+    language: "TypeScript", topics: ["gis", "鑑界"], pushedAt: "2026-11-10T08:00:00Z",
+    stars: 1, openIssues: 0, defaultBranch: "main", ...over,
+  });
+  it("name 當 id／標題，description＋language＋topics 當內文，date 取日期，meta 原樣帶", () => {
+    expect(reposToCandidates([repo()])).toEqual([{
+      kind: "repo", id: "kc2", title: "kc2", text: "土地鑑界工具\nTypeScript\ngis 鑑界", date: "2026-11-10",
+      meta: { language: "TypeScript", private: false, archived: false, url: "https://github.com/chenweihanfool/kc2" },
+    }]);
+  });
+  it("空欄位不進 text；pushedAt 不合法時 date 為 null", () => {
+    const [c] = reposToCandidates([repo({ description: null, language: null, topics: [], pushedAt: "someday" })]);
+    expect(c!.text).toBe("");
+    expect(c!.date).toBeNull();
+    expect(reposToCandidates([repo({ description: "只有描述", language: null, topics: [] })])[0]!.text).toBe("只有描述");
+  });
+  it("private／archived 只有 true 才算 true", () => {
+    expect(reposToCandidates([repo({ private: "yes", archived: 1 })])[0]!.meta).toMatchObject({ private: false, archived: false });
+    expect(reposToCandidates([repo({ private: true, archived: true })])[0]!.meta).toMatchObject({ private: true, archived: true });
+  });
+  it("不可信資料：不是陣列、元素不是物件、name／url 不是非空字串都略過", () => {
+    expect(reposToCandidates(null)).toEqual([]);
+    expect(reposToCandidates({ repos: [] })).toEqual([]);
+    expect(reposToCandidates([null, 5, "x", repo({ name: "" }), repo({ url: 3 }), repo({ name: "  " })])).toEqual([]);
+    expect(reposToCandidates([repo({ name: "" }), repo({ name: "ok" })])).toHaveLength(1);
+  });
+});
+
+describe("runSearch：repo", () => {
+  it("repo 命中的 item 有 meta；其他 kind 的 item 沒有 meta 鍵", () => {
+    const [r] = reposToCandidates([{
+      name: "kc2", fullName: "chenweihanfool/kc2", description: "土地鑑界工具", url: "https://github.com/chenweihanfool/kc2",
+      language: "TypeScript", topics: ["gis"], pushedAt: "2026-11-10T08:00:00Z", private: true, archived: false,
+    }]);
+    const res = runSearch({ repo: [r!], topic: [cand({ kind: "topic", id: "T1", title: "kc2 主題" })] }, ["kc2"], 5);
+    expect(res.groups.find((g) => g.kind === "repo")!.items[0]!.meta)
+      .toEqual({ language: "TypeScript", private: true, archived: false, url: "https://github.com/chenweihanfool/kc2" });
+    expect(Object.keys(res.groups.find((g) => g.kind === "topic")!.items[0]!)).not.toContain("meta");
+  });
+  it("groups 順序 repo 在 trip 後、tool 前", () => {
+    const mk = (kind: Candidate["kind"]) => [cand({ kind, id: kind, title: "鑑界" })];
+    const res = runSearch({ tool: mk("tool"), repo: mk("repo"), trip: mk("trip"), topic: mk("topic") }, ["鑑界"], 5);
+    expect(res.groups.map((g) => g.kind)).toEqual(["topic", "trip", "repo", "tool"]);
   });
 });
 

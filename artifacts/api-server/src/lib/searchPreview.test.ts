@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { fetchRepos } from "./githubRepos";
+import { reposToCandidates } from "./search";
 import {
-  cleanPoint, firstBodyLine, previewDoc, previewGraphEntity, previewIdea, previewPlace, previewTool, previewTopic,
-  previewTrip, topicPoints, validatePreviewParams,
+  cleanPoint, firstBodyLine, previewDoc, previewGraphEntity, previewIdea, previewPlace, previewRepo, previewTool,
+  previewTopic, previewTrip, topicPoints, validatePreviewParams,
 } from "./searchPreview";
 
 const graph = {
@@ -108,6 +110,62 @@ describe("previewDoc", () => {
     expect(p.related).toEqual([]);
     expect(p.source).toBe("原文 2026-11-09");
     expect(previewDoc({ kind: "topic", docKey: "s", title: "x", bodyMd: "", meta: {} }, graph)).toBeNull();
+  });
+});
+
+describe("previewRepo", () => {
+  const repo = (over: Record<string, unknown> = {}) => ({
+    name: "kc2", fullName: "chenweihanfool/kc2", description: "土地鑑界工具",
+    url: "https://github.com/chenweihanfool/kc2", language: "TypeScript", topics: ["gis", "鑑界"],
+    pushedAt: "2026-11-10T08:00:00Z", private: false, fork: false, archived: false, defaultBranch: "main", ...over,
+  });
+  it("找到：one／points／source／url", () => {
+    expect(previewRepo([repo()], "kc2")).toEqual({
+      kind: "repo", id: "kc2", title: "kc2", one: "土地鑑界工具",
+      points: ["語言：TypeScript", "主題：gis、鑑界", "最後推送：2026-11-10", "公開", "預設分支：main"],
+      related: [], source: "GitHub chenweihanfool/kc2", bodyMd: null, url: "https://github.com/chenweihanfool/kc2",
+    });
+  });
+  it("找不到、不是陣列、壞資料都回 null", () => {
+    expect(previewRepo([repo()], "nope")).toBeNull();
+    expect(previewRepo(null, "kc2")).toBeNull();
+    expect(previewRepo([{ name: "kc2" }], "kc2")).toBeNull(); // 沒有 url
+  });
+  it("points 略過 null／空值；description 為 null 時 one 為空字串", () => {
+    const p = previewRepo([repo({ description: null, language: null, topics: [], pushedAt: null, defaultBranch: null })], "kc2")!;
+    expect(p.one).toBe("");
+    expect(p.points).toEqual(["公開"]);
+  });
+  it("私有＋封存（＋fork）的字樣", () => {
+    expect(previewRepo([repo({ private: true })], "kc2")!.points).toContain("🔒 私有");
+    expect(previewRepo([repo({ private: true, archived: true, fork: true })], "kc2")!.points).toContain("🔒 私有・已封存・fork");
+    expect(previewRepo([repo()], "kc2")!.points).toContain("公開");
+  });
+});
+
+describe("repo 資料契約（fetchRepos → reposToCandidates／previewRepo）", () => {
+  const raw = (name: string, extra: Record<string, unknown> = {}) => ({
+    name, full_name: `chenweihanfool/${name}`, html_url: `https://github.com/chenweihanfool/${name}`,
+    description: "土地鑑界工具", language: "TypeScript", topics: ["gis"], pushed_at: "2026-11-10T08:00:00Z",
+    default_branch: "main", private: false, archived: false, fork: false, ...extra,
+  });
+  it("GitHub 原始格式經 fetchRepos 後的 repos 可直接轉候選與預覽", async () => {
+    const fakeFetch = (async () => new Response(JSON.stringify([
+      raw("kc2"), raw("secret", { private: true, archived: true, description: null }),
+    ]))) as unknown as typeof fetch;
+    const r = await fetchRepos({ token: "t", owner: "chenweihanfool" }, fakeFetch);
+    expect(r.status).toBe("ok");
+    const repos = r.status === "ok" ? r.repos : [];
+    expect(reposToCandidates(repos)[0]).toMatchObject({
+      kind: "repo", id: "kc2", title: "kc2", date: "2026-11-10", text: "土地鑑界工具\nTypeScript\ngis",
+      meta: { language: "TypeScript", private: false, archived: false, url: "https://github.com/chenweihanfool/kc2" },
+    });
+    expect(reposToCandidates(repos)).toHaveLength(2);
+    expect(previewRepo(repos, "secret")).toMatchObject({
+      kind: "repo", id: "secret", title: "secret", one: "",
+      points: ["語言：TypeScript", "主題：gis", "最後推送：2026-11-10", "🔒 私有・已封存", "預設分支：main"],
+      source: "GitHub chenweihanfool/secret", url: "https://github.com/chenweihanfool/secret",
+    });
   });
 });
 
