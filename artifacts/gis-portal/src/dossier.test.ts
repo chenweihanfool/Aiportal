@@ -3,7 +3,7 @@ import { buildIndex } from './graphInsights'
 import type { HermesGraphData } from './hermesGraphApi'
 import type { TimelineRow } from './nodeTimeline'
 import {
-  dossierFromHash, dossierHref, dossierIndex, dossierSummary, egoGraph, monthGroups, relatedRanked, relatedTopics,
+  dossierForEvent, dossierFromHash, dossierHref, dossierIndex, dossierSummary, egoGraph, monthGroups, relatedRanked, relatedTopics,
 } from './dossier'
 
 type Graph = NonNullable<HermesGraphData['graph']>
@@ -35,15 +35,35 @@ describe('dossierFromHash / dossierHref', () => {
       }
     }
   })
+  it('事件路由：特殊字元來回', () => {
+    for (const id of ['e1', 'a b', 'x/y', 'a#b', '100%', '中文 事/件#%']) {
+      expect(dossierFromHash(`#dossier/event/${encodeURIComponent(id)}`)).toEqual({ kind: 'event', id })
+    }
+  })
   it('索引與不合法', () => {
     expect(dossierFromHash('#dossier')).toBe('index')
     expect(dossierFromHash('#dossier/')).toBe('index')
-    expect(dossierFromHash('#dossier/event/x')).toBe('index')
+    expect(dossierFromHash('#dossier/event')).toBe('index')
+    expect(dossierFromHash('#dossier/event/')).toBe('index')
+    expect(dossierFromHash('#dossier/event/%E0%A4%A')).toBe('index')
     expect(dossierFromHash('#dossier/case')).toBe('index')
     expect(dossierFromHash('#dossier/case/')).toBe('index')
     expect(dossierFromHash('#dossier/case/%E0%A4%A')).toBe('index')
     expect(dossierFromHash('#knowledge')).toBeNull()
     expect(dossierFromHash('#dossierX')).toBeNull()
+  })
+})
+
+describe('dossierForEvent', () => {
+  const idx = buildIndex(graph())
+  it('有案件取案件（優先於參與者）', () => {
+    expect(dossierForEvent(idx, 'e1')).toEqual({ kind: 'case', name: 'CaseA' })
+  })
+  it('沒有案件退回參與者第一人', () => {
+    expect(dossierForEvent(idx, 'e4')).toEqual({ kind: 'person', name: 'Carol' })
+  })
+  it('都沒有回 null', () => {
+    expect(dossierForEvent(idx, 'nope')).toBeNull()
   })
 })
 
