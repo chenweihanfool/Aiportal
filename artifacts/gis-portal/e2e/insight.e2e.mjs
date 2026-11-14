@@ -56,6 +56,13 @@ for (let i = 0; i < 48; i++) {
 const INSIGHTS = [...HAND, ...GEN].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id < y.id ? -1 : 1))
 const NAMES = ['測量作業', '工作習慣', '人際', '健康與運動', '財務觀念', '學習方法', '家庭生活']
 const CLUSTERS = NAMES.map((name, i) => ({ id: `K0${i + 1}`, name, count: INSIGHTS.filter((x) => x.cluster === `K0${i + 1}`).length }))
+// 稀疏（正式站現況：2 則、同一天兩群）與 12 群 300 則
+const SP = [mk('S-1', 0, 'K01', 'TH-s1', 'new'), mk('S-2', 0, 'K02', 'TH-s2', 'new'), mk('S-3', 12, 'K03', 'TH-s3', 'new')]
+const BIG = Array.from({ length: 300 }, (_, i) => { const c = (i * 7) % 12, t = Math.floor(i / 12) % 9, j = i % 4; return mk(`B-${i}`, 540 - Math.floor((i * 538) / 300), `K${String(c + 1).padStart(2, '0')}`, `TH-b${c}-${t}`, j === 0 ? 'new' : j === 3 ? 'refine' : 'reinforce', null) })
+for (const b of BIG) { const prev = BIG.filter((x) => x.thread === b.thread && x.date <= b.date && x.id !== b.id); b.parent = b.relation === 'new' || prev.length === 0 ? null : prev[prev.length - 1].id; if (b.parent === null) b.relation = 'new' }
+const bodyOf = (list, names) => ({ total: list.length, thisMonth: list.filter((x) => x.date.slice(0, 7) === tpDate(0).slice(0, 7)).length, clusters: names.map(([id, name]) => ({ id, name, count: list.filter((x) => x.cluster === id).length })).filter((c) => c.count > 0), insights: list })
+const modeBody = (mode) => mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
+  : mode === 'big300' ? bodyOf(BIG, Array.from({ length: 12 }, (_, i) => [`K${String(i + 1).padStart(2, '0')}`, ['測量作業', '工作習慣', '人際關係經營', '健康與運動', '財務觀念', '學習方法', '家庭生活', '旅行與休息', '職涯規劃', '情緒覺察', '專案管理', '創作與興趣'][i]])) : insightsBody
 const insightsBody = { total: INSIGHTS.length, thisMonth: 3, clusters: CLUSTERS, insights: INSIGHTS }
 const detailOf = (id) => {
   const it = INSIGHTS.find((x) => x.id === id)
@@ -90,7 +97,7 @@ async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorSc
     if (p === '/api/insights') {
       if (mode === 'fail') return json({ message: 'boom' }, 500)
       if (mode === 'empty') return json({ total: 0, thisMonth: 0, clusters: [], insights: [] })
-      return json(insightsBody)
+      return json(modeBody(mode))
     }
     const m = /^\/api\/insights\/(.+)$/.exec(p)
     if (m) { const d = detailOf(decodeURIComponent(m[1])); return d ? json(d) : json({ message: 'none' }, 404) }
@@ -263,6 +270,67 @@ try {
     await page.locator('[data-testid="now-corner-btn"]').click()
     await page.waitForSelector('[data-testid="now-section"]')
     check(`${T}：展開現在用得上後仍無橫向捲動`, await noHScroll(page))
+    await ctx.close()
+  }
+
+  // ── 稀疏資料（正式站現況：2 則、同一天兩群）要像一棵小樹，不是貼地的鬍子 ──
+  for (const [mode, n] of [['sparse1', 1], ['sparse2', 2], ['sparse3', 3]]) {
+    const T = `稀疏 ${n} 則`
+    const { ctx, page, errors } = await open({ width: 1440, height: 900 }, { mode })
+    await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    await page.waitForTimeout(500)
+    const m = await page.evaluate(() => {
+      const svg = document.querySelector('.it-svg').getBoundingClientRect()
+      const els = [...document.querySelectorAll('.it-trunk, .it-limb, [data-testid="insight-leaf"]')].map((e) => e.getBoundingClientRect())
+      const top = Math.min(...els.map((r) => r.top)), bottom = Math.max(...els.map((r) => r.bottom))
+      const trunk = document.querySelector('.it-trunk').getBoundingClientRect()
+      return { treeH: (bottom - top) / svg.height, trunkH: trunk.height / svg.height, leaves: document.querySelectorAll('[data-testid="insight-leaf"]').length, caps: document.querySelectorAll('[data-testid="insight-cap"]').length }
+    })
+    check(`${T}：整棵樹高度 ≥ 繪圖區 70%、樹幹 ≥ 50%（不是貼地的鬍子）`, m.treeH >= 0.7 && m.trunkH >= 0.5, JSON.stringify(m))
+    check(`${T}：每一群都有標籤膠囊、有小樹苗提示`, m.caps === (n === 1 ? 1 : n === 2 ? 2 : 3) && (await page.locator('[data-testid="insight-seedling"]').innerText()).includes('小樹苗：HERMES 每晚會從日記補上你的心得'))
+    check(`${T}：時間刻度照常顯示（最少涵蓋 6 個月）`, (await page.locator('.it-tick').count()) >= 3)
+    check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `r1-sparse${n}-dark-desktop.png`) })
+    if (n === 2) {
+      const mob = await open({ width: 360, height: 1100 }, { mode })
+      await mob.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+      await mob.page.waitForTimeout(500)
+      check(`${T}：手機 360 無橫向捲動、群標籤都在`, (await noHScroll(mob.page)) && (await mob.page.locator('[data-testid="insight-cap"]').count()) === 2)
+      await mob.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-sparse2-mobile-360.png') })
+      await mob.ctx.close()
+    }
+    await ctx.close()
+  }
+  {
+    const nm = await open({ width: 1440, height: 900 })
+    await nm.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    check('心得多（68 則）時不顯示小樹苗提示', (await nm.page.locator('[data-testid="insight-seedling"]').count()) === 0)
+    await nm.ctx.close()
+  }
+
+  // ── 12 群 300 則：每一群都有標籤；聚焦時刻度與膠囊不被裁切 ──
+  for (const [w, h] of [[1440, 900], [360, 1500]]) {
+    const T = `12 群 300 則 ${w}×${h}`
+    const { ctx, page, errors } = await open({ width: w, height: h }, { mode: 'big300' })
+    await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    await page.waitForTimeout(600)
+    check(`${T}：300 片葉、12 群每一群都有標籤（膠囊或縮寫）`, (await page.locator('[data-testid="insight-leaf"]').count()) === 300 && (await page.locator('[data-testid="insight-cap"]').count()) === 12)
+    check(`${T}：標籤都在畫布內`, await page.evaluate(() => { const st = document.querySelector('.it-stage').getBoundingClientRect(); return [...document.querySelectorAll('[data-testid="insight-cap"] .it-cap-bg')].every((e) => { const r = e.getBoundingClientRect(); return r.left >= st.left - 1 && r.right <= st.right + 1 && r.top >= st.top - 1 && r.bottom <= st.bottom + 1 }) }))
+    if (w === 1440) await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-big300-dark-desktop.png') })
+    for (const idx of [0, 5, 11]) {
+      await page.locator('[data-testid="insight-row"]').nth(idx).click()
+      await page.waitForTimeout(800)
+      const r = await page.evaluate((i) => {
+        const st = document.querySelector('.it-stage').getBoundingClientRect()
+        const ticks = [...document.querySelectorAll('.it-tick text')].map((e) => e.getBoundingClientRect())
+        const caps = [...document.querySelectorAll('[data-testid="insight-cap"]')]
+        const cap = caps.find((c) => c.getAttribute('aria-pressed') === 'true')?.querySelector('.it-cap-bg')?.getBoundingClientRect()
+        return { ticks: ticks.length, ticksOk: ticks.every((t) => t.left >= st.left - 1 && t.right <= st.right + 1 && t.top >= st.top - 1 && t.bottom <= st.bottom + 1 && t.width > 0), capOk: !!cap && cap.left >= st.left - 1 && cap.right <= st.right + 1 && cap.top >= st.top - 1 && cap.bottom <= st.bottom + 1 }
+      }, idx)
+      check(`${T}：聚焦第 ${idx + 1} 群後刻度文字完整（${r.ticks} 個）、該群膠囊完整`, r.ticks >= 1 && r.ticksOk && r.capOk, JSON.stringify(r))
+      if (w === 1440 && idx === 5) await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-big300-focus.png') })
+    }
+    check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))
     await ctx.close()
   }
 
