@@ -4,7 +4,7 @@ import { isObj } from "./search";
 import { addDaysTpe, isRealDate, todayTpe } from "./pushFeedback";
 
 export const PIN_TARGET_KINDS = [
-  "case", "person", "object", "topic", "event", "concept", "method", "source", "idea", "place", "trip",
+  "case", "person", "object", "topic", "event", "concept", "method", "source", "insight", "idea", "place", "trip",
 ] as const;
 export type PinTargetKind = (typeof PIN_TARGET_KINDS)[number];
 

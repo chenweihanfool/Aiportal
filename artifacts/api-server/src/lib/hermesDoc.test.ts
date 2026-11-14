@@ -37,10 +37,62 @@ describe("validateDocs", () => {
     expect(validateDocs({ docs: [doc({ kind: "concept", key: "X" }), doc({ kind: "method", key: "X" })] }).ok).toBe(true);
   });
 
-  it("isDocKind accepts the known kinds (event/concept/method/source/topic/diary)", () => {
-    expect(["event", "concept", "method", "source", "topic", "diary"].every(isDocKind)).toBe(true);
+  it("isDocKind accepts the known kinds (event/concept/method/source/topic/diary/insight)", () => {
+    expect(["event", "concept", "method", "source", "topic", "diary", "insight"].every(isDocKind)).toBe(true);
     expect(isDocKind("person")).toBe(false);
     expect(isDocKind(undefined)).toBe(false);
+  });
+
+  it("insight：meta 齊全才收；time 可為 null、parent 依 relation 檢查", () => {
+    const insight = (over: Record<string, unknown> = {}, metaOver: Record<string, unknown> = {}) => doc({
+      kind: "insight",
+      key: "INS-2026-10-18-1a2b3c4d",
+      title: "一句話心得",
+      meta: {
+        date: "2026-10-18", time: "20:28", provenance: "quote",
+        cluster: { id: "K03", name: "時間管理" }, thread: "TH-1a2b3c4d", relation: "new", parent: null,
+        ...metaOver,
+      },
+      ...over,
+    });
+    expect(validateDocs({ docs: [insight()] }).ok).toBe(true);
+    expect(validateDocs({ docs: [insight({}, { time: null })] }).ok).toBe(true);
+    expect(validateDocs({ docs: [insight({}, { relation: "refine", parent: "INS-2026-09-01-deadbeef" })] }).ok).toBe(true);
+  });
+
+  it.each([
+    ["provenance 不合法", { provenance: "guess" }],
+    ["relation 不合法", { relation: "merge" }],
+    ["new 卻帶 parent", { relation: "new", parent: "INS-2026-09-01-deadbeef" }],
+    ["cluster id 格式", { cluster: { id: "X03", name: "群" } }],
+    ["cluster name 太長", { cluster: { id: "K03", name: "一二三四五六七八九十甲乙丙" } }],
+    ["thread 格式", { thread: "TH-1234" }],
+    ["time 格式", { time: "8:00" }],
+    ["date 格式", { date: "2026/10/18" }],
+    ["非 new 缺 parent", { relation: "reinforce", parent: null }],
+  ])("rejects insight when %s", (_name, metaOver) => {
+    const d = doc({
+      kind: "insight", key: "INS-2026-10-18-1a2b3c4d", title: "心得",
+      meta: {
+        date: "2026-10-18", time: "20:28", provenance: "quote",
+        cluster: { id: "K03", name: "時間管理" }, thread: "TH-1a2b3c4d", relation: "new", parent: null,
+        ...metaOver,
+      },
+    });
+    expect(validateDocs({ docs: [d] }).ok).toBe(false);
+  });
+
+  it("rejects insight with a bad key or a title over 80 chars", () => {
+    const base = {
+      kind: "insight", key: "INS-2026-10-18-1a2b3c4d", title: "心得",
+      meta: {
+        date: "2026-10-18", time: "20:28", provenance: "quote",
+        cluster: { id: "K03", name: "時間管理" }, thread: "TH-1a2b3c4d", relation: "new", parent: null,
+      },
+    };
+    expect(validateDocs({ docs: [doc({ ...base, key: "INS-2026-10-18-XYZ" })] }).ok).toBe(false);
+    expect(validateDocs({ docs: [doc({ ...base, key: "EV-1" })] }).ok).toBe(false);
+    expect(validateDocs({ docs: [doc({ ...base, title: "字".repeat(81) })] }).ok).toBe(false);
   });
 
   it("diary：key 是日期才收，meta.date 有給必須等於 key", () => {

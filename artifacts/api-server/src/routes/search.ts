@@ -101,7 +101,7 @@ router.get("/search", async (req: Request, res: Response) => {
   const want = (k: SearchKind) => v.kind === null || v.kind === k;
   const candidates: Partial<Record<SearchKind, Candidate[]>> = {};
 
-  // hermes_doc 的四個 kind：一次 SQL（每個詞 title ILIKE OR body_md ILIKE，詞與詞 AND），排序級別在 JS 算。
+  // hermes_doc 的 doc kind：一次 SQL（每個詞 title ILIKE OR body_md ILIKE，詞與詞 AND），排序級別在 JS 算。
   // 每 kind 最多保留 200 筆（給 items 用），SQL 總上限 = 200 × 要查的 kind 數，依 meta.date 新到舊。
   // 另跑一次同條件的 count 查詢，把真實數量傳給 runSearch，count 不再被 200 截斷；
   // count 查詢失敗只記 log，降級成用命中數。
@@ -221,7 +221,7 @@ router.get("/search/preview", async (req: Request, res: Response) => {
       p = g ? previewGraphEntity(g, v.kind, v.id) : null;
       break;
     }
-    case "event": case "concept": case "method": case "source": case "diary": {
+    case "event": case "concept": case "method": case "source": case "diary": case "insight": {
       if (!isDocKind(v.kind)) break;
       let row: { kind: string; docKey: string; title: string; bodyMd: string; meta: unknown } | undefined;
       try {

@@ -2,14 +2,14 @@
 // 各 kind 把原始資料轉成候選項、stats 計算、30 秒快取。不碰 DB；routes/search.ts 只負責取資料與套 SQL。
 // 所有 jsonb／payload 內容都當不可信資料：欄位型別不對就略過那一筆。
 
-/** groups 的固定順序（也是 best 同級時的優先順序）。 */
+/** groups 的固定順序（也是 best 同級時的優先順序）；心得排第一。 */
 export const SEARCH_KINDS = [
-  "case", "topic", "person", "object", "event", "concept", "method", "source", "diary", "idea", "place", "trip", "repo", "tool",
+  "insight", "case", "topic", "person", "object", "event", "concept", "method", "source", "diary", "idea", "place", "trip", "repo", "tool",
 ] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
-/** 走 hermes_doc 表（SQL ILIKE）的五個 kind。 */
-export const DOC_KINDS = ["event", "concept", "method", "source", "diary"] as const;
+/** 走 hermes_doc 表（SQL ILIKE）的 kind。 */
+export const DOC_KINDS = ["event", "concept", "method", "source", "diary", "insight"] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
 
 export const SEARCH_MAX_Q = 50;
@@ -117,6 +117,16 @@ export interface RepoMeta {
   url: string;
 }
 
+/** insight 專用的補充資訊（前端畫脈絡迷你時間線）；只原樣帶到 SearchItem，不參與比對。 */
+export interface InsightMeta {
+  date: string | null;
+  cluster: string | null;
+  thread: string | null;
+  relation: string | null;
+}
+
+export type CandidateMeta = RepoMeta | InsightMeta;
+
 /** 各 kind 轉出來的統一形狀。text 是搜尋與 snippet 用的內文；snippet 有值時直接當 snippet（case／person／object）。 */
 export interface Candidate {
   kind: SearchKind;
@@ -125,7 +135,7 @@ export interface Candidate {
   text: string;
   date: string | null;
   snippet?: string;
-  meta?: RepoMeta;
+  meta?: CandidateMeta;
 }
 
 export interface SearchItem {
@@ -134,7 +144,7 @@ export interface SearchItem {
   title: string;
   snippet: string;
   date: string | null;
-  meta?: RepoMeta;
+  meta?: CandidateMeta;
 }
 export interface SearchGroup {
   kind: SearchKind;
@@ -384,7 +394,7 @@ export function graphToCandidates(graph: { events?: unknown; cases?: unknown; hu
   });
 }
 
-/** hermes_doc 的列（event／concept／method／source／diary）。meta 不可信。 */
+/** hermes_doc 的列（event／concept／method／source／diary／insight）。meta 不可信。 */
 export function docRowToCandidate(row: { kind: unknown; docKey: unknown; title: unknown; bodyMd: unknown; meta: unknown }): Candidate | null {
   if (!isDocKind(row.kind)) return null;
   const id = str(row.docKey);
@@ -396,10 +406,17 @@ export function docRowToCandidate(row: { kind: unknown; docKey: unknown; title: 
   }
   const title = str(row.title);
   if (!title) return null;
-  return {
-    kind: row.kind, id, title, text,
-    date: isObj(row.meta) ? dateOf(row.meta["date"]) : null,
-  };
+  const meta = isObj(row.meta) ? row.meta : {};
+  if (row.kind === "insight") {
+    // 日期取 meta.date；cluster／thread／relation 帶給前端畫脈絡迷你時間線。
+    const cluster = isObj(meta["cluster"]) ? str(meta["cluster"]["id"]) : null;
+    const date = dateOf(meta["date"]);
+    return {
+      kind: row.kind, id, title, text, date,
+      meta: { date, cluster, thread: str(meta["thread"]), relation: str(meta["relation"]) },
+    };
+  }
+  return { kind: row.kind, id, title, text, date: dateOf(meta["date"]) };
 }
 
 export function ideasToCandidates(ideas: unknown): Candidate[] {
