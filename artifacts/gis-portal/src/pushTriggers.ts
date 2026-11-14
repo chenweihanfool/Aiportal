@@ -135,7 +135,7 @@ export function parseCalendarFeed(raw: unknown): CalendarFeed | null {
   const p = (root.payload !== undefined ? root.payload : root.available === undefined ? root : null) as Partial<CalendarFeed> | null
   if (!p || typeof p !== 'object' || typeof p.date !== 'string' || !Array.isArray(p.events)) return null
   const events: CalendarEvent[] = []
-  for (const e of p.events) {
+  for (const e of p.events as unknown[]) {
     if (!e || typeof e !== 'object') continue
     const r = e as Record<string, unknown>
     if (typeof r.start !== 'string' || typeof r.title !== 'string') continue
