@@ -155,6 +155,10 @@ export function cardModel(item: SearchHit, ctx: CardCtx): CardModel {
       const t = ctx.trips?.find((x) => x.id === item.id)
       return t ? { type: 'trip', start: t.start, end: t.end } : FALLBACK
     }
+    case 'diary': {
+      const d = splitDate(item.date ?? item.id)
+      return { type: 'dated', day: d?.day ?? null, ym: d?.ym ?? null, summary: item.snippet }
+    }
     case 'event': case 'concept': case 'method': case 'source': case 'idea': case 'place': {
       const d = splitDate(item.date)
       return { type: 'dated', day: d?.day ?? null, ym: d?.ym ?? null, summary: item.snippet }

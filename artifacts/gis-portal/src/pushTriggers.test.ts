@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  haversineMeters, makeMeetingMatcher, meetingCards, nearestPlace, nearbyCard, orderTriggerFirst, parseCalendarFeed, pinDateValid, pinDueOptions, pinnedCards,
+  haversineMeters, pinTargetFor, makeMeetingMatcher, meetingCards, nearestPlace, nearbyCard, orderTriggerFirst, parseCalendarFeed, pinDateValid, pinDueOptions, pinnedCards,
   type CalendarFeed, type MeetingMatcher,
 } from './pushTriggers'
 import { cardKeyOf, type NowCard } from './nowCards'
@@ -124,5 +124,16 @@ describe('parseCalendarFeed / matcher / order', () => {
   it('orderTriggerFirst', () => {
     const mk = (kind: NowCard['kind'], k: string): NowCard => ({ key: cardKeyOf({ kind: 'quiet', name: k }), kind, forDate: '', at: null, why: '', title: k, lines: [], point: '', rank: 0 })
     expect(orderTriggerFirst([mk('topic', 'a'), mk('pinned', 'b'), mk('meeting', 'c')]).map((c) => c.title)).toEqual(['c', 'b', 'a'])
+  })
+})
+
+describe('pinTargetFor', () => {
+  it('有 hash 的類別才有目標', () => {
+    expect(pinTargetFor({ kind: 'topic', id: 't 1', title: 'T' })).toEqual({ targetKind: 'topic', targetId: 't 1', title: 'T', href: '#knowledge/t%201' })
+    expect(pinTargetFor({ kind: 'case', id: '王案', title: '王案' })?.href).toBe('#dossier/case/%E7%8E%8B%E6%A1%88')
+    expect(pinTargetFor({ kind: 'place', id: 'F1', title: '店' })?.href).toBe('#food')
+    expect(pinTargetFor({ kind: 'event', id: 'e', title: 'e' })).toBeNull()
+    expect(pinTargetFor({ kind: 'idea', id: 'e', title: 'e' })).toBeNull()
+    expect(pinTargetFor({ kind: 'diary', id: '2026-01-01', title: 'e' })).toBeNull()
   })
 })

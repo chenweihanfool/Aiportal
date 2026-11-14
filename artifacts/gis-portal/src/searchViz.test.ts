@@ -71,6 +71,7 @@ describe('cardModel', () => {
   })
   it('event 類有日期與無日期', () => {
     expect(cardModel(hit('event', 'x', 'x', '2026-03-09', '摘'), ctx)).toEqual({ type: 'dated', day: '09', ym: '2026-03', summary: '摘' })
+    expect(cardModel(hit('diary', '2026-03-09', '2026-03-09', null, '日記摘'), none)).toEqual({ type: 'dated', day: '09', ym: '2026-03', summary: '日記摘' })
     expect(cardModel(hit('idea', 'x'), none)).toEqual({ type: 'dated', day: null, ym: null, summary: '' })
     expect(cardModel(hit('place', 'x'), none)).toMatchObject({ type: 'dated' })
   })
