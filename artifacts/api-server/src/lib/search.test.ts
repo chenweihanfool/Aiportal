@@ -20,9 +20,12 @@ describe("validateSearchParams", () => {
     const ok = validateSearchParams("  " + "a".repeat(50) + " ", undefined, undefined);
     expect(ok.ok).toBe(true);
   });
-  it("kind 只接受 12 種；limit 1～20 整數、預設 5", () => {
+  it("kind 只接受 13 種（diary 在 source 之後）；limit 1～20 整數、預設 5", () => {
     expect(validateSearchParams("x", "nope", undefined).ok).toBe(false);
     for (const k of SEARCH_KINDS) expect(validateSearchParams("x", k, undefined).ok).toBe(true);
+    expect(SEARCH_KINDS).toContain("diary");
+    expect(SEARCH_KINDS.indexOf("diary")).toBe(SEARCH_KINDS.indexOf("source") + 1);
+    expect(validateSearchParams("a", "diary", undefined).ok).toBe(true);
     expect(validateSearchParams("x", undefined, "0").ok).toBe(false);
     expect(validateSearchParams("x", undefined, "21").ok).toBe(false);
     expect(validateSearchParams("x", undefined, "1.5").ok).toBe(false);
@@ -205,6 +208,12 @@ describe("各 kind 轉換", () => {
     expect(docRowToCandidate({ kind: "concept", docKey: "K", title: "概念", bodyMd: "內文", meta: { date: "2026-03-04" } }))
       .toEqual({ kind: "concept", id: "K", title: "概念", text: "內文", date: "2026-03-04" });
     expect(docRowToCandidate({ kind: "topic", docKey: "K", title: "t", bodyMd: "", meta: {} })).toBeNull();
+  });
+  it("diary：date 取 key、沒有 title 用日期當標題", () => {
+    expect(docRowToCandidate({ kind: "diary", docKey: "2026-11-14", title: "", bodyMd: "今天", meta: {} }))
+      .toEqual({ kind: "diary", id: "2026-11-14", title: "2026-11-14", text: "今天", date: "2026-11-14" });
+    expect(docRowToCandidate({ kind: "diary", docKey: "2026-11-14", title: "標題", bodyMd: "", meta: { date: "2020-01-01" } }))
+      .toEqual({ kind: "diary", id: "2026-11-14", title: "標題", text: "", date: "2026-11-14" });
   });
   it("idea、place、trip、tool", () => {
     expect(ideasToCandidates([{ id: "IDEA-1", title: "想", why: "因", category: "旅遊", lastMentioned: "2026-10-09T10:00:00+08:00" }])[0])

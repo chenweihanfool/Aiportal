@@ -1,9 +1,11 @@
 // 內容層（hermes_doc）的純邏輯：輸入驗證、正文摘錄、概念／方法的「出現脈絡」組裝。
 // 全部是純函式（不碰 DB／網路），方便單元測試；routes/hermesDoc.ts 只負責撈資料與呼叫這裡。
 // 設計：kb-pipeline docs/portal-content-design.md。
+import { isRealDate } from "./pushFeedback";
 
-// source：主題來源的原文（一個來源一筆）；topic：已發布主題的引文索引（meta.quotes）。
-export const DOC_KINDS = ["event", "concept", "method", "source", "topic"] as const;
+// source：主題來源的原文（一個來源一筆）；topic：已發布主題的引文索引（meta.quotes）；
+// diary：日記全文（一筆一天，key 是日期）。
+export const DOC_KINDS = ["event", "concept", "method", "source", "topic", "diary"] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
 
 export const MAX_DOCS_PER_POST = 100;
@@ -51,6 +53,11 @@ export function validateDocs(body: unknown): { ok: true; docs: DocInput[] } | { 
     const sourcePath = d.sourcePath ?? null;
     if (sourcePath !== null && (typeof sourcePath !== "string" || sourcePath.length > 300)) return fail("sourcePath 不合法");
     if (typeof d.contentHash !== "string" || d.contentHash.length < 8 || d.contentHash.length > 128) return fail("contentHash 不合法");
+    if (d.kind === "diary") {
+      if (!isRealDate(d.key)) return fail("diary 的 key 必須是真實日期 YYYY-MM-DD");
+      const metaDate = (meta as Record<string, unknown>)["date"];
+      if (metaDate !== undefined && metaDate !== d.key) return fail("diary 的 meta.date 必須等於 key");
+    }
     const dedupe = `${d.kind}/${d.key}`;
     if (seen.has(dedupe)) return fail(`同一批內重複的文件 ${dedupe}`);
     seen.add(dedupe);

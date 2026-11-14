@@ -4,12 +4,12 @@
 
 /** groups 的固定順序（也是 best 同級時的優先順序）。 */
 export const SEARCH_KINDS = [
-  "case", "topic", "person", "object", "event", "concept", "method", "source", "idea", "place", "trip", "tool",
+  "case", "topic", "person", "object", "event", "concept", "method", "source", "diary", "idea", "place", "trip", "tool",
 ] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
-/** 走 hermes_doc 表（SQL ILIKE）的四個 kind。 */
-export const DOC_KINDS = ["event", "concept", "method", "source"] as const;
+/** 走 hermes_doc 表（SQL ILIKE）的五個 kind。 */
+export const DOC_KINDS = ["event", "concept", "method", "source", "diary"] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
 
 export const SEARCH_MAX_Q = 50;
@@ -73,7 +73,7 @@ export function splitTerms(q: string): string[] {
   return out;
 }
 
-/** q：去頭尾空白後 1～50 字；kind：選填且須在 12 種之內；limit：整數 1～20，預設 5；month／before：選填 YYYY-MM，不可同時給。 */
+/** q：去頭尾空白後 1～50 字；kind：選填且須在 13 種之內；limit：整數 1～20，預設 5；month／before：選填 YYYY-MM，不可同時給。 */
 export function validateSearchParams(
   qRaw: unknown, kindRaw: unknown, limitRaw: unknown, monthRaw?: unknown, beforeRaw?: unknown,
 ): SearchParams {
@@ -372,15 +372,20 @@ export function graphToCandidates(graph: { events?: unknown; cases?: unknown; hu
   });
 }
 
-/** hermes_doc 的列（event／concept／method／source）。meta 不可信。 */
+/** hermes_doc 的列（event／concept／method／source／diary）。meta 不可信。 */
 export function docRowToCandidate(row: { kind: unknown; docKey: unknown; title: unknown; bodyMd: unknown; meta: unknown }): Candidate | null {
   if (!isDocKind(row.kind)) return null;
   const id = str(row.docKey);
+  if (!id) return null;
+  const text = typeof row.bodyMd === "string" ? row.bodyMd : "";
+  if (row.kind === "diary") {
+    // 日記的日期就是 key（不靠 meta.date）；標題空的話用日期當標題。
+    return { kind: row.kind, id, title: str(row.title) ?? id, text, date: dateOf(id) };
+  }
   const title = str(row.title);
-  if (!id || !title) return null;
+  if (!title) return null;
   return {
-    kind: row.kind, id, title,
-    text: typeof row.bodyMd === "string" ? row.bodyMd : "",
+    kind: row.kind, id, title, text,
     date: isObj(row.meta) ? dateOf(row.meta["date"]) : null,
   };
 }
