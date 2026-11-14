@@ -31,7 +31,7 @@ describe("search 路由：未授權與參數驗證", () => {
     }
   });
   it("S1 參數不合法回 400", async () => {
-    for (const qs of ["", "q=", "q=" + "a".repeat(51), "q=a&kind=zzz", "q=a&limit=0", "q=a&limit=21"]) {
+    for (const qs of ["", "q=", "q=" + "a".repeat(51), "q=a&kind=zzz", "q=a&limit=0", "q=a&limit=21", "q=a&month=2026-13", "q=a&before=x", "q=a&month=2026-01&before=2026-01"]) {
       expect((await fetch(`${base}/search?${qs}`, { headers: authed })).status, qs).toBe(400);
     }
   });

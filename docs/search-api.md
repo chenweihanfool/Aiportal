@@ -2,10 +2,12 @@
 
 首頁「一個框搜全部」的後端。五個端點都要 `x-admin-password`（`isAuthorized`），沒有或不對回 **403** `{"message":"需要解鎖私領域才能查看"}`。程式：`artifacts/api-server/src/routes/search.ts`，純邏輯在 `src/lib/search.ts`（搜尋、驗證、stats、快取）與 `src/lib/searchPreview.ts`（預覽）。
 
-## S1 `GET /api/search?q=&kind=&limit=`
+## S1 `GET /api/search?q=&kind=&limit=&month=&before=`
 - `q`：去頭尾空白後 1～50 字（否則 400）。以空白（含全形）切詞，最多 5 詞，每個詞都要命中（不分大小寫子字串，標題或內文）。
 - `kind`：選填，`topic|case|person|object|event|concept|method|source|idea|place|trip|tool`，其他 400。`limit`：每組最多幾筆，1～20，預設 5。
-- 回應：`{ q, total, tookMs, groups: [{ kind, count, items: [{kind,id,title,snippet,date}] }], best }`。
+- `month`／`before`：選填，格式 `YYYY-MM`（月 01～12，否則 400），兩者同時給 400。`month=2026-03` 只留日期在該月的命中；`before=2024-12` 只留日期早於該月（前 7 碼字串比較）的命中；沒有日期的命中在有 `month`／`before` 時一律排除。`groups[].count`、`total`、`best`、`items` 都是篩選後的結果。
+- 回應：`{ q, total, tookMs, groups: [{ kind, count, items: [{kind,id,title,snippet,date}] }], best, facets: { months: [{ ym, n }] } }`。
+- `facets.months`：命中按月的數量，`ym` 為 `YYYY-MM`、`n` 為筆數，依 `ym` 由舊到新，只列 `n>0`。統計範圍與 `groups` 相同的 `q`／`kind` 條件，但**不套** `month`／`before`（直方圖點下去不會跟著縮）。`hermes_doc` 部分另以同條件 `count(*)` 按 `meta.date` 前 7 碼分組、不受 200 筆上限影響，查詢失敗只記 log、該部分當 0；其他 kind 由記憶體候選計數（只計非 `hermes_doc` 的 kind，避免重複）。沒有 `month`／`before` 時 `sum(n)`＝所有有日期命中數；給 `month=X` 時 `total`＝該月在 `facets.months` 的 `n`。
 - `groups` 順序固定：case、topic、person、object、event、concept、method、source、idea、place、trip、tool；沒命中的組不出現；`count` 為該組命中總數。
 - 組內排序級別：標題與整串查詢完全相同 → 標題以第一個詞開頭 → 標題含第一個詞 → 只有內文含；同級依 `date` 新到舊（null 最後），再依 title。`best`＝全部命中中級別最高者（同級依 kind 順序），沒命中為 null。
 - `snippet`：第一個詞在內文第一次命中處前後各 40 字（截斷處加「…」）；只命中標題時取內文前 80 字；沒內文為空字串；最長 200 字。case／person／object 固定為最近一件事件的「日期 標題」。
@@ -23,7 +25,7 @@
 | tool | `portal_sites` | name、subtitle | null |
 
 ### 行為與限制
-- jsonb 快照在程序內快取 30 秒（`clearSearchCache()` 可清）；`hermes_doc` 走 SQL、不快取，四個 kind 一次查詢，每個詞 `title ILIKE OR body_md ILIKE`、詞與詞 AND，SQL 上限為每 kind 200 筆（為了算 count；超過 200 的 count 會被截在 200）。
+- jsonb 快照在程序內快取 30 秒（`clearSearchCache()` 可清）；`hermes_doc` 走 SQL、不快取，四個 kind 一次查詢，每個詞 `title ILIKE OR body_md ILIKE`、詞與詞 AND，SQL 上限為每 kind 200 筆（只為 items 取列；count 另以同條件 `count(*)` 查詢，不受 200 限制）。
 - 查詢一律參數綁定；任何來源表為空、查詢失敗或格式不如預期，該 kind 當 0 筆，不會 500。jsonb 內欄位型別不對的那一筆略過。
 
 ## S2 `GET /api/search/preview?kind=&id=`

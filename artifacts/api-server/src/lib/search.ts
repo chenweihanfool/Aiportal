@@ -57,8 +57,10 @@ export function dateOf(v: unknown): string | null {
 
 // ── S1 參數驗證 ────────────────────────────────────────────────────────────
 export type SearchParams =
-  | { ok: true; q: string; terms: string[]; kind: SearchKind | null; limit: number }
+  | { ok: true; q: string; terms: string[]; kind: SearchKind | null; limit: number; month: string | null; before: string | null }
   | { ok: false; message: string };
+
+const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** 以空白（含全形）切詞，詞轉小寫，去重，最多 5 詞。 */
 export function splitTerms(q: string): string[] {
@@ -71,8 +73,10 @@ export function splitTerms(q: string): string[] {
   return out;
 }
 
-/** q：去頭尾空白後 1～50 字；kind：選填且須在 12 種之內；limit：整數 1～20，預設 5。 */
-export function validateSearchParams(qRaw: unknown, kindRaw: unknown, limitRaw: unknown): SearchParams {
+/** q：去頭尾空白後 1～50 字；kind：選填且須在 12 種之內；limit：整數 1～20，預設 5；month／before：選填 YYYY-MM，不可同時給。 */
+export function validateSearchParams(
+  qRaw: unknown, kindRaw: unknown, limitRaw: unknown, monthRaw?: unknown, beforeRaw?: unknown,
+): SearchParams {
   if (typeof qRaw !== "string") return { ok: false, message: "q 必填" };
   const q = qRaw.trim();
   if (q.length === 0) return { ok: false, message: "q 不可為空白" };
@@ -88,9 +92,20 @@ export function validateSearchParams(qRaw: unknown, kindRaw: unknown, limitRaw: 
     limit = Number(limitRaw);
     if (limit < 1 || limit > SEARCH_MAX_LIMIT) return { ok: false, message: `limit 必須在 1～${SEARCH_MAX_LIMIT} 之間` };
   }
+  let month: string | null = null;
+  if (monthRaw !== undefined) {
+    if (typeof monthRaw !== "string" || !YM_RE.test(monthRaw)) return { ok: false, message: "month 必須是 YYYY-MM" };
+    month = monthRaw;
+  }
+  let before: string | null = null;
+  if (beforeRaw !== undefined) {
+    if (typeof beforeRaw !== "string" || !YM_RE.test(beforeRaw)) return { ok: false, message: "before 必須是 YYYY-MM" };
+    before = beforeRaw;
+  }
+  if (month !== null && before !== null) return { ok: false, message: "month 與 before 只能擇一" };
   const terms = splitTerms(q);
   if (terms.length === 0) return { ok: false, message: "q 不可為空白" };
-  return { ok: true, q, terms, kind, limit };
+  return { ok: true, q, terms, kind, limit, month, before };
 }
 
 // ── 候選項、比對、排序 ─────────────────────────────────────────────────────
@@ -126,6 +141,43 @@ export interface SearchResult {
 export function matchesAll(c: Pick<Candidate, "title" | "text">, terms: string[]): boolean {
   const hay = `${c.title}\n${c.text}`.toLowerCase();
   return terms.every((t) => hay.includes(t));
+}
+
+/**
+ * 月份篩選：month 給定時日期前 7 碼須等於該月；before 給定時前 7 碼須小於該月（字串比較）。
+ * 兩者皆 null 一律 true；沒有日期的候選在有 month／before 時排除。
+ */
+export function matchesMonth(date: string | null, month: string | null, before: string | null): boolean {
+  if (month === null && before === null) return true;
+  if (date === null) return false;
+  const ym = date.slice(0, 7);
+  if (month !== null) return ym === month;
+  return ym < before!;
+}
+
+/**
+ * facets.months：依 ym 由舊到新、只列 n>0 的月份。
+ * 記憶體候選只計非 DOC_KINDS（doc kind 由 docMonths 提供，避免重複），且只計有命中、date 非 null 的；與 docMonths 同月相加。
+ */
+export function monthFacets(
+  candidates: Partial<Record<SearchKind, Candidate[]>>,
+  terms: string[],
+  docMonths: Array<{ ym: string; n: number }>,
+): Array<{ ym: string; n: number }> {
+  const acc = new Map<string, number>();
+  for (const d of docMonths) acc.set(d.ym, (acc.get(d.ym) ?? 0) + d.n);
+  for (const kind of SEARCH_KINDS) {
+    if (isDocKind(kind)) continue;
+    for (const c of candidates[kind] ?? []) {
+      if (c.kind !== kind || c.date === null || !matchesAll(c, terms)) continue;
+      const ym = c.date.slice(0, 7);
+      acc.set(ym, (acc.get(ym) ?? 0) + 1);
+    }
+  }
+  return [...acc.entries()]
+    .filter(([, n]) => n > 0)
+    .map(([ym, n]) => ({ ym, n }))
+    .sort((a, b) => (a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0));
 }
 
 /**

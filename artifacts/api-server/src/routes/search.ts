@@ -8,9 +8,9 @@ import { isAuthorized } from "../lib/adminSession";
 import { logger } from "../lib/logger";
 import { escapeLike } from "../lib/hermesDocSearch";
 import {
-  DOC_KINDS, buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, isDocKind,
-  parseRecentLimit, parseSearchLogBody, parseStatsDays, placesToCandidates, runSearch, sitesToCandidates, topicsToCandidates,
-  tripsToCandidates, validateSearchParams, type Candidate, type SearchKind,
+  DOC_KINDS, buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, isDocKind, matchesMonth,
+  monthFacets, parseRecentLimit, parseSearchLogBody, parseStatsDays, placesToCandidates, runSearch, sitesToCandidates,
+  topicsToCandidates, tripsToCandidates, validateSearchParams, type Candidate, type SearchKind,
 } from "../lib/search";
 import {
   previewDoc, previewGraphEntity, previewIdea, previewPlace, previewTool, previewTopic, previewTrip,
@@ -67,7 +67,7 @@ const loadSites = () => loadSource("sites", async () =>
 // ── S1 ────────────────────────────────────────────────────────────────────
 router.get("/search", async (req: Request, res: Response) => {
   if (!isAuthorized(req.headers["x-admin-password"])) return res.status(403).json(FORBIDDEN);
-  const v = validateSearchParams(req.query["q"], req.query["kind"], req.query["limit"]);
+  const v = validateSearchParams(req.query["q"], req.query["kind"], req.query["limit"], req.query["month"], req.query["before"]);
   if (!v.ok) return res.status(400).json({ message: v.message });
   const started = Date.now();
   const want = (k: SearchKind) => v.kind === null || v.kind === k;
@@ -85,12 +85,19 @@ router.get("/search", async (req: Request, res: Response) => {
       return or(sql`${hermesDocTable.title} ILIKE ${p}`, sql`${hermesDocTable.bodyMd} ILIKE ${p}`);
     }),
   );
-  const docsPromise = docWhere === null ? Promise.resolve([]) : (async () => {
+  // month／before 只影響命中結果（items／count／total／best），facets 用不含月份的 docWhere。
+  const monthWhere = v.month !== null
+    ? sql`left(${hermesDocTable.meta}->>'date', 7) = ${v.month}`
+    : v.before !== null
+      ? sql`left(${hermesDocTable.meta}->>'date', 7) < ${v.before}`
+      : null;
+  const docFilterWhere = docWhere === null ? null : monthWhere === null ? docWhere : and(docWhere, monthWhere);
+  const docsPromise = docFilterWhere === null ? Promise.resolve([]) : (async () => {
     try {
       return await db
         .select({ kind: hermesDocTable.kind, docKey: hermesDocTable.docKey, title: hermesDocTable.title, bodyMd: hermesDocTable.bodyMd, meta: hermesDocTable.meta })
         .from(hermesDocTable)
-        .where(docWhere)
+        .where(docFilterWhere)
         .orderBy(sql`(${hermesDocTable.meta}->>'date') DESC NULLS LAST`)
         .limit(DOC_SQL_LIMIT_PER_KIND * docKinds.length);
     } catch (err) {
@@ -98,12 +105,12 @@ router.get("/search", async (req: Request, res: Response) => {
       return [];
     }
   })();
-  const docCountsPromise = docWhere === null ? Promise.resolve(undefined) : (async () => {
+  const docCountsPromise = docFilterWhere === null ? Promise.resolve(undefined) : (async () => {
     try {
       const rows = await db
         .select({ kind: hermesDocTable.kind, n: sql<number>`count(*)::int` })
         .from(hermesDocTable)
-        .where(docWhere)
+        .where(docFilterWhere)
         .groupBy(hermesDocTable.kind);
       const counts: Partial<Record<SearchKind, number>> = {};
       for (const row of rows) if (isDocKind(row.kind)) counts[row.kind] = row.n;
@@ -113,11 +120,26 @@ router.get("/search", async (req: Request, res: Response) => {
       return undefined;
     }
   })();
+  // facets.months 的 hermes_doc 部分：同 docWhere（不含月份）＋合法月份，group by 前 7 碼，不受 200 筆上限影響。
+  const docMonthsPromise = docWhere === null ? Promise.resolve([] as Array<{ ym: string; n: number }>) : (async () => {
+    try {
+      const rows = await db
+        .select({ ym: sql<string>`left(${hermesDocTable.meta}->>'date', 7)`, n: sql<number>`count(*)::int` })
+        .from(hermesDocTable)
+        .where(and(docWhere, sql`left(${hermesDocTable.meta}->>'date', 7) ~ '^\\d{4}-(0[1-9]|1[0-2])'`))
+        .groupBy(sql`left(${hermesDocTable.meta}->>'date', 7)`);
+      return rows.map((r) => ({ ym: r.ym, n: r.n }));
+    } catch (err) {
+      logger.error({ err }, "search hermes_doc month facet query failed");
+      return [];
+    }
+  })();
 
   const needGraph = want("case") || want("person") || want("object");
-  const [docs, docCounts, graph, topics, ideas, places, trips, sites] = await Promise.all([
+  const [docs, docCounts, docMonths, graph, topics, ideas, places, trips, sites] = await Promise.all([
     docsPromise,
     docCountsPromise,
+    docMonthsPromise,
     needGraph ? loadGraph() : null,
     want("topic") ? loadTopics() : null,
     want("idea") ? loadIdeas() : null,
@@ -143,8 +165,16 @@ router.get("/search", async (req: Request, res: Response) => {
   }
   if (v.kind !== null) for (const k of Object.keys(candidates) as SearchKind[]) if (k !== v.kind) delete candidates[k];
 
+  // facets 用「月份篩選前」的候選算，直方圖不會隨點選縮小；再過濾候選套 month／before 給 runSearch。
+  const months = monthFacets(candidates, v.terms, docMonths);
+  if (v.month !== null || v.before !== null) {
+    for (const k of Object.keys(candidates) as SearchKind[]) {
+      candidates[k] = candidates[k]!.filter((c) => matchesMonth(c.date, v.month, v.before));
+    }
+  }
+
   const r = runSearch(candidates, v.terms, v.limit, docCounts);
-  return res.json({ q: v.q, total: r.total, tookMs: Date.now() - started, groups: r.groups, best: r.best });
+  return res.json({ q: v.q, total: r.total, tookMs: Date.now() - started, groups: r.groups, best: r.best, facets: { months } });
 });
 
 // ── S2 ────────────────────────────────────────────────────────────────────
