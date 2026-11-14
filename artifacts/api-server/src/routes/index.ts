@@ -24,6 +24,7 @@ import companionActionsRouter from "./companionActions";
 import knowledgeCorrectionsRouter from "./knowledgeCorrections";
 import searchRouter from "./search";
 import pushFeedbackRouter from "./pushFeedback";
+import pushPinsRouter from "./pushPins";
 import exportRouter from "./export";
 
 const router: IRouter = Router();
@@ -54,6 +55,7 @@ router.use(companionActionsRouter);
 router.use(knowledgeCorrectionsRouter);
 router.use(searchRouter);
 router.use(pushFeedbackRouter);
+router.use(pushPinsRouter);
 router.use(exportRouter);
 
 export default router;
