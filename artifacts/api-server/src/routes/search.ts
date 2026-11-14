@@ -7,13 +7,15 @@ import { and, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { logger } from "../lib/logger";
 import { escapeLike } from "../lib/hermesDocSearch";
+import type { RepoInfo } from "../lib/githubRepos";
+import { githubReposCache } from "../lib/githubReposCache";
 import {
   DOC_KINDS, buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, isDocKind, matchesMonth,
-  monthFacets, parseRecentLimit, parseSearchLogBody, parseStatsDays, placesToCandidates, runSearch, sitesToCandidates,
-  topicsToCandidates, tripsToCandidates, validateSearchParams, type Candidate, type SearchKind,
+  monthFacets, parseRecentLimit, parseSearchLogBody, parseStatsDays, placesToCandidates, reposToCandidates, runSearch,
+  sitesToCandidates, topicsToCandidates, tripsToCandidates, validateSearchParams, type Candidate, type SearchKind,
 } from "../lib/search";
 import {
-  previewDoc, previewGraphEntity, previewIdea, previewPlace, previewTool, previewTopic, previewTrip,
+  previewDoc, previewGraphEntity, previewIdea, previewPlace, previewRepo, previewTool, previewTopic, previewTrip,
   validatePreviewParams, type Preview,
 } from "../lib/searchPreview";
 
@@ -63,6 +65,32 @@ const loadTrips = () => loadSource("trips", async () => {
 });
 const loadSites = () => loadSource("sites", async () =>
   db.select({ id: portalSitesTable.id, name: portalSitesTable.name, subtitle: portalSitesTable.subtitle }).from(portalSitesTable));
+
+// GitHub 倉庫快取（與 /api/github/repos 共用同一份，它自己就有 30 分鐘快取，不再包 30 秒 createTtlCache）。
+// 最多等 2 秒：逾時回 null（該 kind 0 筆），背景抓取照跑，下一次搜尋就有。失敗或沒有資料也回 null，不讓搜尋 500。
+const REPOS_WAIT_MS = 2000;
+async function loadRepos(): Promise<RepoInfo[] | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    const clock = new Promise<null>((resolve) => {
+      const t = setTimeout(() => resolve(null), REPOS_WAIT_MS);
+      timer = t;
+      t.unref();
+    });
+    const res = await Promise.race([githubReposCache.get(), clock]);
+    if (res === null) return null; // 逾時：不記 log
+    if (res.value.status !== "ok") {
+      logger.warn({ status: res.value.status }, "search repo source empty");
+      return null;
+    }
+    return res.value.repos;
+  } catch (err) {
+    logger.warn({ err }, "search repo source load failed");
+    return null;
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
 
 // ── S1 ────────────────────────────────────────────────────────────────────
 router.get("/search", async (req: Request, res: Response) => {
@@ -136,7 +164,7 @@ router.get("/search", async (req: Request, res: Response) => {
   })();
 
   const needGraph = want("case") || want("person") || want("object");
-  const [docs, docCounts, docMonths, graph, topics, ideas, places, trips, sites] = await Promise.all([
+  const [docs, docCounts, docMonths, graph, topics, ideas, places, trips, repos, sites] = await Promise.all([
     docsPromise,
     docCountsPromise,
     docMonthsPromise,
@@ -145,6 +173,7 @@ router.get("/search", async (req: Request, res: Response) => {
     want("idea") ? loadIdeas() : null,
     want("place") ? loadPlaces() : null,
     want("trip") ? loadTrips() : null,
+    want("repo") ? loadRepos() : null,
     want("tool") ? loadSites() : null,
   ]);
 
@@ -153,6 +182,7 @@ router.get("/search", async (req: Request, res: Response) => {
   candidates.idea = ideasToCandidates(ideas);
   candidates.place = placesToCandidates(places);
   candidates.trip = tripsToCandidates(trips);
+  candidates.repo = reposToCandidates(repos);
   candidates.tool = sitesToCandidates(sites);
   const perKind = new Map<string, number>();
   for (const row of docs) {
@@ -209,6 +239,7 @@ router.get("/search/preview", async (req: Request, res: Response) => {
     case "idea": p = previewIdea(await loadIdeas(), v.id); break;
     case "place": p = previewPlace(await loadPlaces(), v.id); break;
     case "trip": p = previewTrip(await loadTrips(), v.id); break;
+    case "repo": p = previewRepo(await loadRepos(), v.id); break;
     case "tool": p = previewTool(await loadSites(), v.id); break;
   }
   if (!p) return res.status(404).json({ message: "找不到" });
