@@ -134,8 +134,8 @@ function PlaceDetail({ p, now, meters }: { p: FoodPlace; now: Date; meters: numb
         <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>{p.id}</span>
         <b style={{ color: CV.ink, fontSize: '1rem' }}>{p.name}</b>
         <span style={{ fontSize: '0.72rem', color: STATUS_COLOR[p.status] }}>{FOOD_STATUS_ICON[p.status]} {statusLabelFor(p.kind, p.status)}</span>
-        {meters !== null && <span style={{ fontFamily: FONT.mono, fontSize: '0.72rem', color: '#2f80ff' }}>📍 {formatDistance(meters)}</span>}
-        {navigateUrl(p) && <a href={navigateUrl(p)!} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', ...pill(true, '#2f80ff'), textDecoration: 'none' }}>🧭 導航</a>}
+        {meters !== null && <span style={{ fontFamily: FONT.mono, fontSize: '0.72rem', color: 'var(--c-sky)' }}>📍 {formatDistance(meters)}</span>}
+        {navigateUrl(p) && <a href={navigateUrl(p)!} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', ...pill(true, 'var(--c-sky)'), textDecoration: 'none' }}>🧭 導航</a>}
       </div>
       <div style={{ fontSize: '0.74rem', color: CV.steel, lineHeight: 1.6 }}>
         {[p.area, p.cuisine, priceLabel(p.priceLevel)].filter(Boolean).join(' · ')}
@@ -297,7 +297,7 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
         </div>
 
         <div className="fm-nearbar" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '0.8rem 0 0.5rem' }}>
-          <button type="button" data-testid="nearby-toggle" style={pill(nearbyOn || geo.state === 'asking', '#2f80ff')} onClick={() => (geo.state === 'idle' || geo.state === 'denied' || geo.state === 'error' || geo.state === 'unavailable' ? geo.start() : geo.stop())}>
+          <button type="button" data-testid="nearby-toggle" style={pill(nearbyOn || geo.state === 'asking', 'var(--c-sky)')} onClick={() => (geo.state === 'idle' || geo.state === 'denied' || geo.state === 'error' || geo.state === 'unavailable' ? geo.start() : geo.stop())}>
             {geo.state === 'asking' ? '📍 定位中…' : nearbyOn ? `📍 附近・由近到遠${geo.accuracyM !== null ? `（±${geo.accuracyM} m）` : ''}` : '📍 找附近'}
           </button>
           {nearbyOn && (
@@ -364,7 +364,7 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
                       </span>
                       <span style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, whiteSpace: 'nowrap' }}>
                         {meterOf.get(p.id)
-                          ? <b style={{ color: '#2f80ff', fontSize: '0.74rem' }}>{formatDistance(meterOf.get(p.id)!.meters)}<br />{bearingLabel(meterOf.get(p.id)!.bearing)}</b>
+                          ? <b style={{ color: 'var(--c-sky)', fontSize: '0.74rem' }}>{formatDistance(meterOf.get(p.id)!.meters)}<br />{bearingLabel(meterOf.get(p.id)!.bearing)}</b>
                           : p.status === 'want' ? `${daysBetween(p.addedAt, now)} 天` : p.visitedAt?.slice(5) ?? ''}
                       </span>
                     </button>

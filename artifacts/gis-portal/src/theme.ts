@@ -27,7 +27,7 @@ export const COLOR = {
   lineBright: '#2b3a42',
 
   amber: '#3de0c2',
-  amberDim: '#1f8f7b',
+  amberDim: '#26a08a',
 
   steel: '#8a9aa0',
   steelDim: '#7a898f',

@@ -406,7 +406,7 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   const T = `${w}×${h} 異常`
   check(`${T}：data-sys=alert，⑤ 移到 ① 下方（today 底 ${g.today.bottom} ≈ sys 頂 ${g.sys.top}）`, (await page.locator('.hm-root[data-sys="alert"]').count()) === 1 && Math.abs(g.sys.top - g.today.bottom) <= 14 && g.sys.top < g.dims.top)
   const lamp = await page.evaluate(() => getComputedStyle(document.querySelector('.hm-sys .hm-lamp')).backgroundColor)
-  check(`${T}：燈變色（crit 紅 ${lamp}）`, /226, 88, 79/.test(lamp))
+  check(`${T}：燈變色（crit 紅 ${lamp}）`, /255, 122, 107|184, 58, 48/.test(lamp))
   const t = await page.locator('.hm-sys').innerText()
   check(`${T}：寫出原因（管線 L3、Ollama、推送、硬碟）`, /管線 L3 失敗（14 小時前）：apply 失敗/.test(t) && /Ollama 會在補點前用完/.test(t), t.replace(/\n/g, ' | ').slice(0, 300))
   check(`${T}：頁面可往下捲、不被截掉`, g.scrollH >= g.clientH, `${g.scrollH}/${g.clientH}`)

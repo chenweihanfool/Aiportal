@@ -22,7 +22,7 @@ import {
 // 內文走 MarkdownView（輸出是 React 元素，不是 HTML 字串，沒有注入面）。入口網只讀，不寫入。
 // ─────────────────────────────────────────────
 
-const STATUS_COLOR: Record<TripStatus, string> = { planned: '#2f80ff', ongoing: CV.amber, done: CV.steel }
+const STATUS_COLOR: Record<TripStatus, string> = { planned: 'var(--c-sky)', ongoing: CV.amber, done: CV.steel }
 
 const chip = (color: string = CV.steel): CSSProperties => ({
   fontFamily: FONT.mono, fontSize: '0.68rem', padding: '4px 10px', borderRadius: 999, cursor: 'pointer', textDecoration: 'none',
