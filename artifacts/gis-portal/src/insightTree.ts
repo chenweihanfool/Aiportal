@@ -485,7 +485,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     })
   }
 
-  // ── 邊界 → 平移與縮小（樹幹置中、底部貼齊；只縮不放）──
+  // ── 邊界 → 平移與縮放（樹幹置中、底部貼齊）──
   const trunkBase: P = [0, TRUNK_LEN]
   let minY = 0
   let maxY = TRUNK_LEN
@@ -499,8 +499,10 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   for (const i of visible) { const p = pos.get(i.id); if (p) grow(p, LEAF_R[i.relation]) }
   const availW = W / 2 - PAD
   const availH = H - 2 * PAD - LABEL_ROOM
-  const sx = halfX > availW ? availW / halfX : 1
-  const sy = maxY - minY > availH ? availH / (maxY - minY) : 1
+  // 畫布放得下就等比放大（最多 1.8 倍，樹才長得夠大）；放不下就各軸只縮不放
+  const fit = Math.min(availW / Math.max(halfX, 1), availH / Math.max(maxY - minY, 1))
+  const sx = fit > 1 ? Math.min(fit, 1.8) : Math.min(1, availW / Math.max(halfX, 1))
+  const sy = fit > 1 ? Math.min(fit, 1.8) : Math.min(1, availH / Math.max(maxY - minY, 1))
   const baseY = H - PAD
   const T = (p: P): P => [W / 2 + p[0] * sx, baseY - (maxY - p[1]) * sy]
   // 樹幹底到樹幹頂（原點）依 sy 縮放；原點的 y＝baseY-(maxY-0)*sy
