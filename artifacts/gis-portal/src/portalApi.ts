@@ -227,8 +227,8 @@ export async function apiFetchHermesPipelineHistory(adminPassword: string, days 
 }
 
 // HermesGraph* types + apiFetchHermesGraph moved to ./hermesGraphApi.ts so
-// RelationshipUniverse.tsx (the full-page #graph route) can share them
-// without a circular import back into this file.
+// the graph consumers (dossier, search, war room) can share them without a
+// circular import back into this file.
 
 // 回傳 Blob 而不是先 parse 成 JSON 再重新 stringify——內容本來就是伺服器
 // 端已經序列化好的 JSON 文字，直接轉存成檔案不需要多一趟解析/重組。

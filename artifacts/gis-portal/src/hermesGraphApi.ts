@@ -1,9 +1,7 @@
-// Shared /api/hermes-graph types + fetcher — used by both the compact
-// summary panel embedded in the HERMES 戰情室 section (App.tsx) and the
-// full-page 3D relationship universe (RelationshipUniverse.tsx). Pulled out
-// of App.tsx into its own module specifically so those two files can import
-// it without creating a circular App.tsx <-> RelationshipUniverse.tsx
-// dependency (App.tsx renders RelationshipUniverse for the #graph route).
+// Shared /api/hermes-graph types + fetcher — used by the compact summary
+// panel embedded in the HERMES 戰情室 section and by the dossier/search views.
+// Pulled out of App.tsx into its own module so those consumers can import it
+// without creating a circular import back into App.tsx.
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 // firstSeenAt：人物頁首次進入 vault 的時間（ISO）；舊版 API／pusher 沒帶時為 null 或缺漏，「最近新增」退回用關聯事件的最早日期
