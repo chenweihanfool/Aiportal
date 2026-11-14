@@ -1,4 +1,5 @@
 import { MarkdownView } from './MarkdownView'
+import { SearchDiaryReport } from './SearchDiaryReport'
 import { PinButton } from './PinButton'
 import { pinTargetFor } from './pushTriggers'
 import { CTX_H, CTX_W, contextLayout, ctxLabel, highlightSegments, kindLabel, openAction, type PreviewRelated, type SearchKind, type SearchPreview } from './omniSearch'
@@ -62,18 +63,23 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
   if (!item) return <div className="om-none om-lb">NO PREVIEW</div>
   const data = preview && preview.kind === item.kind && preview.id === item.id ? preview : null
   const p = data?.state === 'ok' ? data.data : null
-  const inPanel = openAction(item.kind, item.id).type === 'expand'
+  const act = openAction(item.kind, item.id).type
+  const inPanel = act === 'expand'
+  const isDiary = item.kind === 'diary'
+  const isEvent = item.kind === 'event'
+  const rawBtn = isDiary || isEvent
   return (
     <div className="om-reader-in">
       <span className="om-kd">{kindLabel(item.kind)}</span>
       <h2><Marked text={item.title} q={q} /></h2>
-      {!data || data.state === 'loading' ? <p className="om-one om-dim">載入預覽中…</p> : null}
-      {data?.state === 'error' ? <p className="om-one om-dim" role="status">預覽暫時讀不到，稍後再試。</p> : null}
-      {data?.state === 'missing' ? <p className="om-one om-dim">這一筆沒有預覽資料。</p> : null}
+      {isDiary ? null : !data || data.state === 'loading' ? <p className="om-one om-dim">載入預覽中…</p> : null}
+      {!isDiary && data?.state === 'error' ? <p className="om-one om-dim" role="status">預覽暫時讀不到，稍後再試。</p> : null}
+      {!isDiary && data?.state === 'missing' ? <p className="om-one om-dim">這一筆沒有預覽資料。</p> : null}
+      {isDiary && <SearchDiaryReport date={item.id} pw={pw ?? null} />}
       {p && (
         <>
-          {p.one && <p className="om-one"><Marked text={p.one} q={q} /></p>}
-          {p.points.length > 0 && (
+          {!isDiary && p.one && <p className="om-one"><Marked text={p.one} q={q} /></p>}
+          {!isDiary && p.points.length > 0 && (
             <>
               <h3 className="om-lb">{pointsLabel(p.kind)}</h3>
               <ul>{p.points.map((pt, i) => <li key={i}><Marked text={pt} q={q} /></li>)}</ul>
@@ -89,10 +95,12 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
         </>
       )}
       <div className="om-act">
-        <button type="button" className="om-cta" onClick={onOpen}>{inPanel ? (expanded ? '收合全文 ↵' : '展開全文 ↵') : item.kind === 'repo' ? '在 GitHub 開啟 ↵' : '開啟 ↵'}</button>
+        {isDiary
+          ? <button type="button" className="om-cta" onClick={() => { window.location.hash = 'graph/timeline' }}>在時間軸看 ↵</button>
+          : <button type="button" className={inPanel ? 'om-gh' : 'om-cta'} onClick={onOpen}>{inPanel ? (expanded ? '收合原文 ↵' : '看原文 ↵') : isEvent ? '開啟事件卷宗 ↵' : item.kind === 'repo' ? '在 GitHub 開啟 ↵' : '開啟 ↵'}</button>}
         {p?.url && <a className="om-gh" href={p.url} target="_blank" rel="noopener noreferrer">在 GitHub 開啟 ↗</a>}
         {p?.bodyMd != null && !inPanel && (
-          <button type="button" className="om-gh" onClick={onToggleExpand}>{expanded ? '收合全文' : '展開全文'}</button>
+          <button type="button" className="om-gh" onClick={onToggleExpand}>{rawBtn ? (expanded ? '收合原文' : '看原文') : (expanded ? '收合全文' : '展開全文')}</button>
         )}
         <PinButton pw={pw ?? null} target={pinTargetFor(item)} />
         {item.kind === 'topic' && <a className="om-gh" href={`#knowledge/${encodeURIComponent(item.id)}`}>✎ 這頁有錯</a>}

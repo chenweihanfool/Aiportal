@@ -2223,6 +2223,12 @@ button.ms-col { cursor: pointer; }
 .om-ctx .om-n:hover text { fill: var(--c-ink); }
 .om-ctx .om-c circle { fill: var(--c-accent); stroke: none; }
 .om-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; align-items: center; }
+.om-reader { min-width: 0; overflow-x: hidden; }
+.om-rp { margin-top: 10px; min-width: 0; max-width: 100%; }
+.om-rp-link { display: inline-block; margin-bottom: 6px; }
+.om-rp-body { min-width: 0; max-width: 100%; overflow-x: auto; }
+.om-rp-body svg, .om-rp-body img, .om-rp-body table { max-width: 100%; }
+.om-rp-ev { color: var(--c-ink); text-decoration: underline; text-underline-offset: 2px; }
 .om-body { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--c-line); max-height: 50vh; overflow: auto; }
 @media (max-width: 820px) {
   .om-results { grid-template-columns: minmax(0, 1fr); }
