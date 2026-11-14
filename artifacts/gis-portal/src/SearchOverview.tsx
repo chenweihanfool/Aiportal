@@ -50,7 +50,7 @@ export function SearchOverview({ resp, kindFilter, date, todayYm, onKind, onDate
                   <span className="os-viz-seglb">{label} {s.n}</span>
                 </>
               )
-              const style = { flex: `${Math.max(s.pct, 1)} 1 0` }
+              const style = { flex: `${Math.max(s.pct, 1)} 1 auto` }
               if (s.kind === 'other') return <div key="other" className="os-viz-seg" style={style}>{inner}</div>
               const kind = s.kind
               const on = kindFilter === kind

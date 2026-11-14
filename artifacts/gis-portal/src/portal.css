@@ -2419,11 +2419,11 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .om-root .os-viz-chip { font-size: 12.5px; color: var(--c-accent-ink); border: 1px solid var(--c-accent-dim); border-radius: 999px; padding: 1px 10px; }
 .om-root .os-viz-chip:hover { background: var(--c-accent-soft); }
 .om-root .os-viz-all { color: var(--c-ink-2); border-color: var(--c-line-strong); }
-.os-viz-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: end; }
-.os-viz-kinds { display: flex; gap: 3px; min-width: 0; }
-.om-root .os-viz-seg { display: flex; flex-direction: column; gap: 4px; min-width: 2.6rem; text-align: left; padding: 3px 2px 2px; border-radius: 5px; outline-offset: 1px; }
+.os-viz-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.os-viz-kinds { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.om-root .os-viz-seg { display: flex; flex-direction: column; gap: 4px; min-width: max-content; text-align: left; padding: 3px 2px 2px; border-radius: 5px; outline-offset: 1px; }
 .os-viz-segbar { display: block; height: 8px; border-radius: 3px; }
-.os-viz-seglb { font-size: 11.5px; line-height: 1.2; color: var(--c-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.os-viz-seglb { font-size: 11.5px; line-height: 1.2; color: var(--c-ink-2); white-space: nowrap; }
 .om-root button.os-viz-seg:hover .os-viz-seglb { color: var(--c-ink); }
 .om-root .os-viz-seg.os-viz-on { outline: 2px solid var(--c-accent); }
 .os-viz-seg.os-viz-on .os-viz-seglb { color: var(--c-ink); font-weight: 600; text-decoration: underline; }
