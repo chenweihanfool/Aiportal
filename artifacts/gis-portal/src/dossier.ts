@@ -112,6 +112,12 @@ export interface DossierSummary {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
+/** 敘事裡的 Obsidian wikilink 轉成純文字：[[名稱]]→名稱、[[名稱|顯示]]→顯示；檔名前的「YYYY-MM-DD_」日期前綴拿掉 */
+export function plainWikilinks(s: string): string {
+  return s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target: string, label?: string) =>
+    (label ?? target).replace(/^\d{4}-\d{2}-\d{2}_/, '').trim())
+}
+
 /** 摘要列。實體不存在回 null。sentence＝最近一則 hub 敘事；沒有就「共 N 件事件，最近 YYYY-MM-DD」。 */
 export function dossierSummary(
   index: GraphIndex, kind: DossierKind, name: string,
@@ -124,7 +130,7 @@ export function dossierSummary(
   const last = dates.length ? dates[dates.length - 1] : null
   const hubKey = `${kind === 'person' ? 'p' : kind === 'case' ? 'c' : 'o'}:${name}`
   const latest = [...(narratives.get(hubKey) ?? [])].sort((a, b) => b.date.localeCompare(a.date))[0]
-  const text = latest?.text.trim()
+  const text = latest ? plainWikilinks(latest.text).trim() : ''
   const sentence = text || `共 ${ids.length} 件事件${last ? `，最近 ${last}` : ''}`
   const people = relatedRanked(index, kind, name, Number.MAX_SAFE_INTEGER).filter(r => r.kind === 'person').length
   return { title: name, kindLabel: DOSSIER_KIND_LABEL[kind], sentence, events: ids.length, first, last, people }

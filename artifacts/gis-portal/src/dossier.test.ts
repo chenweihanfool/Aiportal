@@ -3,7 +3,7 @@ import { buildIndex } from './graphInsights'
 import type { HermesGraphData } from './hermesGraphApi'
 import type { TimelineRow } from './nodeTimeline'
 import {
-  dossierForEvent, dossierFromHash, dossierHref, dossierIndex, dossierSummary, egoGraph, monthGroups, relatedRanked, relatedTopics,
+  dossierForEvent, dossierFromHash, dossierHref, dossierIndex, dossierSummary, egoGraph, monthGroups, plainWikilinks, relatedRanked, relatedTopics,
 } from './dossier'
 
 type Graph = NonNullable<HermesGraphData['graph']>
@@ -133,6 +133,19 @@ describe('dossierSummary', () => {
       { hub: 'CaseA', kind: 'case', date: '2026-02-01', type: 'weave', text: '新' },
     ] }))
     expect(dossierSummary(idx, 'case', 'CaseA', idx.narrativesByHub)!.sentence).toBe('新')
+  })
+  it('敘事裡的 wikilink 轉成純文字', () => {
+    const idx = buildIndex(graph({ hubNarratives: [
+      { hub: 'CaseA', kind: 'case', date: '2026-02-01', type: 'weave', text: '由 [[陳某]] 串起：[[2026-08-11_gen-root.py 條目]]、[[kb-pipeline|管線]]' },
+    ] }))
+    expect(dossierSummary(idx, 'case', 'CaseA', idx.narrativesByHub)!.sentence).toBe('由 陳某 串起：gen-root.py 條目、管線')
+  })
+})
+
+describe('plainWikilinks', () => {
+  it('沒有 wikilink 原樣；不成對的括號不動', () => {
+    expect(plainWikilinks('一般文字')).toBe('一般文字')
+    expect(plainWikilinks('[[未關閉')).toBe('[[未關閉')
   })
 })
 
