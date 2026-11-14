@@ -139,7 +139,7 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
     if (day !== 'today') return base
     const extra = [
       ...pinnedCards((pins.data ?? []).filter((p) => !donePins.includes(p.id)), todayIso),
-      ...(matcher.data ? meetingCards(calendar.data, clock, matcher.data) : []),
+      ...(matcher.data ? meetingCards(calendar.data, clock, matcher.data.match) : []),
       ...(near.card ? [near.card] : []),
     ]
     return extra.length === 0 ? base : orderTriggerFirst(sortCards([...base, ...extra]))

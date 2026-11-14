@@ -47,11 +47,12 @@ export async function apiFetchPlaces(pw: string): Promise<FoodPlace[]> {
   return (await apiFetchFood(pw)).places
 }
 
-/** 會前卡的比對來源：知識題目名稱＋卷宗索引前 20 名；兩邊任一失敗就只用另一邊 */
-export async function apiFetchMeetingMatcher(pw: string): Promise<MeetingMatcher> {
+/** 會前卡的比對來源：知識題目名稱＋卷宗索引前 20 名；兩邊任一失敗就只用另一邊。
+ *  回傳 `{ match }` 物件而不是函式本身：放進 React state 的函式會被當成 updater 執行（2026-11-14 白屏事故）。 */
+export async function apiFetchMeetingMatcher(pw: string): Promise<{ match: MeetingMatcher }> {
   const [topics, graph] = await Promise.all([
     apiFetchTopicsData(pw).then((m) => m.value?.topics ?? [], () => []),
     apiFetchHermesGraph(pw).then((d) => (d.available && d.graph ? dossierIndex(buildIndex(d.graph), 20) : []), () => []),
   ])
-  return makeMeetingMatcher(topics.map((t) => ({ id: t.id, name: t.name })), graph.map((g) => ({ kind: g.kind, name: g.name })))
+  return { match: makeMeetingMatcher(topics.map((t) => ({ id: t.id, name: t.name })), graph.map((g) => ({ kind: g.kind, name: g.name }))) }
 }
