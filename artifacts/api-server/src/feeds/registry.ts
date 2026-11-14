@@ -175,6 +175,9 @@ const DIAGRAM_MAP = {
 };
 const DIAGRAM = { oneOf: [{ type: "null" }, DIAGRAM_FLOW, DIAGRAM_TIMELINE, DIAGRAM_MAP] };
 
+// calendar-today 的時間欄位：全天事件用 YYYY-MM-DD，其餘 ISO 8601 且必須帶時區。
+const CALENDAR_TIME = "^(\\d{4}-\\d{2}-\\d{2}|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2}))$";
+
 export const FEED_REGISTRY: Record<string, FeedDef> = {
   // 知識庫架構頁（#architecture）各節點的真實處理數字；推送端 kb-pipeline scripts/arch-stats-pusher.py（每 10 分鐘，只讀計算）。
   "kb-arch-stats": {
@@ -690,6 +693,40 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
                   },
                 },
               },
+            },
+          },
+        },
+      },
+    },
+  },
+  // 首頁「今天的行程」卡片：只收標題、開始／結束時間、地點文字，不含與會者、描述、會議連結（私領域才看得到）。
+  // 推送端與前端卡片另行施工；日期一律是台北日期 YYYY-MM-DD。
+  "calendar-today": {
+    version: 1,
+    description: "今天的行程：只有標題、開始／結束時間、地點文字；不含與會者、描述、會議連結（台北日期）",
+    maxBytes: 64 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "calendar-today feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "date", "events"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        events: {
+          type: "array",
+          maxItems: 50,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["start", "end", "allDay", "title", "location"],
+            properties: {
+              start: { type: "string", pattern: CALENDAR_TIME },
+              end: { type: ["string", "null"], pattern: CALENDAR_TIME },
+              allDay: { type: "boolean" },
+              title: { type: "string", minLength: 1, maxLength: 120 },
+              location: { type: ["string", "null"], maxLength: 120 },
             },
           },
         },
