@@ -405,3 +405,14 @@ export function loadRecent(storage: StorageLike | null = defaultStorage()): stri
 export function saveRecent(list: readonly string[], storage: StorageLike | null = defaultStorage()): void {
   try { storage?.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX))) } catch { /* 寫不進去就只在這次有效 */ }
 }
+
+/** 日記的搜尋 id 是否為 YYYY-MM-DD（真實存在的日期才算） */
+export function isDiaryDate(id: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(id)
+  if (!m) return false
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3]
+}
+
+/** 沒有日報時最多列幾筆事件標題 */
+export const DIARY_EVENTS_MAX = 8
