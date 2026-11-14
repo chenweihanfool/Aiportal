@@ -21,7 +21,7 @@ export const HALF_POINTS = 3;
 /** 基準線至少要幾天才修正；不足時修正為 0 */
 export const MIN_BASELINE_DAYS = 7;
 
-/** social、tripDay、workout 一天最多 1；newPlaces 每間算一次 */
+/** social＝見面人數、workout＝運動項目數（2026-11-14 起；先前一天都只算 1）；tripDay 一天最多 1；newPlaces 每間算一次 */
 export interface DayCounts { tasks: number; ideasNew: number; ideasDone: number; social: number; newPlaces: number; tripDay: number; workout: number }
 
 export interface DayScore {
@@ -58,7 +58,7 @@ export function dayCounter(ideas: HermesIdea[], tasksByDate: Map<string, number>
     const l = life.get(date);
     return {
       tasks: tasksByDate.get(date) ?? 0, ideasNew: born.get(date) ?? 0, ideasDone: done.get(date) ?? 0,
-      social: l && l.socialPeople > 0 ? 1 : 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l && l.workouts.length > 0 ? 1 : 0,
+      social: l?.socialPeople ?? 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l?.workouts.length ?? 0,
     };
   };
 }

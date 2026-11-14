@@ -48,17 +48,19 @@ describe('任務與想法的標題（提示窗）', () => {
 
 describe('生活項目', () => {
   const life = parseDailyLife({ days: [
-    { date: '2026-10-20', socialPeople: 3, newPlaces: ['甲店', '乙店'], trip: '花蓮', workouts: ['深蹲', '臥推'] },
+    { date: '2026-10-20', socialPeople: 3, socialNames: ['阿明', '小美', '老王'], newPlaces: ['甲店', '乙店'], trip: '花蓮', workouts: ['深蹲', '臥推'] },
     { date: '2026-10-21', socialPeople: 0, newPlaces: [], trip: '花蓮', workouts: [] },
     { date: 'x', socialPeople: 1, newPlaces: [], trip: null, workouts: [] },
   ] })
   const ix = dailyIndex([], tasks({ '2026-10-20': 1 }), life)
-  it('parseDailyLife：丟壞列；格式不對回 null', () => {
+  it('parseDailyLife：丟壞列；格式不對回 null；缺 socialNames 的舊資料補空陣列', () => {
     expect(Object.keys(life!)).toEqual(['2026-10-20', '2026-10-21'])
+    expect(life!['2026-10-21'].socialNames).toEqual([])
+    expect(parseDailyLife({ days: [{ date: '2026-10-22', socialPeople: 2, newPlaces: [], trip: null, workouts: [] }] })?.['2026-10-22'].socialNames).toEqual([])
     expect(parseDailyLife({ days: 'x' })).toBeNull()
   })
-  it('見人、旅行、運動一天算一次，新店每間算一次', () => {
-    expect(ix.at('2026-10-20')).toEqual({ tasks: 1, ideasNew: 0, ideasDone: 0, social: 1, newPlaces: 2, tripDay: 1, workout: 1 })
+  it('見人算人數、運動算項數、旅行一天算一次，新店每間算一次', () => {
+    expect(ix.at('2026-10-20')).toEqual({ tasks: 1, ideasNew: 0, ideasDone: 0, social: 3, newPlaces: 2, tripDay: 1, workout: 2 })
     expect(ix.at('2026-10-22')).toMatchObject({ social: 0, newPlaces: 0, tripDay: 0, workout: 0 })
   })
   it('提示窗列出具體項目；區間合計與合計數都含生活項目', () => {

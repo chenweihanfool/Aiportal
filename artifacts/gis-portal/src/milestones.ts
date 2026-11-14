@@ -16,10 +16,10 @@ export const PARTS: ReadonlyArray<{ key: PartKey; icon: string; label: string; u
   { key: 'tasks', icon: '✅', label: '完成任務', unit: '項' },
   { key: 'ideasNew', icon: '💡', label: '新想法', unit: '個' },
   { key: 'ideasDone', icon: '🚀', label: '想法實行', unit: '個' },
-  { key: 'social', icon: '🫶', label: '見家人朋友', unit: '天' },
+  { key: 'social', icon: '🫶', label: '見家人朋友', unit: '位' },
   { key: 'newPlaces', icon: '🍜', label: '去新店', unit: '間' },
   { key: 'tripDay', icon: '🧳', label: '旅行', unit: '天' },
-  { key: 'workout', icon: '🏋️', label: '運動', unit: '天' },
+  { key: 'workout', icon: '🏋️', label: '運動', unit: '項' },
 ]
 /** 走勢要畫幾期（含本期） */
 export const TREND_N: Record<MsLevel, number> = { day: 14, week: 12, month: 12, quarter: 8, year: 5 }
@@ -59,14 +59,15 @@ export async function apiFetchTasksDone(pw: string): Promise<TasksDone | null> {
 }
 
 // ── 資料：每天的生活項目（GET /api/daily-life，算法見 api-server lib/dailyLife.ts） ──
-export interface LifeDay { date: string; socialPeople: number; newPlaces: string[]; trip: string | null; workouts: string[] }
+export interface LifeDay { date: string; socialPeople: number; socialNames: string[]; newPlaces: string[]; trip: string | null; workouts: string[] }
 export type DailyLife = Record<string, LifeDay>
 
 export function parseDailyLife(raw: unknown): DailyLife | null {
   const days = (raw as { days?: unknown } | null)?.days
   if (!Array.isArray(days)) return null
   const out: DailyLife = {}
-  for (const d of days as LifeDay[]) if (d && typeof d.date === 'string' && DATE.test(d.date)) out[d.date] = d
+  // 舊資料沒有 socialNames：補空陣列，不可丟錯
+  for (const d of days as LifeDay[]) if (d && typeof d.date === 'string' && DATE.test(d.date)) out[d.date] = { ...d, socialNames: Array.isArray(d.socialNames) ? d.socialNames : [] }
   return out
 }
 
@@ -79,6 +80,7 @@ export async function apiFetchDailyLife(pw: string): Promise<DailyLife | null> {
 }
 
 // ── 每天的計數 ──
+/** social＝見面人數、workout＝運動項目數（2026-11-14 起；先前一天都只算 1） */
 export type Counts = Record<PartKey, number>
 /** 每項的具體標題（任務、想法、店名；一天算一次的生活項目帶日期，合併區間時才分得出來）；任務標題推送端沒給的日子是空陣列，數量照 Counts */
 export type Items = Record<PartKey, string[]>
@@ -102,7 +104,7 @@ export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null, 
       const l = life?.[d]
       return {
         tasks: byDate[d] ?? 0, ideasNew: born[d]?.length ?? 0, ideasDone: done[d]?.length ?? 0,
-        social: l && l.socialPeople > 0 ? 1 : 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l && l.workouts.length > 0 ? 1 : 0,
+        social: l?.socialPeople ?? 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l?.workouts.length ?? 0,
       }
     },
     items: (d) => {

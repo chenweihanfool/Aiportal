@@ -29,9 +29,9 @@ describe("dayCounter", () => {
     expect(at("2026-10-03")).toEqual(counts({ tasks: 2, ideasDone: 1 }));
     expect(at("2026-10-05").ideasDone).toBe(0);
   });
-  it("生活項目：見人、旅行、運動一天算一次，新店每間算一次", () => {
-    const at = dayCounter([], new Map(), new Map([["2026-10-03", { date: "2026-10-03", socialPeople: 3, newPlaces: ["甲", "乙"], trip: "花蓮", workouts: ["深蹲", "臥推"] }]]));
-    expect(at("2026-10-03")).toEqual(counts({ social: 1, newPlaces: 2, tripDay: 1, workout: 1 }));
+  it("生活項目：見人算人數、運動算項數、旅行一天算一次，新店每間算一次", () => {
+    const at = dayCounter([], new Map(), new Map([["2026-10-03", { date: "2026-10-03", socialPeople: 3, socialNames: ["甲", "乙", "丙"], newPlaces: ["甲", "乙"], trip: "花蓮", workouts: ["深蹲", "臥推"] }]]));
+    expect(at("2026-10-03")).toEqual(counts({ social: 3, newPlaces: 2, tripDay: 1, workout: 2 }));
     expect(at("2026-10-04")).toEqual(counts());
   });
   it("回補想法的 done 是補登日，不算實行", () => {
