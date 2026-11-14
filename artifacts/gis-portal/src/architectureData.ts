@@ -91,7 +91,7 @@ export const NODES: readonly ArchNode[] = [
     scripts: ['hermes-graph-pusher.py', 'hermes-timeline-pusher.py', 'hermes-status-pusher.py', 'hermes-usage-pusher.py'],
     note: 'graph pusher 與 L5 各自再解析一次 frontmatter（重複解析處）。' },
   { id: 'portal', band: 'portal', title: '入口網', sub: 'Aiportal', role: 'portal',
-    what: '關係宇宙、時間軸、想法庫、地圖、幸福指數、戰情室；解鎖後才顯示私領域資料。' },
+    what: '卷宗、時間軸、想法庫、地圖、幸福指數、戰情室；解鎖後才顯示私領域資料。' },
 ]
 
 export interface ArchEdge { from: string; to: string; label?: string }

@@ -1,8 +1,7 @@
-// 翰翰儀表板入口：解鎖狀態、網址路由（#graph／#food／#trips／#dim／#legacy）與全站搜尋（首頁 HomeBoard 的 OmniSearch）。
+// 翰翰儀表板入口：解鎖狀態、網址路由（#dossier／#food／#trips／#dim／#legacy）與全站搜尋（首頁 HomeBoard 的 OmniSearch）。
 import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
-import { RelationshipUniverse } from './RelationshipUniverse'
 import { ArchitectureView } from './ArchitectureView'
 import { KnowledgeView } from './KnowledgeView'
 import { TimelineView } from './TimelineView'
@@ -34,20 +33,20 @@ export default function App() {
   const [unlockedPassword, setUnlockedPassword] = useState<string | null>(() => readUnlock())
   const unlocked = !!unlockedPassword
   const [adminOpen, setAdminOpen] = useState(false)
-  // 全頁 3D 關係宇宙走 hash route（#graph），不是路徑 route——這個 SPA 沒
+  // 全頁頁面走 hash route（#dossier 等），不是路徑 route——這個 SPA 沒
   // 有接路由庫，路徑 route 在 refresh/直接貼網址時需要伺服端 SPA fallback
   // 設定，hash 則完全是前端狀態，不需要動部署那端的反向代理規則。
   // #home（新首頁預覽時期分享出去的網址）已等同預設首頁：直接把網址的 hash 清掉，免得停在一個沒有意義的路由上
-  // 2.90.0 拿掉關係頁的兩個分頁：舊書籤 #relations、#relations/prep 一律改寫成 #graph。
+  // 2.93.0 3D 關係圖退場：舊書籤 #graph、#relations、#relations/prep 一律改寫成卷宗索引 #dossier。
   const readHash = () => {
     const h = window.location.hash
     if (h === '#home') {
       try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 取不到 history 就維持原網址 */ }
       return ''
     }
-    if (h === '#relations' || h === '#relations/prep') {
-      try { window.history.replaceState(null, '', window.location.pathname + window.location.search + '#graph') } catch { /* 取不到 history 就維持原網址 */ }
-      return '#graph'
+    if (h === '#graph' || h === '#relations' || h === '#relations/prep') {
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.search + '#dossier') } catch { /* 取不到 history 就維持原網址 */ }
+      return '#dossier'
     }
     return h
   }
@@ -104,9 +103,6 @@ export default function App() {
   const dossierRoute = dossierFromHash(hashRoute)
   if (dossierRoute !== null) {
     return <DossierView unlockedPassword={unlockedPassword} route={dossierRoute} onRequestUnlock={handleRequestUnlock} />
-  }
-  if (hashRoute === '#graph') {
-    return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
   }
   // 知識庫架構頁（2026-10-22）：分層架構圖＋L1～L5 即時狀態；入口在首頁「成長軌跡」與戰情室旁
   if (hashRoute === '#architecture') {

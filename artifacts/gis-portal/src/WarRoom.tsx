@@ -54,12 +54,12 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
           )}
           <button
             type="button"
-            onClick={() => { window.location.hash = 'graph' }}
+            onClick={() => { window.location.hash = 'dossier' }}
             style={{
               width: '100%', padding: '0.7rem', borderRadius: '5px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.74rem', letterSpacing: '0.06em',
               background: 'color-mix(in srgb, var(--c-accent) 8%, transparent)', border: `1px solid ${CV.amberDim}`, color: CV.amber,
             }}
-          >展開完整關係宇宙 →</button>
+          >看卷宗 →</button>
           <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>
             {data.computedAt ? formatMinutesAgo(data.computedAt) : ''}
           </div>

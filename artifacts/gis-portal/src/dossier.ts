@@ -5,7 +5,7 @@ import type { TimelineRow } from './nodeTimeline'
 import type { TopicNudges } from './topicNudges'
 
 export type DossierKind = 'case' | 'person' | 'object'
-export type DossierRoute = { kind: DossierKind; name: string } | 'index' | null
+export type DossierRoute = { kind: DossierKind; name: string } | { kind: 'event'; id: string } | 'index' | null
 
 export const DOSSIER_KIND_LABEL: Record<DossierKind, string> = { case: '案件', person: '人物', object: '物件' }
 
@@ -25,13 +25,25 @@ export function dossierFromHash(hash: string): DossierRoute {
   if (slash < 0) return 'index'
   const kind = rest.slice(0, slash)
   const rawName = rest.slice(slash + 1)
-  if (!isKind(kind) || rawName === '') return 'index'
+  if (rawName === '') return 'index'
   try {
     const name = decodeURIComponent(rawName)
-    return name === '' ? 'index' : { kind, name }
+    if (name === '') return 'index'
+    if (kind === 'event') return { kind: 'event', id: name }
+    if (!isKind(kind)) return 'index'
+    return { kind, name }
   } catch {
     return 'index'
   }
+}
+
+/** 事件 → 所屬卷宗：案件（名稱排序第一個）優先，其次參與者第一人，都沒有回 null。eventId 不含 e: 前綴。 */
+export function dossierForEvent(index: GraphIndex, eventId: string): { kind: DossierKind; name: string } | null {
+  const cases = [...index.caseEvents].filter(([, ids]) => ids.includes(eventId)).map(([c]) => c).sort((a, b) => a.localeCompare(b))
+  if (cases.length > 0) return { kind: 'case', name: cases[0] }
+  const people = (index.eventParticipants.get(eventId) ?? []).map(p => p.person).sort((a, b) => a.localeCompare(b))
+  if (people.length > 0) return { kind: 'person', name: people[0] }
+  return null
 }
 
 // ── 事件集合（人／案／物各自的事件 id） ──

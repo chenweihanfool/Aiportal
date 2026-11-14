@@ -8,8 +8,8 @@ import type { SearchPreview } from './omniSearch'
 import { MarkdownView } from './MarkdownView'
 import { apiFetchTopicNudges, knowledgeHref, type TopicNudges } from './topicNudges'
 import {
-  DOSSIER_KIND_LABEL, EGO_VIEW, dossierHref, dossierIndex, dossierRows, dossierSummary, egoGraph, monthGroups,
-  relatedRanked, relatedTopics, type DossierKind,
+  DOSSIER_KIND_LABEL, EGO_VIEW, dossierForEvent, dossierHref, dossierIndex, dossierRows, dossierSummary, egoGraph, monthGroups,
+  relatedRanked, relatedTopics, type DossierKind, type DossierRoute,
 } from './dossier'
 import { DossierIndex } from './DossierIndex'
 import './dossier.css'
@@ -163,7 +163,7 @@ function Dossier({ index, kind, name, pw, nudges }: { index: GraphIndex; kind: D
 
 export function DossierView({ unlockedPassword, route, onRequestUnlock }: {
   unlockedPassword: string | null
-  route: { kind: DossierKind; name: string } | 'index'
+  route: Exclude<DossierRoute, null>
   onRequestUnlock: () => void
 }) {
   const { load, retry } = useGraph(unlockedPassword)
@@ -175,6 +175,17 @@ export function DossierView({ unlockedPassword, route, onRequestUnlock }: {
     return () => { dead = true }
   }, [unlockedPassword])
   const rows = useMemo(() => (load.state === 'ok' ? dossierIndex(load.index, 20) : []), [load])
+  // 事件網址：圖譜載入後換成該事件的卷宗（案件優先、其次參與者）；換不掉就退回索引。
+  const resolved = useMemo(
+    () => (route !== 'index' && route.kind === 'event' && load.state === 'ok' ? dossierForEvent(load.index, route.id) : null),
+    [route, load],
+  )
+  useEffect(() => {
+    if (route === 'index' || route.kind !== 'event' || load.state !== 'ok') return
+    const target = resolved ? dossierHref(resolved.kind, resolved.name) : '#dossier'
+    try { window.history.replaceState(null, '', window.location.pathname + window.location.search + target) } catch { /* 取不到 history 就維持原網址 */ }
+  }, [route, load.state, resolved])
+  const shown = route === 'index' ? 'index' : route.kind === 'event' ? resolved : route
   return (
     <div className="dz-page">
       <div className="dz-wrap">
@@ -192,10 +203,12 @@ export function DossierView({ unlockedPassword, route, onRequestUnlock }: {
           <div className="dz-card"><p className="dz-note">圖譜讀取失敗。</p><button type="button" className="dz-btn" onClick={retry}>重試</button></div>
         ) : load.state === 'empty' ? (
           <div className="dz-card"><p className="dz-note">圖譜還沒有資料。</p><button type="button" className="dz-btn" onClick={retry}>重試</button></div>
-        ) : route === 'index' ? (
+        ) : shown === 'index' ? (
           <section className="dz-card"><h2>卷宗索引（事件最多的前 20 名）</h2><DossierIndex rows={rows} /></section>
+        ) : shown === null ? (
+          <div className="dz-card"><p className="dz-note">找不到這件事件的卷宗。<a className="dz-link" href="#dossier">看卷宗索引</a></p></div>
         ) : (
-          <Dossier index={load.index} kind={route.kind} name={route.name} pw={unlockedPassword} nudges={nudges} />
+          <Dossier index={load.index} kind={shown.kind} name={shown.name} pw={unlockedPassword} nudges={nudges} />
         )}
       </div>
     </div>

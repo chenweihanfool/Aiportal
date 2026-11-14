@@ -11,7 +11,7 @@
 // 截圖輸出到 E2E_SHOTS_DIR（預設 /tmp/timeline-e2e-shots）。
 //
 // 為什麼要有這個：vitest 沒有 DOM，鍵盤／焦點鎖／捲動載入／對話框這些行為單元測試測不到；
-// 也曾靠它抓到「聚焦 effect 宣告順序」的真實 bug（見 RelationshipUniverse.tsx 的說明）。
+// 也曾靠它抓到「聚焦 effect 宣告順序」的真實 bug。
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -113,7 +113,7 @@ const DAILY_BODY = `🌙 每日精煉洞察 2026-09-22
 - 覺察 3：有反思
 - 能量 2：平常`
 const IDEAS = { available: true, generatedAt: '2026-09-28', receivedAt: null, weakest: null, top: [], weeks: [], mind: null, mindShadow: [],
-  ideas: [{ id: 'IDEA-0001', title: '把關係宇宙做成年度回顧影片', category: '創作', dimension: null, source: null, why: null, value: 4, effort: 2, status: 'new', bornAt: '2026-09-23T10:00', lastMentioned: '2026-09-23T10:00',
+  ideas: [{ id: 'IDEA-0001', title: '把卷宗做成年度回顧影片', category: '創作', dimension: null, source: null, why: null, value: 4, effort: 2, status: 'new', bornAt: '2026-09-23T10:00', lastMentioned: '2026-09-23T10:00',
     mentions: 1, backfill: false, days: ['2026-09-23'], history: [], score: null, scoreWhy: [], weakBoost: false }] }
 const PLACES = { available: true, receivedAt: null, places: [{ id: 'FOOD-1', name: '老王牛肉麵', area: '大安區', address: null, lat: 25.03, lng: 121.54, cuisine: '牛肉麵', tags: [], status: 'visited', priceLevel: null, why: null, source: null,
   mustTry: [], rating: 4, addedAt: '2026-09-24', visitedAt: '2026-09-26', days: ['2026-09-24', '2026-09-26'], mapUrl: null, kind: 'food', photos: [] }] }
@@ -253,20 +253,15 @@ async function newPage(viewport, unlocked = true) {
   for (let i = 0; i < 6; i++) { await page.keyboard.press('Shift+Tab'); inside = inside && (await page.evaluate(() => !!document.activeElement?.closest('[role=dialog]'))) }
   check('Shift+Tab 也不會跑出對話框', inside)
 
-  // 事件晶片 → 跳到關係圖並聚焦
+  // 事件晶片 → 跳到卷宗（事件網址載入後改寫成所屬案件或人物卷宗）
   await page.locator('[role=dialog] button:has-text("事件甲：整理檢核表")').click()
-  await page.waitForFunction(() => location.hash === '#graph')
-  await page.waitForSelector('canvas')
-  await page.waitForFunction(() => document.body.innerText.includes('參與者'), null, { timeout: 8000 }).catch(() => {})
-  check('點事件晶片：對話框關閉、切到 #graph', (await page.locator('[role=dialog]').count()) === 0 && (await page.evaluate(() => location.hash)) === '#graph')
-  const panel = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
-  check('關係圖已聚焦該事件：詳情面板出現「事件 · 2026-09-28」與參與者', panel.includes('事件 · 2026-09-28') && panel.includes('參與者') && panel.includes('王小明 同事'))
-  
-  await page.screenshot({ path: SHOTS + '/3-graph-focus.png' })
-  check('聚焦請求已被消費（sessionStorage 清空，不會重複聚焦）', (await page.evaluate(() => sessionStorage.getItem('kb.graph.focus'))) === null)
+  await page.waitForFunction(() => /^#dossier\/(event|case|person|object)\//.test(location.hash))
+  const eventHash = await page.evaluate(() => location.hash)
+  check('點事件晶片：對話框關閉、網址變成卷宗', (await page.locator('[role=dialog]').count()) === 0 && /^#dossier\/(event|case|person|object)\//.test(eventHash), eventHash)
+  await page.screenshot({ path: SHOTS + '/3-dossier-event.png' })
 
-  // 回時間軸分頁；級別記憶
-  await page.getByRole('button', { name: '時間軸', exact: true }).click()
+  // 回時間軸；級別記憶
+  await page.goto(base + '/#graph/timeline')
   await page.waitForSelector('[data-testid=timeline-row]')
   // Esc 關閉並還原焦點
   const row2 = page.locator('[data-testid=timeline-row]').nth(2)
@@ -316,7 +311,7 @@ async function newPage(viewport, unlocked = true) {
   await page.locator('[data-testid=ms-card]').screenshot({ path: SHOTS + '/9-milestones-week.png' })
   check('週報段落：概覽放大、任務有逾期／到期徽章、人物各一張卡', (await page.locator('[data-testid=rb-section-hero]').count()) === 1 && (await page.locator('.rb-chip[data-kind=overdue]').count()) === 1 && (await page.locator('.rb-chip[data-kind=due]').count()) === 1 && (await page.locator('.rb-entry').count()) === 2)
   await page.waitForTimeout(900)
-  check('想法格子：滑過顯示具體是哪個想法（不只數量）', ((await page.locator('.rp-cell[data-k=ideas]').evaluateAll(els => els.map(e => e.getAttribute('title') || ''))).join('|')).includes('• 把關係宇宙做成年度回顧影片'))
+  check('想法格子：滑過顯示具體是哪個想法（不只數量）', ((await page.locator('.rp-cell[data-k=ideas]').evaluateAll(els => els.map(e => e.getAttribute('title') || ''))).join('|')).includes('• 把卷宗做成年度回顧影片'))
   check('美食格子：提示列出店名與狀態', ((await page.locator('.rp-cell[data-k=food]').evaluateAll(els => els.map(e => e.getAttribute('title') || ''))).join('|')).includes('老王牛肉麵（吃過）'))
   check('旅程格子：提示列出趟次名稱', ((await page.locator('.rp-cell[data-k=travel]').evaluateAll(els => els.map(e => e.getAttribute('title') || ''))).join('|')).includes('• 台南旅遊'))
   await page.screenshot({ path: SHOTS + '/5b-week-visual.png', fullPage: false })

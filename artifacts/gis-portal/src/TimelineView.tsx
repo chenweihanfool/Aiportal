@@ -7,7 +7,6 @@ import { apiFetchIdeas } from './boardApi'
 import { useAsync } from './homeHooks'
 import { apiFetchDailyLife, apiFetchTasksDone, dailyIndex } from './milestones'
 import { dailyScore, dailyScoreLine, type DailyScore } from './dailyScore'
-import { clearTimelineReturn, peekTimelineReturn, requestGraphFocus, saveTimelineReturn } from './graphFocus'
 import { countWithTime, eventDisplayTime, eventTimeLabel, eventTimeTitle } from './dayEvents'
 import {
   apiFetchTimelineDetail, apiFetchTimelineList,
@@ -53,17 +52,14 @@ function useIsMobile(): boolean {
 interface Ref { level: TimelineLevel; periodKey: string }
 
 export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: string | null; onBack: () => void }) {
-  // 從關係宇宙按「返回時間軸」回來：還原當時的級別與開著的日報對話框（見 graphFocus.ts）
-  const [restore] = useState(peekTimelineReturn)
-  useEffect(() => { clearTimelineReturn() }, [])
-  const [level, setLevel] = useState<TimelineLevel>(() => (restore && isLevel(restore.level) ? restore.level : readLevel()))
+  const [level, setLevel] = useState<TimelineLevel>(readLevel)
   const [items, setItems] = useState<TimelineItem[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [loadedLevel, setLoadedLevel] = useState<TimelineLevel | null>(null)
   // 對話框：stack 最上層是目前顯示的期間；下鑽時 push，「返回」時 pop
-  const [stack, setStack] = useState<Ref[]>(() => (restore ? restore.stack.filter((r): r is Ref => isLevel(r.level)) : []))
+  const [stack, setStack] = useState<Ref[]>([])
   const [detail, setDetail] = useState<TimelineDetail | null>(null)
   const [detailError, setDetailError] = useState(false)
   const genRef = useRef(0)
@@ -155,11 +151,9 @@ export function TimelineView({ unlockedPassword, onBack }: { unlockedPassword: s
   }, [top, nav.older, nav.newer, closeDialog, goTo])
 
   const jumpToEvent = useCallback((id: string) => {
-    requestGraphFocus({ kind: 'event', id: `e:${id}` })
-    saveTimelineReturn({ level, stack })
     setStack([])
-    window.location.hash = '#graph'
-  }, [level, stack])
+    window.location.hash = '#dossier/event/' + encodeURIComponent(id)
+  }, [])
 
   const groups = groupItems(level, items)
 
