@@ -2500,8 +2500,8 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .st-left { display: grid; gap: var(--sp-3); min-width: 0; align-content: start; }
 .st-left > .nw-root { margin: 0; }
 .it-root {
-  --it-trunk0: color-mix(in srgb, var(--c-ink-3) 40%, var(--c-bg));
-  --it-trunk1: color-mix(in srgb, var(--c-accent) 55%, var(--c-ink-3));
+  --it-trunk0: color-mix(in srgb, var(--c-warn) 38%, var(--c-ink-3));
+  --it-trunk1: color-mix(in srgb, var(--c-accent) 62%, var(--c-ink-3));
   position: relative; min-width: 0; padding: var(--sp-4); color: var(--c-ink); container-type: inline-size;
   background: radial-gradient(ellipse 80% 55% at 45% 100%, var(--c-accent-soft), transparent 75%), var(--c-surface);
   border: 1px solid var(--c-line); border-radius: var(--r-lg); overflow-x: clip;

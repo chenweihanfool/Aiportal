@@ -206,10 +206,15 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
   const [vb, setVb] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const vbRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
   const target = useMemo(() => (layout ? focusViewBox(layout, focus) : null), [layout, focus])
+  const lastKey = useRef('')
   useEffect(() => {
-    if (!target) return
+    if (!target || !layout) return
+    // 只有「聚焦的群」改變才播放放大動畫；畫布大小改變（載入、視窗縮放）直接換成新的 viewBox
+    const key = `${layout.width}x${layout.height}`
+    const sizeChanged = lastKey.current !== key
+    lastKey.current = key
     const from = vbRef.current
-    if (!from || reducedMotion()) { vbRef.current = target; setVb(target); return }
+    if (!from || sizeChanged || reducedMotion()) { vbRef.current = target; setVb(target); return }
     let raf = 0
     const t0 = performance.now()
     const step = (t: number) => {
@@ -222,7 +227,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [target])
+  }, [target]) // eslint-disable-line react-hooks/exhaustive-deps
   const toggleFocus = (ci: number) => setFocus((f) => (f === ci ? null : ci))
 
   const closePanel = useCallback(() => {

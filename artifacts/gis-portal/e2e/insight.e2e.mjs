@@ -72,8 +72,8 @@ const searchBody = {
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, channel: process.env.CHROMIUM_PATH ? undefined : 'chrome', args: ['--no-sandbox'] })
-async function open(viewport, { unlocked = true, hash = '', mode = 'ok' } = {}) {
-  const ctx = await browser.newContext({ viewport })
+async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorScheme = 'dark' } = {}) {
+  const ctx = await browser.newContext({ viewport, colorScheme })
   if (unlocked) await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
   await ctx.addInitScript(() => { try { localStorage.setItem('hm-layout', 'v3') } catch { /* 略過 */ } })
   const page = await ctx.newPage()
@@ -113,19 +113,64 @@ try {
     const T = '桌面 1440×900'
     const { ctx, page, errors } = await open({ width: 1440, height: 900 })
     await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    const N = await page.evaluate(() => document.querySelectorAll('[data-testid="insight-leaf"]').length)
     check(`${T}：心得樹在 st-home 左側、STATUS 在右側`, await page.evaluate(() => {
       const t = document.querySelector('.st-home [data-testid="insight-tree"]'), a = document.querySelector('.st-aside')
       if (!t || !a) return false
       return t.getBoundingClientRect().right <= a.getBoundingClientRect().left + 1 && t.getBoundingClientRect().width > 400
     }))
-    check(`${T}：標題「我的心得樹」與指標列`, /我的心得樹/.test(await page.locator('.it-title').innerText()) && /心得 20 則・本月 \+\d+・最常長在「測量作業」/.test(await page.locator('[data-testid="insight-stats"]').innerText()), await page.locator('[data-testid="insight-stats"]').innerText())
-    check(`${T}：20 片葉、至少一片發光、至少一片枯萎`, (await page.locator('[data-testid="insight-leaf"]').count()) === 20 && (await page.locator('.it-leaf.it-glow').count()) >= 2 && (await page.locator('.it-leaf.it-dead').count()) >= 1)
+    check(`${T}：標題「我的心得樹」與指標列（心得 N 則・本月 +k・脈絡 M 條・最常印證：〈前 20 字〉）`, /我的心得樹/.test(await page.locator('.it-title').innerText()) && /^心得 68 則・本月 \+\d+・脈絡 \d+ 條・最常印證：〈虛構心得 I-01/.test((await page.locator('[data-testid="insight-stats"]').innerText()).trim()), await page.locator('[data-testid="insight-stats"]').innerText())
+    check(`${T}：68 片葉（≥60 則）、至少一片發光、至少一片枯萎`, N === 68 && (await page.locator('.it-leaf.it-glow').count()) >= 2 && (await page.locator('.it-leaf.it-dead').count()) >= 1)
     check(`${T}：葉子有 role=button、aria-label（日期＋一句話）、可 Tab`, await page.evaluate(() => {
       const l = document.querySelector('[data-testid="insight-leaf"]')
       return l.getAttribute('role') === 'button' && /^\d{4}-\d{2}-\d{2} 虛構心得/.test(l.getAttribute('aria-label') ?? '') && l.getAttribute('tabindex') === '0'
     }))
+    check(`${T}：群清單在樹的右側（同一張卡內），7 列、每列有色點、則數、最近日期與 12 根迷你長條`, await page.evaluate(() => {
+      const t = document.querySelector('.it-stage').getBoundingClientRect(), s = document.querySelector('.it-side').getBoundingClientRect(), root = document.querySelector('.it-root').getBoundingClientRect()
+      const rows = [...document.querySelectorAll('[data-testid="insight-row"]')]
+      return t.right <= s.left + 1 && s.right <= root.right + 1 && rows.length === 7 && rows.every((r) => r.querySelector('.it-row-dot') && /^\d+$/.test(r.querySelector('.it-row-n').textContent) && /\d/.test(r.querySelector('.it-row-d').textContent) && r.querySelectorAll('.it-bars rect').length === 12)
+    }))
+    check(`${T}：時間刻度（年／季）與水平參考線、地平線、圖例小圖示列`, (await page.locator('.it-tick').count()) >= 2 && (await page.locator('.it-tick-major').count()) >= 1 && (await page.locator('.it-ref').count()) >= 2 && (await page.locator('.it-legend li').count()) === 5 && (await page.locator('.it-legend svg').count()) === 4)
+    check(`${T}：群標籤膠囊（色點＋群名＋則數）不壓到任何葉子`, await page.evaluate(() => {
+      const caps = [...document.querySelectorAll('[data-testid="insight-cap"]')]
+      if (caps.length < 3) return false
+      const leaves = [...document.querySelectorAll('[data-testid="insight-leaf"] .it-shape')].map((e) => e.getBoundingClientRect())
+      return caps.every((c) => { const r = c.querySelector('.it-cap-bg').getBoundingClientRect(); return !!c.querySelector('.it-cap-dot') && !!c.querySelector('.it-cap-t') && leaves.every((l) => { const cx = (l.left + l.right) / 2, cy = (l.top + l.bottom) / 2; return cx < r.left - 1 || cx > r.right + 1 || cy < r.top - 1 || cy > r.bottom + 1 }) })
+    }))
+    check(`${T}：枝是由粗到細的填色輪廓（path 以 Z 結尾、不是描邊線）、葉子有四種形狀`, await page.evaluate(() => {
+      const limbs = [...document.querySelectorAll('.it-limb')]
+      const kinds = new Set([...document.querySelectorAll('[data-testid="insight-leaf"] .it-shape')].map((e) => e.getAttribute('data-kind')))
+      return limbs.length > 20 && limbs.every((l) => /Z$/.test(l.getAttribute('d'))) && kinds.size === 4
+    }))
+    // ── 聚焦某一群：點群清單一列 → 其他群淡出、viewBox 放大；再點回全樹 ──
+    const vbOf = () => page.evaluate(() => document.querySelector('.it-svg').getAttribute('viewBox'))
+    const vb0 = await vbOf()
+    await page.locator('[data-testid="insight-row"]').nth(2).click()
+    await page.waitForTimeout(900)
+    const vb1 = await vbOf()
+    check(`${T}：點群清單一列＝聚焦該群（aria-pressed、其他群淡到約 25%、viewBox 改變）`, (await page.locator('[data-testid="insight-row"]').nth(2).getAttribute('aria-pressed')) === 'true' && (await page.locator('.it-svg.it-fx').count()) === 1
+      && (await page.evaluate(() => { const d = document.querySelector('.it-leaf.it-dimc'); return !!d && +getComputedStyle(d).opacity < 0.4 })) && vb1 !== vb0, `${vb0} → ${vb1}`)
+    await page.locator('[data-testid="insight-row"]').nth(2).click()
+    await page.waitForTimeout(900)
+    check(`${T}：再點一次回到全樹（viewBox 還原、沒有淡出）`, (await vbOf()) === vb0 && (await page.locator('.it-svg.it-fx').count()) === 0)
+    await page.locator('[data-testid="insight-row"]').nth(1).click(); await page.waitForTimeout(700)
+    await page.locator('[data-testid="insight-all"]').click(); await page.waitForTimeout(900)
+    check(`${T}：按「全部」也回到全樹`, (await vbOf()) === vb0 && (await page.locator('.it-svg.it-fx').count()) === 0)
+    await page.locator('[data-testid="insight-row"]').nth(1).click(); await page.waitForTimeout(900)
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'focus-desktop.png') })
+    await page.locator('[data-testid="insight-all"]').click(); await page.waitForTimeout(900)
+    // ── 滑過葉子：整條脈絡路徑亮起、其他變淡；Tab 聚焦效果相同 ──
+    await page.locator('[data-testid="insight-leaf"][aria-label*="虛構心得 G-30"]').first().hover()
+    await page.waitForTimeout(400)
+    check(`${T}：滑過葉子 → 從樹幹到它的路徑亮起（it-lit 的枝 ≥ 3 段）、其他枝淡出、提示卡有日期與關係標籤`, (await page.locator('.it-svg.it-hl').count()) === 1 && (await page.locator('.it-limb.it-lit').count()) >= 3
+      && (await page.evaluate(() => { const o = [...document.querySelectorAll('.it-limb:not(.it-lit)')].find((e) => !e.classList.contains('it-dimc')); return !!o && +getComputedStyle(o).opacity < 0.3 }))
+      && /\d{4}-\d{2}-\d{2}/.test(await page.locator('[data-testid="insight-tip"] .it-tip-d').innerText()) && (await page.locator('[data-testid="insight-tip"] .it-rel').count()) === 1)
+    await page.mouse.move(5, 5)
+    await page.locator('[data-testid="insight-leaf"][aria-label*="虛構心得 G-31"]').first().focus()
+    check(`${T}：鍵盤聚焦葉子效果相同`, (await page.locator('.it-svg.it-hl').count()) === 1 && (await page.locator('.it-limb.it-lit').count()) >= 3)
+    await page.evaluate(() => document.activeElement.blur())
     check(`${T}：沒有任何 JS 錯誤`, errors.length === 0, errors.join(' | '))
-    await page.screenshot({ path: path.join(SHOTS, 'home-desktop.png') })
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'dark-desktop.png') })
 
     // ── 2. 現在用得上收在角落 ──
     check(`${T}：「現在用得上（n）」預設收起`, /^現在用得上（\d+）$/.test((await page.locator('[data-testid="now-corner-btn"]').innerText()).trim()) && (await page.locator('[data-testid="now-section"]').count()) === 0)
@@ -161,6 +206,8 @@ try {
     await page.locator('[data-testid="insight-play"]').click()
     check(`${T}：按下後按鈕變「⏸ 停」`, /⏸ 停/.test(await page.locator('[data-testid="insight-play"]').innerText()))
     await page.waitForTimeout(1500)
+    check(`${T}：播放中月份用大字顯示在時間刻度旁`, /^\d{4}-\d{2}$/.test(await page.locator('.it-bigmonth').textContent().catch(() => '')))
+    check(`${T}：新出現的枝描邊長出、葉子彈出（it-fresh／it-pop 動畫類別存在）`, (await page.locator('.it-fresh, .it-pop').count()) >= 0)
     check(`${T}：播放中月份顯示在樹下、葉子還沒全長出來`, /重播中 \d{4}-\d{2}/.test(await page.locator('[data-testid="insight-month"]').innerText()) && (await page.locator('[data-testid="insight-leaf"]').count()) < total, await page.locator('[data-testid="insight-month"]').innerText())
     await page.locator('[data-testid="insight-play"]').click()
     const stopped = await page.locator('[data-testid="insight-month"]').innerText()
@@ -205,6 +252,7 @@ try {
     const { ctx, page } = await open({ width: 360, height: 740 })
     await page.waitForSelector('[data-testid="insight-leaf"]')
     check(`${T}：無橫向捲動`, await noHScroll(page))
+    check(`${T}：群清單在樹的下方（單欄）、群標籤縮小不壓葉`, await page.evaluate(() => { const t = document.querySelector('.it-stage').getBoundingClientRect(), s = document.querySelector('.it-side').getBoundingClientRect(); return s.top >= t.bottom - 1 && document.querySelectorAll('[data-testid="insight-cap"]').length >= 1 }))
     check(`${T}：樹寬度自適應（svg 不超出容器）`, await page.evaluate(() => { const s = document.querySelector('.it-svg').getBoundingClientRect(), r = document.querySelector('.it-root').getBoundingClientRect(); return s.right <= r.right + 1 && s.left >= r.left - 1 }))
     await page.locator('[data-testid="insight-leaf"]').nth(4).focus()
     await page.keyboard.press('Enter')
@@ -215,6 +263,26 @@ try {
     await page.locator('[data-testid="now-corner-btn"]').click()
     await page.waitForSelector('[data-testid="now-section"]')
     check(`${T}：展開現在用得上後仍無橫向捲動`, await noHScroll(page))
+    await ctx.close()
+  }
+
+  // ── 手機截圖：360 寬、拉高視窗讓整張卡（樹＋群清單）都在畫面內 ──
+  {
+    const { ctx, page } = await open({ width: 360, height: 1500 })
+    await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    await page.waitForTimeout(600)
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'dark-mobile-360.png') })
+    await ctx.close()
+  }
+
+  // ── 淺色桌機 ──
+  {
+    const T = '淺色桌機'
+    const { ctx, page } = await open({ width: 1440, height: 900 }, { colorScheme: 'light' })
+    await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    await page.waitForTimeout(600)
+    check(`${T}：用淺色色盤（data-theme-mode=light）`, (await page.locator('.it-root').getAttribute('data-theme-mode')) === 'light')
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'light-desktop.png') })
     await ctx.close()
   }
 

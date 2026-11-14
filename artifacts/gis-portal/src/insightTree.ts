@@ -326,7 +326,7 @@ export function threadWidth(reinforceCount: number): number {
 }
 
 /** 葉子半徑（依關係；窄畫布乘 0.82） */
-const LEAF_R: Record<InsightRelation, number> = { new: 5.5, reinforce: 7.5, refine: 7, overturn: 6.5 }
+const LEAF_R: Record<InsightRelation, number> = { new: 6, reinforce: 8.5, refine: 8, overturn: 7.5 }
 
 /** 葉形（單位座標，葉尖朝上、中心在原點；乘上 r 後使用）。新生＝嫩芽水滴、印證＝飽滿葉＋葉脈、修正＝葉＋旁邊多一小分岔、推翻＝微垂的枯葉 */
 export interface LeafShape { kind: 'bud' | 'leaf' | 'fork' | 'dead'; d: string; vein: string | null }
@@ -404,7 +404,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   const H = Math.max(200, opts.height)
   const compact = W < 520
   const PAD = 12
-  const AXIS_W = compact ? 36 : 48
+  const AXIS_W = compact ? 44 : 60
   const rs = compact ? 0.82 : 1
   const today = taipeiDay(opts.now)
   const todayN = dayNumber(today)
@@ -466,7 +466,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const y1 = Math.max(yTop - 10, Math.min(yOf(mine[mine.length - 1]!.date) - 22, y0 - 46))
     const tipX = cx + laneCenter[ci]! * 0.88
     const dx = tipX - cx
-    cl[ci] = { p0: [cx, y0], p1: [cx + dx * 0.55, y0 - 4], p2: [cx + dx * 1.0, y0 - (y0 - y1) * 0.5], p3: [tipX, y1], y0, y1, first: mine[0]!, count: mine.length }
+    cl[ci] = { p0: [cx, y0], p1: [cx + dx * 0.45, y0 - (y0 - y1) * 0.16], p2: [cx + dx * 1.0, y0 - (y0 - y1) * 0.5], p3: [tipX, y1], y0, y1, first: mine[0]!, count: mine.length }
   }
   const pointOnCluster = (ci: number, t: number): P => { const c = cl[ci]!; return cubicAt(c.p0, c.p1, c.p2, c.p3, t) }
   const tAtY = (ci: number, y: number): number => {
@@ -536,7 +536,8 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
         let startLeaf: string | null = null
         let side = mainSide
         if (b.forkFrom === null) {
-          const ya = yOf(b.items[0]!.date)
+          // 從主枝上「稍早於第一則」的位置長出，枝才會斜著往上長到葉子，不是一根橫桿
+          const ya = Math.min(ground - 30, yOf(b.items[0]!.date) + (compact ? 12 : 18))
           start = pointOnCluster(ci, tAtY(ci, ya))
         } else {
           startLeaf = b.forkFrom
@@ -697,7 +698,14 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   for (let s = 0; s <= 14; s++) {
     const t = s / 14
     trunkPts.push([cx + bend * Math.sin(Math.PI * t), ground + (trunkTop - ground) * t])
-    trunkWs.push(trunkW0 * (1 - 0.45 * Math.pow(t, 0.8)))
+    trunkWs.push(trunkW0 * (1 - 0.55 * Math.pow(t, 0.8)))
+  }
+  // 樹幹頂端收成圓頭，不留平頂
+  const topW = trunkWs[trunkWs.length - 1]!
+  for (let c = 1; c <= 3; c++) {
+    const f = c / 3
+    trunkPts.push([trunkPts[trunkPts.length - 1]![0], trunkTop - (topW / 2) * Math.sin((f * Math.PI) / 2)])
+    trunkWs.push(topW * Math.cos((f * Math.PI) / 2) + 0.2)
   }
   const trunk: InsightLimb = {
     id: 'trunk', d: ribbon(trunkPts, trunkWs), level: 'trunk', width: A1(trunkWs[0]!), widthStart: A1(trunkWs[0]!), widthEnd: A1(trunkWs[trunkWs.length - 1]!),
@@ -759,8 +767,6 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const bb = { x0: c.x - 8, y0: c.y - 8, x1: c.x + 8, y1: c.y + 8 }
     const grow = (x0: number, y0: number, x1: number, y1: number): void => { bb.x0 = Math.min(bb.x0, x0); bb.y0 = Math.min(bb.y0, y0); bb.x1 = Math.max(bb.x1, x1); bb.y1 = Math.max(bb.y1, y1) }
     for (const l of leaves) if (l.clusterIndex === ci) grow(l.x - l.r * 1.6, l.y - l.r * 1.6, l.x + l.r * 1.6, l.y + l.r * 1.6)
-    const cc = cl[ci]
-    if (cc) grow(cc.p0[0] - 6, cc.p0[1] - 6, cc.p0[0] + 6, cc.p0[1] + 6)
     if (c.labelShown) grow(c.lx - c.lw / 2, c.ly - c.lh / 2, c.lx + c.lw / 2, c.ly + c.lh / 2)
     c.bbox = { x0: A1(bb.x0), y0: A1(bb.y0), x1: A1(bb.x1), y1: A1(bb.y1) }
   })
@@ -799,7 +805,7 @@ export function focusViewBox(layout: Pick<InsightTreeLayout, 'width' | 'height' 
   const H = layout.height
   const c = clusterIndex === null ? undefined : layout.clusters[clusterIndex]
   if (!c || c.count === 0) return { x: 0, y: 0, w: W, h: H }
-  const m = 22
+  const m = 16
   const bw = c.bbox.x1 - c.bbox.x0 + 2 * m
   const bh = c.bbox.y1 - c.bbox.y0 + 2 * m
   const aspect = W / H
