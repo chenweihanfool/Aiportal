@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CV, themedColor } from './theme'
+import { CV, inkMix, themedColor } from './theme'
 import type { HhiBreakdown } from './boardView'
 import type { IdeaItem } from './boardApi'
 import { categoryColor } from './ideasView'
@@ -472,7 +472,7 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
                   <button type="button" className="hm-idea" onClick={onOpenIdeas} title={it.scoreWhy.join('\n')}>
                     <span className="hm-idea-rank" style={{ color: i === 0 ? CV.amber : CV.steel }}>{i + 1}</span>
                     <span className="hm-idea-title">{it.status === 'doing' && <span aria-label="進行中">🚀 </span>}{it.title}</span>
-                    <span className="hm-cat" style={{ color: c, borderColor: c }}>{it.category ?? '未分類'}</span>
+                    <span className="hm-cat" style={{ color: inkMix(c), borderColor: c }}>{it.category ?? '未分類'}</span>
                     <span className="hm-idea-score">{it.score?.toFixed(1) ?? '—'}</span>
                   </button>
                 </li>

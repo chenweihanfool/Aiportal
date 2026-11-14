@@ -1,5 +1,5 @@
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { CV, FONT, alpha, themedColor } from './theme'
+import { CV, FONT, alpha, inkMix, themedColor } from './theme'
 import { apiFetchHermesGraph, type HermesGraphData } from './hermesGraphApi'
 import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
@@ -352,7 +352,7 @@ function OllamaMiniCard({ pw, refreshKey }: { pw: string; refreshKey: number }) 
 // api-server 再乘「補短板」；系統／工作改善類也一起排，只用徽章標出類別（使用者 2026-10-09 裁定）。
 const CatBadge = ({ category }: { category: string | null }) => {
   const c = categoryColor(category)
-  return <span className="bd-cat" style={{ color: c, borderColor: c, background: alpha(c, 10) }}>{category ?? '未分類'}</span>
+  return <span className="bd-cat" style={{ color: inkMix(c), borderColor: c, background: alpha(c, 10) }}>{category ?? '未分類'}</span>
 }
 
 function IdeasCard({ pw }: { pw: string }) {
@@ -517,7 +517,7 @@ export function IdeasPanel({ pw }: { pw: string }) {
   if (error) return <Muted>暫時無法取得想法庫</Muted>
   if (data === null) return <Muted>載入中…</Muted>
   const pill = (active: boolean, color: string = CV.amber): CSSProperties => ({
-    ...btn, color: active ? CV.panelDeep : color, background: active ? color : 'transparent', borderColor: color,
+    ...btn, color: active ? CV.panelDeep : inkMix(color), background: active ? color : 'transparent', borderColor: color,
   })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

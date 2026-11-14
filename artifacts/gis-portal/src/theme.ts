@@ -191,3 +191,6 @@ const COLOR_VAR: Record<string, string> = Object.fromEntries(
 )
 /** 分數色或 COLOR 的 hex → 對應的 CSS 變數（深淺主題都對）；其他值原樣回傳。給「拿到 hex 才上色」的地方用。 */
 export const themedColor = (hex: string): string => SCORE_VAR[hex.toLowerCase()] ?? COLOR_VAR[hex.toLowerCase()] ?? hex
+
+/** 有色文字（分類色、角色色）：把色混 45% 文字色，深淺主題都讀得到（≥4.5:1）；框線與底色仍用原色。 */
+export const inkMix = (color: string): string => `color-mix(in srgb, ${color} 55%, var(--c-ink))`
