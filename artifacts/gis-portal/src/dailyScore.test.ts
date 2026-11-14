@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import type { Counts } from './milestones'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ACHIEVEMENT_WEIGHT, AI_WEIGHT, HALF_POINTS, IDEA_DONE_POINTS, NEW_PLACE_POINTS, SOCIAL_POINTS, TRIP_DAY_POINTS, WORKOUT_POINTS, achievementPoints, achievementScore, dailyScore, dailyScoreLine } from './dailyScore'
+import { ACHIEVEMENT_WEIGHT, AI_WEIGHT, HALF_POINTS, IDEA_DONE_POINTS, NEW_PLACE_POINTS, SOCIAL_POINTS, TRIP_DAY_POINTS, WORKOUT_CAP, WORKOUT_POINTS, achievementPoints, achievementScore, dailyScore, dailyScoreLine } from './dailyScore'
 
 const c = (tasks: number, ideasNew: number, ideasDone: number, life: Partial<Counts> = {}): Counts =>
   ({ tasks, ideasNew, ideasDone, social: 0, newPlaces: 0, tripDay: 0, workout: 0, ...life })
@@ -10,7 +10,7 @@ const c = (tasks: number, ideasNew: number, ideasDone: number, life: Partial<Cou
 describe('前後端公式一致', () => {
   it('常數與 api-server lib/dailyScore.ts 相同', () => {
     const src = readFileSync(resolve(__dirname, '../../api-server/src/lib/dailyScore.ts'), 'utf8')
-    for (const [name, v] of Object.entries({ ACHIEVEMENT_WEIGHT, AI_WEIGHT, IDEA_DONE_POINTS, HALF_POINTS, SOCIAL_POINTS, NEW_PLACE_POINTS, TRIP_DAY_POINTS, WORKOUT_POINTS })) {
+    for (const [name, v] of Object.entries({ ACHIEVEMENT_WEIGHT, AI_WEIGHT, IDEA_DONE_POINTS, HALF_POINTS, SOCIAL_POINTS, NEW_PLACE_POINTS, TRIP_DAY_POINTS, WORKOUT_POINTS, WORKOUT_CAP })) {
       expect(src, name).toContain(`export const ${name} = ${v};`)
     }
   })
@@ -21,11 +21,12 @@ describe('成果分（遞減曲線）', () => {
     expect(achievementPoints(c(4, 1, 1))).toBe(7)
     expect([0, 1, 3, 6, 9].map(achievementScore)).toEqual([0, 21, 50, 75, 88])
   })
-  it('生活面向：見人 2、新店每間 1、旅行 2、運動 2', () => {
+  it('生活面向：見人 2（人數再多仍 2）、新店每間 1、旅行 2、運動每項 1 上限 4', () => {
     expect(achievementPoints(c(0, 0, 0, { social: 1 }))).toBe(2)
+    expect(achievementPoints(c(0, 0, 0, { social: 3 }))).toBe(2)
     expect(achievementPoints(c(0, 0, 0, { newPlaces: 2 }))).toBe(2)
     expect(achievementPoints(c(0, 0, 0, { tripDay: 1 }))).toBe(2)
-    expect(achievementPoints(c(0, 0, 0, { workout: 1 }))).toBe(2)
+    expect([1, 2, 5].map((n) => achievementPoints(c(0, 0, 0, { workout: n })))).toEqual([1, 2, 4])
     // 旅行日陪家人吃新店：5 點 → 成果 69，不再是 0
     expect(achievementScore(achievementPoints(c(0, 0, 0, { social: 1, tripDay: 1, newPlaces: 1 })))).toBe(69)
   })
@@ -53,6 +54,6 @@ describe('dailyScore', () => {
     expect(dailyScoreLine(dailyScore(60, c(4, 1, 0))!)).toBe('67＝成果 69×80%＋AI 60×20%（任務 4・新想法 1・實行 0）')
     expect(dailyScoreLine(dailyScore(null, c(3, 0, 0))!)).toContain('沒有 AI 自評')
     expect(dailyScoreLine(dailyScore(70, null)!)).toBe('70＝AI 自評（成果資料讀不到）')
-    expect(dailyScoreLine(dailyScore(null, c(0, 0, 0, { social: 1, workout: 1 }))!)).toContain('（任務 0・新想法 0・實行 0・見人 1・運動 1）')
+    expect(dailyScoreLine(dailyScore(null, c(0, 0, 0, { social: 1, workout: 1 }))!)).toContain('（任務 0・新想法 0・實行 0・見人 1 位・運動 1 項）')
   })
 })
