@@ -181,9 +181,10 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       case 'ideas': onOpenIdeas(); break
       case 'chat': onOpenChat(q || undefined); break
       case 'tool': {
-        // sites 裡沒有這個工具（清單尚未載入或已被撤掉）就什麼都不做，不開空白頁
+        // sites 裡沒有這個工具（清單尚未載入或已被撤掉）只顯示提示，不開空白頁
         const site = sites.find((s) => String(s.id) === a.id)
         if (site) onSelectSite(site)
+        else setNotice('找不到這個工具連結')
         break
       }
       case 'expand': setExpanded((v) => !v); break
