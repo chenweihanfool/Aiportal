@@ -14,7 +14,7 @@ describe("parsePinBody", () => {
     dueDate: due(7),
   };
 
-  it("合法回物件；11 種 targetKind 都接受", () => {
+  it("合法回物件；12 種 targetKind 都接受", () => {
     const parsed = parsePinBody(good);
     expect(parsed).toEqual(good);
     expect(parsePinBody(good)).toEqual({ ...good });
