@@ -100,11 +100,11 @@ const Leaf = memo(function Leaf({ lf, ins, color, lit, dimc, fresh, onOpen, onHo
 })
 
 /** 主題標籤：放得下就是膠囊；放不下縮成色點，滑過／聚焦／點清單時放大成完整膠囊 */
-const Cap = memo(function Cap({ c, color, open, dimc, on, onPick, onEnter }: { c: InsightClusterOut; color: string; open: boolean; dimc: boolean; on: boolean; onPick: () => void; onEnter: () => void }) {
+const Cap = memo(function Cap({ c, ci, color, open, dimc, on, onPick, onEnter }: { c: InsightClusterOut; ci: number; color: string; open: boolean; dimc: boolean; on: boolean; onPick: () => void; onEnter: () => void }) {
   return (
-    <g className={`it-cap${dimc ? ' it-dimc' : ''}${on ? ' it-cap-on' : ''}${open ? '' : ' it-cap-dotmode'}`} style={{ color }} role="button" tabIndex={0}
+    <g className={`it-cap${dimc ? ' it-dimc' : ''}${on ? ' it-cap-on' : ''}${open ? '' : ' it-cap-dotmode'}`} style={{ color }} role="button" tabIndex={0} data-ci={ci}
       aria-label={`${c.name} ${c.count} 則，點一下聚焦這個主題`} aria-pressed={on} data-testid={open ? 'insight-cap' : 'insight-dot'}
-      onClick={onPick} onFocus={onEnter} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick() } }}>
+      onClick={onPick} onFocus={onEnter} onMouseEnter={onEnter} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick() } }}>
       <circle className="it-tipdot" cx={c.x} cy={c.y} r={open ? 2.6 : 5.5} />
       {!open && <circle className="it-cap-hit" cx={c.x} cy={c.y} r={11} />}
       {open && (
@@ -350,7 +350,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                       dimc={focus !== null && lf.clusterIndex !== focus} fresh={fresh.has(lf.id)} onOpen={open} onHover={setHover} onKey={onLeafKey} />
                   ))}
                   {layout.clusters.map((c, ci) => c.count > 0 && (
-                    <Cap key={c.id} c={c} color={col(ci)} open={c.labelShown || capHover === ci || focus === ci} dimc={focus !== null && ci !== focus} on={focus === ci}
+                    <Cap key={c.id} c={c} ci={ci} color={col(ci)} open={c.labelShown || capHover === ci || focus === ci} dimc={focus !== null && ci !== focus} on={focus === ci}
                       onPick={() => toggleFocus(ci)} onEnter={() => setCapHover(ci)} />
                   ))}
                   {upto && <text className="it-bigmonth" x={16} y={36}>{upto}</text>}

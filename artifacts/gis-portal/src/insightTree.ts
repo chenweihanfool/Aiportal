@@ -715,7 +715,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   }
 
   // ── 樹幹（高度固定，與主枝數無關） ──
-  const trunkTop = attachY(Math.max(0, nc - 1)) - 14
+  const trunkTop = yTop + 6 // 樹幹高度固定（與主枝數無關）
   const trunkPts: P[] = []
   const trunkWs: number[] = []
   const bend = (hash01('trunk') - 0.5) * 2 * TRUNK_BEND
@@ -775,7 +775,9 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
       const y = clamp(c.y + oy, hh + 2, H - hh - 2)
       const r = { x0: x - hw, y0: y - hh, x1: x + hw, y1: y + hh }
       if (ci === 0) { c.lx = A1(x); c.ly = A1(y) }
-      if (ok || placed.some((o) => r.x0 < o.x1 + 3 && r.x1 > o.x0 - 3 && r.y0 < o.y1 + 3 && r.y1 > o.y0 - 3)) return
+      const onLeaf = leaves.some((l) => Math.hypot(l.x - clamp(l.x, r.x0, r.x1), l.y - clamp(l.y, r.y0, r.y1)) < l.r * 1.1 + 1)
+      if (ok) return
+      if (onLeaf || placed.some((o) => r.x0 < o.x1 + 3 && r.x1 > o.x0 - 3 && r.y0 < o.y1 + 3 && r.y1 > o.y0 - 3)) return
       placed.push(r)
       c.lx = A1(x); c.ly = A1(y); c.labelShown = true
       ok = true
