@@ -1,14 +1,15 @@
 // 首頁「一個框搜全部」的純邏輯（2.86.0）：不碰 DOM、不打網路（網路在 omniSearchApi.ts，畫面在 OmniSearch.tsx）。
 // 契約（S1～S3）見 docs/search-api.md 與規格；這裡的解析一律寬容：欄位不對的項目略過，整體不丟錯。
+import type { RepoItem } from './repoApi'
 
-export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'tool' | 'diary'
+export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'repo' | 'tool' | 'diary'
 
 /** 結果分組的固定順序（與後端 groups 順序一致） */
-export const KIND_ORDER: readonly SearchKind[] = ['case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'diary', 'idea', 'place', 'trip', 'tool']
+export const KIND_ORDER: readonly SearchKind[] = ['case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'diary', 'idea', 'place', 'trip', 'repo', 'tool']
 
 const KIND_LABEL: Record<SearchKind, string> = {
   case: '案件', topic: '知識', person: '人', object: '物', event: '事件', concept: '概念',
-  method: '方法', source: '原文', idea: '想法', place: '地點', trip: '遊記', tool: '工具', diary: '日記',
+  method: '方法', source: '原文', idea: '想法', place: '地點', trip: '遊記', repo: '倉庫', tool: '工具', diary: '日記',
 }
 
 export function isSearchKind(v: unknown): v is SearchKind {
@@ -17,7 +18,10 @@ export function isSearchKind(v: unknown): v is SearchKind {
 
 export function kindLabel(kind: SearchKind): string { return KIND_LABEL[kind] }
 
-export interface SearchHit { kind: SearchKind; id: string; title: string; snippet: string; date: string | null }
+/** 倉庫專屬的補充資訊（只有 kind 為 repo 的命中才有） */
+export interface RepoMeta { language: string | null; private: boolean; archived: boolean; url: string }
+
+export interface SearchHit { kind: SearchKind; id: string; title: string; snippet: string; date: string | null; meta?: RepoMeta }
 export interface SearchGroup { kind: SearchKind; count: number; items: SearchHit[] }
 export interface SearchFacets { months: Array<{ ym: string; n: number }> }
 export interface SearchResponse { q: string; total: number; tookMs: number; groups: SearchGroup[]; best: SearchHit | null; facets: SearchFacets }
@@ -25,6 +29,8 @@ export interface PreviewRelated { kind: SearchKind; id: string; title: string }
 export interface SearchPreview {
   kind: SearchKind; id: string; title: string; one: string; points: string[]
   related: PreviewRelated[]; source: string; bodyMd: string | null
+  /** 倉庫的 GitHub 網址（只有 repo 預覽可能帶） */
+  url?: string
 }
 
 /** API 的 q 上限（S1：去頭尾空白後 1～50 字） */
@@ -36,22 +42,24 @@ export const MAX_QUERY_LEN = 50
 
 export type ParsedQuery =
   | { mode: 'empty'; prefix: null; kind: null; q: '' }
-  | { mode: 'search'; prefix: '@' | '#' | '?' | null; kind: SearchKind | null; q: string }
+  | { mode: 'search'; prefix: '@' | '#' | '?' | 'gh:' | null; kind: SearchKind | null; q: string }
   | { mode: 'command'; prefix: '>'; kind: null; q: string }
 
 const PREFIX_KIND: Record<string, SearchKind> = { '@': 'person', '#': 'case', '?': 'topic' }
+const GH_PREFIX_RE = /^gh:/i
 
 /** 前綴提示鈕（未輸入時顯示） */
-export const PREFIX_HINTS: ReadonlyArray<{ prefix: '@' | '#' | '?' | '>'; label: string }> = [
-  { prefix: '@', label: '只找人' }, { prefix: '#', label: '只找案件' }, { prefix: '?', label: '只找知識' }, { prefix: '>', label: '下指令' },
+export const PREFIX_HINTS: ReadonlyArray<{ prefix: '@' | '#' | '?' | 'gh:' | '>'; label: string }> = [
+  { prefix: '@', label: '只找人' }, { prefix: '#', label: '只找案件' }, { prefix: '?', label: '只找知識' }, { prefix: 'gh:', label: '只找倉庫' }, { prefix: '>', label: '下指令' },
 ]
 
-/** 解析輸入框內容：`@ # ?` 限定類型、`>` 指令模式；沒有前綴就是全部。q 去頭尾空白並截到 50 字。 */
+/** 解析輸入框內容：`@ # ? gh:` 限定類型、`>` 指令模式；沒有前綴就是全部。q 去頭尾空白並截到 50 字。 */
 export function parseQuery(raw: string): ParsedQuery {
   const s = raw.trim()
   if (!s) return { mode: 'empty', prefix: null, kind: null, q: '' }
   const first = s[0]
   if (first === '>') return { mode: 'command', prefix: '>', kind: null, q: s.slice(1).trim() }
+  if (GH_PREFIX_RE.test(s)) return { mode: 'search', prefix: 'gh:', kind: 'repo', q: s.slice(3).trim().slice(0, MAX_QUERY_LEN) }
   if (first === '@' || first === '#' || first === '?') {
     return { mode: 'search', prefix: first, kind: PREFIX_KIND[first], q: s.slice(1).trim().slice(0, MAX_QUERY_LEN) }
   }
@@ -66,6 +74,8 @@ export type OpenAction =
   | { type: 'tool'; id: string }
   | { type: 'expand' }
   | { type: 'dossier'; kind: 'case' | 'person' | 'object'; name: string }
+  | { type: 'repo'; id: string }
+  | { type: 'repoList' }
 
 export interface OmniCommand { id: string; label: string; hint: string; keywords: string[]; action: OpenAction }
 
@@ -74,6 +84,7 @@ export const COMMANDS: readonly OmniCommand[] = [
   { id: 'ideas', label: '想法庫', hint: '全部想法與狀態', keywords: ['想法', '想法庫', 'ideas'], action: { type: 'ideas' } },
   { id: 'relations', label: '卷宗', hint: '案件／人物卷宗', keywords: ['關係', '人', '案件', '卷宗'], action: { type: 'hash', hash: 'dossier' } },
   { id: 'knowledge', label: '知識', hint: '知識頁與全樹', keywords: ['知識', '知識頁', 'knowledge'], action: { type: 'hash', hash: 'knowledge' } },
+  { id: 'repos', label: '倉庫', hint: '最近更新的 10 個 GitHub 倉庫', keywords: ['倉庫', 'github', 'gh', 'repo', 'repos'], action: { type: 'repoList' } },
   { id: 'food', label: '美食地圖', hint: '口袋名單與地圖', keywords: ['美食', '吃', '餐廳', '地圖', '附近', 'food'], action: { type: 'hash', hash: 'food' } },
   { id: 'trips', label: '遊記', hint: '每趟旅行的紀錄', keywords: ['遊記', '旅遊', '行程', 'trip', 'trips'], action: { type: 'hash', hash: 'trips' } },
   { id: 'architecture', label: '知識庫架構', hint: '分層架構與各節點狀態', keywords: ['架構', '知識庫架構', 'architecture'], action: { type: 'hash', hash: 'architecture' } },
@@ -126,8 +137,41 @@ export function openAction(kind: SearchKind, id: string): OpenAction {
     case 'case': return { type: 'dossier', kind: 'case', name: id }
     case 'person': return { type: 'dossier', kind: 'person', name: id }
     case 'object': return { type: 'dossier', kind: 'object', name: id }
+    case 'repo': return { type: 'repo', id }
     case 'event': case 'concept': case 'method': case 'source': case 'diary': return { type: 'expand' }
   }
+}
+
+/** 指令模式的倉庫列表最多顯示幾筆 */
+export const REPO_LIST_MAX = 10
+
+const REPO_LIST_QUERIES = ['倉庫', 'github', 'gh', 'repo', 'repos']
+
+/** 指令 `>倉庫`（及 github／gh／repo／repos）＝列出最近更新的倉庫 */
+export function isRepoListQuery(q: string): boolean {
+  return REPO_LIST_QUERIES.includes(q.trim().toLowerCase())
+}
+
+const HTTP_RE = /^https?:/i
+
+/** 倉庫清單 → 可放進搜尋列表的命中：最近推送在前、null 最後、同時間依名稱；壞網址略過 */
+export function recentRepoHits(repos: readonly RepoItem[], max = REPO_LIST_MAX): SearchHit[] {
+  const t = (r: RepoItem): number => {
+    if (!r.pushedAt) return -Infinity
+    const ms = Date.parse(r.pushedAt)
+    return Number.isFinite(ms) ? ms : -Infinity
+  }
+  return [...repos]
+    .sort((a, b) => t(b) - t(a) || a.name.localeCompare(b.name))
+    .slice(0, max)
+    .flatMap((r): SearchHit[] => {
+      if (typeof r.url !== 'string' || !HTTP_RE.test(r.url)) return []
+      const date = r.pushedAt ? r.pushedAt.slice(0, 10) : null
+      return [{
+        kind: 'repo', id: r.name, title: r.name, snippet: r.description ?? '', date,
+        meta: { language: r.language, private: r.private === true, archived: r.archived === true, url: r.url },
+      }]
+    })
 }
 
 // ─────────────────────────────────────────────
@@ -138,12 +182,25 @@ const isRec = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null)
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
+/** 倉庫命中的補充欄位：meta 是物件、url 是 http(s) 字串才帶；其他情況（含 javascript:）不帶 */
+function parseRepoMeta(raw: unknown): RepoMeta | undefined {
+  if (!isRec(raw)) return undefined
+  const url = str(raw.url)
+  if (url === null || !HTTP_RE.test(url)) return undefined
+  return { language: str(raw.language), private: raw.private === true, archived: raw.archived === true, url }
+}
+
 function parseHit(raw: unknown): SearchHit | null {
   if (!isRec(raw)) return null
   const id = str(raw.id)
   const title = str(raw.title)
   if (!isSearchKind(raw.kind) || id === null || id === '' || title === null || title === '') return null
-  return { kind: raw.kind, id, title, snippet: cleanSnippet(str(raw.snippet) ?? ''), date: str(raw.date) }
+  const base: SearchHit = { kind: raw.kind, id, title, snippet: cleanSnippet(str(raw.snippet) ?? ''), date: str(raw.date) }
+  if (raw.kind === 'repo') {
+    const meta = parseRepoMeta(raw.meta)
+    if (meta) base.meta = meta
+  }
+  return base
 }
 
 const EMPTY_RESPONSE: SearchResponse = { q: '', total: 0, tookMs: 0, groups: [], best: null, facets: { months: [] } }
@@ -194,11 +251,14 @@ export function parsePreview(raw: unknown): SearchPreview | null {
       if (isSearchKind(r.kind) && rid !== null && rid !== '' && rt !== null && rt !== '') related.push({ kind: r.kind, id: rid, title: rt })
     }
   }
-  return {
+  const url = str(raw.url)
+  const preview: SearchPreview = {
     kind: raw.kind, id, title, one: str(raw.one) ?? '',
     points: Array.isArray(raw.points) ? raw.points.filter((p): p is string => typeof p === 'string' && p !== '') : [],
     related, source: str(raw.source) ?? '', bodyMd: str(raw.bodyMd),
   }
+  if (url !== null && HTTP_RE.test(url)) preview.url = url
+  return preview
 }
 
 // ─────────────────────────────────────────────

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ABANDON_MS, COMMANDS, CTX_H, CTX_W, KIND_ORDER, RECENT_KEY, addRecent, cleanSnippet, commandAnswer, contextLayout, ctxLabel, filterCommands, flattenHits, keepKnownTools,
-  highlightSegments, isAbandoned, kindLabel, loadRecent, logKey, moveIndex, openAction, parsePreview, parseQuery, parseSearchResponse,
+  ABANDON_MS, COMMANDS, CTX_H, CTX_W, KIND_ORDER, RECENT_KEY, REPO_LIST_MAX, addRecent, cleanSnippet, commandAnswer, contextLayout, ctxLabel, filterCommands, flattenHits, keepKnownTools,
+  highlightSegments, isAbandoned, isRepoListQuery, kindLabel, loadRecent, logKey, moveIndex, openAction, parsePreview, parseQuery, parseSearchResponse, recentRepoHits,
   quickAnswer, saveRecent, shouldLog, type SearchGroup, type SearchHit,
 } from './omniSearch'
+import type { RepoItem } from './repoApi'
 
 const hit = (kind: SearchHit['kind'], id: string, title = id, snippet = ''): SearchHit => ({ kind, id, title, snippet, date: null })
 
@@ -22,6 +23,12 @@ describe('parseQuery', () => {
   })
   it('q 截到 50 字', () => {
     expect(parseQuery('a'.repeat(80)).q).toHaveLength(50)
+  })
+  it('gh: 只找倉庫（不分大小寫，q 可空）', () => {
+    expect(parseQuery('gh:aiportal')).toEqual({ mode: 'search', prefix: 'gh:', kind: 'repo', q: 'aiportal' })
+    expect(parseQuery('GH: x')).toEqual({ mode: 'search', prefix: 'gh:', kind: 'repo', q: 'x' })
+    expect(parseQuery('gh:')).toEqual({ mode: 'search', prefix: 'gh:', kind: 'repo', q: '' })
+    expect(parseQuery('gh:' + 'a'.repeat(80)).q).toHaveLength(50)
   })
 })
 
@@ -154,6 +161,80 @@ describe('開啟去處', () => {
     expect(kindLabel('diary')).toBe('日記')
     expect(KIND_ORDER.indexOf('diary')).toBe(KIND_ORDER.indexOf('source') + 1)
     expect(openAction('diary', '2026-03-09')).toEqual({ type: 'expand' })
+  })
+  it('倉庫排在遊記後、工具前，開啟去處是 repo', () => {
+    expect(kindLabel('repo')).toBe('倉庫')
+    expect(KIND_ORDER.indexOf('repo')).toBe(KIND_ORDER.indexOf('trip') + 1)
+    expect(KIND_ORDER.indexOf('repo')).toBe(KIND_ORDER.indexOf('tool') - 1)
+    expect(openAction('repo', 'aiportal')).toEqual({ type: 'repo', id: 'aiportal' })
+  })
+})
+
+describe('倉庫清單與 meta', () => {
+  const repo = (name: string, pushedAt: string | null, over: Partial<RepoItem> = {}, url = `https://github.com/o/${name}`): RepoItem => ({
+    name, fullName: `o/${name}`, description: null, url, homepage: null, private: false, fork: false, archived: false,
+    language: null, topics: [], pushedAt, stars: 0, openIssues: 0, defaultBranch: null, ...over,
+  })
+
+  it('parseHit：repo 且 url 是 http(s) 才帶 meta（欄位寬容）', () => {
+    const r = parseSearchResponse({
+      groups: [{
+        kind: 'repo', count: 1, items: [{
+          kind: 'repo', id: 'aiportal', title: 'aiportal', snippet: '描述', date: '2026-11-10',
+          meta: { language: 5, private: 1, archived: true, url: 'https://github.com/x/aiportal' },
+        }],
+      }],
+    })
+    expect(r.groups[0].items[0].meta).toEqual({ language: null, private: false, archived: true, url: 'https://github.com/x/aiportal' })
+  })
+  it('parseHit：壞網址或非 repo 不帶 meta 鍵', () => {
+    const r = parseSearchResponse({
+      groups: [
+        { kind: 'repo', count: 1, items: [{ kind: 'repo', id: 'bad', title: 'bad', meta: { url: 'javascript:alert(1)' } }] },
+        { kind: 'case', count: 1, items: [{ kind: 'case', id: 'c', title: 'C', meta: { url: 'https://github.com/x/c' } }] },
+      ],
+    })
+    expect('meta' in r.groups[0].items[0]).toBe(false)
+    expect('meta' in r.groups[1].items[0]).toBe(false)
+  })
+  it('parsePreview：url 只收 http(s)', () => {
+    expect(parsePreview({ kind: 'repo', id: 'a', title: 'a', url: 'https://github.com/x/a' })?.url).toBe('https://github.com/x/a')
+    expect(parsePreview({ kind: 'repo', id: 'a', title: 'a', url: 'http://github.com/x/a' })?.url).toBe('http://github.com/x/a')
+    const bad = parsePreview({ kind: 'repo', id: 'a', title: 'a', url: 'javascript:alert(1)' })!
+    expect('url' in bad).toBe(false)
+  })
+  it('isRepoListQuery：只有幾個等價的指令字', () => {
+    for (const q of ['倉庫', ' github ', 'GH', 'repo', 'repos']) expect(isRepoListQuery(q)).toBe(true)
+    for (const q of ['', '倉', 'githubx', '>倉庫']) expect(isRepoListQuery(q)).toBe(false)
+  })
+  it('filterCommands 找得到倉庫指令', () => {
+    expect(filterCommands('倉').map((c) => c.id)).toContain('repos')
+    expect(filterCommands('repos')[0]?.action).toEqual({ type: 'repoList' })
+  })
+  it('recentRepoHits：新到舊、null 最後、同時間依名稱', () => {
+    const hits = recentRepoHits([
+      repo('old', '2026-01-01'),
+      repo('none', null),
+      repo('b', '2026-11-10'),
+      repo('a', '2026-11-10'),
+      repo('new', '2026-11-12'),
+    ])
+    expect(hits.map((h) => h.id)).toEqual(['new', 'a', 'b', 'old', 'none'])
+  })
+  it('recentRepoHits：上限 10、欄位轉換', () => {
+    const many = Array.from({ length: 12 }, (_, i) => repo(`r${String(i).padStart(2, '0')}`, `2026-11-${String(i + 1).padStart(2, '0')}`, { description: `d${i}`, language: 'TypeScript', private: true }))
+    const hits = recentRepoHits(many)
+    expect(hits).toHaveLength(REPO_LIST_MAX)
+    expect(hits[0]).toEqual({
+      kind: 'repo', id: 'r11', title: 'r11', snippet: 'd11', date: '2026-11-12',
+      meta: { language: 'TypeScript', private: true, archived: false, url: 'https://github.com/o/r11' },
+    })
+    expect(hits[9].id).toBe('r02')
+    expect(recentRepoHits([repo('x', null, { description: null })])[0]).toMatchObject({ id: 'x', snippet: '', date: null })
+  })
+  it('recentRepoHits：壞網址略過', () => {
+    const hits = recentRepoHits([repo('good', '2026-01-01'), repo('evil', '2026-02-01', {}, 'javascript:alert(1)')])
+    expect(hits.map((h) => h.id)).toEqual(['good'])
   })
 })
 

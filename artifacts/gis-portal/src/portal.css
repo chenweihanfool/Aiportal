@@ -2459,6 +2459,10 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .os-card-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); }
 .os-card-line-h { flex: 1 1 auto; height: 2px; background: var(--c-accent-dim); }
 .os-card-spanlb { display: flex; justify-content: space-between; margin: 0; font-family: var(--font-mono); font-size: 12px; }
+/* 2.95.0：倉庫卡（語言色點＋私有鎖與更新時間） */
+.os-card-lang { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.os-card-repo-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+.os-card-lock { flex: 0 0 auto; font-size: 12px; line-height: 1; }
 @media (max-width: 820px) {
   .os-viz-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .os-viz-bars { height: 36px; }

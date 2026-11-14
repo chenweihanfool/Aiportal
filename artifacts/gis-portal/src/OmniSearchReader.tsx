@@ -13,6 +13,7 @@ export function Marked({ text, q }: { text: string; q: string }) {
 }
 
 function pointsLabel(kind: SearchKind): string {
+  if (kind === 'repo') return '資訊'
   if (kind === 'topic') return '要注意什麼'
   if (kind === 'case') return '來龍去脈'
   return '最近'
@@ -88,7 +89,8 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
         </>
       )}
       <div className="om-act">
-        <button type="button" className="om-cta" onClick={onOpen}>{inPanel ? (expanded ? '收合全文 ↵' : '展開全文 ↵') : '開啟 ↵'}</button>
+        <button type="button" className="om-cta" onClick={onOpen}>{inPanel ? (expanded ? '收合全文 ↵' : '展開全文 ↵') : item.kind === 'repo' ? '在 GitHub 開啟 ↵' : '開啟 ↵'}</button>
+        {p?.url && <a className="om-gh" href={p.url} target="_blank" rel="noopener noreferrer">在 GitHub 開啟 ↗</a>}
         {p?.bodyMd != null && !inPanel && (
           <button type="button" className="om-gh" onClick={onToggleExpand}>{expanded ? '收合全文' : '展開全文'}</button>
         )}
