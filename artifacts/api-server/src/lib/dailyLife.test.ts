@@ -41,6 +41,10 @@ describe("lifeDaysOf", () => {
     expect(m.size).toBe(1);
     expect(lifeDaysOf(src({ workoutDays: { bad: true } }), TODAY).size).toBe(0);
   });
+  it("運動：同一動作記兩筆只算 1 項；名稱去空白", () => {
+    const m = lifeDaysOf(src({ workoutDays: [{ date: "2026-10-07", entries: 4, exercises: ["跑步", " 跑步 ", "深蹲", ""] }] }), TODAY);
+    expect(m.get("2026-10-07")?.workouts).toEqual(["跑步", "深蹲"]);
+  });
   it("未來與視窗外的日子不列", () => {
     const m = lifeDaysOf(src({ workoutDays: [{ date: "2026-10-31", exercises: ["深蹲"] }, { date: "2020-01-01", exercises: ["深蹲"] }] }), TODAY);
     expect(m.size).toBe(0);

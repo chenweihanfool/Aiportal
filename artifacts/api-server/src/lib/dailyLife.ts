@@ -90,7 +90,8 @@ export function lifeDaysOf(src: LifeSources, today: string): Map<string, LifeDay
     for (const w of src.workoutDays as Array<{ date?: unknown; exercises?: unknown }>) {
       if (typeof w?.date !== "string" || !Array.isArray(w.exercises) || w.exercises.length === 0) continue;
       const d = dayOf(w.date);
-      if (d) d.workouts = w.exercises.filter((x): x is string => typeof x === "string");
+      // 同一動作記兩筆只算 1 項：去空白後非空、去重保序
+      if (d) d.workouts = [...new Set(w.exercises.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean))];
     }
   }
   return out;
