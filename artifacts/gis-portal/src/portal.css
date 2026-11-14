@@ -2625,7 +2625,6 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-panel-text { margin: var(--sp-3) 0 var(--sp-2); font-size: 1.15rem; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .it-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .it-date { font: 12.5px var(--font-mono); color: var(--c-accent-ink); border: 1px solid var(--c-accent-dim); border-radius: var(--r-pill); padding: 2px 10px; background: var(--c-accent-soft); }
-.it-day { margin-top: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-bg); max-height: 360px; overflow: auto; }
 .it-lb { margin: var(--sp-4) 0 var(--sp-2); font: 11.5px var(--font-mono); letter-spacing: 0.12em; color: var(--c-ink-3); font-weight: 400; }
 .it-dim { margin: 0; color: var(--c-ink-3); font-size: 0.9rem; }
 .it-evidence { margin: 0; padding: var(--sp-2) var(--sp-3); border-left: 2px solid var(--c-accent); background: var(--c-accent-soft); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 0.92rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }

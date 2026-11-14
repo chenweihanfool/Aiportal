@@ -10,7 +10,9 @@ import { blockState } from './homeView'
 import { StateFrame } from './StateFrame'
 import { PinButton } from './PinButton'
 import { pinTargetFor } from './pushTriggers'
-import { SearchDiaryReport } from './SearchDiaryReport'
+import { createPortal } from 'react-dom'
+import { DayReportDialog } from './DayReportDialog'
+import { buildTimelineDayLink } from './timelineLink'
 
 // 首頁「我的心得樹」（2.99.0）：樹高＝時間，心得照日期長成枝葉；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
 // 排版是純函式（insightTree.ts／insightPalette.ts，有測試），這裡只畫 SVG、群清單側欄與側邊面板。樣式 it- 前綴在 portal.css。
@@ -399,10 +401,13 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => { closeRef.current?.focus() }, [])
   useEffect(() => {
-    const f = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    // 日報視窗開著時 Esc 只關視窗，不連心得面板一起關
+    const f = (e: KeyboardEvent) => { if (e.key === 'Escape' && !showDay) onClose() }
     window.addEventListener('keydown', f)
     return () => window.removeEventListener('keydown', f)
-  }, [onClose])
+  }, [onClose, showDay])
+  const dateBtnRef = useRef<HTMLButtonElement>(null)
+  const closeDay = useCallback(() => { setShowDay(false); setTimeout(() => dateBtnRef.current?.focus(), 0) }, [])
   useEffect(() => { setShowDay(false) }, [id])
   useEffect(() => {
     if (!pw) { setDet(null); return }
@@ -434,14 +439,13 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
         <h3 className="it-panel-text" data-testid="insight-panel-text">{text || '（找不到這則心得）'}</h3>
         <div className="it-meta">
           {date && (
-            <button type="button" className="it-date" data-testid="insight-date" aria-expanded={showDay} onClick={() => setShowDay((v) => !v)}>
+            <button ref={dateBtnRef} type="button" className="it-date" data-testid="insight-date" aria-haspopup="dialog" onClick={() => setShowDay(true)}>
               {date}{d?.time ?? fallback?.time ? ` ${d?.time ?? fallback?.time}` : ''}・看那天日報
             </button>
           )}
           {relation && <span className={`it-rel it-rel-${relation}`}>{RELATION_LABEL[relation]}</span>}
           {provenance && <span className="it-prov">{PROVENANCE_LABEL[provenance]}</span>}
         </div>
-        {showDay && date && <div className="it-day" data-testid="insight-day"><SearchDiaryReport date={date} pw={pw} /></div>}
         <h4 className="it-lb">日記原文</h4>
         {!cur || cur.state === 'loading' ? <p className="it-dim">載入中…</p>
           : cur.state === 'error' ? <p className="it-dim" role="status">原文暫時讀不到，稍後再試。</p>
@@ -464,6 +468,10 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
         </ol>
         <div className="it-act"><PinButton pw={pw} target={pinTarget} /></div>
       </aside>
+      {showDay && date && pw && createPortal(
+        <DayReportDialog date={date} password={pw} onClose={closeDay} timelineHref={buildTimelineDayLink(date, `insight/${encodeURIComponent(id)}`)} />,
+        document.body,
+      )}
     </>
   )
 }

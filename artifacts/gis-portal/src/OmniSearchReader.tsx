@@ -3,6 +3,7 @@ import { MarkdownView } from './MarkdownView'
 import { apiFetchInsightDetail } from './insightApi'
 import { PROVENANCE_LABEL, RELATION_LABEL, type InsightDetail, type ThreadDot } from './insightTree'
 import { SearchDiaryReport } from './SearchDiaryReport'
+import { buildTimelineDayLink } from './timelineLink'
 import { PinButton } from './PinButton'
 import { pinTargetFor } from './pushTriggers'
 import { CTX_H, CTX_W, contextLayout, ctxLabel, highlightSegments, kindLabel, openAction, type PreviewRelated, type SearchKind, type SearchPreview } from './omniSearch'
@@ -161,7 +162,7 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
       )}
       <div className="om-act">
         {isDiary
-          ? <button type="button" className="om-cta" onClick={() => { window.location.hash = 'graph/timeline' }}>在時間軸看 ↵</button>
+          ? <button type="button" className="om-cta" onClick={() => { window.location.hash = buildTimelineDayLink(item.id, '') }}>在時間軸看 ↵</button>
           : <button type="button" className={inPanel ? 'om-gh' : 'om-cta'} onClick={onOpen}>{inPanel ? (expanded ? '收合原文 ↵' : '看原文 ↵') : isEvent ? '開啟事件卷宗 ↵' : item.kind === 'repo' ? '在 GitHub 開啟 ↵' : '開啟 ↵'}</button>}
         {p?.url && <a className="om-gh" href={p.url} target="_blank" rel="noopener noreferrer">在 GitHub 開啟 ↗</a>}
         {p?.bodyMd != null && !inPanel && (
