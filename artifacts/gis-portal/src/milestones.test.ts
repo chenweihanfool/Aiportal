@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
 import {
-  averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseDailyLife, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
+  dayNames, averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseDailyLife, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
   type TasksDone,
 } from './milestones'
 
@@ -64,10 +64,22 @@ describe('生活項目', () => {
     expect(ix.at('2026-10-22')).toMatchObject({ social: 0, newPlaces: 0, tripDay: 0, workout: 0 })
   })
   it('提示窗列出具體項目；區間合計與合計數都含生活項目', () => {
-    expect(ix.items('2026-10-20')).toMatchObject({ social: ['10/20 3 位家人朋友'], newPlaces: ['甲店', '乙店'], tripDay: ['10/20 花蓮'], workout: ['10/20 深蹲、臥推'] })
+    expect(ix.items('2026-10-20')).toMatchObject({ social: ['10/20 阿明、小美、老王'], newPlaces: ['甲店', '乙店'], tripDay: ['10/20 花蓮'], workout: ['10/20 深蹲、臥推'] })
     expect(itemsRange(ix, ['2026-10-20', '2026-10-21'], TODAY).tripDay).toEqual(['10/20 花蓮', '10/21 花蓮'])
     expect(partTip('tripDay', 2, ['10/20 花蓮', '10/21 花蓮'])).toBe('🧳 旅行 2\n• 10/20 花蓮\n• 10/21 花蓮')
     expect(buckets(ix, 'day', ['2026-10-21', '2026-10-21'], TODAY, 1)[0].total).toBe(1)
+  })
+  it('舊資料沒有名字：見人提示窗維持「N 位家人朋友」；dayNames 取出名字', () => {
+    const old = dailyIndex([], null, parseDailyLife({ days: [{ date: '2026-10-22', socialPeople: 2, newPlaces: [], trip: null, workouts: [] }] }))
+    expect(old.items('2026-10-22').social).toEqual(['10/22 2 位家人朋友'])
+    expect(dayNames(old.items('2026-10-22').social)).toEqual([])
+    expect(dayNames(ix.items('2026-10-20').social)).toEqual(['阿明', '小美', '老王'])
+    expect(dayNames(ix.items('2026-10-20').workout)).toEqual(['深蹲', '臥推'])
+    expect(dayNames([])).toEqual([])
+  })
+  it('partTip：見人、運動數量多於標題行數時不補「另 N 項沒有標題紀錄」', () => {
+    expect(partTip('social', 3, ['10/20 阿明、小美、老王'])).toBe('🫶 見家人朋友 3\n• 10/20 阿明、小美、老王')
+    expect(partTip('workout', 2, ['10/20 深蹲、臥推'])).toBe('🏋️ 運動 2\n• 10/20 深蹲、臥推')
   })
   it('只有生活項目的日子也算連續有成果', () => {
     expect(streakEndingAt(ix, '2026-10-21', TODAY)).toBe(2)

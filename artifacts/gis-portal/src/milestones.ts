@@ -112,7 +112,7 @@ export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null, 
       const md = `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`
       return {
         tasks: titles[d] ?? [], ideasNew: born[d] ?? [], ideasDone: done[d] ?? [],
-        social: l && l.socialPeople > 0 ? [`${md} ${l.socialPeople} 位家人朋友`] : [],
+        social: l && l.socialPeople > 0 ? [l.socialNames.length > 0 ? `${md} ${l.socialNames.join('、')}` : `${md} ${l.socialPeople} 位家人朋友`] : [],
         newPlaces: l?.newPlaces ?? [],
         tripDay: l?.trip ? [`${md} ${l.trip}`] : [],
         workout: l && l.workouts.length > 0 ? [`${md} ${l.workouts.join('、')}`] : [],
@@ -151,7 +151,7 @@ export function itemsRange(ix: DailyIndex, r: Range, today: string): Items {
   return out
 }
 
-/** 一項的提示窗：「✅ 完成任務 4」＋逐條標題（超過 8 項寫「另 N 項」）；數量多於標題時補一句（舊資料沒有任務標題） */
+/** 一項的提示窗：「✅ 完成任務 4」＋逐條標題（超過 8 項寫「另 N 項」）；只有任務在數量多於標題時補一句（舊資料沒有任務標題；見人是人數、運動是項數，一天只有一行標題，不能拿來比） */
 export function partTip(key: PartKey, count: number, titles: readonly string[], unknown = false): string {
   const p = PARTS.find((x) => x.key === key)!
   const head = `${p.icon} ${p.label} ${unknown ? '—' : count}`
@@ -159,7 +159,16 @@ export function partTip(key: PartKey, count: number, titles: readonly string[], 
   if (count === 0) return head
   if (titles.length === 0) return `${head}（這段時間沒有標題紀錄）`
   const text = tipText(head, titles)
-  return titles.length < count ? `${text}\n（另 ${count - titles.length} 項沒有標題紀錄）` : text
+  return key === 'tasks' && titles.length < count ? `${text}\n（另 ${count - titles.length} 項沒有標題紀錄）` : text
+}
+
+/** 日級卡片用：取出那天的名字（見人的人名、運動的項目名）；items 一天一行「M/D 甲、乙」，舊資料見人只有「N 位家人朋友」就回空陣列 */
+export function dayNames(items: readonly string[]): string[] {
+  const line = items[0]
+  if (!line) return []
+  const body = line.replace(/^\d+\/\d+ /, '')
+  if (/^\d+ 位家人朋友$/.test(body)) return []
+  return body.split('、').filter((x) => x !== '')
 }
 
 // ── 走勢：本期往前 N 期 ──
