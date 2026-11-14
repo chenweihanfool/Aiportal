@@ -141,7 +141,8 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
 
   // #insight/<id>（搜尋、釘選、推送卡的連結）→ 打開那一則的面板
   useEffect(() => {
-    const f = () => { const id = insightIdFromHash(window.location.hash); if (id) setSelected(id) }
+    // 網址回到沒有 #insight/ 的狀態（例如瀏覽器上一頁）就關面板，避免網址空了面板還開著
+    const f = () => { const id = insightIdFromHash(window.location.hash); setSelected(id) }
     window.addEventListener('hashchange', f)
     return () => window.removeEventListener('hashchange', f)
   }, [])
