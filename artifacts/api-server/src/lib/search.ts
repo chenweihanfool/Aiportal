@@ -4,7 +4,7 @@
 
 /** groups 的固定順序（也是 best 同級時的優先順序）。 */
 export const SEARCH_KINDS = [
-  "case", "topic", "person", "object", "event", "concept", "method", "source", "diary", "idea", "place", "trip", "tool",
+  "case", "topic", "person", "object", "event", "concept", "method", "source", "diary", "idea", "place", "trip", "repo", "tool",
 ] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -73,7 +73,7 @@ export function splitTerms(q: string): string[] {
   return out;
 }
 
-/** q：去頭尾空白後 1～50 字；kind：選填且須在 13 種之內；limit：整數 1～20，預設 5；month／before：選填 YYYY-MM，不可同時給。 */
+/** q：去頭尾空白後 1～50 字；kind：選填且須在 14 種之內；limit：整數 1～20，預設 5；month／before：選填 YYYY-MM，不可同時給。 */
 export function validateSearchParams(
   qRaw: unknown, kindRaw: unknown, limitRaw: unknown, monthRaw?: unknown, beforeRaw?: unknown,
 ): SearchParams {
@@ -109,6 +109,14 @@ export function validateSearchParams(
 }
 
 // ── 候選項、比對、排序 ─────────────────────────────────────────────────────
+/** repo 專用的補充資訊（其他 kind 沒有）；只原樣帶到 SearchItem，不參與比對。 */
+export interface RepoMeta {
+  language: string | null;
+  private: boolean;
+  archived: boolean;
+  url: string;
+}
+
 /** 各 kind 轉出來的統一形狀。text 是搜尋與 snippet 用的內文；snippet 有值時直接當 snippet（case／person／object）。 */
 export interface Candidate {
   kind: SearchKind;
@@ -117,6 +125,7 @@ export interface Candidate {
   text: string;
   date: string | null;
   snippet?: string;
+  meta?: RepoMeta;
 }
 
 export interface SearchItem {
@@ -125,6 +134,7 @@ export interface SearchItem {
   title: string;
   snippet: string;
   date: string | null;
+  meta?: RepoMeta;
 }
 export interface SearchGroup {
   kind: SearchKind;
@@ -230,7 +240,9 @@ export function makeSnippet(text: string, firstTerm: string): string {
 
 function toItem(c: Candidate, terms: string[]): SearchItem {
   const snippet = c.snippet !== undefined ? c.snippet : makeSnippet(c.text, terms[0] ?? "");
-  return { kind: c.kind, id: c.id, title: c.title, snippet: snippet.length > SNIPPET_MAX ? snippet.slice(0, SNIPPET_MAX - 1) + "…" : snippet, date: c.date };
+  const item: SearchItem = { kind: c.kind, id: c.id, title: c.title, snippet: snippet.length > SNIPPET_MAX ? snippet.slice(0, SNIPPET_MAX - 1) + "…" : snippet, date: c.date };
+  if (c.meta !== undefined) item.meta = c.meta;
+  return item;
 }
 
 /**
@@ -429,6 +441,29 @@ export function tripsToCandidates(trips: unknown): Candidate[] {
     if (!id || !name) continue;
     const parts = [t["area"], t["summary"]].filter((x): x is string => typeof x === "string");
     out.push({ kind: "trip", id, title: name, text: parts.join("\n"), date: dateOf(t["start"]) });
+  }
+  return out;
+}
+
+/** GitHub 倉庫（RepoInfo[]）：name 當 id／標題，description＋language＋topics 當內文，pushedAt 當日期，另帶 meta。 */
+export function reposToCandidates(repos: unknown): Candidate[] {
+  if (!Array.isArray(repos)) return [];
+  const out: Candidate[] = [];
+  for (const r of repos as unknown[]) {
+    if (!isObj(r)) continue;
+    const name = str(r["name"]);
+    const url = str(r["url"]);
+    if (!name || !url) continue;
+    const parts = [str(r["description"]), str(r["language"]), strList(r["topics"]).join(" ")]
+      .filter((x): x is string => x !== null && x.length > 0);
+    out.push({
+      kind: "repo",
+      id: name,
+      title: name,
+      text: parts.join("\n"),
+      date: dateOf(r["pushedAt"]),
+      meta: { language: str(r["language"]), private: r["private"] === true, archived: r["archived"] === true, url },
+    });
   }
   return out;
 }
