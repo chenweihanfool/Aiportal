@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { apiSearch, apiSearchLog, apiSearchPreview } from './omniSearchApi'
+import { apiFetchHermesGraph } from './hermesGraphApi'
+import { buildIndex } from './graphInsights'
+import { apiFetchTopicsData } from './statsApi'
+import { apiFetchTrips } from './tripsApi'
+import { HitCard } from './SearchCards'
+import { SearchOverview, type DateFilter } from './SearchOverview'
+import { cardModel, taipeiYm, type CardCtx, type CardModel } from './searchViz'
 import {
   KIND_ORDER, PREFIX_HINTS, addRecent, commandAnswer, filterCommands, flattenHits, isAbandoned, kindLabel, loadRecent, logKey, moveIndex,
   keepKnownTools, openAction, parseQuery, quickAnswer, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
@@ -62,11 +69,20 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const [notice, setNotice] = useState<string | null>(null)
   const [pulse, setPulse] = useState(0)
   const [recent, setRecent] = useState<string[]>(() => loadRecent())
+  // 總覽條的篩選（類別、月份）；key 對不上目前的搜尋詞＝已失效（詞一改就自動清掉）
+  const [flt, setFlt] = useState<{ key: string; kind: SearchKind | null; date: DateFilter | null }>({ key: '', kind: null, date: null })
+  const [listState, setListState] = useState<{ key: string; resp: SearchResponse } | null>(null)
+  const [ctx, setCtx] = useState<CardCtx | null>(null)
 
   const rootRef = useRef<HTMLElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const session = useRef<Session | null>(null)
   const lastLogKey = useRef<string | null>(null)
+  const interacted = useRef(false)
+  const lastQKey = useRef('')
+  const ctxStarted = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const pwRef = useRef(pw)
   pwRef.current = pw
   const sitesRef = useRef(sites)
@@ -91,7 +107,27 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     () => (rawResp === null || knownToolIds.size === 0 ? rawResp : keepKnownTools(rawResp, knownToolIds)),
     [rawResp, knownToolIds],
   )
-  const flat = useMemo(() => flattenHits(resp?.groups ?? []), [resp])
+  const fkey = `${searchKind ?? ''}|${searchQ}`
+  const kindFilter = flt.key === fkey ? flt.kind : null
+  const dateFilter = flt.key === fkey ? flt.date : null
+  const dateType = dateFilter?.type ?? null
+  const dateYm = dateFilter?.ym ?? null
+  const listKey = `${fkey}|${dateType ?? ''}:${dateYm ?? ''}|${kindFilter ?? ''}`
+  const listResp = useMemo(
+    () => (listState === null || listState.key !== listKey ? null : knownToolIds.size === 0 ? listState.resp : keepKnownTools(listState.resp, knownToolIds)),
+    [listState, listKey, knownToolIds],
+  )
+  // 選了類別：列表用另打的 kind 查詢（limit 20）；還沒回來先用基本查詢裡那一類
+  const groups = useMemo(
+    () => (kindFilter ? (listResp?.groups ?? (resp?.groups ?? []).filter((g) => g.kind === kindFilter)) : (resp?.groups ?? [])),
+    [kindFilter, listResp, resp],
+  )
+  const flat = useMemo(() => flattenHits(groups), [groups])
+  const models = useMemo(() => {
+    const m = new Map<string, CardModel>()
+    if (ctx) for (const h of flat) m.set(`${h.kind}:${h.id}`, cardModel(h, ctx))
+    return m
+  }, [flat, ctx])
   const hitsLen = parsed.mode === 'command' ? cmds.length : status === 'ok' ? flat.length : 0
 
   // ── 紀錄（F10）──
@@ -110,6 +146,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   // ── 搜尋（F3）：停止輸入 250ms 後才打，新查詢取消舊請求 ──
   useEffect(() => {
     flushAbandon()
+    if (lastQKey.current !== fkey) { interacted.current = false; lastQKey.current = fkey }
     setDetour(null)
     setExpanded(false)
     if (!searchQ || !pw) { setStatus('idle'); setRawResp(null); setSel(0); return }
@@ -117,7 +154,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     const ctl = new AbortController()
     const t = setTimeout(() => {
       setPulse((n) => n + 1)
-      apiSearch(pw, searchQ, searchKind, ctl.signal)
+      apiSearch(pw, searchQ, searchKind, ctl.signal, dateType === 'month' ? { month: dateYm ?? undefined } : dateType === 'before' ? { before: dateYm ?? undefined } : {})
         .then((r) => {
           if (ctl.signal.aborted) return
           if (r === null) { setStatus('offline'); setRawResp(null); return }
@@ -128,12 +165,40 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
           const known = new Set(sitesRef.current.map((x) => String(x.id)))
           const shown = known.size === 0 ? r : keepKnownTools(r, known)
           setSel(shown.groups.length > 0 ? 0 : -1)
-          session.current = { q: searchQ, kind: searchKind, total: shown.total, shownAt: Date.now(), clicked: false }
+          session.current = { q: searchQ, kind: searchKind, total: shown.total, shownAt: Date.now(), clicked: interacted.current }
         })
         .catch(() => { if (!ctl.signal.aborted) setStatus('error') })
     }, DEBOUNCE_MS)
     return () => { clearTimeout(t); ctl.abort() }
-  }, [pw, searchQ, searchKind, flushAbandon])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pw, searchQ, searchKind, dateType, dateYm, flushAbandon])
+
+  // 選了類別：另打 kind 查詢取列表（含月份篩選）
+  useEffect(() => {
+    if (!kindFilter || !pw || !searchQ) { setListState(null); return }
+    const ctl = new AbortController()
+    const opts = { limit: 20, ...(dateType === 'month' ? { month: dateYm ?? undefined } : dateType === 'before' ? { before: dateYm ?? undefined } : {}) }
+    apiSearch(pw, searchQ, kindFilter, ctl.signal, opts)
+      .then((r) => { if (!ctl.signal.aborted) setListState(r ? { key: listKey, resp: r } : null) })
+      .catch(() => { if (!ctl.signal.aborted) setListState(null) })
+    return () => ctl.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pw, searchQ, kindFilter, dateType, dateYm])
+
+  // 視覺卡要的資料：第一次有結果時抓一次，抓不到就維持文字列
+  const hasResults = status === 'ok' && (resp?.total ?? 0) > 0
+  useEffect(() => {
+    if (!hasResults || !pw || ctxStarted.current) return
+    ctxStarted.current = true
+    void Promise.allSettled([apiFetchHermesGraph(pw), apiFetchTopicsData(pw), apiFetchTrips(pw)]).then(([g, t, r]) => {
+      if (!mounted.current) return
+      let index = null
+      try { if (g.status === 'fulfilled' && g.value.graph) index = buildIndex(g.value.graph) } catch { index = null }
+      const topics = t.status === 'fulfilled' ? (t.value.value?.topics ?? null) : null
+      const trips = r.status === 'fulfilled' && !r.value.sample ? r.value.trips : null
+      setCtx({ index, topics, trips })
+    })
+  }, [hasResults, pw])
 
   // 指令模式：過濾字變了就選回第一個
   useEffect(() => { if (parsed.mode === 'command') setSel(0) }, [parsed.mode, parsed.mode === 'command' ? parsed.q : ''])
@@ -233,8 +298,20 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
 
   const startWith = (text: string) => { setRaw(text); inputRef.current?.focus() }
 
+  // 點總覽條算互動：不要被當成「沒點開」記放棄
+  const touch = () => { interacted.current = true; if (session.current) session.current.clicked = true }
+  const pickKind = (k: SearchKind | null) => {
+    touch(); setDetour(null); setSel(0)
+    setFlt((f) => ({ key: fkey, kind: k, date: f.key === fkey ? f.date : null }))
+  }
+  const pickDate = (d: DateFilter | null) => {
+    touch(); setDetour(null)
+    setFlt((f) => ({ key: fkey, date: d, kind: f.key === fkey ? f.kind : null }))
+  }
+
   // ── 顯示用文字 ──
   const noResult = parsed.mode === 'search' && status === 'ok' && flat.length === 0
+  const filtering = kindFilter !== null || dateFilter !== null
   const answer =
     parsed.mode === 'empty' ? ''
     : parsed.mode === 'command' ? commandAnswer(cmds)
@@ -245,11 +322,12 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     : status === 'ok' ? quickAnswer(resp?.best ?? null)
     : ''
   const shown = useTypewriter(answer)
+  const busy = status === 'loading' && resp !== null
+  const showOverview = parsed.mode === 'search' && (status === 'ok' || busy) && !!resp && (resp.total > 0 || filtering)
   const searching = parsed.mode !== 'empty'
   const locked = !pw && parsed.mode !== 'command'
   const showLockNote = locked && (focused || searching)
   const showPanel = searching && (parsed.mode === 'command' || !!pw)
-  const busy = status === 'loading' && resp !== null
 
   let idx = -1
   return (
@@ -305,6 +383,9 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       {showPanel && (
         <div className={`om-results${parsed.mode === 'command' ? ' om-results-cmd' : ''}`}>
           <div className={`om-panel om-rs${busy ? ' om-busy' : ''}`} onMouseMove={glow}>
+            {showOverview && resp && (
+              <SearchOverview resp={resp} kindFilter={kindFilter} date={dateFilter} todayYm={taipeiYm()} onKind={pickKind} onDate={pickDate} />
+            )}
             <div id="om-listbox" role="listbox" aria-label={parsed.mode === 'command' ? '指令' : '搜尋結果'}>
               {parsed.mode === 'command' && cmds.length === 0 && <div className="om-none">沒有符合的指令</div>}
               {parsed.mode === 'command' && cmds.map((c, i) => (
@@ -317,7 +398,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
               {parsed.mode === 'search' && status === 'loading' && !resp && <div className="om-none" role="presentation">搜尋中…</div>}
               {parsed.mode === 'search' && status === 'error' && <div className="om-none" role="presentation">搜尋暫時失敗，稍後再試。</div>}
               {parsed.mode === 'search' && status === 'offline' && <div className="om-none" role="presentation">搜尋服務還沒上線</div>}
-              {noResult && (
+              {noResult && filtering && <div className="om-none" role="presentation">這個篩選沒有結果，按上面的「全部」取消篩選。</div>}
+              {noResult && !filtering && (
                 <div className="om-none" role="presentation">
                   知識庫裡沒有「{searchQ}」<br />
                   <span className="om-lb">已記下這次查無結果</span><br /><br />
@@ -325,7 +407,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
                 </div>
               )}
               {parsed.mode === 'search' && (status === 'ok' || busy) && resp && KIND_ORDER.map((k) => {
-                const g = resp.groups.find((x) => x.kind === k)
+                const g = groups.find((x) => x.kind === k)
                 if (!g) return null
                 return (
                   <div key={k} role="group" aria-label={kindLabel(k)}>
@@ -335,14 +417,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
                       const i = idx
                       const on = !detour && i === sel
                       return (
-                        <div key={`${h.kind}:${h.id}`} id={`om-opt-${i}`} role="option" aria-selected={on} className={`om-hit${on ? ' om-on' : ''}`}
-                          style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }} onClick={() => pick(i)}>
-                          <span className="om-kd">{kindLabel(h.kind)}</span>
-                          <span>
-                            <div className="om-t"><Marked text={h.title} q={searchQ} /></div>
-                            {h.snippet && <div className="om-s"><Marked text={h.snippet} q={searchQ} /></div>}
-                          </span>
-                        </div>
+                        <HitCard key={`${h.kind}:${h.id}`} hit={h} i={i} on={on} q={searchQ} model={models.get(`${h.kind}:${h.id}`) ?? null} onPick={pick} onSearch={startWith} />
                       )
                     })}
                   </div>
