@@ -505,7 +505,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const df = hi[k]! > lo[k]! ? (dn - lo[k]!) / (hi[k]! - lo[k]!) : 1
     const rf = n <= 1 ? 1 : i / (n - 1)
     const tc = br[k]!.tc
-    return tc + (1 - tc) * (0.5 * df + 0.5 * rf)
+    return tc + (1 - tc) * (0.3 * df + 0.7 * rf)
   }
   const tOfDay = (k: number, dn: number): number => {
     const its = itemsOf.get(cids[k]!)!
@@ -515,7 +515,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const df = hi[k]! > lo[k]! ? clamp((dn - lo[k]!) / (hi[k]! - lo[k]!), 0, 1) : 1
     const rf = n <= 1 ? 1 : Math.min(c, n - 1) / (n - 1)
     const tc = br[k]!.tc
-    return tc + (1 - tc) * (0.5 * df + 0.5 * rf)
+    return tc + (1 - tc) * (0.3 * df + 0.7 * rf)
   }
 
   // ── 每片葉的位置（與輸出哪些無關） ──
@@ -556,7 +556,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const sg = upSide ? 1 : -1
     const dir: P = [tau[0] * Math.cos(phi) + un[0] * Math.sin(phi) * sg, tau[1] * Math.cos(phi) + un[1] * Math.sin(phi) * sg]
     const m = items.length
-    const L = Math.min(b.len * 0.5, 1.3 * step, Math.max(22 * rs, (28 + 18 * Math.log2(1 + m)) * rs))
+    const L = Math.min(b.len * 0.6, 1.5 * step, Math.max(22 * rs, (34 + 24 * Math.log2(1 + m)) * rs))
     const perp: P = [-dir[1], dir[0]]
     const end: P = [F[0] + dir[0] * L, F[1] + dir[1] * L]
     const ang = (Math.acos(clamp(tau[0] * dir[0] + tau[1] * dir[1], -1, 1)) * 180) / Math.PI

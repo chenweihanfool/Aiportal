@@ -243,7 +243,7 @@ describe('人生樹排版（3.0.0）', () => {
       for (const t of ly.twigs) {
         expect(t.angle).toBeGreaterThanOrEqual(25); expect(t.angle).toBeLessThanOrEqual(50.5)
         expect(t.length).toBeLessThan(ly.clusters[t.clusterIndex]!.len)
-        expect(t.length).toBeLessThanOrEqual(ly.clusters[t.clusterIndex]!.len * 0.5 + 0.1)
+        expect(t.length).toBeLessThanOrEqual(ly.clusters[t.clusterIndex]!.len * 0.6 + 0.1)
       }
       for (const c of ly.clusters) expect(c.y).toBeLessThan(c.ay - 10)
       for (let k = 2; k < ly.clusters.length; k++) { expect(ly.clusters[k]!.y).toBeLessThan(ly.clusters[k - 2]!.y); expect(ly.clusters[k]!.ay).toBeLessThan(ly.clusters[k - 2]!.ay) }

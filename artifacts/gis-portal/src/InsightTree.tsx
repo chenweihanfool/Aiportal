@@ -341,8 +341,12 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                     <g key={cl.id} className={`it-clump${focus !== null && cl.clusterIndex !== focus ? ' it-dimc' : ''}`} data-testid="insight-clump" data-ci={cl.clusterIndex} role="button" tabIndex={0}
                       aria-label={`${layout.clusters[cl.clusterIndex]?.name ?? ''} 另有 ${cl.count} 則，點一下聚焦這一群看全部`} style={{ color: col(cl.clusterIndex) }}
                       onClick={() => toggleFocus(cl.clusterIndex)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFocus(cl.clusterIndex) } }}>
-                      <circle className="it-clump-c" cx={cl.x} cy={cl.y} r={cl.r} />
-                      <text className="it-clump-t" x={cl.x} y={cl.y + 4} textAnchor="middle">{cl.count}</text>
+                      <circle className="it-hit" cx={cl.x} cy={cl.y} r={cl.r * 1.25} />
+                      {[[-0.55, -0.1, -55], [0.5, -0.2, 40], [-0.15, 0.45, -15], [0.3, 0.4, 70], [0, -0.55, 8]].slice(0, cl.count >= 5 ? 5 : cl.count >= 3 ? 4 : 3).map(([ox, oy, rot], q) => (
+                        <path key={q} className="it-clump-leaf" d={leafShape('new').d} transform={`translate(${cl.x + ox! * cl.r},${cl.y + oy! * cl.r}) rotate(${rot}) scale(${cl.r * 0.5})`} />
+                      ))}
+                      <circle className="it-clump-b" cx={cl.x + cl.r * 0.75} cy={cl.y - cl.r * 0.65} r={cl.r * 0.62} />
+                      <text className="it-clump-t" x={cl.x + cl.r * 0.75} y={cl.y - cl.r * 0.65 + 3.5} textAnchor="middle">{cl.count}</text>
                     </g>
                   ))}
                   {layout.leaves.map((lf) => (
