@@ -42,6 +42,7 @@
 | `companion` | 1 | 首頁陪伴區塊：歷年今天、很久沒聯絡的人、每天的家人朋友互動（kb-pipeline `companion-pusher.py`，每 10 分鐘只讀） |
 | `topics` | 1 | 知識頁（#knowledge）：知識庫長出來的主題、頁面內容、成長紀錄與相關題目（kb-pipeline 每週推送）。2.75.0 起含知識樹 |
 | `topic-nudges` | 1 | 首頁主動推播主題知識：「今天」卡、明日報告區塊、陪伴區塊的「一年前的這時候」（kb-pipeline `vikunja-gantt-pusher.py`，每 10 分鐘） |
+| `calendar-today` | 1 | 今天的行程：只有標題、開始／結束時間、地點文字；不含與會者、描述、會議連結（台北日期，私領域） |
 
 ## topics 的 sources 選填欄位（v1 只加選填，舊 payload 照常通過）
 `sources[]` 每筆除了 `id`、`title`、`month`，還可帶：
@@ -59,6 +60,7 @@
 ## hermes-doc 的新 kind（內容層，`POST /api/admin/hermes-doc`，標頭 `x-admin-password`）
 - `source`：一個主題來源一筆。`key` 是來源 id（可能含 `/`，例如 `AI/工作/x`），`bodyMd` 是原文全文（UTF-8 截到 64 KiB），`sourcePath` 是 vault 相對路徑。`meta`＝`{type, case, date, originName, rawPath, textFrom, evidence, topics}`，`textFrom` 為 `original|diary|note|event|none`。
 - `topic`：一個已發布主題一筆。`key` 是主題 id，`bodyMd` 為空字串，`meta = {quotes: [{k, ref, text, fromOriginal, weak}]}`（`k` 是 feed `body` 裡第 k 個 `⟦n⟧` 標記）。
+- `diary`：一整天的日記一筆（全文都收）。`key` 必須是真實日期 `YYYY-MM-DD`，`meta.date` 有給就必須等於 `key`；不符整批 400 拒收。
 - 單筆查詢：`GET /api/hermes-doc/source/<encodeURIComponent(key)>`、`GET /api/hermes-doc/topic/<key>`，回 `{kind,key,title,bodyMd,truncated,updatedAt,meta,sourcePath}`；查無回 404。key 含 `/` 時前端一定要 `encodeURIComponent`。
 
 ## GET /api/hermes-doc-search（原文全文搜尋，標頭 `x-admin-password`）
