@@ -17,7 +17,7 @@ export function safeFrom(raw: string | null | undefined): string | null {
   if (raw == null) return null
   if (raw.length > FROM_MAX) return null
   if (raw.includes('://')) return null
-  if (raw.startsWith('/') || raw.startsWith('\')) return null
+  if (raw.startsWith('/') || raw.startsWith('\\')) return null
   if (/^\s/.test(raw) || /[\u0000-\u001f]/.test(raw)) return null
   if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return null
   return raw
