@@ -2463,3 +2463,21 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
   .os-viz-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .os-viz-bars { height: 36px; }
 }
+
+/* 第 4 期 4-4：📌 需要時提醒我、📍 附近（pt- 前綴；顏色只用 --c-* token） */
+.pt-pin { position: relative; display: inline-block; }
+.pt-pin-btn { border-radius: 6px; padding: 5px 11px; font-size: 13.5px; color: var(--c-ink-2); background: none; border: 1px solid var(--c-line-strong); cursor: pointer; }
+.pt-pin-btn:hover { color: var(--c-ink); border-color: var(--c-accent); }
+.pt-pin-btn:focus-visible, .pt-opt:focus-visible, .pt-date:focus-visible, .pt-near:focus-visible, .pt-go:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.pt-menu { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px; border: 1px solid var(--c-line-strong); border-radius: 8px; background: var(--c-raised); }
+.pt-opt, .pt-go { border-radius: 6px; padding: 5px 11px; font-size: 13.5px; color: var(--c-ink); background: none; border: 1px solid var(--c-line-strong); cursor: pointer; }
+.pt-opt:hover, .pt-go:hover { border-color: var(--c-accent); }
+.pt-opt:disabled, .pt-go:disabled { opacity: 0.6; cursor: default; }
+.pt-date { font: inherit; font-size: 13.5px; color: var(--c-ink); background: var(--c-bg); border: 1px solid var(--c-line-strong); border-radius: 6px; padding: 4px 6px; }
+.pt-msg { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--c-accent-ink); }
+.pt-msg.pt-err { color: var(--c-ink); }
+.pt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.pt-near { border-radius: 6px; padding: 4px 10px; font-size: 12.5px; color: var(--c-accent-ink); background: none; border: 1px dashed var(--c-line-strong); cursor: pointer; }
+.pt-near:hover { border-color: var(--c-accent); }
+.pt-near:disabled { opacity: 0.6; cursor: default; }
+.pt-near-msg { font-size: 12.5px; color: var(--c-ink-2); }
