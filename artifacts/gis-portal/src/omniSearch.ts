@@ -1,6 +1,5 @@
 // 首頁「一個框搜全部」的純邏輯（2.86.0）：不碰 DOM、不打網路（網路在 omniSearchApi.ts，畫面在 OmniSearch.tsx）。
 // 契約（S1～S3）見 docs/search-api.md 與規格；這裡的解析一律寬容：欄位不對的項目略過，整體不丟錯。
-import { caseId, objectId, personId } from './graphInsights'
 
 export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'tool'
 
@@ -66,15 +65,14 @@ export type OpenAction =
   | { type: 'chat' }
   | { type: 'tool'; id: string }
   | { type: 'expand' }
-  | { type: 'graph'; kind: 'case' | 'person' | 'object'; id: string }
+  | { type: 'dossier'; kind: 'case' | 'person' | 'object'; name: string }
 
 export interface OmniCommand { id: string; label: string; hint: string; keywords: string[]; action: OpenAction }
 
 export const COMMANDS: readonly OmniCommand[] = [
   { id: 'timeline', label: '時間軸', hint: '日／週／月／季／年報', keywords: ['時間軸', '日報', '週報', '月報', '報告', 'timeline'], action: { type: 'hash', hash: 'graph/timeline' } },
   { id: 'ideas', label: '想法庫', hint: '全部想法與狀態', keywords: ['想法', '想法庫', 'ideas'], action: { type: 'ideas' } },
-  { id: 'relations', label: '關係', hint: '事人物關係宇宙', keywords: ['關係', '人', '案件', 'relations'], action: { type: 'hash', hash: 'graph' } },
-  { id: 'graph', label: '關係宇宙', hint: '3D 關係圖', keywords: ['關係宇宙', '宇宙', '圖', 'graph'], action: { type: 'hash', hash: 'graph' } },
+  { id: 'relations', label: '卷宗', hint: '案件／人物卷宗', keywords: ['關係', '人', '案件', '卷宗'], action: { type: 'hash', hash: 'dossier' } },
   { id: 'knowledge', label: '知識', hint: '知識頁與全樹', keywords: ['知識', '知識頁', 'knowledge'], action: { type: 'hash', hash: 'knowledge' } },
   { id: 'food', label: '美食地圖', hint: '口袋名單與地圖', keywords: ['美食', '吃', '餐廳', '地圖', '附近', 'food'], action: { type: 'hash', hash: 'food' } },
   { id: 'trips', label: '遊記', hint: '每趟旅行的紀錄', keywords: ['遊記', '旅遊', '行程', 'trip', 'trips'], action: { type: 'hash', hash: 'trips' } },
@@ -88,7 +86,7 @@ export function filterCommands(q: string): OmniCommand[] {
   const s = q.trim().toLowerCase()
   if (!s) return [...COMMANDS]
   const hits = COMMANDS.filter(c => c.label.toLowerCase().includes(s) || c.hint.toLowerCase().includes(s) || c.keywords.some(k => k.toLowerCase().includes(s) || s.includes(k.toLowerCase())))
-  // 名稱完全相同 → 名稱以輸入開頭 → 其他；同級維持原順序（「關係宇宙」不會被「關係」搶走）
+  // 名稱完全相同 → 名稱以輸入開頭 → 其他；同級維持原順序
   const rank = (c: OmniCommand) => { const l = c.label.toLowerCase(); return l === s ? 0 : l.startsWith(s) ? 1 : 2 }
   return hits.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map(x => x.c)
 }
@@ -125,9 +123,9 @@ export function openAction(kind: SearchKind, id: string): OpenAction {
     case 'place': return { type: 'hash', hash: 'food' }
     case 'trip': return { type: 'hash', hash: `trips/${encodeURIComponent(id)}` }
     case 'tool': return { type: 'tool', id }
-    case 'case': return { type: 'graph', kind: 'case', id: caseId(id) }
-    case 'person': return { type: 'graph', kind: 'person', id: personId(id) }
-    case 'object': return { type: 'graph', kind: 'object', id: objectId(id) }
+    case 'case': return { type: 'dossier', kind: 'case', name: id }
+    case 'person': return { type: 'dossier', kind: 'person', name: id }
+    case 'object': return { type: 'dossier', kind: 'object', name: id }
     case 'event': case 'concept': case 'method': case 'source': return { type: 'expand' }
   }
 }

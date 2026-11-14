@@ -27,10 +27,10 @@ describe('parseQuery', () => {
 
 describe('指令', () => {
   it('名稱完全相同的指令排最前面', () => {
-    expect(filterCommands('關係宇宙')[0]?.id).toBe('graph')
+    expect(filterCommands('卷宗')[0]?.id).toBe('relations')
     expect(filterCommands('知識庫架構')[0]?.id).toBe('architecture')
     expect(filterCommands('關係')[0]?.id).toBe('relations')
-    expect(filterCommands('關係')[0]?.action).toEqual({ type: 'hash', hash: 'graph' })
+    expect(filterCommands('關係')[0]?.action).toEqual({ type: 'hash', hash: 'dossier' })
   })
   it('摘要去掉 markdown 標記', () => {
     expect(cleanSnippet('## 這是什麼 鑑界流程 - 備妥 [[權狀|所有權狀]] 與 [[圖]]⟦2⟧ **重點** ^c001')).toBe('這是什麼 鑑界流程 備妥 所有權狀 與 圖 重點')
@@ -55,7 +55,7 @@ describe('指令', () => {
   })
   it('清單含規格列的九項', () => {
     const labels = COMMANDS.map(c => c.label)
-    for (const l of ['時間軸', '想法庫', '關係', '知識', '美食地圖', '遊記', '知識庫架構', '舊版首頁', '問 HERMES']) expect(labels).toContain(l)
+    for (const l of ['時間軸', '想法庫', '卷宗', '知識', '美食地圖', '遊記', '知識庫架構', '舊版首頁', '問 HERMES']) expect(labels).toContain(l)
   })
   it('指令即答', () => {
     expect(commandAnswer([])).toBe('沒有符合的指令')
@@ -144,9 +144,9 @@ describe('開啟去處', () => {
     expect(openAction('place', '1')).toEqual({ type: 'hash', hash: 'food' })
     expect(openAction('trip', '濱海/行')).toEqual({ type: 'hash', hash: `trips/${encodeURIComponent('濱海/行')}` })
     expect(openAction('tool', '7')).toEqual({ type: 'tool', id: '7' })
-    expect(openAction('case', 'x')).toEqual({ type: 'graph', kind: 'case', id: 'c:x' })
-    expect(openAction('person', 'x')).toEqual({ type: 'graph', kind: 'person', id: 'p:x' })
-    expect(openAction('object', 'x')).toEqual({ type: 'graph', kind: 'object', id: 'o:x' })
+    expect(openAction('case', 'x')).toEqual({ type: 'dossier', kind: 'case', name: 'x' })
+    expect(openAction('person', 'x')).toEqual({ type: 'dossier', kind: 'person', name: 'x' })
+    expect(openAction('object', 'x')).toEqual({ type: 'dossier', kind: 'object', name: 'x' })
     for (const k of ['event', 'concept', 'method', 'source'] as const) expect(openAction(k, 'x')).toEqual({ type: 'expand' })
   })
   it('每個 kind 都有中文標籤', () => {
