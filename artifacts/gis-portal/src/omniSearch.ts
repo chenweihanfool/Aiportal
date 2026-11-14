@@ -1,15 +1,16 @@
 // 首頁「一個框搜全部」的純邏輯（2.86.0）：不碰 DOM、不打網路（網路在 omniSearchApi.ts，畫面在 OmniSearch.tsx）。
 // 契約（S1～S3）見 docs/search-api.md 與規格；這裡的解析一律寬容：欄位不對的項目略過，整體不丟錯。
 import type { RepoItem } from './repoApi'
+import type { InsightRelation } from './insightTree'
 
-export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'repo' | 'tool' | 'diary'
+export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'repo' | 'tool' | 'diary' | 'insight'
 
 /** 結果分組的固定順序（與後端 groups 順序一致） */
-export const KIND_ORDER: readonly SearchKind[] = ['case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'diary', 'idea', 'place', 'trip', 'repo', 'tool']
+export const KIND_ORDER: readonly SearchKind[] = ['insight', 'case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'diary', 'idea', 'place', 'trip', 'repo', 'tool']
 
 const KIND_LABEL: Record<SearchKind, string> = {
   case: '案件', topic: '知識', person: '人', object: '物', event: '事件', concept: '概念',
-  method: '方法', source: '原文', idea: '想法', place: '地點', trip: '遊記', repo: '倉庫', tool: '工具', diary: '日記',
+  method: '方法', source: '原文', idea: '想法', place: '地點', trip: '遊記', repo: '倉庫', tool: '工具', diary: '日記', insight: '心得',
 }
 
 export function isSearchKind(v: unknown): v is SearchKind {
@@ -21,7 +22,10 @@ export function kindLabel(kind: SearchKind): string { return KIND_LABEL[kind] }
 /** 倉庫專屬的補充資訊（只有 kind 為 repo 的命中才有） */
 export interface RepoMeta { language: string | null; private: boolean; archived: boolean; url: string }
 
-export interface SearchHit { kind: SearchKind; id: string; title: string; snippet: string; date: string | null; meta?: RepoMeta }
+/** 心得命中的補充資訊（只有 kind 為 insight 的命中才有）：脈絡迷你時間線用 */
+export interface InsightMeta { date: string; cluster: string; thread: string; relation: InsightRelation }
+
+export interface SearchHit { kind: SearchKind; id: string; title: string; snippet: string; date: string | null; meta?: RepoMeta | InsightMeta }
 export interface SearchGroup { kind: SearchKind; count: number; items: SearchHit[] }
 export interface SearchFacets { months: Array<{ ym: string; n: number }> }
 export interface SearchResponse { q: string; total: number; tookMs: number; groups: SearchGroup[]; best: SearchHit | null; facets: SearchFacets }
@@ -141,6 +145,7 @@ export function openAction(kind: SearchKind, id: string): OpenAction {
     case 'repo': return { type: 'repo', id }
     case 'event': return { type: 'hash', hash: `dossier/event/${encodeURIComponent(id)}` }
     case 'diary': return { type: 'report', date: id }
+    case 'insight': return { type: 'hash', hash: `insight/${encodeURIComponent(id)}` }
     case 'concept': case 'method': case 'source': return { type: 'expand' }
   }
 }
@@ -193,6 +198,19 @@ function parseRepoMeta(raw: unknown): RepoMeta | undefined {
   return { language: str(raw.language), private: raw.private === true, archived: raw.archived === true, url }
 }
 
+const INSIGHT_REL: readonly string[] = ['new', 'reinforce', 'refine', 'overturn']
+
+/** 心得命中的補充欄位：四個欄位都合法才帶，否則忽略 */
+function parseInsightMeta(raw: unknown): InsightMeta | undefined {
+  if (!isRec(raw)) return undefined
+  const date = str(raw.date)
+  const cluster = str(raw.cluster)
+  const thread = str(raw.thread)
+  const relation = str(raw.relation)
+  if (date === null || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !cluster || !thread || relation === null || !INSIGHT_REL.includes(relation)) return undefined
+  return { date, cluster, thread, relation: relation as InsightRelation }
+}
+
 function parseHit(raw: unknown): SearchHit | null {
   if (!isRec(raw)) return null
   const id = str(raw.id)
@@ -201,6 +219,9 @@ function parseHit(raw: unknown): SearchHit | null {
   const base: SearchHit = { kind: raw.kind, id, title, snippet: cleanSnippet(str(raw.snippet) ?? ''), date: str(raw.date) }
   if (raw.kind === 'repo') {
     const meta = parseRepoMeta(raw.meta)
+    if (meta) base.meta = meta
+  } else if (raw.kind === 'insight') {
+    const meta = parseInsightMeta(raw.meta)
     if (meta) base.meta = meta
   }
   return base

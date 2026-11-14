@@ -169,7 +169,7 @@ function scenario(name) {
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })
 // layout：'classic'（預設，既有段落全部照舊驗舊版首頁）或 'v3'（新版三塊）；只在還沒有選擇時寫入，所以點開關、重新整理後會維持最後一次的選擇
-async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait = true, layout = 'classic' } = {}) {
+async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait = true, layout = 'classic', expandNow = true } = {}) {
   const S = scenario(scn)
   const ctx = await browser.newContext({ viewport })
   if (unlocked) await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
@@ -248,6 +248,12 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
   })
   await page.goto(BASE + '/' + hash)
   if (wait) await page.waitForSelector(layout === 'v3' ? '.st-home' : '.hm-root', { timeout: 15000 })
+  // 2.99.0：v3 的「現在用得上」收在角落（預設只有一顆小鈕），既有斷言都針對展開後的區塊，所以先按開（未解鎖沒有小鈕就略過）
+  if (wait && layout === 'v3' && expandNow) {
+    await page.waitForSelector('[data-testid="now-corner-btn"]', { timeout: 3000 }).catch(() => {})
+    const corner = page.locator('[data-testid="now-corner-btn"]')
+    if ((await corner.count()) > 0) { await corner.click(); await page.waitForSelector('[data-testid="now-section"]', { timeout: 5000 }) }
+  }
   return { ctx, page, errors, calls }
 }
 const settle = async (page, ms = 1700) => { await page.waitForFunction(() => !document.querySelector('.hm-frame[aria-busy="true"]'), null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(ms) }
@@ -1128,7 +1134,9 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
       const dimsTop = await top(page, '[data-testid="st-dims"]')
       const shownCards = await page.locator('[data-testid="now-card"]').count()
       check(`${T}：搜尋框與「現在用得上」標題在首屏內（om ${omTop}、now ${nowTop} < ${h}）`, omTop !== null && omTop < h && nowTop !== null && nowTop < h)
-      check(`${T}：st-dims 的上緣 ${dimsTop} ≤ ${limit}（1.5 屏）`, dimsTop !== null && dimsTop <= limit, String(dimsTop))
+      // 2.99.0：左側多了一塊心得樹（首頁左側大塊），1.5 屏的上限扣掉它的高度再比
+      const treeH = await page.evaluate(() => Math.round(document.querySelector('[data-testid="insight-tree"]')?.getBoundingClientRect().height ?? 0) + 12)
+      check(`${T}：st-dims 的上緣 ${dimsTop}（扣掉心得樹 ${treeH}）≤ ${limit}（1.5 屏）`, dimsTop !== null && dimsTop - treeH <= limit, String(dimsTop))
       check(`${T}：st-dims 有 6 格、3 欄 2 列`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && (await page.evaluate(() => new Set([...document.querySelectorAll('[data-testid="st-dim"]')].map((e) => Math.round(e.getBoundingClientRect().left))).size)) === 3)
       check(`${T}：不橫向捲動、沒有頁面錯誤`, (await noHScroll(page)) && errors.length === 0, errors.join(' | ').slice(0, 300))
       check(`${T}：STATUS 在「現在用得上」下面（單欄）`, await page.evaluate(() => document.querySelector('[data-testid="now-section"]').getBoundingClientRect().bottom <= document.querySelector('.st-aside').getBoundingClientRect().top + 1))

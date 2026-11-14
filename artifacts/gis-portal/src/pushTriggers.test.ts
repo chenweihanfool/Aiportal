@@ -133,6 +133,7 @@ describe('pinTargetFor', () => {
     expect(pinTargetFor({ kind: 'case', id: '王案', title: '王案' })?.href).toBe('#dossier/case/%E7%8E%8B%E6%A1%88')
     expect(pinTargetFor({ kind: 'place', id: 'F1', title: '店' })?.href).toBe('#food')
     expect(pinTargetFor({ kind: 'event', id: 'e 1', title: 'e' })).toEqual({ targetKind: 'event', targetId: 'e 1', title: 'e', href: '#dossier/event/e%201' })
+    expect(pinTargetFor({ kind: 'insight', id: 'I 1', title: '一句心得' })).toEqual({ targetKind: 'insight', targetId: 'I 1', title: '一句心得', href: '#insight/I%201' })
     expect(pinTargetFor({ kind: 'idea', id: 'e', title: 'e' })).toBeNull()
     expect(pinTargetFor({ kind: 'repo', id: 'r', title: 'r' })).toBeNull()
     expect(pinTargetFor({ kind: 'diary', id: '2026-01-01', title: 'e' })).toBeNull()

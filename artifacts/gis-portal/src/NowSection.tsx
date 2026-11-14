@@ -52,7 +52,7 @@ function useNarrow(): boolean {
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, onActionsChange, todayLine, onOpenBrief }: {
+export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, onActionsChange, todayLine, onOpenBrief, corner = false }: {
   /** null＝未解鎖：整個區塊不顯示 */
   pw: string | null
   nowMs: number
@@ -71,7 +71,10 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   todayLine?: string | null
   /** 新版首頁（v3）：明日報告卡的「看全文」改開抽屜；沒給就維持捲到頁面上的明日報告區塊（舊版首頁） */
   onOpenBrief?: () => void
+  /** 新版首頁（2.99.0）：收進角落——預設只顯示一顆「現在用得上（n）」小鈕，按了在原位置展開原本的整個區塊；沒給就照舊整塊顯示 */
+  corner?: boolean
 }) {
+  const [cornerOpen, setCornerOpen] = useState(false)
   const narrow = useNarrow()
   const [expanded, setExpanded] = useState(false)
   const pendingScroll = useRef<string | null>(null)
@@ -239,6 +242,16 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   }
 
   if (!pw) return null
+  if (corner && !cornerOpen) {
+    return (
+      <div className="nw-corner" data-testid="now-corner">
+        {todayLine && <p className="nw-line1 nw-corner-line" data-testid="st-today-line">{todayLine}</p>}
+        <button type="button" className="nw-corner-btn" data-testid="now-corner-btn" aria-expanded={false} onClick={() => setCornerOpen(true)}>
+          現在用得上（{cards.length}）
+        </button>
+      </div>
+    )
+  }
 
   const nowHour = day === 'today' ? ((nowMs + 8 * 3_600_000) % 86_400_000) / 3_600_000 : null
   const timed = cards.filter((c) => atHours(c.at) !== null)
@@ -252,6 +265,7 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
       <div className="nw-head">
         <h2 id="nw-h" className="nw-title">現在用得上</h2>
         <span className="nw-lb" data-testid="now-count">{countLabel(cards.length)}</span>
+        {corner && <button type="button" className="nw-gh nw-corner-close" data-testid="now-corner-close" aria-expanded onClick={() => setCornerOpen(false)}>收起 ✕</button>}
         <div className="nw-seg" role="group" aria-label="切換今天或明天">
           <button type="button" className={day === 'today' ? 'nw-on' : ''} aria-pressed={day === 'today'} onClick={() => setDay('today')}>今天</button>
           <button type="button" className={day === 'tomorrow' ? 'nw-on' : ''} aria-pressed={day === 'tomorrow'} onClick={() => setDay('tomorrow')}>明天</button>
