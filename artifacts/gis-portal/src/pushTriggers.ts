@@ -202,7 +202,7 @@ export function orderTriggerFirst(cards: readonly NowCard[]): NowCard[] {
 export type PinTargetKind = 'case' | 'person' | 'object' | 'topic' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip'
 export interface PinTarget { targetKind: PinTargetKind; targetId: string; title: string; href: string }
 
-/** 搜尋命中的釘選目標；開啟動作沒有 hash 的類別（想法、事件、工具、日記…）回 null＝不顯示按鈕 */
+/** 搜尋命中的釘選目標；開啟動作沒有 hash 的類別（想法、工具、日記…）回 null；事件 2.97.0 起開卷宗頁，可以釘選＝不顯示按鈕 */
 export function pinTargetFor(item: { kind: SearchKind; id: string; title: string }): PinTarget | null {
   const a = openAction(item.kind, item.id)
   const href = a.type === 'hash' ? `#${a.hash}` : a.type === 'dossier' ? dossierHref(a.kind, a.name) : null
