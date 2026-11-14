@@ -245,6 +245,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
   const lit = useMemo<ReadonlySet<string>>(() => (hovered ? new Set(hovered.path) : EMPTY_SET), [hovered])
   const view = vb ?? { x: 0, y: 0, w: layout?.width ?? width, h: layout?.height ?? height }
   const scale = layout ? layout.width / view.w : 1
+  const sy = (y: number): number => (y - view.y) * scale // 版面座標的高度 → 螢幕座標
   const col = (ci: number, shade = 0): string => paletteColor(slotOf(layout?.clusters[ci]?.id ?? ''), theme, shade)
   const year = day.slice(0, 4)
   const maxBar = Math.max(1, ...summaries.flatMap((s) => s.months))
@@ -284,18 +285,6 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                   {/* 地面：帶柔光的地平線 */}
                   <ellipse className="it-ground" cx={layout.width / 2 + 20} cy={layout.axis.ground + 2} rx={layout.width * 0.46} ry={14} fill="url(#it-ground-g)" />
                   <rect x={layout.axis.x + 6} y={layout.axis.ground} width={layout.width - layout.axis.x - 12} height={1.4} fill="url(#it-hline-g)" />
-                  {/* 時間刻度（年輪）：左側一條淡淡的軸，標年／季，並有很淡的水平參考線 */}
-                  <g className="it-axis" aria-hidden>
-                    <line x1={layout.axis.x} x2={layout.axis.x} y1={layout.axis.top} y2={layout.axis.ground} />
-                    {layout.ticks.map((t) => (
-                      <g key={`${t.label}${t.y}`} className={t.major ? 'it-tick it-tick-major' : 'it-tick'}>
-                        <line className="it-ref" x1={layout.axis.x} x2={layout.width - 10} y1={t.y} y2={t.y} />
-                        <line x1={layout.axis.x - 4} x2={layout.axis.x} y1={t.y} y2={t.y} />
-                        <text x={layout.axis.x - 7} y={t.y + 3.5} textAnchor="end">{layout.compact && !t.major ? t.label.slice(2) : t.label}</text>
-                      </g>
-                    ))}
-                  </g>
-                  {upto && <text className="it-bigmonth" x={layout.axis.x + 12} y={Math.max(layout.axis.top + 18, dateToY(layout.axis, `${upto}-28`) - 6)} aria-hidden>{upto}</text>}
                   <path className="it-trunk" d={layout.trunk.d} fill="url(#it-trunk-g)" />
                   {layout.limbs.map((l) => {
                     const ci = l.clusterIndex ?? 0
@@ -319,6 +308,21 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                     <Leaf key={lf.id} lf={lf} ins={byId.get(lf.id)} color={col(lf.clusterIndex, lf.shade)} lit={lit.has(lf.id) && hovered?.id === lf.id}
                       dimc={focus !== null && lf.clusterIndex !== focus} fresh={fresh.has(lf.id)} onOpen={open} onHover={setHover} onKey={onLeafKey} />
                   ))}
+                </svg>
+                {/* 時間刻度（年輪）畫在螢幕座標上：聚焦放大時刻度文字不會跟著被裁掉或放大，只是高度跟著對應日期移動 */}
+                <svg className="it-axis-svg" width={layout.width} height={layout.height} viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden focusable="false">
+                  <rect className="it-gutter" x={0} y={0} width={layout.axis.x + 3} height={layout.height} />
+                  <g className="it-axis">
+                    <line x1={layout.axis.x} x2={layout.axis.x} y1={Math.max(0, sy(layout.axis.top))} y2={Math.min(layout.height, sy(layout.axis.ground))} />
+                    {layout.ticks.filter((t) => sy(t.y) > 8 && sy(t.y) < layout.height - 6).map((t) => (
+                      <g key={`${t.label}${t.y}`} className={t.major ? 'it-tick it-tick-major' : 'it-tick'}>
+                        <line className="it-ref" x1={layout.axis.x} x2={layout.width - 10} y1={sy(t.y)} y2={sy(t.y)} />
+                        <line x1={layout.axis.x - 4} x2={layout.axis.x} y1={sy(t.y)} y2={sy(t.y)} />
+                        <text x={layout.axis.x - 7} y={sy(t.y) + 3.5} textAnchor="end">{layout.compact && !t.major ? t.label.slice(2) : t.label}</text>
+                      </g>
+                    ))}
+                  </g>
+                  {upto && <text className="it-bigmonth" x={layout.axis.x + 12} y={Math.min(layout.height - 8, Math.max(24, sy(dateToY(layout.axis, `${upto}-28`)) - 6))}>{upto}</text>}
                 </svg>
                 {hovered && hoveredIns && (
                   <div className="it-tip" role="tooltip" data-testid="insight-tip"

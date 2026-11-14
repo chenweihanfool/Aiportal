@@ -2522,6 +2522,8 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 @container (max-width: 640px) { .it-body { grid-template-columns: minmax(0, 1fr); } }
 .it-stage { position: relative; width: 100%; min-width: 0; }
 .it-svg { display: block; max-width: 100%; overflow: hidden; border-radius: var(--r-md); }
+.it-axis-svg { position: absolute; left: 0; top: 0; pointer-events: none; max-width: 100%; }
+.it-gutter { fill: var(--c-surface); opacity: 0.9; }
 
 /* 地面、時間刻度 */
 .it-trunk-s0 { stop-color: var(--it-trunk0); }

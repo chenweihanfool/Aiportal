@@ -426,3 +426,24 @@ describe('群標籤不會消失（退回第 1 次）', () => {
     expect(l.clusters.some((c) => c.leader)).toBe(true)
   })
 })
+
+describe('聚焦時不裁切（退回第 1 次）', () => {
+  it('聚焦任一群：viewBox 完整包住該群的葉子與標籤膠囊（含引線端點），且不超出畫布', () => {
+    for (const [w, h] of [[360, 440], [1200, 640]] as const) {
+      const l = layoutInsightTree(bigData(), { width: w, height: h, now: NOW })
+      l.clusters.forEach((c, ci) => {
+        if (c.count === 0) return
+        const vb = focusViewBox(l, ci)
+        expect(vb.x).toBeGreaterThanOrEqual(0); expect(vb.y).toBeGreaterThanOrEqual(0)
+        expect(vb.x + vb.w).toBeLessThanOrEqual(w + 0.1); expect(vb.y + vb.h).toBeLessThanOrEqual(h + 0.1)
+        expect(c.lx - c.lw / 2).toBeGreaterThanOrEqual(vb.x - 0.1); expect(c.lx + c.lw / 2).toBeLessThanOrEqual(vb.x + vb.w + 0.1)
+        expect(c.ly - c.lh / 2).toBeGreaterThanOrEqual(vb.y - 0.1); expect(c.ly + c.lh / 2).toBeLessThanOrEqual(vb.y + vb.h + 0.1)
+        expect(c.x).toBeGreaterThanOrEqual(vb.x); expect(c.x).toBeLessThanOrEqual(vb.x + vb.w)
+        for (const lf of l.leaves.filter((x) => x.clusterIndex === ci)) {
+          expect(lf.x - lf.r).toBeGreaterThanOrEqual(vb.x - 0.1); expect(lf.x + lf.r).toBeLessThanOrEqual(vb.x + vb.w + 0.1)
+          expect(lf.y - lf.r).toBeGreaterThanOrEqual(vb.y - 0.1); expect(lf.y + lf.r).toBeLessThanOrEqual(vb.y + vb.h + 0.1)
+        }
+      })
+    }
+  })
+})
