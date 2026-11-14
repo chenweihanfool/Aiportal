@@ -4,7 +4,7 @@ import type { CompanionData, PersonAction, QuietPerson } from './companion'
 import { rotateQuiet, visibleQuietPeople } from './companion'
 import type { NudgeMatch, NudgeRecall, TopicNudges } from './topicNudges'
 
-export type CardKind = 'topic' | 'resume' | 'recall' | 'quiet' | 'brief' | 'onthisday'
+export type CardKind = 'topic' | 'resume' | 'recall' | 'quiet' | 'brief' | 'onthisday' | 'pinned' | 'nearby' | 'meeting'
 export type NowDay = 'today' | 'tomorrow'
 
 export interface NowCard {
@@ -26,6 +26,10 @@ export interface NowCard {
   topicId?: string
   /** quiet 的人名（動作用；不進 cardKey） */
   person?: string
+  /** pinned／nearby／meeting 的動作連結（hash，如 #food） */
+  href?: string
+  /** pinned 的釘選編號（按「好了」用） */
+  pinId?: number
 }
 
 export interface FeedbackState {
@@ -50,7 +54,10 @@ export function cardKeyOf(c: { kind: 'topic'; topicId: string; matchedBy?: strin
   | { kind: 'recall'; topicId: string }
   | { kind: 'quiet'; name: string }
   | { kind: 'brief'; date: string }
-  | { kind: 'onthisday'; date: string; title: string }): string {
+  | { kind: 'onthisday'; date: string; title: string }
+  | { kind: 'pinned'; id: number }
+  | { kind: 'nearby'; placeId: string; date: string }
+  | { kind: 'meeting'; date: string; start: string }): string {
   switch (c.kind) {
     case 'topic': return `topic:${c.topicId}:${c.matchedBy || 'terms'}:${c.caseName || hash(c.firstTrigger)}`
     case 'resume': return `resume:${c.caseName}`
@@ -58,6 +65,9 @@ export function cardKeyOf(c: { kind: 'topic'; topicId: string; matchedBy?: strin
     case 'quiet': return `quiet:${hash(c.name)}`
     case 'brief': return `brief:${c.date}`
     case 'onthisday': return `onthisday:${c.date}:${hash(c.title)}`
+    case 'pinned': return `pinned:${c.id}`
+    case 'nearby': return `nearby:${c.placeId}:${c.date}`
+    case 'meeting': return `meeting:${c.date}:${c.start}`
   }
 }
 
