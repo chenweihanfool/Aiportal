@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, makeSnippet, parseSearchLogBody,
+  buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, makeSnippet, matchesMonth,
+  monthFacets, parseSearchLogBody,
   parseRecentLimit, parseStatsDays, placesToCandidates, rankOf, runSearch, sitesToCandidates, splitTerms, topicsToCandidates,
   tripsToCandidates, validateSearchParams, SEARCH_KINDS, type Candidate,
 } from "./search";
@@ -30,6 +31,19 @@ describe("validateSearchParams", () => {
     const l = validateSearchParams("x", "case", "20");
     expect(l.ok && l.limit).toBe(20);
     expect(l.ok && l.kind).toBe("case");
+  });
+  it("month／before 選填、須為 YYYY-MM、不可同時給", () => {
+    const m = validateSearchParams("x", undefined, undefined, "2026-03");
+    expect(m.ok && m.month).toBe("2026-03");
+    expect(m.ok && m.before).toBeNull();
+    const b = validateSearchParams("x", undefined, undefined, undefined, "2024-12");
+    expect(b.ok && b.before).toBe("2024-12");
+    expect(b.ok && b.month).toBeNull();
+    for (const bad of ["2026-13", "2026-1", "abcd-ef"]) {
+      expect(validateSearchParams("x", undefined, undefined, bad).ok, bad).toBe(false);
+      expect(validateSearchParams("x", undefined, undefined, undefined, bad).ok, bad).toBe(false);
+    }
+    expect(validateSearchParams("x", undefined, undefined, "2026-01", "2026-01").ok).toBe(false);
   });
   it("以空白（含全形）切詞，最多 5 詞、轉小寫", () => {
     expect(splitTerms("王　先生 Abc  鑑界")).toEqual(["王", "先生", "abc", "鑑界"]);
@@ -96,6 +110,47 @@ describe("runSearch：多詞 AND 與排序", () => {
     const r2 = runSearch({ case: [cand({ title: "鑑界案" })], person: [cand({ kind: "person", title: "鑑界" })] }, ["鑑界"], 5);
     expect(r2.best!.kind).toBe("person");
     expect(runSearch({ case: [cand({ title: "x" })] }, ["鑑界"], 5).best).toBeNull();
+  });
+});
+
+describe("matchesMonth", () => {
+  it("兩者皆 null 一律 true；有 month／before 時沒有日期的排除", () => {
+    expect(matchesMonth(null, null, null)).toBe(true);
+    expect(matchesMonth("2026-03-15", null, null)).toBe(true);
+    expect(matchesMonth(null, "2026-03", null)).toBe(false);
+    expect(matchesMonth(null, null, "2026-03")).toBe(false);
+  });
+  it("month 比前 7 碼相等；before 比前 7 碼小於", () => {
+    expect(matchesMonth("2026-03-15", "2026-03", null)).toBe(true);
+    expect(matchesMonth("2026-04-01", "2026-03", null)).toBe(false);
+    expect(matchesMonth("2026-02-28", null, "2026-03")).toBe(true);
+    expect(matchesMonth("2026-03-01", null, "2026-03")).toBe(false);
+    expect(matchesMonth("2026-04-01", null, "2026-03")).toBe(false);
+  });
+});
+
+describe("monthFacets", () => {
+  it("只計非 doc kind、有命中、date 非 null 的候選；與 docMonths 同月相加；由舊到新", () => {
+    const out = monthFacets({
+      case: [
+        cand({ title: "鑑界案", date: "2025-01-02" }),
+        cand({ title: "鑑界乙", date: "2025-01-20" }),
+        cand({ title: "無關", date: "2024-12-01" }),
+        cand({ title: "沒日期", date: null }),
+      ],
+      idea: [cand({ kind: "idea", title: "鑑界想法", date: "2026-02-03" })],
+      // doc kind 由 docMonths 提供，候選不能再算一次。
+      event: [cand({ kind: "event", title: "鑑界事件", date: "2025-01-05" })],
+    }, ["鑑界"], [{ ym: "2025-01", n: 7 }, { ym: "2024-11", n: 2 }, { ym: "2026-02", n: 1 }]);
+    expect(out).toEqual([
+      { ym: "2024-11", n: 2 },
+      { ym: "2025-01", n: 9 },
+      { ym: "2026-02", n: 2 },
+    ]);
+  });
+  it("只列 n>0 的月份", () => {
+    expect(monthFacets({}, ["x"], [{ ym: "2025-01", n: 0 }])).toEqual([]);
+    expect(monthFacets({}, ["x"], [])).toEqual([]);
   });
 });
 
