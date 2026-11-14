@@ -400,3 +400,29 @@ describe('稀疏資料像一棵小樹（退回第 1 次）', () => {
     }
   })
 })
+
+describe('群標籤不會消失（退回第 1 次）', () => {
+  it('12 群 300 則在 1200 與 360 寬：每一群都有標籤（膠囊或縮寫），縮寫最多 4 字，且都在畫布內、互不重疊', () => {
+    for (const [w, h] of [[1200, 640], [360, 440], [360, 340]] as const) {
+      const l = layoutInsightTree(bigData(), { width: w, height: h, now: NOW })
+      const withData = l.clusters.filter((c) => c.count > 0)
+      expect(withData).toHaveLength(12)
+      for (const c of withData) {
+        expect(c.labelShown, `${c.id} @${w}`).toBe(true)
+        expect(c.text.length).toBeGreaterThan(0)
+        if (c.abbr) expect([...c.text].length).toBeLessThanOrEqual(4)
+        expect(c.lx - c.lw / 2).toBeGreaterThanOrEqual(0); expect(c.lx + c.lw / 2).toBeLessThanOrEqual(w)
+        expect(c.ly - c.lh / 2).toBeGreaterThanOrEqual(0); expect(c.ly + c.lh / 2).toBeLessThanOrEqual(h)
+      }
+      const rect = (c: (typeof withData)[number]) => ({ x0: c.lx - c.lw / 2, x1: c.lx + c.lw / 2, y0: c.ly - c.lh / 2, y1: c.ly + c.lh / 2 })
+      for (let i = 0; i < withData.length; i++) for (let j = i + 1; j < withData.length; j++) {
+        const p = rect(withData[i]!), q = rect(withData[j]!)
+        expect(p.x0 < q.x1 && p.x1 > q.x0 && p.y0 < q.y1 && p.y1 > q.y0, `${withData[i]!.id}/${withData[j]!.id} @${w}`).toBe(false)
+      }
+    }
+  })
+  it('放不下的膠囊推到外側兩欄並畫引線（leader）', () => {
+    const l = layoutInsightTree(bigData(), { width: 360, height: 440, now: NOW })
+    expect(l.clusters.some((c) => c.leader)).toBe(true)
+  })
+})

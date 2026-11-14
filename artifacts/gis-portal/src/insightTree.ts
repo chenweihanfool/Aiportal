@@ -280,6 +280,12 @@ export interface InsightClusterOut {
   labelShown: boolean
   /** 膠囊離主枝末端較遠，需要畫細引線 */
   leader: boolean
+  /** 膠囊上顯示的群名（太長截短；退成縮寫時最多 4 字） */
+  text: string
+  /** 是否顯示則數 */
+  showCount: boolean
+  /** 放不下完整膠囊，退成「色點＋縮寫群名」 */
+  abbr: boolean
   /** 這一群所有枝葉（含標籤）的外框，聚焦時用 */
   bbox: { x0: number; y0: number; x1: number; y1: number }
 }
@@ -741,43 +747,81 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   // ── 群標籤：色點＋群名＋則數的小膠囊，放在主枝末端附近；避開葉子與其他標籤，放不下往外側推並畫引線 ──
   const fs = compact ? 11 : 12.5
   const nameMax = compact ? 6 : 8
-  const textW = (s: string): number => [...s].reduce((w, ch) => w + (/[\u0000-ÿ]/.test(ch) ? fs * 0.58 : fs), 0)
+  const textW = (t: string): number => [...t].reduce((w, ch) => w + (/[\u0000-ÿ]/.test(ch) ? fs * 0.58 : fs), 0)
+  const sizeOf = (name: string, count: number, abbr: boolean): { text: string; showCount: boolean; lw: number; lh: number } => {
+    if (abbr) { const t = name.length > 4 ? name.slice(0, 4) : name; return { text: t, showCount: false, lw: 10 + textW(t) + 10, lh: fs + 7 } }
+    const t = name.length > nameMax ? `${name.slice(0, nameMax - 1)}…` : name
+    const sc = !compact
+    return { text: t, showCount: sc, lw: 10 + textW(t) + (sc ? textW(String(count)) + 8 : 0) + 12, lh: fs + 9 }
+  }
   const clusters: InsightClusterOut[] = clusterDefs.map((c, ci) => {
     const cc = cl[ci]
     const tip: P = cc ? cc.p3 : [cx, ground - 40]
-    const nm = c.name.length > nameMax ? `${c.name.slice(0, nameMax - 1)}…` : c.name
-    const lw = 10 + textW(nm) + (compact ? 0 : textW(String(visCount[ci]!)) + 8) + 12
-    return { id: c.id, name: c.name, count: visCount[ci]!, x: A1(tip[0]), y: A1(tip[1]), lx: A1(tip[0]), ly: A1(tip[1]), lw: A1(lw), lh: A1(fs + 9), labelShown: false, leader: false, bbox: { x0: tip[0], y0: tip[1], x1: tip[0], y1: tip[1] } }
+    const z = sizeOf(c.name, visCount[ci]!, false)
+    return {
+      id: c.id, name: c.name, count: visCount[ci]!, x: A1(tip[0]), y: A1(tip[1]), lx: A1(tip[0]), ly: A1(tip[1]), lw: A1(z.lw), lh: A1(z.lh), labelShown: false, leader: false,
+      text: z.text, showCount: z.showCount, abbr: false, bbox: { x0: tip[0], y0: tip[1], x1: tip[0], y1: tip[1] },
+    }
   })
-  const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = []
-  const hitsLeaf = (r: { x0: number; y0: number; x1: number; y1: number }): boolean =>
+  type Rect = { x0: number; y0: number; x1: number; y1: number }
+  const placed: Rect[] = []
+  const hitsLeaf = (r: Rect): boolean =>
     leaves.some((l) => {
       const nx = clamp(l.x, r.x0, r.x1)
       const ny = clamp(l.y, r.y0, r.y1)
       return Math.hypot(l.x - nx, l.y - ny) < l.r * 1.25 + 2
     })
+  const hitsLabel = (r: Rect): boolean => placed.some((o) => r.x0 < o.x1 + 3 && r.x1 > o.x0 - 3 && r.y0 < o.y1 + 3 && r.y1 > o.y0 - 3)
   const byCount = clusters.map((_, i) => i).filter((i) => clusters[i]!.count > 0).sort((a, b) => clusters[b]!.count - clusters[a]!.count || a - b)
-  for (const i of byCount) {
-    const c = clusters[i]!
+  /** 試著把膠囊放在 (x,y)；放得下（不壓葉子、不撞其他標籤）才記下來 */
+  const tryAt = (c: InsightClusterOut, x0: number, y0: number, ignoreLeaves: boolean): boolean => {
+    const hw = c.lw / 2
+    const hh = c.lh / 2
+    const x = clamp(x0, AXIS_W + 4 + hw, W - 4 - hw)
+    const y = clamp(y0, hh + 2, H - hh - 2)
+    const r = { x0: x - hw, y0: y - hh, x1: x + hw, y1: y + hh }
+    if ((!ignoreLeaves && hitsLeaf(r)) || hitsLabel(r)) return false
+    placed.push(r)
+    c.lx = A1(x)
+    c.ly = A1(y)
+    c.labelShown = true
+    c.leader = Math.hypot(x - c.x, y - c.y) > c.lh * 1.2
+    return true
+  }
+  const near = (c: InsightClusterOut, ig: boolean): boolean => {
     const hw = c.lw / 2
     const hh = c.lh / 2
     const cands: P[] = [
       [0, -hh - 8], [-hw - 4, -hh - 6], [hw + 4, -hh - 6], [0, -3 * hh - 6], [-hw - 6, -3 * hh - 4], [hw + 6, -3 * hh - 4],
       [-hw - 12, 0], [hw + 12, 0], [0, -5 * hh - 6], [-hw - 10, -5 * hh], [hw + 10, -5 * hh], [-hw - 16, 3 * hh], [hw + 16, 3 * hh],
     ]
-    for (const [ox, oy] of cands) {
-      const x = clamp(c.x + ox, hw + 2, W - hw - 2)
-      const y = clamp(c.y + oy, hh + 2, H - hh - 2)
-      const r = { x0: x - hw, y0: y - hh, x1: x + hw, y1: y + hh }
-      if (hitsLeaf(r)) continue
-      if (placed.some((o) => r.x0 < o.x1 + 3 && r.x1 > o.x0 - 3 && r.y0 < o.y1 + 3 && r.y1 > o.y0 - 3)) continue
-      placed.push(r)
-      c.lx = A1(x)
-      c.ly = A1(y)
-      c.labelShown = true
-      c.leader = Math.hypot(x - c.x, y - c.y) > hh * 2.4
-      break
+    return cands.some(([ox, oy]) => tryAt(c, c.x + ox, c.y + oy, ig))
+  }
+  /** 推到樹冠外側的左右兩欄，用細引線連回枝梢；從離枝梢最近的高度往上下找空位 */
+  const outer = (c: InsightClusterOut, ig: boolean): boolean => {
+    const hw = c.lw / 2
+    const hh = c.lh / 2
+    const sides = c.x >= cx ? [1, -1] : [-1, 1]
+    for (let k = 0; k <= Math.ceil(H / (2 * hh + 4)); k++) {
+      for (const sd of sides) {
+        const x = sd < 0 ? AXIS_W + 4 + hw : W - 4 - hw
+        for (const dy of k === 0 ? [0] : [k, -k]) if (tryAt(c, x, c.y + dy * (2 * hh + 4), ig)) return true
+      }
     }
+    return false
+  }
+  const useAbbr = (c: InsightClusterOut): void => {
+    const z = sizeOf(c.name, c.count, true)
+    c.text = z.text; c.showCount = false; c.abbr = true; c.lw = A1(z.lw); c.lh = A1(z.lh)
+  }
+  for (const i of byCount) {
+    const c = clusters[i]!
+    if (near(c, false) || outer(c, false)) continue
+    useAbbr(c)
+    if (near(c, false) || outer(c, false)) continue
+    // 真的擠滿了：縮寫膠囊仍要顯示，退到外側兩欄、允許蓋過葉子（只避開其他標籤）
+    if (outer(c, true)) continue
+    c.lx = c.x; c.ly = c.y; c.labelShown = true; c.leader = false
   }
   // 外框（聚焦用）
   clusters.forEach((c, ci) => {

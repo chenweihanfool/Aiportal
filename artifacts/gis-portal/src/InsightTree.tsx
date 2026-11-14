@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { apiFetchInsightDetail, apiFetchInsights } from './insightApi'
 import {
-  PROVENANCE_LABEL, RELATION_LABEL, clusterLabelText, clusterSummaries, dateToY, focusViewBox, insightIdFromHash, insightStats, layoutInsightTree, leafShape,
+  PROVENANCE_LABEL, RELATION_LABEL, clusterSummaries, dateToY, focusViewBox, insightIdFromHash, insightStats, layoutInsightTree, leafShape,
   monthSeries, suggestTreeHeight, taipeiDay, type Insight, type InsightData, type InsightDetail, type InsightLeaf, type InsightLimb, type InsightRelation, type InsightTreeLayout,
 } from './insightTree'
 import { clusterSlots, paletteColor, type PaletteTheme } from './insightPalette'
@@ -310,9 +310,9 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                       {c.leader && <line className="it-leader" x1={c.x} y1={c.y} x2={c.lx} y2={c.ly} />}
                       <circle className="it-tipdot" cx={c.x} cy={c.y} r={2.6} />
                       <rect className="it-cap-bg" x={c.lx - c.lw / 2} y={c.ly - c.lh / 2} width={c.lw} height={c.lh} rx={c.lh / 2} />
-                      <circle className="it-cap-dot" cx={c.lx - c.lw / 2 + 11} cy={c.ly} r={3.6} />
-                      <text className="it-cap-t" x={c.lx - c.lw / 2 + 19} y={c.ly + 4}>{clusterLabelText(c.name, layout.compact ? 6 : 8)}</text>
-                      {!layout.compact && <text className="it-cap-n" x={c.lx + c.lw / 2 - 9} y={c.ly + 4} textAnchor="end">{c.count}</text>}
+                      <circle className="it-cap-dot" cx={c.lx - c.lw / 2 + 10} cy={c.ly} r={3.6} />
+                      <text className="it-cap-t" x={c.lx - c.lw / 2 + (c.abbr ? 17 : 19)} y={c.ly + 4}>{c.text}</text>
+                      {c.showCount && <text className="it-cap-n" x={c.lx + c.lw / 2 - 9} y={c.ly + 4} textAnchor="end">{c.count}</text>}
                     </g>
                   ))}
                   {layout.leaves.map((lf) => (
