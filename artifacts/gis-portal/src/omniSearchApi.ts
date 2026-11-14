@@ -4,9 +4,14 @@ import { parsePreview, parseSearchResponse, type SearchKind, type SearchPreview,
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
 /** 404（後端還沒部署）回 null；其他失敗丟例外；被取消時丟 AbortError。 */
-export async function apiSearch(pw: string, q: string, kind: SearchKind | null, signal?: AbortSignal): Promise<SearchResponse | null> {
+export interface SearchOpts { month?: string; before?: string; limit?: number }
+
+export async function apiSearch(pw: string, q: string, kind: SearchKind | null, signal?: AbortSignal, opts: SearchOpts = {}): Promise<SearchResponse | null> {
   const params = new URLSearchParams({ q })
   if (kind) params.set('kind', kind)
+  if (opts.month) params.set('month', opts.month)
+  else if (opts.before) params.set('before', opts.before)
+  if (opts.limit) params.set('limit', String(opts.limit))
   const r = await fetch(`${API_BASE}api/search?${params.toString()}`, { headers: { 'x-admin-password': pw }, signal })
   if (r.status === 404) return null
   if (!r.ok) throw new Error('Failed to search')

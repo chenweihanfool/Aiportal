@@ -20,7 +20,8 @@ export function kindLabel(kind: SearchKind): string { return KIND_LABEL[kind] }
 
 export interface SearchHit { kind: SearchKind; id: string; title: string; snippet: string; date: string | null }
 export interface SearchGroup { kind: SearchKind; count: number; items: SearchHit[] }
-export interface SearchResponse { q: string; total: number; tookMs: number; groups: SearchGroup[]; best: SearchHit | null }
+export interface SearchFacets { months: Array<{ ym: string; n: number }> }
+export interface SearchResponse { q: string; total: number; tookMs: number; groups: SearchGroup[]; best: SearchHit | null; facets: SearchFacets }
 export interface PreviewRelated { kind: SearchKind; id: string; title: string }
 export interface SearchPreview {
   kind: SearchKind; id: string; title: string; one: string; points: string[]
@@ -147,7 +148,21 @@ function parseHit(raw: unknown): SearchHit | null {
   return { kind: raw.kind, id, title, snippet: cleanSnippet(str(raw.snippet) ?? ''), date: str(raw.date) }
 }
 
-const EMPTY_RESPONSE: SearchResponse = { q: '', total: 0, tookMs: 0, groups: [], best: null }
+const EMPTY_RESPONSE: SearchResponse = { q: '', total: 0, tookMs: 0, groups: [], best: null, facets: { months: [] } }
+
+/** facets 缺欄位（舊後端）或壞掉＝空陣列；月份格式不對或 n<=0 的略過 */
+function parseFacets(raw: unknown): SearchFacets {
+  const months: SearchFacets['months'] = []
+  if (isRec(raw) && Array.isArray(raw.months)) {
+    for (const m of raw.months) {
+      if (!isRec(m)) continue
+      const ym = str(m.ym)
+      const n = num(m.n)
+      if (ym !== null && /^\d{4}-\d{2}$/.test(ym) && n !== null && n > 0) months.push({ ym, n })
+    }
+  }
+  return { months }
+}
 
 /** 壞掉的整體回傳空結果；壞掉的項目或組略過 */
 export function parseSearchResponse(raw: unknown): SearchResponse {
@@ -164,7 +179,7 @@ export function parseSearchResponse(raw: unknown): SearchResponse {
   }
   const sum = groups.reduce((n, g) => n + g.count, 0)
   const total = num(raw.total)
-  return { q: str(raw.q) ?? '', total: total !== null && total >= 0 ? total : sum, tookMs: num(raw.tookMs) ?? 0, groups, best: parseHit(raw.best) }
+  return { q: str(raw.q) ?? '', total: total !== null && total >= 0 ? total : sum, tookMs: num(raw.tookMs) ?? 0, groups, best: parseHit(raw.best), facets: parseFacets(raw.facets) }
 }
 
 export function parsePreview(raw: unknown): SearchPreview | null {
@@ -192,9 +207,9 @@ export function parsePreview(raw: unknown): SearchPreview | null {
 // 鍵盤移動、即答
 // ─────────────────────────────────────────────
 
-/** 把分組結果攤平成上下鍵的移動順序（照組、組內照原順序） */
+/** 把分組結果攤平成上下鍵的移動順序（照畫面順序 KIND_ORDER、組內照原順序） */
 export function flattenHits(groups: readonly SearchGroup[]): SearchHit[] {
-  return groups.flatMap(g => g.items)
+  return KIND_ORDER.flatMap(k => groups.filter(g => g.kind === k).flatMap(g => g.items))
 }
 
 /** 循環移動：len 為 0 回 -1；current 為 -1（還沒選）時往下到 0、往上到最後一個 */
