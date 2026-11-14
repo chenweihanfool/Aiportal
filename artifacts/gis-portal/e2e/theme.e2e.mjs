@@ -150,7 +150,7 @@ const noHScroll = (page) => page.evaluate(() => document.documentElement.scrollW
 
 // ═══ 3. 每頁 × 深／淺：截圖、橫向捲動、看不見的字 ═══
 const PAGES = [
-  ['home', ''], ['legacy', '#legacy'], ['knowledge', '#knowledge'], ['relations', '#relations'], ['universe', '#graph'],
+  ['home', ''], ['legacy', '#legacy'], ['knowledge', '#knowledge'], ['universe', '#graph'],
   ['timeline', '#graph/timeline'], ['food', '#food'], ['trips', '#trips'], ['dim', '#dim/lifeFreedom'], ['architecture', '#architecture'],
 ]
 for (const [scheme, tag] of [['dark', 'dark'], ['light', 'light']]) {

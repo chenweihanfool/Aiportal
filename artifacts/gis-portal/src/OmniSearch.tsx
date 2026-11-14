@@ -4,6 +4,7 @@ import {
   KIND_ORDER, PREFIX_HINTS, addRecent, commandAnswer, filterCommands, flattenHits, isAbandoned, kindLabel, loadRecent, logKey, moveIndex,
   keepKnownTools, openAction, parseQuery, quickAnswer, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
 } from './omniSearch'
+import { requestGraphFocus } from './graphFocus'
 import { Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
 import type { SiteData } from './portalApi'
 
@@ -188,6 +189,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
         break
       }
       case 'expand': setExpanded((v) => !v); break
+      case 'graph': requestGraphFocus({ kind: a.kind, id: a.id }); window.location.hash = '#graph'; break
     }
   }
   const openItem = (h: ReaderItem) => {

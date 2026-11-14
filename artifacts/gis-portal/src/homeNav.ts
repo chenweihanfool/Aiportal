@@ -31,7 +31,7 @@ export type HomeShortcutDef = { id: string; label: string; icon: string } & ({ h
 export const HOME_SHORTCUTS: readonly HomeShortcutDef[] = [
   { id: 'timeline', label: '時間軸', icon: '🕒', href: '#graph/timeline' },
   { id: 'ideas', label: '想法庫', icon: '💡', action: 'ideas' },
-  { id: 'relations', label: '關係', icon: '🌌', href: '#relations' },
+  { id: 'relations', label: '關係', icon: '🌌', href: '#graph' },
   { id: 'knowledge', label: '知識', icon: '📚', href: '#knowledge' },
 ]
 

@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
-import { RelationsView } from './RelationsView'
 import { RelationshipUniverse } from './RelationshipUniverse'
 import { ArchitectureView } from './ArchitectureView'
 import { KnowledgeView } from './KnowledgeView'
@@ -39,11 +38,16 @@ export default function App() {
   // 有接路由庫，路徑 route 在 refresh/直接貼網址時需要伺服端 SPA fallback
   // 設定，hash 則完全是前端狀態，不需要動部署那端的反向代理規則。
   // #home（新首頁預覽時期分享出去的網址）已等同預設首頁：直接把網址的 hash 清掉，免得停在一個沒有意義的路由上
+  // 2.90.0 拿掉關係頁的兩個分頁：舊書籤 #relations、#relations/prep 一律改寫成 #graph。
   const readHash = () => {
     const h = window.location.hash
     if (h === '#home') {
       try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 取不到 history 就維持原網址 */ }
       return ''
+    }
+    if (h === '#relations' || h === '#relations/prep') {
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.search + '#graph') } catch { /* 取不到 history 就維持原網址 */ }
+      return '#graph'
     }
     return h
   }
@@ -110,10 +114,6 @@ export default function App() {
   const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
   if (reviewYear !== null) {
     return <YearReview year={reviewYear} unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock} />
-  }
-  // 關係頁（2026-11-01）：#relations 找人／案、#relations/prep 見面前；3D 宇宙仍在 #graph
-  if (hashRoute === '#relations' || hashRoute === '#relations/prep') {
-    return <><RelationsView tab={hashRoute === '#relations' ? 'find' : 'prep'} unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />{unlockModal}</>
   }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
