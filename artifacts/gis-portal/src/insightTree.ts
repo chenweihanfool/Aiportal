@@ -534,17 +534,23 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   interface Geo { k: number; F: P; end: P; L: number; tf: number; angle: number }
   const geoOf = new Map<string, Geo>()
   const tiOf = new Map<string, number>()
+  const ntOf: number[] = cids.map(() => 0)
   for (let k = 0; k < nc; k++) {
     const ths = [...threadItems.keys()].filter((t) => ownerCluster.get(t) === cids[k])
     ths.sort((a, b) => (threadItems.get(a)![0]!.date < threadItems.get(b)![0]!.date ? -1 : threadItems.get(a)![0]!.date > threadItems.get(b)![0]!.date ? 1 : a < b ? -1 : 1))
     ths.forEach((t, ti) => tiOf.set(t, ti))
+    ntOf[k] = ths.length
   }
   const byCluster: Rec[][] = cids.map(() => [])
   for (const [th, items] of threadItems) {
     const kk = cidx.get(ownerCluster.get(th)!)!
     const ti = tiOf.get(th)!
     const b = br[kk]!
-    const tf = tOfIndex(kk, clusterRank.get(items[0]!.id)!, dayNumber(items[0]!.date))
+    // 分出點依「脈絡在本群出現的先後」平均排在主枝 15%～95%（先後順序＝首則日期順序不變），
+    // 避免各脈絡首則都很早時細枝全擠在樹幹邊、主枝外段空著（PM 修正 2026-11-15）
+    const nt = ntOf[kk]!
+    const tc0 = b.tc
+    const tf = nt <= 1 ? tOfIndex(kk, clusterRank.get(items[0]!.id)!, dayNumber(items[0]!.date)) : tc0 + (1 - tc0) * (0.15 + 0.8 * (ti / (nt - 1)))
     const F = pointOn(kk, tf)
     const dd = cubicDir(b.p0, b.p1, b.p2, b.p3, tf)
     const dl = Math.hypot(dd[0], dd[1]) || 1
