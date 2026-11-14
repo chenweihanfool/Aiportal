@@ -12,6 +12,8 @@ export interface LifeDay {
   date: string;
   /** 當天互動的家人朋友人數（同事不算，推送端已排除） */
   socialPeople: number;
+  /** 當天互動的人名（推送端 2026-11 起提供；舊資料沒有＝[]）；去空白、去重、最多 20 個 */
+  socialNames: string[];
   newPlaces: string[];
   trip: string | null;
   workouts: string[];
@@ -32,6 +34,21 @@ const shiftDate = (date: string, days: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** 人名只收字串，去空白後非空、去重保序，最多 20 個；缺漏或格式不對＝[] */
+const SOCIAL_NAMES_MAX = 20;
+const namesOf = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const x of raw) {
+    if (typeof x !== "string") continue;
+    const name = x.trim();
+    if (!name || out.includes(name)) continue;
+    out.push(name);
+    if (out.length === SOCIAL_NAMES_MAX) break;
+  }
+  return out;
+};
+
 /** 日期對當天的生活項目；只列視窗內、不晚於今天、有東西的日子。來源缺或格式不對就略過那一項（前後天一樣缺，修正不會偏） */
 export function lifeDaysOf(src: LifeSources, today: string): Map<string, LifeDay> {
   const from = shiftDate(today, -LIFE_WINDOW_DAYS);
@@ -39,16 +56,19 @@ export function lifeDaysOf(src: LifeSources, today: string): Map<string, LifeDay
   const dayOf = (date: string): LifeDay | null => {
     if (!DATE.test(date) || date < from || date > today) return null;
     let d = out.get(date);
-    if (!d) out.set(date, (d = { date, socialPeople: 0, newPlaces: [], trip: null, workouts: [] }));
+    if (!d) out.set(date, (d = { date, socialPeople: 0, socialNames: [], newPlaces: [], trip: null, workouts: [] }));
     return d;
   };
 
   const social = (src.companion as { socialDays?: unknown } | null)?.socialDays;
   if (Array.isArray(social)) {
-    for (const s of social as Array<{ date?: unknown; people?: unknown }>) {
+    for (const s of social as Array<{ date?: unknown; people?: unknown; names?: unknown }>) {
       if (typeof s?.date !== "string" || typeof s.people !== "number" || s.people <= 0) continue;
       const d = dayOf(s.date);
-      if (d) d.socialPeople = s.people;
+      if (d) {
+        d.socialPeople = s.people;
+        d.socialNames = namesOf(s.names);
+      }
     }
   }
 
