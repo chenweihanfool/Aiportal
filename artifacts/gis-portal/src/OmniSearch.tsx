@@ -282,6 +282,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
         break
       }
       case 'expand': setExpanded((v) => !v); break
+      case 'report': document.getElementById('om-report')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); break
       case 'dossier': window.location.hash = dossierHref(a.kind, a.name); break
       case 'repo': {
         const url = repoUrlFor(a.id)

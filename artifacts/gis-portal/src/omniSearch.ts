@@ -73,6 +73,7 @@ export type OpenAction =
   | { type: 'chat' }
   | { type: 'tool'; id: string }
   | { type: 'expand' }
+  | { type: 'report'; date: string }
   | { type: 'dossier'; kind: 'case' | 'person' | 'object'; name: string }
   | { type: 'repo'; id: string }
   | { type: 'repoList' }
@@ -138,7 +139,9 @@ export function openAction(kind: SearchKind, id: string): OpenAction {
     case 'person': return { type: 'dossier', kind: 'person', name: id }
     case 'object': return { type: 'dossier', kind: 'object', name: id }
     case 'repo': return { type: 'repo', id }
-    case 'event': case 'concept': case 'method': case 'source': case 'diary': return { type: 'expand' }
+    case 'event': return { type: 'hash', hash: `dossier/event/${encodeURIComponent(id)}` }
+    case 'diary': return { type: 'report', date: id }
+    case 'concept': case 'method': case 'source': return { type: 'expand' }
   }
 }
 

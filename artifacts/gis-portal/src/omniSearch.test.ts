@@ -154,13 +154,14 @@ describe('開啟去處', () => {
     expect(openAction('case', 'x')).toEqual({ type: 'dossier', kind: 'case', name: 'x' })
     expect(openAction('person', 'x')).toEqual({ type: 'dossier', kind: 'person', name: 'x' })
     expect(openAction('object', 'x')).toEqual({ type: 'dossier', kind: 'object', name: 'x' })
-    for (const k of ['event', 'concept', 'method', 'source'] as const) expect(openAction(k, 'x')).toEqual({ type: 'expand' })
+    for (const k of ['concept', 'method', 'source'] as const) expect(openAction(k, 'x')).toEqual({ type: 'expand' })
+    expect(openAction('event', 'e 1/2')).toEqual({ type: 'hash', hash: `dossier/event/${encodeURIComponent('e 1/2')}` })
   })
   it('每個 kind 都有中文標籤', () => {
     for (const k of KIND_ORDER) expect(kindLabel(k)).not.toBe('')
     expect(kindLabel('diary')).toBe('日記')
     expect(KIND_ORDER.indexOf('diary')).toBe(KIND_ORDER.indexOf('source') + 1)
-    expect(openAction('diary', '2026-03-09')).toEqual({ type: 'expand' })
+    expect(openAction('diary', '2026-03-09')).toEqual({ type: 'report', date: '2026-03-09' })
   })
   it('倉庫排在遊記後、工具前，開啟去處是 repo', () => {
     expect(kindLabel('repo')).toBe('倉庫')
