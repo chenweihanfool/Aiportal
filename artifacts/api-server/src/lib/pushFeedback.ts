@@ -3,7 +3,7 @@
 // routes/pushFeedback.ts 只負責查詢與回應。契約見 docs/push-feedback-api.md。
 import { isObj } from "./search";
 
-export const CARD_KINDS = ["topic", "resume", "recall", "quiet", "brief", "onthisday"] as const;
+export const CARD_KINDS = ["topic", "resume", "recall", "quiet", "brief", "onthisday", "pinned", "nearby", "meeting"] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
 
 export const PUSH_ACTIONS = ["shown", "opened", "useful", "useless", "later"] as const;
@@ -137,7 +137,7 @@ function rate(numerator: number, denominator: number): number {
 /**
  * 由 SQL 彙總出的次數算成回應：actionRows＝範圍內各 action 的筆數，kindRows＝範圍內各
  * (kind, action) 的筆數，daysWithCards＝範圍內有 shown 的不同 for_date 數。
- * byKind 六種 kind 固定順序全列（0 也列）；不認得的 kind／action 忽略。
+ * byKind 九種 kind 固定順序全列（0 也列）；不認得的 kind／action 忽略。
  */
 export function buildPushStats(
   days: number,

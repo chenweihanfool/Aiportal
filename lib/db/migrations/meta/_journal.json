@@ -225,6 +225,13 @@
       "when": 1794623407533,
       "tag": "0031_mature_fantastic_four",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794630769183,
+      "tag": "0032_natural_micromax",
+      "breakpoints": true
     }
   ]
 }

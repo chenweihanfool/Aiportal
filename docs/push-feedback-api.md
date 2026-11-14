@@ -10,7 +10,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 | 欄位 | 規則 |
 |---|---|
 | `cardKey` | 字串，trim 後 1～200 字 |
-| `cardKind` | `topic｜resume｜recall｜quiet｜brief｜onthisday` |
+| `cardKind` | `topic｜resume｜recall｜quiet｜brief｜onthisday｜pinned｜nearby｜meeting` |
 | `action` | `shown｜opened｜useful｜useless｜later` |
 | `forDate` | `^\d{4}-\d{2}-\d{2}$` 且是真實日曆日（擋 `2026-02-30`） |
 
@@ -47,7 +47,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 
 - `shown`／`opened`／`useful`／`useless`＝範圍內各 action 筆數（shown 本來就同一 `(cardKey, forDate)` 只一筆）。
 - `openRate`＝opened÷shown、`uselessRate`＝useless÷shown：0～1、四捨五入到小數 3 位；分母 0 時為 0；大於 1 截為 1。
-- `byKind`：六種 kind 固定順序 `topic, resume, recall, quiet, brief, onthisday` 全列（0 也列）。
+- `byKind`：九種 kind 固定順序 `topic, resume, recall, quiet, brief, onthisday, pinned, nearby, meeting` 全列（0 也列）。
 - `daysWithCards`：範圍內有 shown 的不同 `for_date` 數。
 
 ## cardKey 組法
@@ -62,7 +62,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 | brief | `brief:<日期>` |
 | onthisday | `onthisday:<原日期 YYYY-MM-DD>:<標題雜湊>`（companion 的 onThisDay 沒有 id） |
 
-`cardKind` 必須是上表六種；`cardKey` 前綴與 `cardKind` 是否一致不在此端點驗證（前端自行遵守）。
+`cardKind` 必須是上表九種；`cardKey` 前綴與 `cardKind` 是否一致不在此端點驗證（前端自行遵守）。卡種 `pinned`（📌 需要時提醒我）、`nearby`（4-4b）、`meeting`（4-4c）為 2026-11-14 新增，先加進驗證與統計，前端後續再接。
 
 ## 表 `push_feedback`（只新增）
 | 欄位 | 型別 | 說明 |
@@ -76,10 +76,65 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 
 索引 `(card_key, for_date)`。migration `0030_*`，只有 CREATE TABLE／CREATE INDEX。
 
+## 釘選 `POST/GET /api/push/pins`（2026-11-14）
+「📌 需要時提醒我」：使用者在閱讀面板或卷宗頁釘一個目標、選一個日子；到那天首頁推送卡出現一張 `pinned` 卡。三支端點同樣要 `x-admin-password`，沒過回 **403** `{"message":"需要解鎖私領域才能查看"}`。程式：`artifacts/api-server/src/routes/pushPins.ts`，純邏輯在 `src/lib/pushPin.ts`。
+
+### PIN1 `POST /api/push/pins`
+body：`{ targetKind, targetId, title, href, dueDate }`，必須是物件、只接受這五個鍵（多餘鍵 400）。
+
+| 欄位 | 規則 |
+|---|---|
+| `targetKind` | `case｜person｜object｜topic｜event｜concept｜method｜source｜idea｜place｜trip` |
+| `targetId` | 字串，trim 後 1～200 字 |
+| `title` | 字串，trim 後 1～200 字 |
+| `href` | 字串，必須以 `#` 開頭（前端 hash 路由），1～300 字 |
+| `dueDate` | `YYYY-MM-DD` 且是真實日曆日；不得早於今天（台北日期）、不得晚於今天＋366 天 |
+
+任何一項不合法 → **400** `{message}`。
+
+- 同一 `(target_kind, target_id, due_date)` 已有**未完成**的 pin → **200** `{id: 既有那筆 id}`，不重複建；否則新增 → **201** `{id}`。去重用查詢判斷，沒有唯一索引，同時送兩次可能建出兩筆。
+
+### PIN2 `GET /api/push/pins?due=today`／`GET /api/push/pins`
+只回 `done_at is null` 的 pin，依 `due_date` 舊到新、同日期依 `id` 小到大。
+
+- `due=today`：只回 `due_date <= 今天（台北）`，最多 **50** 筆。
+- 不帶 `due`：回全部未完成，最多 **200** 筆。
+- `due` 其他值 → **400**（只接受不帶或 `today`）。
+
+```json
+{
+  "pins": [
+    { "id": 1, "targetKind": "case", "targetId": "case:王案", "title": "王案判決書", "href": "#/reading/case/王案", "dueDate": "2026-11-20", "createdAt": "2026-11-14T03:00:00.000Z" }
+  ]
+}
+```
+
+### PIN3 `POST /api/push/pins/:id/done`
+把 pin 標成完成，`done_at` 寫入當下時間 → **200** `{id, doneAt}`。
+
+- `id` 非正整數 → **400**。
+- 不存在或已完成（`done_at` 已有值）→ **404**。
+
+壞 JSON 由既有的全域 JSON 錯誤處理回 400。
+
+### 表 `push_pin`（只新增）
+| 欄位 | 型別 | 說明 |
+|---|---|---|
+| `id` | serial pk | |
+| `target_kind` | text not null | 十一種 kind |
+| `target_id` | text not null | ≤200 |
+| `title` | text not null | ≤200 |
+| `href` | text not null | ≤300，以 `#` 開頭 |
+| `due_date` | text not null | 台北日期 `YYYY-MM-DD` |
+| `created_at` | timestamptz not null default now() | |
+| `done_at` | timestamptz null | 非 null 表示已完成 |
+
+索引 `push_pin_due_date_idx`：`(due_date) where done_at is null`，支援未完成清單查詢。migration `0032_*`，只有 CREATE TABLE／CREATE INDEX。
+
 ## 時區規則
 - 台北時區＝UTC+8，沒有夏令時間。
 - 「今天」以台北日期為準：UTC 16:00（台北 00:00）換日；`for_date` 一律是台北日期字串。
 - 「晚點」截止＝台北當天 20:00，回應字串固定 `YYYY-MM-DDT20:00:00+08:00`。
 
 ## 部署
-新增資料表 `push_feedback`（migration `0030_*`），部署要先跑 db-migrate，再重建 api-server。feed `topic-nudges` 只是新增選填欄位、v1 不升版；推送端（kb-pipeline）送新欄位前要先上 api-server。
+新增資料表 `push_feedback`（migration `0030_*`），部署要先跑 db-migrate，再重建 api-server。feed `topic-nudges` 只是新增選填欄位、v1 不升版；推送端（kb-pipeline）送新欄位前要先上 api-server。釘選另新增資料表 `push_pin`（migration `0032_*`），同樣先跑 db-migrate 再重建 api-server。

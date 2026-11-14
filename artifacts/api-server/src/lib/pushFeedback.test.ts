@@ -89,7 +89,7 @@ describe("buildPushFeedback", () => {
 });
 
 describe("buildPushStats", () => {
-  it("分母 0 時比率為 0；byKind 六種固定順序全列", () => {
+  it("分母 0 時比率為 0；byKind 九種固定順序全列", () => {
     const s = buildPushStats(14, [], [], 0);
     expect(s).toEqual({
       days: 14, shown: 0, opened: 0, openRate: 0, useful: 0, useless: 0, uselessRate: 0,
@@ -118,6 +118,9 @@ describe("buildPushStats", () => {
       { kind: "quiet", shown: 0, opened: 0, useless: 0 },
       { kind: "brief", shown: 0, opened: 0, useless: 0 },
       { kind: "onthisday", shown: 0, opened: 0, useless: 0 },
+      { kind: "pinned", shown: 0, opened: 0, useless: 0 },
+      { kind: "nearby", shown: 0, opened: 0, useless: 0 },
+      { kind: "meeting", shown: 0, opened: 0, useless: 0 },
     ]);
   });
 });
