@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 
 export type GraphTab = 'find' | 'prep' | 'universe' | 'timeline'
 
@@ -8,13 +8,13 @@ export type GraphTab = 'find' | 'prep' | 'universe' | 'timeline'
 export function GraphShell({ tab, onBack, extra, children }: { tab: GraphTab; onBack: () => void; extra?: ReactNode; children: ReactNode }) {
   const tabStyle = (active: boolean) => ({
     cursor: 'pointer', background: 'none', border: 'none', padding: '0.25rem 0.1rem', fontFamily: FONT.body,
-    fontSize: '0.82rem', fontWeight: 600, color: active ? COLOR.amber : COLOR.steelDim,
-    borderBottom: `2px solid ${active ? COLOR.amber : 'transparent'}`,
+    fontSize: '0.82rem', fontWeight: 600, color: active ? CV.amber : CV.steelDim,
+    borderBottom: `2px solid ${active ? CV.amber : 'transparent'}`,
   } as const)
   return (
-    <div style={{ position: 'fixed', inset: 0, background: COLOR.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COLOR.line}`, flexWrap: 'wrap' }}>
-        <span onClick={onBack} style={{ cursor: 'pointer', color: COLOR.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.04em' }}>← 返回儀表板</span>
+    <div style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${CV.line}`, flexWrap: 'wrap' }}>
+        <span onClick={onBack} style={{ cursor: 'pointer', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.04em' }}>← 返回儀表板</span>
         <nav aria-label="關係圖分頁" style={{ display: 'flex', gap: '1.1rem' }}>
           <button type="button" aria-current={tab === 'find' ? 'page' : undefined} style={tabStyle(tab === 'find')}
             onClick={() => { window.location.hash = '#relations' }}>找人／案</button>

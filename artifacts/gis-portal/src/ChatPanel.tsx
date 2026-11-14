@@ -192,7 +192,7 @@ export function ChatPanel({ pw, prefill }: { pw: string; prefill: { text: string
           </>
         )}
       </div>
-      {error && <p className="ch-note" role="alert" style={{ margin: 0, color: '#e0605a' }}>{error}</p>}
+      {error && <p className="ch-note" role="alert" style={{ margin: 0, color: 'var(--c-crit)' }}>{error}</p>}
       <form className="ch-form" onSubmit={(e) => void send(e)}>
         <textarea ref={inputRef} className="ch-input" data-testid="chat-input" rows={3} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey} placeholder="和 HERMES 說話（Enter 送出，Shift+Enter 換行）" aria-label="訊息" disabled={!ready} />
         {runId

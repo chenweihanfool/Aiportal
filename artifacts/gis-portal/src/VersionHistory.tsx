@@ -1,7 +1,7 @@
 // 頁首的版本按鈕（點開版本歷程對話框）。
 import { useCallback, useState } from 'react'
 import { VersionHistoryDialog } from './VersionHistoryDialog'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import { VERSION_HISTORY } from './versionHistory'
 
 // 2.53.0：頂欄壓成單列，按鈕高度與帳號、⚙ 對齊（不再 marginTop）。
@@ -18,11 +18,11 @@ export function VersionHistory() {
   return (
     <>
       <button type="button" className="tb-ver" onClick={() => setExpanded(true)} title="版本歷程" aria-label={`版本歷程 v${latest.version}`} style={{
-        display: 'inline-flex', alignItems: 'center', gap: '6px', background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
-        padding: '0.3rem 0.6rem', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steel, whiteSpace: 'nowrap', lineHeight: 1.2,
+        display: 'inline-flex', alignItems: 'center', gap: '6px', background: CV.panel, border: `1px solid ${CV.line}`, borderRadius: '5px',
+        padding: '0.3rem 0.6rem', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.64rem', color: CV.steel, whiteSpace: 'nowrap', lineHeight: 1.2,
       }}>
-        <span style={{ color: COLOR.amber, fontWeight: 600 }}>v{latest.version}</span>
-        <span style={{ color: COLOR.steelDim }}>版本歷程 ▸</span>
+        <span style={{ color: CV.amber, fontWeight: 600 }}>v{latest.version}</span>
+        <span style={{ color: CV.steelDim }}>版本歷程 ▸</span>
       </button>
       {expanded && <VersionHistoryDialog entries={VERSION_HISTORY} onClose={closeHistory} />}
     </>

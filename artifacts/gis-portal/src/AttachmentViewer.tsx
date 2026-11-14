@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import { apiFetchAttachment } from './attachmentApi'
 import { attachmentKind } from './docContent'
 import { pathBase } from './markdownLite'
@@ -8,7 +8,7 @@ import { pathBase } from './markdownLite'
 // 純唯讀；其他類型（docx、xlsx…）不預覽，只說明原因。
 const TEXT_LIMIT = 200_000
 
-const NAV_BTN = { background: 'none', border: `1px solid ${COLOR.line}`, color: COLOR.steel, borderRadius: 4, padding: '2px 10px', cursor: 'pointer', whiteSpace: 'nowrap' } as const
+const NAV_BTN = { background: 'none', border: `1px solid ${CV.line}`, color: CV.steel, borderRadius: 4, padding: '2px 10px', cursor: 'pointer', whiteSpace: 'nowrap' } as const
 
 type State =
   | { status: 'loading' }
@@ -64,32 +64,32 @@ export function AttachmentViewer({ password, path, onClose, siblings, onNavigate
     <div role="dialog" aria-label={`附件預覽：${name}`} onClick={onClose}
       style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,11,14,0.88)', padding: '12px' }}>
       <div onClick={e => e.stopPropagation()} style={{
-        display: 'flex', flexDirection: 'column', width: 'min(960px, 100%)', maxHeight: '100%', background: COLOR.panel,
-        border: `1px solid ${COLOR.lineBright}`, borderRadius: 6, overflow: 'hidden',
+        display: 'flex', flexDirection: 'column', width: 'min(960px, 100%)', maxHeight: '100%', background: CV.panel,
+        border: `1px solid ${CV.lineBright}`, borderRadius: 6, overflow: 'hidden',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderBottom: `1px solid ${COLOR.line}` }}>
-          <span title={path} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: COLOR.ink, fontSize: '0.82rem' }}>📎 {name}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderBottom: `1px solid ${CV.line}` }}>
+          <span title={path} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: CV.ink, fontSize: '0.82rem' }}>📎 {name}</span>
           {state.status === 'pdf' && (
-            <a href={state.url} target="_blank" rel="noopener noreferrer" style={{ color: COLOR.amber, fontSize: '0.74rem', fontFamily: FONT.mono }}>另開分頁</a>
+            <a href={state.url} target="_blank" rel="noopener noreferrer" style={{ color: CV.amber, fontSize: '0.74rem', fontFamily: FONT.mono }}>另開分頁</a>
           )}
           {canNav && (
             <>
               <button type="button" data-testid="attach-prev" onClick={() => go(-1)} aria-label="上一個附件" style={NAV_BTN}>‹ 上一張</button>
-              <span style={{ color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{idx + 1}/{siblings!.length}</span>
+              <span style={{ color: CV.steelDim, fontFamily: FONT.mono, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{idx + 1}/{siblings!.length}</span>
               <button type="button" data-testid="attach-next" onClick={() => go(1)} aria-label="下一個附件" style={NAV_BTN}>下一張 ›</button>
             </>
           )}
-          <button onClick={onClose} aria-label="關閉" style={{ background: 'none', border: `1px solid ${COLOR.line}`, color: COLOR.steel, borderRadius: 4, padding: '2px 10px', cursor: 'pointer' }}>關閉</button>
+          <button onClick={onClose} aria-label="關閉" style={{ background: 'none', border: `1px solid ${CV.line}`, color: CV.steel, borderRadius: 4, padding: '2px 10px', cursor: 'pointer' }}>關閉</button>
         </div>
         <div style={{ overflow: 'auto', minHeight: 0, flex: 1, padding: state.status === 'pdf' ? 0 : '12px' }}>
-          {state.status === 'loading' && <div style={{ color: COLOR.steel, fontSize: '0.8rem' }}>載入附件中…</div>}
-          {state.status === 'error' && <div style={{ color: COLOR.warn, fontSize: '0.8rem', lineHeight: 1.6 }}>{state.message}</div>}
+          {state.status === 'loading' && <div style={{ color: CV.steel, fontSize: '0.8rem' }}>載入附件中…</div>}
+          {state.status === 'error' && <div style={{ color: CV.warn, fontSize: '0.8rem', lineHeight: 1.6 }}>{state.message}</div>}
           {state.status === 'image' && <img src={state.url} alt={name} style={{ display: 'block', maxWidth: '100%', maxHeight: '78vh', margin: '0 auto', objectFit: 'contain' }} />}
           {state.status === 'pdf' && <iframe src={state.url} title={name} style={{ display: 'block', width: '100%', height: '78vh', border: 0, background: '#fff' }} />}
           {state.status === 'text' && (
             <>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: FONT.mono, fontSize: '0.76rem', lineHeight: 1.65, color: COLOR.steel }}>{state.text}</pre>
-              {state.truncated && <div style={{ color: COLOR.warn, fontSize: '0.72rem', marginTop: '8px' }}>檔案過長，這裡只顯示前段。</div>}
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: FONT.mono, fontSize: '0.76rem', lineHeight: 1.65, color: CV.steel }}>{state.text}</pre>
+              {state.truncated && <div style={{ color: CV.warn, fontSize: '0.72rem', marginTop: '8px' }}>檔案過長，這裡只顯示前段。</div>}
             </>
           )}
         </div>

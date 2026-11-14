@@ -406,7 +406,7 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   const T = `${w}×${h} 異常`
   check(`${T}：data-sys=alert，⑤ 移到 ① 下方（today 底 ${g.today.bottom} ≈ sys 頂 ${g.sys.top}）`, (await page.locator('.hm-root[data-sys="alert"]').count()) === 1 && Math.abs(g.sys.top - g.today.bottom) <= 14 && g.sys.top < g.dims.top)
   const lamp = await page.evaluate(() => getComputedStyle(document.querySelector('.hm-sys .hm-lamp')).backgroundColor)
-  check(`${T}：燈變色（crit 紅 ${lamp}）`, /226, 88, 79/.test(lamp))
+  check(`${T}：燈變色（crit 紅 ${lamp}）`, /255, 122, 107|184, 58, 48/.test(lamp))
   const t = await page.locator('.hm-sys').innerText()
   check(`${T}：寫出原因（管線 L3、Ollama、推送、硬碟）`, /管線 L3 失敗（14 小時前）：apply 失敗/.test(t) && /Ollama 會在補點前用完/.test(t), t.replace(/\n/g, ' | ').slice(0, 300))
   check(`${T}：頁面可往下捲、不被截掉`, g.scrollH >= g.clientH, `${g.scrollH}/${g.clientH}`)
@@ -1082,7 +1082,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     const { ctx, page, calls } = await open({ width: 1440, height: 900 }, 'normal', { layout: 'v3' })
     await page.waitForSelector('[data-testid="hm-layout-toggle"]')
     const t = page.locator('[data-testid="hm-layout-toggle"]')
-    check('切換：預設是 v3（開關 aria-pressed=false、沒有 .hm-nav）、旁邊有「2027-01-31 後移除」的說明', (await t.getAttribute('aria-pressed')) === 'false' && (await page.locator('.hm-nav').count()) === 0 && /2027-01-31/.test(await page.locator('.st-layoutbar').innerText()))
+    check('切換：預設是 v3（開關 aria-pressed=false、沒有 .hm-nav）、開關在頂欄同一排、title 有「2027-01-31 後移除」的說明、舊的 .st-layoutbar 細列已拿掉', (await t.getAttribute('aria-pressed')) === 'false' && (await page.locator('.hm-nav').count()) === 0 && /2027-01-31/.test((await t.getAttribute('title')) ?? '') && (await page.locator('header.tb [data-testid="hm-layout-toggle"]').count()) === 1 && (await page.locator('.st-layoutbar').count()) === 0)
     const before = calls.length
     await t.click(); await page.waitForSelector('.hm-nav'); await settle(page, 600)
     check('切換：點開關立即出現舊版首頁（.hm-nav、.hm-today），aria-pressed=true，STATUS 消失', (await t.getAttribute('aria-pressed')) === 'true' && (await page.locator('.hm-nav, .hm-today').count()) >= 2 && (await page.locator('.st-aside').count()) === 0)

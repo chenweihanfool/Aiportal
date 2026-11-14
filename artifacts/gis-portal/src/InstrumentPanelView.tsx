@@ -1,9 +1,9 @@
 // 入口網首頁：頁首、主區（新首頁或舊版首頁）與兩個抽屜的內容。
 import { useState } from 'react'
-import { CLASSIC_REMOVAL_NOTE, browserLayoutStore, readHomeLayout, writeHomeLayout, type HomeLayout } from './homeLayout'
+import { browserLayoutStore, readHomeLayout, writeHomeLayout, type HomeLayout } from './homeLayout'
 import { DesktopBoard } from './DesktopBoard'
 import { HomeBoard } from './HomeBoard'
-import { COLOR } from './theme'
+import { CV } from './theme'
 import { DimensionGauge, MindIndexCard, SUMMARY_BODIES, SocialIndexCard } from './DimensionCards'
 import { HappinessHeroCard } from './HappinessHero'
 import { TopBar } from './TopBar'
@@ -94,16 +94,8 @@ export function InstrumentPanelView({
   const opsDetail = <HermesWarRoomSection unlocked={unlocked} unlockedPassword={unlockedPassword} onRequestUnlock={onRequestUnlock} />
 
   return (
-    <div className="ip-shell" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: COLOR.panelDeep }}>
-      <TopBar portals={sites.length} legacy={legacy} onOpenAdmin={onOpenAdmin} />
-      {!legacy && (
-        <div className="st-layoutbar">
-          <button type="button" className="st-layout-toggle" data-testid="hm-layout-toggle" aria-pressed={layout === 'classic'} onClick={toggleLayout} title={CLASSIC_REMOVAL_NOTE}>
-            舊版首頁
-          </button>
-          <span className="st-layout-note">{CLASSIC_REMOVAL_NOTE}</span>
-        </div>
-      )}
+    <div className="ip-shell" style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: CV.panelDeep }}>
+      <TopBar portals={sites.length} legacy={legacy} onOpenAdmin={onOpenAdmin} layout={legacy ? undefined : layout} onToggleLayout={legacy ? undefined : toggleLayout} />
 
       <div className="ip-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 'var(--sp-4) var(--sp-5) var(--sp-6)' }}>
         <div className="ip-layout">

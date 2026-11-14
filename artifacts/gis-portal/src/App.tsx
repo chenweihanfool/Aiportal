@@ -11,7 +11,7 @@ import { TripsView } from './TripsView'
 import { dimKeyFromHash } from './dimensionPage'
 import { YearReview } from './YearReview'
 import { yearFromHash } from './yearReview'
-import { COLOR } from './theme'
+import { CV } from './theme'
 import { AdminAuthModal, AdminPanel, PasswordModal } from './Dialogs'
 import { DimensionDetail, dimensionLinks } from './DimensionDetail'
 import { InstrumentPanelView } from './InstrumentPanelView'
@@ -143,7 +143,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: COLOR.panelDeep, position: 'relative', overflow: 'hidden' }}>
+    <div style={{ width: '100vw', height: '100vh', background: CV.panelDeep, position: 'relative', overflow: 'hidden' }}>
       <InstrumentPanelView
         sites={sites}
         dashboard={dashboard}

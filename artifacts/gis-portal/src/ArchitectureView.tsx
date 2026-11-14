@@ -10,7 +10,7 @@ import { scheduleLine, shortSchedule } from './pipelineSchedule'
 // L1～L5 的班表與健康狀態是即時的（/api/hermes-pipeline），其餘是結構說明。點節點高亮上下游、看職責與腳本。
 // 拓撲資料在 architectureData.ts（有測試）；樣式在 portal.css 的 ar-*。
 
-const LAMP: Record<string, string> = { ok: '#5fbf7a', crit: '#e2584f', unknown: '#5b6270' }
+const LAMP: Record<string, string> = { ok: 'var(--c-ok)', crit: 'var(--c-crit)', unknown: 'var(--c-ink-3)' }
 
 function LayerStatus({ layer, unlocked, loading, failed }: { layer: HermesPipelineLayerData | null; unlocked: boolean; loading: boolean; failed: boolean }) {
   if (!unlocked) return <span className="ar-live ar-live--off">🔒 解鎖後顯示狀態</span>

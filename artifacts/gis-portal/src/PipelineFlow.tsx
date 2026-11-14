@@ -1,7 +1,7 @@
 // 戰情室的 L1~L5 知識萃取管線：互動式數據流向圖與歷史。
 import { useEffect, useState } from 'react'
 import { scheduleLine, shortSchedule } from './pipelineSchedule'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import { formatMinutesAgo } from './format'
 import { CollapsibleSubPanel, FormulaToggle, StatCell } from './panelUi'
 import { apiFetchHermesPipeline, apiFetchHermesPipelineHistory, type HermesPipelineData, type HermesPipelineHealth, type HermesPipelineHistoryPoint, type HermesPipelineLayerData } from './portalApi'
@@ -108,9 +108,9 @@ const PIPELINE_EDGES: PipelineEdge[] = [
 ]
 
 function pipelineHealthColor(health: HermesPipelineHealth | undefined): string {
-  if (health === 'ok') return COLOR.ok
-  if (health === 'crit') return COLOR.crit
-  return COLOR.steelDim
+  if (health === 'ok') return CV.ok
+  if (health === 'crit') return CV.crit
+  return CV.steelDim
 }
 function pipelineHealthLabel(health: HermesPipelineHealth | undefined): string {
   if (health === 'ok') return '正常'
@@ -120,9 +120,9 @@ function pipelineHealthLabel(health: HermesPipelineHealth | undefined): string {
 
 function PipelineDetailCard({ meta, layer }: { meta: PipelineNodeMeta; layer: HermesPipelineLayerData | null }) {
   return (
-    <div style={{ background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '5px', padding: '0.9rem 1rem', marginTop: '0.8rem' }}>
+    <div style={{ background: CV.panelDeep, border: `1px solid ${CV.line}`, borderRadius: '5px', padding: '0.9rem 1rem', marginTop: '0.8rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.4rem' }}>
-        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>{meta.label}</span>
+        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink }}>{meta.label}</span>
         {layer && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: FONT.mono, fontSize: '0.62rem', color: pipelineHealthColor(layer.health) }}>
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: pipelineHealthColor(layer.health) }} />
@@ -130,26 +130,26 @@ function PipelineDetailCard({ meta, layer }: { meta: PipelineNodeMeta; layer: He
           </span>
         )}
       </div>
-      <div style={{ fontSize: '0.74rem', color: COLOR.steel, lineHeight: 1.6, marginBottom: meta.monitored ? '0.7rem' : 0 }}>{meta.description}</div>
+      <div style={{ fontSize: '0.74rem', color: CV.steel, lineHeight: 1.6, marginBottom: meta.monitored ? '0.7rem' : 0 }}>{meta.description}</div>
       {meta.script && (
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steelDim, marginBottom: '2px' }}>
-          腳本：<span style={{ color: COLOR.steel }}>{meta.script}</span>　排程：<span style={{ color: COLOR.steel }}>{scheduleLine(layer?.schedule, meta.schedule)}</span>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: CV.steelDim, marginBottom: '2px' }}>
+          腳本：<span style={{ color: CV.steel }}>{meta.script}</span>　排程：<span style={{ color: CV.steel }}>{scheduleLine(layer?.schedule, meta.schedule)}</span>
         </div>
       )}
       {meta.monitored && (
         layer === null ? (
-          <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, marginTop: '0.5rem' }}>尚無 heartbeat 資料</div>
+          <div style={{ fontSize: '0.68rem', color: CV.steelDim, marginTop: '0.5rem' }}>尚無 heartbeat 資料</div>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(76px, 1fr))', gap: '1px', background: COLOR.line, border: `1px solid ${COLOR.line}`, borderRadius: '5px', overflow: 'hidden', marginTop: '0.6rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(76px, 1fr))', gap: '1px', background: CV.line, border: `1px solid ${CV.line}`, borderRadius: '5px', overflow: 'hidden', marginTop: '0.6rem' }}>
               <StatCell label="最近執行" value={layer.lastRunTs !== null ? formatMinutesAgo(new Date(layer.lastRunTs).toISOString()) : (layer.lastRun ?? '—')} />
               <StatCell label="已處理" value={layer.processed !== null ? String(layer.processed) : '—'} />
               <StatCell label="已入庫" value={layer.committed !== null ? String(layer.committed) : '—'} />
-              <StatCell label="失敗" value={layer.failed !== null ? String(layer.failed) : '—'} valueColor={layer.failed ? COLOR.crit : undefined} />
+              <StatCell label="失敗" value={layer.failed !== null ? String(layer.failed) : '—'} valueColor={layer.failed ? CV.crit : undefined} />
               <StatCell label="待處理" value={layer.backlog !== null ? String(layer.backlog) : '—'} />
             </div>
             {layer.errorSummary && (
-              <div style={{ fontSize: '0.68rem', color: COLOR.crit, marginTop: '0.6rem', lineHeight: 1.5 }}>⚠ {layer.errorSummary}</div>
+              <div style={{ fontSize: '0.68rem', color: CV.crit, marginTop: '0.6rem', lineHeight: 1.5 }}>⚠ {layer.errorSummary}</div>
             )}
           </>
         )
@@ -172,22 +172,22 @@ function HermesPipelineFlowDiagram({ data }: { data: HermesPipelineData | null }
         >
           <defs>
             <marker id="pipeline-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" fill={COLOR.steelDim} />
+              <path d="M0,0 L10,5 L0,10 z" fill={CV.steelDim} />
             </marker>
             <marker id="pipeline-arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" fill={COLOR.amberDim} />
+              <path d="M0,0 L10,5 L0,10 z" fill={CV.amberDim} />
             </marker>
           </defs>
 
           {PIPELINE_EDGES.map((e, i) => (
             <g key={i}>
               <path
-                d={e.path} fill="none" stroke={e.feedback ? COLOR.amberDim : COLOR.steelDim} strokeWidth={1.3}
+                d={e.path} fill="none" stroke={e.feedback ? CV.amberDim : CV.steelDim} strokeWidth={1.3}
                 strokeDasharray={e.feedback ? '4 3' : undefined}
                 markerEnd={`url(#${e.feedback ? 'pipeline-arrow-amber' : 'pipeline-arrow'})`}
               />
               {e.label && e.labelAt && (
-                <text x={e.labelAt.x} y={e.labelAt.y} fontFamily={FONT.mono} fontSize={8.5} fill={e.feedback ? COLOR.amberDim : COLOR.steelDim}>{e.label}</text>
+                <text x={e.labelAt.x} y={e.labelAt.y} fontFamily={FONT.mono} fontSize={8.5} fill={e.feedback ? CV.amberDim : CV.steelDim}>{e.label}</text>
               )}
             </g>
           ))}
@@ -201,11 +201,11 @@ function HermesPipelineFlowDiagram({ data }: { data: HermesPipelineData | null }
               <g key={id} onClick={() => setSelected(id)} style={{ cursor: 'pointer' }}>
                 <rect
                   x={pos.x} y={pos.y} width={pos.w} height={pos.h} rx={6}
-                  fill={isSelected ? 'rgba(245,166,35,0.08)' : COLOR.panelRaised}
-                  stroke={isSelected ? COLOR.amberDim : COLOR.line} strokeWidth={isSelected ? 1.6 : 1}
+                  fill={isSelected ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : CV.panelRaised}
+                  stroke={isSelected ? CV.amberDim : CV.line} strokeWidth={isSelected ? 1.6 : 1}
                 />
-                <text x={pos.x + 10} y={pos.y + 23} fontFamily={FONT.body} fontSize={12} fontWeight={600} fill={COLOR.ink}>{meta.label}</text>
-                <text x={pos.x + 10} y={pos.y + 39} fontFamily={FONT.mono} fontSize={9} fill={COLOR.steelDim}>{meta.monitored ? shortSchedule(layer?.schedule, meta.sub) : meta.sub}</text>
+                <text x={pos.x + 10} y={pos.y + 23} fontFamily={FONT.body} fontSize={12} fontWeight={600} fill={CV.ink}>{meta.label}</text>
+                <text x={pos.x + 10} y={pos.y + 39} fontFamily={FONT.mono} fontSize={9} fill={CV.steelDim}>{meta.monitored ? shortSchedule(layer?.schedule, meta.sub) : meta.sub}</text>
                 {meta.monitored && (
                   <circle cx={pos.x + pos.w - 11} cy={pos.y + 11} r={4.5} fill={pipelineHealthColor(layer?.health)} />
                 )}
@@ -215,10 +215,10 @@ function HermesPipelineFlowDiagram({ data }: { data: HermesPipelineData | null }
         </svg>
       </div>
 
-      <div style={{ display: 'flex', gap: '14px', fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, marginTop: '0.5rem', flexWrap: 'wrap' }}>
-        <span><span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: COLOR.ok, marginRight: '4px' }} />正常</span>
-        <span><span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: COLOR.crit, marginRight: '4px' }} />異常／逾時未執行</span>
-        <span><span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: COLOR.steelDim, marginRight: '4px' }} />尚無資料</span>
+      <div style={{ display: 'flex', gap: '14px', fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, marginTop: '0.5rem', flexWrap: 'wrap' }}>
+        <span><span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: CV.ok, marginRight: '4px' }} />正常</span>
+        <span><span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: CV.crit, marginRight: '4px' }} />異常／逾時未執行</span>
+        <span><span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: CV.steelDim, marginRight: '4px' }} />尚無資料</span>
         <span style={{ flex: 1 }} />
         <span>點節點看詳情</span>
       </div>
@@ -251,20 +251,20 @@ function PipelineHistoryStrip({ unlockedPassword }: { unlockedPassword: string |
       <FormulaToggle expanded={open} onToggle={() => setOpen(x => !x)} labelCollapsed="近 14 天歷史 ▼" labelExpanded="收起 ▲" />
       {open && (
         error ? (
-          <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, marginTop: '0.5rem' }}>暫時無法取得資料</div>
+          <div style={{ fontSize: '0.68rem', color: CV.steelDim, marginTop: '0.5rem' }}>暫時無法取得資料</div>
         ) : history === null ? (
-          <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, marginTop: '0.5rem' }}>載入中…</div>
+          <div style={{ fontSize: '0.68rem', color: CV.steelDim, marginTop: '0.5rem' }}>載入中…</div>
         ) : history.length === 0 ? (
-          <div style={{ fontSize: '0.68rem', color: COLOR.steelDim, marginTop: '0.5rem' }}>還沒有歷史資料</div>
+          <div style={{ fontSize: '0.68rem', color: CV.steelDim, marginTop: '0.5rem' }}>還沒有歷史資料</div>
         ) : (
           <div style={{ marginTop: '0.6rem' }}>
             {(['L1', 'L2', 'L3', 'L4', 'L5'] as const).map(layer => (
               <div key={layer} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, width: '18px', flexShrink: 0 }}>{layer}</span>
+                <span style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, width: '18px', flexShrink: 0 }}>{layer}</span>
                 <div style={{ display: 'flex', gap: '2px' }}>
                   {history.map(h => {
                     const health = h[layer]
-                    const color = health ? pipelineHealthColor(health) : COLOR.line
+                    const color = health ? pipelineHealthColor(health) : CV.line
                     return (
                       <span
                         key={h.date}
@@ -276,7 +276,7 @@ function PipelineHistoryStrip({ unlockedPassword }: { unlockedPassword: string |
                 </div>
               </div>
             ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: FONT.mono, fontSize: '0.58rem', color: COLOR.steelDim, marginTop: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: FONT.mono, fontSize: '0.58rem', color: CV.steelDim, marginTop: '4px' }}>
               <span>{history[0]?.date}</span>
               <span>{history[history.length - 1]?.date}</span>
             </div>
@@ -305,18 +305,18 @@ export function HermesPipelinePanel({ unlockedPassword }: { unlockedPassword: st
   return (
     <CollapsibleSubPanel title="知識萃取管線（L1~L5）" sub="日記 → 知識：數據流向與即時健康狀態" hasAlert={hasAlert}>
       {error ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>暫時無法取得資料</div>
       ) : data === null ? (
-        <div style={{ fontSize: '0.72rem', color: COLOR.steelDim, padding: '0.6rem 0' }}>載入中…</div>
+        <div style={{ fontSize: '0.72rem', color: CV.steelDim, padding: '0.6rem 0' }}>載入中…</div>
       ) : (
         <>
           {!data.available && (
-            <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, marginBottom: '0.6rem' }}>尚無 heartbeat 資料，collect.ps1 還沒讀到 HERMES 主機上的 heartbeat.json——下方是管線架構圖，節點暫時顯示「尚無資料」</div>
+            <div style={{ fontSize: '0.7rem', color: CV.steelDim, marginBottom: '0.6rem' }}>尚無 heartbeat 資料，collect.ps1 還沒讀到 HERMES 主機上的 heartbeat.json——下方是管線架構圖，節點暫時顯示「尚無資料」</div>
           )}
           <HermesPipelineFlowDiagram data={data} />
           <PipelineHistoryStrip unlockedPassword={unlockedPassword} />
           {data.computedAt && (
-            <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>{formatMinutesAgo(data.computedAt)}</div>
+            <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.6rem', textAlign: 'right' }}>{formatMinutesAgo(data.computedAt)}</div>
           )}
         </>
       )}

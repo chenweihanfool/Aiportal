@@ -1,6 +1,6 @@
 // 儀表圈（270° 弧形刻度盤）。
 import { useEffect, useState } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 
 // ─────────────────────────────────────────────
 // Gauge — the signature instrument of the redesign. A 270° arc dial (90°
@@ -30,7 +30,7 @@ function gaugeArcPath(cx: number, cy: number, r: number, startDeg: number, endDe
 export function Gauge({
   value,
   size = 'small',
-  color = COLOR.amber,
+  color = CV.amber,
   locked = false,
 }: {
   value: number | null
@@ -65,7 +65,7 @@ export function Gauge({
 
   return (
     <svg width={dim} height={dim} viewBox={`0 0 ${dim} ${dim}`} style={{ flexShrink: 0, opacity: locked ? 0.4 : 1 }}>
-      <path d={track} fill="none" stroke={COLOR.panelDeep} strokeWidth={stroke} strokeLinecap="round" />
+      <path d={track} fill="none" stroke={CV.panelDeep} strokeWidth={stroke} strokeLinecap="round" />
       {!locked && (
         <path
           d={valueArc} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
@@ -74,21 +74,21 @@ export function Gauge({
         />
       )}
       {ticks.map(t => (
-        <line key={t.key} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={COLOR.steelDim} strokeWidth={1} />
+        <line key={t.key} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={CV.steelDim} strokeWidth={1} />
       ))}
       {!locked && (
         <>
           <line
             x1={cx} y1={cy} x2={cx} y2={cy - (r - stroke / 2 - 2)}
-            stroke={COLOR.ink} strokeWidth={isPrimary ? 3 : 2} strokeLinecap="round"
+            stroke={CV.ink} strokeWidth={isPrimary ? 3 : 2} strokeLinecap="round"
             className="ip-needle"
             style={{ transformOrigin: `${cx}px ${cy}px`, transform: `rotate(${needleAngle}deg)` }}
           />
-          <circle cx={cx} cy={cy} r={isPrimary ? 5 : 3.5} fill={COLOR.ink} />
+          <circle cx={cx} cy={cy} r={isPrimary ? 5 : 3.5} fill={CV.ink} />
         </>
       )}
       <text
-        x={cx} y={cy + r * 0.52} textAnchor="middle" fill={locked ? COLOR.steelDim : color}
+        x={cx} y={cy + r * 0.52} textAnchor="middle" fill={locked ? CV.steelDim : color}
         fontFamily={FONT.mono} fontWeight={600} fontSize={isPrimary ? 36 : 18}
       >
         {locked ? '🔒' : value !== null ? Math.round(value) : '—'}

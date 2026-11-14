@@ -1,6 +1,6 @@
 // 面向頁（#dim/<key>）的「分數怎麼來」內容與相關連結。
 import { type DimLink } from './DimensionPage'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import { MindDetailBody, SUMMARY_BODIES, SocialDetailBody } from './DimensionCards'
 import { dimensionOf } from './dimensions'
 import { rawToScoreText } from './dimensionPage'
@@ -25,12 +25,12 @@ export function DimensionDetail({ dimKey, dashboard, pw = null }: { dimKey: stri
     const normalized = typeof hhiSummary?.data?.[def.scoreKey] === 'number' ? hhiSummary.data[def.scoreKey] as number : null
     return (
       <div>
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: COLOR.steelDim, marginBottom: '0.6rem', lineHeight: 1.6 }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.64rem', color: CV.steelDim, marginBottom: '0.6rem', lineHeight: 1.6 }}>
           {rawToScoreText(raw, normalized)}
         </div>
-        {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: COLOR.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
+        {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: CV.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
         <Body data={data} />
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
       </div>
     )
   }
@@ -38,7 +38,7 @@ export function DimensionDetail({ dimKey, dashboard, pw = null }: { dimKey: stri
     return (
       <div>
         <MindDetailBody hhiSummary={hhiSummary} />
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(hhiSummary?.fetchedAt ?? null)}</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(hhiSummary?.fetchedAt ?? null)}</div>
       </div>
     )
   }
@@ -51,14 +51,14 @@ export function DimensionDetail({ dimKey, dashboard, pw = null }: { dimKey: stri
     if (observed === null || observed === 0) return <p className="hm-note">近 14 天沒有日記可供觀測，所以還算不出社交分數。</p>
     return (
       <div>
-        {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: COLOR.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
+        {data['stale'] === true && <div style={{ fontSize: '0.68rem', color: CV.warn, marginBottom: '0.5rem' }}>資料已超過 36 小時未更新</div>}
         {names.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '0.7rem' }} aria-label="近 14 天互動的家人朋友">
-            {names.map(n => <span key={n} style={{ fontSize: '0.68rem', color: COLOR.steel, background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 9px' }}>{n}</span>)}
+            {names.map(n => <span key={n} style={{ fontSize: '0.68rem', color: CV.steel, background: CV.panelDeep, border: `1px solid ${CV.line}`, borderRadius: '999px', padding: '2px 9px' }}>{n}</span>)}
           </div>
         )}
         <SocialDetailBody summary={summary} hhiSummary={hhiSummary} pw={pw} />
-        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.6rem' }}>{formatMinutesAgo(summary.fetchedAt)}</div>
       </div>
     )
   }

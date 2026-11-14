@@ -14,7 +14,7 @@
 // 收合態也比原本略大（1.12）；另有「展開」鈕讓面板蓋滿整個視窗（z-index 高於 3D canvas）。
 // ─────────────────────────────────────────────
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT } from './theme'
 import type { HermesGraphData } from './hermesGraphApi'
 import { apiFetchHermesDoc, type HermesDoc } from './hermesDocApi'
 import { MarkdownView, InlineText } from './MarkdownView'
@@ -45,13 +45,13 @@ function Chip({ label, kind, hint, onClick }: { label: string; kind: NodeKind; h
       style={{
         display: 'inline-flex', alignItems: 'center', gap: '5px', maxWidth: '100%',
         padding: '3px 9px', borderRadius: '999px', cursor: 'pointer',
-        background: 'rgba(255,255,255,0.04)', border: `1px solid ${COLOR.line}`,
-        fontSize: 'calc(var(--ds, 1) * 0.68rem)', color: COLOR.ink, lineHeight: 1.5,
+        background: 'var(--c-wash)', border: `1px solid ${CV.line}`,
+        fontSize: 'calc(var(--ds, 1) * 0.68rem)', color: CV.ink, lineHeight: 1.5,
       }}
     >
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: KIND_COLOR[kind], flexShrink: 0 }} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      {hint && <span style={{ color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', flexShrink: 0 }}>{hint}</span>}
+      {hint && <span style={{ color: CV.steelDim, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', flexShrink: 0 }}>{hint}</span>}
     </span>
   )
 }
@@ -59,7 +59,7 @@ function Chip({ label, kind, hint, onClick }: { label: string; kind: NodeKind; h
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginTop: '0.7rem' }}>
-      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: COLOR.steelDim, letterSpacing: '0.08em', marginBottom: '5px' }}>{title}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: CV.steelDim, letterSpacing: '0.08em', marginBottom: '5px' }}>{title}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>{children}</div>
     </div>
   )
@@ -69,7 +69,7 @@ function Note({ children, tone }: { children: React.ReactNode; tone?: 'warn' | '
   return (
     <div style={{
       fontSize: 'calc(var(--ds, 1) * 0.68rem)', lineHeight: 1.6, marginTop: '0.55rem',
-      color: tone === 'warn' ? COLOR.warn : COLOR.steel,
+      color: tone === 'warn' ? CV.warn : CV.steel,
     }}>{children}</div>
   )
 }
@@ -89,13 +89,13 @@ function AssessmentNote({ assessment }: { assessment: { date: string; text: stri
   return (
     <div style={{
       marginBottom: '0.7rem', padding: '0.6rem 0.75rem', borderRadius: '6px',
-      background: 'rgba(255,255,255,0.03)', borderLeft: `3px solid ${COLOR.amber}`,
+      background: 'var(--c-wash)', borderLeft: `3px solid ${CV.amber}`,
     }}>
       <div style={{
-        fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim,
+        fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: CV.steelDim,
         letterSpacing: '0.08em', marginBottom: '4px',
       }}>目前評價 · {assessment.date}</div>
-      <div style={{ fontSize: 'calc(var(--ds, 1) * 0.7rem)', lineHeight: 1.65, color: COLOR.ink, fontStyle: 'italic' }}>
+      <div style={{ fontSize: 'calc(var(--ds, 1) * 0.7rem)', lineHeight: 1.65, color: CV.ink, fontStyle: 'italic' }}>
         {assessment.text}
       </div>
     </div>
@@ -137,19 +137,19 @@ export function RelationshipDetailPanel({
   const containerStyle: CSSProperties = expanded
     ? {
         position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column',
-        background: COLOR.panelDeep, ...dsStyle,
+        background: CV.panelDeep, ...dsStyle,
       }
     : {
         position: 'absolute', left: '1.2rem', bottom: '1.2rem', width: 'min(480px, calc(100% - 2.4rem))',
         maxHeight: 'calc(100% - 2.4rem)', display: 'flex', flexDirection: 'column',
-        background: 'rgba(18,19,25,0.97)', border: `1px solid ${COLOR.line}`, borderRadius: '6px', ...dsStyle,
+        background: 'color-mix(in srgb, var(--c-bg) 97%, transparent)', border: `1px solid ${CV.line}`, borderRadius: '6px', ...dsStyle,
       }
 
   return (
     <div style={containerStyle}>
       <div style={{ padding: expanded ? '1.1rem 1.6rem 0' : '0.8rem 1rem 0', flexShrink: 0 }}>
         {trail.length > 1 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginBottom: '6px', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginBottom: '6px', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: CV.steelDim }}>
             {trail.slice(-5).map((t, i, arr) => {
               const absolute = trail.length - arr.length + i
               const label = t.kind === 'event' ? (index.eventById.get(splitId(t.id).name)?.title ?? '') : splitId(t.id).name
@@ -159,7 +159,7 @@ export function RelationshipDetailPanel({
                   {i > 0 && <span style={{ margin: '0 3px' }}>›</span>}
                   <span
                     onClick={() => onTrailJump(absolute)}
-                    style={{ cursor: 'pointer', color: i === arr.length - 1 ? COLOR.amber : COLOR.steelDim }}
+                    style={{ cursor: 'pointer', color: i === arr.length - 1 ? CV.amber : CV.steelDim }}
                   >{short}</span>
                 </span>
               )
@@ -168,14 +168,14 @@ export function RelationshipDetailPanel({
         )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-          <div style={{ fontSize: 'calc(var(--ds, 1) * 0.84rem)', color: COLOR.ink, fontWeight: 600, lineHeight: 1.4 }}>{title}</div>
+          <div style={{ fontSize: 'calc(var(--ds, 1) * 0.84rem)', color: CV.ink, fontWeight: 600, lineHeight: 1.4 }}>{title}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <span
               onClick={() => setExpanded(x => !x)}
               title={expanded ? '收起面板' : '展開滿版閱讀'}
-              style={{ cursor: 'pointer', color: expanded ? COLOR.amber : COLOR.steelDim, fontSize: 'calc(var(--ds, 1) * 0.8rem)' }}
+              style={{ cursor: 'pointer', color: expanded ? CV.amber : CV.steelDim, fontSize: 'calc(var(--ds, 1) * 0.8rem)' }}
             >{expanded ? '⤡' : '⤢'}</span>
-            <span onClick={onClose} style={{ cursor: 'pointer', color: COLOR.steelDim, fontSize: 'calc(var(--ds, 1) * 0.85rem)' }}>✕</span>
+            <span onClick={onClose} style={{ cursor: 'pointer', color: CV.steelDim, fontSize: 'calc(var(--ds, 1) * 0.85rem)' }}>✕</span>
           </div>
         </div>
 
@@ -183,14 +183,14 @@ export function RelationshipDetailPanel({
           {tabs.map(t => (
             <span key={t} onClick={() => setTab(t)} style={{
               cursor: 'pointer', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', paddingBottom: '3px',
-              color: effectiveTab === t ? COLOR.amber : COLOR.steelDim,
-              borderBottom: `1px solid ${effectiveTab === t ? COLOR.amber : 'transparent'}`,
+              color: effectiveTab === t ? CV.amber : CV.steelDim,
+              borderBottom: `1px solid ${effectiveTab === t ? CV.amber : 'transparent'}`,
             }}>{tabLabel(t)}</span>
           ))}
           <div style={{ flex: 1 }} />
           <span
             onClick={() => onSetPathAnchor(pathAnchor === selection.id ? null : selection.id)}
-            style={{ cursor: 'pointer', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: pathAnchor === selection.id ? COLOR.amber : COLOR.steelDim }}
+            style={{ cursor: 'pointer', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: pathAnchor === selection.id ? CV.amber : CV.steelDim }}
           >{pathAnchor === selection.id ? '● 已設為路徑起點' : '設為路徑起點'}</span>
         </div>
       </div>
@@ -254,7 +254,7 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
   const siblings = collectAttachmentPaths(doc.bodyMd, doc.sources.filter(s => s.type === 'attachment').map(s => s.path))
     return (
       <>
-        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: CV.steelDim, marginTop: '0.6rem' }}>
           事件{doc.date ? ` · ${doc.date}` : ''}
         </div>
         {bodyText.trim()
@@ -273,10 +273,10 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
                   onKeyDown={previewable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewing(s.path) } } : undefined}
                   style={{
                   display: 'inline-flex', gap: '6px', alignItems: 'baseline', maxWidth: '100%', padding: '3px 9px', borderRadius: '999px',
-                  background: 'rgba(255,255,255,0.03)', border: `1px solid ${previewable ? COLOR.amberDim : COLOR.line}`, fontSize: 'calc(var(--ds, 1) * 0.66rem)',
-                  color: previewable ? COLOR.amber : COLOR.ink, cursor: previewable ? 'pointer' : 'default',
+                  background: 'var(--c-wash)', border: `1px solid ${previewable ? CV.amberDim : CV.line}`, fontSize: 'calc(var(--ds, 1) * 0.66rem)',
+                  color: previewable ? CV.amber : CV.ink, cursor: previewable ? 'pointer' : 'default',
                 }}>
-                  <span style={{ color: COLOR.steelDim, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)' }}>{line.label}</span>
+                  <span style={{ color: CV.steelDim, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)' }}>{line.label}</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line.text}</span>
                 </span>
               )
@@ -291,7 +291,7 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
   const label = doc.kind === 'concept' ? '概念' : '方法'
   return (
     <>
-      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: CV.steelDim, marginTop: '0.6rem' }}>
         {label} · {doc.contexts.length} 個事件 · {doc.promoted ? '已晉升' : '候選（僅 1 個事件，尚未被重複驗證）'}
       </div>
       {doc.aliases.length > 0 && <Note>事件裡的其他說法：{doc.aliases.map(a => `「${a}」`).join('、')}（管線已合併到這個名稱）。</Note>}
@@ -300,22 +300,22 @@ function ContentTab({ password, kind, name, go, resolve }: { password: string | 
       <Section title="出現脈絡（新→舊）">{null}</Section>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '-0.1rem' }}>
         {doc.contexts.map(c => (
-          <div key={c.eventId} style={{ borderLeft: `2px solid ${COLOR.line}`, paddingLeft: '0.7rem' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'baseline', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: COLOR.steelDim }}>
+          <div key={c.eventId} style={{ borderLeft: `2px solid ${CV.line}`, paddingLeft: '0.7rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'baseline', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: CV.steelDim }}>
               <span>{c.date}</span>
-              {c.relation && <span style={{ color: COLOR.amberDim }}>{c.relation}</span>}
+              {c.relation && <span style={{ color: CV.amberDim }}>{c.relation}</span>}
               {c.as && <span>原措辭「{c.as}」</span>}
             </div>
             <div
               onClick={() => go(eventId(c.eventId))}
-              style={{ cursor: 'pointer', fontSize: 'calc(var(--ds, 1) * 0.74rem)', color: COLOR.ink, lineHeight: 1.5, marginTop: '2px' }}
+              style={{ cursor: 'pointer', fontSize: 'calc(var(--ds, 1) * 0.74rem)', color: CV.ink, lineHeight: 1.5, marginTop: '2px' }}
             >{c.title}</div>
             {c.evidence && (
-              <div style={{ fontSize: 'calc(var(--ds, 1) * 0.68rem)', color: COLOR.steel, lineHeight: 1.6, marginTop: '3px', fontStyle: 'italic' }}>
+              <div style={{ fontSize: 'calc(var(--ds, 1) * 0.68rem)', color: CV.steel, lineHeight: 1.6, marginTop: '3px', fontStyle: 'italic' }}>
                 日記：「{c.evidence}」
               </div>
             )}
-            {c.excerpt && <div style={{ fontSize: 'calc(var(--ds, 1) * 0.66rem)', color: COLOR.steelDim, lineHeight: 1.6, marginTop: '3px' }}>{c.excerpt}</div>}
+            {c.excerpt && <div style={{ fontSize: 'calc(var(--ds, 1) * 0.66rem)', color: CV.steelDim, lineHeight: 1.6, marginTop: '3px' }}>{c.excerpt}</div>}
           </div>
         ))}
       </div>
@@ -339,7 +339,7 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
 
     return (
       <>
-        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: CV.steelDim, marginTop: '0.6rem' }}>
           人物 · {events.length} 事件 · {related.length} 位已記關係人物
         </div>
         {related.length > 0 && (
@@ -349,9 +349,9 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
         )}
         {/* L5 寫在 People/*.md「## 關係人物」的敘述，之前完全沒被用到 */}
         {related.filter(r => r.description).map(r => (
-          <div key={`d-${r.other}`} style={{ fontSize: 'calc(var(--ds, 1) * 0.66rem)', color: COLOR.steel, lineHeight: 1.6, marginTop: '5px' }}>
-            <span style={{ color: COLOR.ink }}>{r.other}</span>
-            <span style={{ color: COLOR.steelDim }}>：{r.description}</span>
+          <div key={`d-${r.other}`} style={{ fontSize: 'calc(var(--ds, 1) * 0.66rem)', color: CV.steel, lineHeight: 1.6, marginTop: '5px' }}>
+            <span style={{ color: CV.ink }}>{r.other}</span>
+            <span style={{ color: CV.steelDim }}>：{r.description}</span>
           </div>
         ))}
         {cases.size > 0 && (
@@ -371,13 +371,13 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
     const methods = index.eventMethods.get(name) ?? []
     return (
       <>
-        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: CV.steelDim, marginTop: '0.6rem' }}>
           事件 · {ev?.date || '日期不明'}{ev?.status ? ` · ${ev.status}` : ''}
         </div>
         {ev?.tags && ev.tags.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
             {ev.tags.map(t => (
-              <span key={t} style={{ fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: COLOR.steelDim, background: COLOR.panel, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '1px 7px' }}>{t}</span>
+              <span key={t} style={{ fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: CV.steelDim, background: CV.panel, border: `1px solid ${CV.line}`, borderRadius: '999px', padding: '1px 7px' }}>{t}</span>
             ))}
           </div>
         )}
@@ -419,11 +419,11 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
     for (const id of ids) for (const p of index.eventParticipants.get(id) ?? []) people.set(p.person, (people.get(p.person) ?? 0) + 1)
     return (
       <>
-        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: CV.steelDim, marginTop: '0.6rem' }}>
           案件{index.caseStatus.get(name) ? ` · ${index.caseStatus.get(name)}` : ''} · {ids.length} 事件
           {caseTaskStateLabel(index.caseTaskState.get(name)) && (
             <span data-testid="case-task-state" title="依 Vikunja 專案是否封存判斷；只是標記，不影響其他數字"
-              style={{ marginLeft: '0.5rem', color: index.caseTaskState.get(name) === '已結案' ? COLOR.steelDim : COLOR.amber }}>
+              style={{ marginLeft: '0.5rem', color: index.caseTaskState.get(name) === '已結案' ? CV.steelDim : CV.amber }}>
               · {caseTaskStateLabel(index.caseTaskState.get(name))}
             </span>
           )}
@@ -446,7 +446,7 @@ function LinksTab({ index, kind, name, go }: { index: GraphIndex; kind: NodeKind
   for (const id of ids) for (const p of index.eventParticipants.get(id) ?? []) handlers.set(p.person, (handlers.get(p.person) ?? 0) + 1)
   return (
     <>
-      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, marginTop: '0.6rem' }}>
+      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: CV.steelDim, marginTop: '0.6rem' }}>
         物件{index.objectType.get(name) ? ` · ${index.objectType.get(name)}` : ''} · {ids.length} 事件
       </div>
       {handlers.size > 0 && (
@@ -652,12 +652,12 @@ function EventTimelineTab({
   const dotSize = expanded ? 11 : 8
   const dateW = expanded ? '8.4rem' : '5.6rem'
   const tool: CSSProperties = {
-    cursor: 'pointer', background: 'transparent', border: `1px solid ${COLOR.line}`, borderRadius: 999, color: COLOR.steel,
+    cursor: 'pointer', background: 'transparent', border: `1px solid ${CV.line}`, borderRadius: 999, color: CV.steel,
     fontFamily: 'inherit', fontSize: 'calc(var(--ds, 1) * 0.62rem)', padding: '2px 10px',
   }
   return (
     <div style={{ marginTop: '0.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: COLOR.steelDim, marginBottom: '2px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: CV.steelDim, marginBottom: '2px' }}>
         <span>共 {total} 筆關聯事件 · 新→舊</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           <button type="button" data-testid="node-tl-expand-all" style={tool} onClick={() => setOpenMonths(new Set(groups.map(g => g.month)))}>全部展開</button>
@@ -670,39 +670,39 @@ function EventTimelineTab({
           <div key={g.month} data-testid="node-tl-group">
             <button type="button" aria-expanded={open} onClick={() => toggle(g.month)} style={{
               display: 'flex', alignItems: 'baseline', gap: '0.5rem', width: '100%', textAlign: 'left', cursor: 'pointer',
-              background: 'none', border: 'none', borderBottom: `1px solid ${COLOR.line}`, color: 'inherit', font: 'inherit',
+              background: 'none', border: 'none', borderBottom: `1px solid ${CV.line}`, color: 'inherit', font: 'inherit',
               fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', letterSpacing: '0.06em',
               margin: '0.8rem 0 0.3rem', padding: '0 0 2px',
             }}>
-              <span aria-hidden style={{ color: COLOR.steel, width: 12 }}>{open ? '▾' : '▸'}</span>
-              <span style={{ color: COLOR.amberDim }}>{g.month} · {g.rows.length}</span>
-              {!open && <span style={{ color: COLOR.steelDim, letterSpacing: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{monthDigest(g)}</span>}
+              <span aria-hidden style={{ color: CV.steel, width: 12 }}>{open ? '▾' : '▸'}</span>
+              <span style={{ color: CV.amberDim }}>{g.month} · {g.rows.length}</span>
+              {!open && <span style={{ color: CV.steelDim, letterSpacing: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{monthDigest(g)}</span>}
             </button>
             {open && (
               <div style={{ position: 'relative' }}>
                 {/* 垂直軸線：在日期欄與標題欄之間 */}
-                <div style={{ position: 'absolute', left: `calc(${dateW} + ${dotSize / 2}px)`, top: 4, bottom: 4, width: 1, background: COLOR.line }} />
+                <div style={{ position: 'absolute', left: `calc(${dateW} + ${dotSize / 2}px)`, top: 4, bottom: 4, width: 1, background: CV.line }} />
                 {g.rows.map(r => {
                   const lab = rowDateLabel(r)
                   return (
                     <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', padding: '0.28rem 0' }}>
                       <div title={lab.title} data-testid="node-tl-date" style={{
-                        flex: `0 0 ${dateW}`, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: r.dateApprox || !r.date ? COLOR.steelDim : COLOR.steel,
+                        flex: `0 0 ${dateW}`, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: r.dateApprox || !r.date ? CV.steelDim : CV.steel,
                         paddingTop: '2px', whiteSpace: 'nowrap', lineHeight: 1.35,
                       }}>
                         <div>{lab.date}</div>
-                        {lab.time && <div style={{ fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim }}>{lab.time}</div>}
+                        {lab.time && <div style={{ fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: CV.steelDim }}>{lab.time}</div>}
                       </div>
                       <div style={{ flexShrink: 0, width: dotSize, paddingTop: '5px', position: 'relative', zIndex: 1 }}>
-                        <span style={{ display: 'block', width: dotSize, height: dotSize, borderRadius: '50%', background: KIND_COLOR.event, boxShadow: `0 0 0 3px ${COLOR.panelDeep}` }} />
+                        <span style={{ display: 'block', width: dotSize, height: dotSize, borderRadius: '50%', background: KIND_COLOR.event, boxShadow: `0 0 0 3px ${CV.panelDeep}` }} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           onClick={() => go(eventId(r.id))}
-                          style={{ cursor: 'pointer', fontSize: 'calc(var(--ds, 1) * 0.74rem)', color: COLOR.ink, lineHeight: 1.5 }}
+                          style={{ cursor: 'pointer', fontSize: 'calc(var(--ds, 1) * 0.74rem)', color: CV.ink, lineHeight: 1.5 }}
                         >{r.title}</div>
                         {(r.status || (r.case && kind !== 'case')) && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: COLOR.steelDim, marginTop: '1px' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: CV.steelDim, marginTop: '1px' }}>
                             {r.status && <span>{r.status}</span>}
                             {r.case && kind !== 'case' && <span>案 · {r.case}</span>}
                           </div>
@@ -737,7 +737,7 @@ function NarrativeTab({
   const dateW = expanded ? '8.4rem' : '5.6rem'
   return (
     <div style={{ marginTop: '0.5rem' }}>
-      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: COLOR.steelDim, marginBottom: '4px' }}>
+      <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: CV.steelDim, marginBottom: '4px' }}>
         L5 敘事 · 共 {entries.length} 則 · 新→舊
       </div>
       {visible.map((n, i) => (
@@ -746,7 +746,7 @@ function NarrativeTab({
       {entries.length > NARRATIVE_OPEN && (
         <div
           onClick={() => setShowOlder(v => !v)}
-          style={{ cursor: 'pointer', textAlign: 'center', margin: '0.7rem 0 0.2rem', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: COLOR.amberDim }}
+          style={{ cursor: 'pointer', textAlign: 'center', margin: '0.7rem 0 0.2rem', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.62rem)', color: CV.amberDim }}
         >{showOlder ? '收合較早的敘事' : `顯示較早的 ${entries.length - NARRATIVE_OPEN} 則`}</div>
       )}
     </div>
@@ -760,25 +760,25 @@ function NarrativeEntry({
   const [all, setAll] = useState(false)
   const shown = all ? parsed.items : parsed.items.slice(0, NARRATIVE_ITEMS)
   const isAlert = entry.type === 'alert'
-  const accent = isAlert ? COLOR.warn : COLOR.amber
+  const accent = isAlert ? CV.warn : CV.amber
   const text = (t: string) => <InlineText text={t} resolveWikilink={resolve} onNavigate={go} />
   return (
-    <div style={{ display: 'flex', gap: '0.7rem', padding: '0.7rem 0', borderBottom: `1px solid ${COLOR.line}` }}>
+    <div style={{ display: 'flex', gap: '0.7rem', padding: '0.7rem 0', borderBottom: `1px solid ${CV.line}` }}>
       <div style={{ flex: `0 0 ${dateW}`, paddingTop: '2px' }}>
-        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: COLOR.steelDim, whiteSpace: 'nowrap' }}>{entry.date}</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.64rem)', color: CV.steelDim, whiteSpace: 'nowrap' }}>{entry.date}</div>
         <div style={{ fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.58rem)', color: accent, marginTop: '2px' }}>{isAlert ? '⚠ 警報' : '編織'}</div>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {parsed.headline && (
-          <div style={{ fontSize: 'calc(var(--ds, 1) * 0.76rem)', color: COLOR.ink, lineHeight: 1.6, fontWeight: 600 }}>{text(parsed.headline)}</div>
+          <div style={{ fontSize: 'calc(var(--ds, 1) * 0.76rem)', color: CV.ink, lineHeight: 1.6, fontWeight: 600 }}>{text(parsed.headline)}</div>
         )}
         {shown.length > 0 && (
           <ul style={{ margin: parsed.headline ? '0.35rem 0 0' : 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
             {shown.map((it, k) => (
-              <li key={k} style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline', fontSize: 'calc(var(--ds, 1) * 0.72rem)', color: COLOR.steel, lineHeight: 1.7 }}>
+              <li key={k} style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline', fontSize: 'calc(var(--ds, 1) * 0.72rem)', color: CV.steel, lineHeight: 1.7 }}>
                 {it.label
-                  ? <span style={{ flexShrink: 0, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: accent, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '0 7px' }}>{it.label}</span>
-                  : <span style={{ flexShrink: 0, color: COLOR.steelDim }}>·</span>}
+                  ? <span style={{ flexShrink: 0, fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: accent, border: `1px solid ${CV.line}`, borderRadius: '999px', padding: '0 7px' }}>{it.label}</span>
+                  : <span style={{ flexShrink: 0, color: CV.steelDim }}>·</span>}
                 <span style={{ minWidth: 0 }}>{text(it.text)}</span>
               </li>
             ))}
@@ -787,7 +787,7 @@ function NarrativeEntry({
         {parsed.items.length > NARRATIVE_ITEMS && (
           <div
             onClick={() => setAll(v => !v)}
-            style={{ cursor: 'pointer', marginTop: '0.4rem', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: COLOR.amberDim }}
+            style={{ cursor: 'pointer', marginTop: '0.4rem', fontFamily: FONT.mono, fontSize: 'calc(var(--ds, 1) * 0.6rem)', color: CV.amberDim }}
           >{all ? '收合' : `展開其餘 ${parsed.items.length - NARRATIVE_ITEMS} 條`}</div>
         )}
       </div>

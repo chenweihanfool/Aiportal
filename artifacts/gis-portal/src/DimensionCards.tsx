@@ -1,6 +1,6 @@
 // 六個面向的摘要內容與卡片（財務／身體／從容／旅遊的 *SummaryBody，心智、社交的明細與卡片）。#dim/<key> 面向頁也用這裡的明細元件。
 import { useMemo, useState } from 'react'
-import { COLOR, FONT } from './theme'
+import { CV, FONT, themedColor } from './theme'
 import { DIMENSIONS, dimensionOf, type DimensionDef } from './dimensions'
 import { Gauge } from './Gauge'
 import { rawToScoreText } from './dimensionPage'
@@ -27,8 +27,8 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   const items = [
     { label: '總資產', value: totalAssetsTWD !== null ? formatTWD(totalAssetsTWD) : '—', formula: '目前資產總市值（最新一筆快照）' },
-    { label: 'TWRR', value: formatPct(twrr), color: twrr === null ? undefined : (twrr >= 0 ? COLOR.ok : COLOR.crit), formula: '時間加權報酬率——排除加減碼時機影響，純看資產本身的報酬表現' },
-    { label: 'MWRR', value: formatPct(mwrr), color: mwrr === null ? undefined : (mwrr >= 0 ? COLOR.ok : COLOR.crit), formula: '金額加權報酬率——考慮加減碼金額與時機，反映實際到手的報酬' },
+    { label: 'TWRR', value: formatPct(twrr), color: twrr === null ? undefined : (twrr >= 0 ? CV.ok : CV.crit), formula: '時間加權報酬率——排除加減碼時機影響，純看資產本身的報酬表現' },
+    { label: 'MWRR', value: formatPct(mwrr), color: mwrr === null ? undefined : (mwrr >= 0 ? CV.ok : CV.crit), formula: '金額加權報酬率——考慮加減碼金額與時機，反映實際到手的報酬' },
     { label: '休假配速', value: pacingIndex !== null ? `${Math.round(pacingIndex * 100)}%` : '—', formula: '休假進度 ÷ 年度時間進度，100% = 剛好照今年時間進度休假' },
   ]
 
@@ -46,9 +46,9 @@ function PfCwhSummaryBody({ data }: { data: Record<string, unknown> }) {
 const MUSCLE_GROUP_AXES = ['胸', '背', '腿', '肩', '二头肌', '核心', '臀', '三头肌', '有氧']
 
 const OBSERVATION_MARK = {
-  good: { mark: '✓', color: COLOR.ok },
-  warn: { mark: '!', color: COLOR.warn },
-  info: { mark: '・', color: COLOR.steel },
+  good: { mark: '✓', color: CV.ok },
+  warn: { mark: '!', color: CV.warn },
+  info: { mark: '・', color: CV.steel },
 }
 
 // 上週週報：FitnessForge 算好的摘要，完整內容連回 FitnessForge 的週報告頁
@@ -56,7 +56,7 @@ function FitnessWeeklyReportSection({ report }: { report: FitnessWeeklyReport })
   const change = report.scoreChangePct
   const items = [
     { label: '綜合分', value: report.totalScore.toLocaleString('zh-TW') },
-    { label: '比前 4 週', value: change !== null ? `${change >= 0 ? '+' : ''}${change}%` : '—', color: change === null ? undefined : (change >= 0 ? COLOR.ok : COLOR.crit) },
+    { label: '比前 4 週', value: change !== null ? `${change >= 0 ? '+' : ''}${change}%` : '—', color: change === null ? undefined : (change >= 0 ? CV.ok : CV.crit) },
     { label: '里程碑', value: `${report.stars} / 5` },
     { label: '訓練天數', value: `${report.trainingDays} 天` },
     { label: '力量組數', value: `${report.strengthSets} 組` },
@@ -65,18 +65,18 @@ function FitnessWeeklyReportSection({ report }: { report: FitnessWeeklyReport })
     { label: '連續達標', value: `${report.streak} 週` },
   ]
   return (
-    <div data-testid="fitness-weekly-report" style={{ marginTop: '1.1rem', paddingTop: '1rem', borderTop: `1px solid ${COLOR.line}` }}>
+    <div data-testid="fitness-weekly-report" style={{ marginTop: '1.1rem', paddingTop: '1rem', borderTop: `1px solid ${CV.line}` }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '4px 12px', marginBottom: '10px' }}>
-        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>
-          上週週報 <span style={{ fontFamily: FONT.mono, fontWeight: 400, color: COLOR.steel }}>{formatWeekRange(report.weekStart, report.weekEnd)}</span>
+        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink }}>
+          上週週報 <span style={{ fontFamily: FONT.mono, fontWeight: 400, color: CV.steel }}>{formatWeekRange(report.weekStart, report.weekEnd)}</span>
         </div>
-        <a href={FITNESS_REPORT_URL} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', color: COLOR.steel }}>看完整週報 →</a>
+        <a href={FITNESS_REPORT_URL} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', color: CV.steel }}>看完整週報 →</a>
       </div>
       <SupportStats items={items} />
       {report.observations.length > 0 && (
         <ul style={{ listStyle: 'none', margin: '0.9rem 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {report.observations.map(o => (
-            <li key={o.text} style={{ display: 'flex', gap: '8px', fontSize: '0.78rem', lineHeight: 1.5, color: COLOR.ink }}>
+            <li key={o.text} style={{ display: 'flex', gap: '8px', fontSize: '0.78rem', lineHeight: 1.5, color: CV.ink }}>
               <span aria-hidden style={{ flexShrink: 0, width: '1em', textAlign: 'center', fontWeight: 700, color: OBSERVATION_MARK[o.tone].color }}>{OBSERVATION_MARK[o.tone].mark}</span>
               <span>{o.text}</span>
             </li>
@@ -84,7 +84,7 @@ function FitnessWeeklyReportSection({ report }: { report: FitnessWeeklyReport })
         </ul>
       )}
       {report.focus.length > 0 && (
-        <div style={{ marginTop: '0.7rem', fontSize: '0.74rem', color: COLOR.steel }}>這週優先練：{report.focus.join('、')}</div>
+        <div style={{ marginTop: '0.7rem', fontSize: '0.74rem', color: CV.steel }}>這週優先練：{report.focus.join('、')}</div>
       )}
     </div>
   )
@@ -107,7 +107,7 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   const items = [
     { label: '本週積分', value: weeklyScore !== null ? weeklyScore.toLocaleString('zh-TW') : '—', formula: '本週各筆訓練紀錄的加權分數總和（原始累積量，未經配速調整）' },
-    { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? COLOR.ok : COLOR.crit), formula: '本週至今 vs 近 4 週同一段時間平均；平均基準太小或缺資料時，改比「目前配速 vs 個人平均配速」' },
+    { label: '趨勢', value: trendPct !== null ? `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}%` : '—', color: trendPct === null ? undefined : (trendPct >= 0 ? CV.ok : CV.crit), formula: '本週至今 vs 近 4 週同一段時間平均；平均基準太小或缺資料時，改比「目前配速 vs 個人平均配速」' },
     {
       label: '覆蓋率',
       value: coverageScore !== null ? `${coverageScore}%${activityBonusPoints > 0 ? `（含活動量 +${activityBonusPoints}%）` : ''}` : '—',
@@ -126,7 +126,7 @@ function FitnessForgeSummaryBody({ data }: { data: Record<string, unknown> }) {
             ...items,
           ]} />
         </div>
-        <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={220} color={COLOR.amber} />
+        <LabeledRadarChart axes={radarAxes} maxValue={150} baselineFraction={100 / 150} size={220} color={CV.amber} />
       </div>
       {weeklyReport && <FitnessWeeklyReportSection report={weeklyReport} />}
     </>
@@ -141,7 +141,7 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
 
   const diagItem = (label: string, score: number | null, formula: string) => {
     const tone = heroTone(score, true)
-    return { label, value: score !== null ? String(score) : '—', formula, color: score !== null ? tone.color : undefined, tier: score !== null ? tone.label : undefined }
+    return { label, value: score !== null ? String(score) : '—', formula, color: score !== null ? themedColor(tone.color) : undefined, tier: score !== null ? tone.label : undefined }
   }
 
   const items = [
@@ -157,7 +157,7 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
   const actionNum = (k: string) => (actions && typeof actions[k] === 'number' ? actions[k] as number : null)
   const overdue = actionNum('overdue'), dueToday = actionNum('dueToday'), dueNext7 = actionNum('dueNext7'), doneWeek = actionNum('doneWeek')
   const actionItems = overdue !== null && dueToday !== null && dueNext7 !== null && doneWeek !== null ? [
-    { label: '已逾期', value: String(overdue), color: overdue > 0 ? COLOR.crit : undefined, formula: '未完成、到期日早於今天的任務數' },
+    { label: '已逾期', value: String(overdue), color: overdue > 0 ? CV.crit : undefined, formula: '未完成、到期日早於今天的任務數' },
     { label: '今天到期', value: String(dueToday), formula: '未完成、到期日是今天（台北時間）的任務數' },
     { label: '7 天內到期', value: String(dueNext7), formula: '未完成、到期日在明天到 7 天後的任務數' },
     { label: '近 7 天完成', value: String(doneWeek), formula: '近 7 天（含今天）標記完成的任務數；沒有完成時間的不計' },
@@ -167,7 +167,7 @@ function VikunjaSummaryBody({ data }: { data: Record<string, unknown> }) {
     <>
       {actionItems && (
         <>
-          <div style={{ fontSize: '0.7rem', color: COLOR.steelDim, letterSpacing: '0.05em', marginBottom: '6px' }}>今天要做什麼</div>
+          <div style={{ fontSize: '0.7rem', color: CV.steelDim, letterSpacing: '0.05em', marginBottom: '6px' }}>今天要做什麼</div>
           <SupportStats items={actionItems} />
           <div style={{ height: '1rem' }} />
         </>
@@ -268,7 +268,7 @@ export function DimensionGauge({
   const normalizedScore = hhiData && typeof hhiData[DIMENSION_NORMALIZED_FIELD[summary.subsystemId] ?? ''] === 'number'
     ? hhiData[DIMENSION_NORMALIZED_FIELD[summary.subsystemId]!] as number
     : null
-  const tone = normalizedScore !== null ? heroTone(normalizedScore, false) : { color: COLOR.steelDim, label: '資料不足' }
+  const tone = normalizedScore !== null ? heroTone(normalizedScore, false) : { color: CV.steelDim, label: '資料不足' }
 
   if (isLocked) {
     return <LockedGaugeCard label={site.name} sub={site.subtitle || DIMENSION_SUB[summary.subsystemId] || ''} onRequestUnlock={() => onSelect(site)} />
@@ -279,12 +279,12 @@ export function DimensionGauge({
       onClick={() => onSelect(site)}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', cursor: 'pointer',
-        padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
+        padding: '1rem 0.9rem 0.9rem', background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px',
       }}
     >
-      <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink, textAlign: 'center' }}>{site.name}</div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim, letterSpacing: '0.04em' }}>
+      <Gauge value={normalizedScore} color={themedColor(tone.color)} />
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink, textAlign: 'center' }}>{site.name}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim, letterSpacing: '0.04em' }}>
         {normalizedScore !== null ? tone.label : (summary.status === 'pending' ? '資料準備中' : '暫時無法取得資料')}
       </div>
       {/* 目前只有 vikunja（從容指數）的資料會帶 stale 欄位——其餘三個維度
@@ -292,13 +292,13 @@ export function DimensionGauge({
           念可言。跟 MindIndexCard／SocialIndexCard 同一套文案/樣式，通用寫
           在這裡而不是只寫在 VikunjaSummaryBody 裡，以後哪個維度也需要就不
           用再抄一次。 */}
-      {data?.['stale'] === true && <div style={{ fontSize: '0.62rem', color: COLOR.warn }}>資料已超過 36 小時未更新</div>}
+      {data?.['stale'] === true && <div style={{ fontSize: '0.62rem', color: CV.warn }}>資料已超過 36 小時未更新</div>}
       {Body && data && (
         <div style={{ width: '100%', marginTop: '0.3rem' }} onClick={e => e.stopPropagation()}>
           <FormulaToggle expanded={expanded} onToggle={() => setExpanded(x => !x)} labelCollapsed="詳細數據 ▼" labelExpanded="收起 ▲" />
           {expanded && (
             <div style={{ marginTop: '0.5rem' }}>
-              <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
                 {rawToScoreText(rawHero, normalizedScore)}
               </div>
               <Body data={data} />
@@ -306,9 +306,9 @@ export function DimensionGauge({
           )}
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingTop: '0.5rem', marginTop: '0.2rem', borderTop: `1px solid ${COLOR.line}`, fontFamily: FONT.mono, fontSize: '0.6rem' }}>
-        <span style={{ color: COLOR.steelDim }}>{formatMinutesAgo(summary.fetchedAt)}</span>
-        <span style={{ color: COLOR.amberDim, letterSpacing: '0.03em' }}>前往系統 ↗</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingTop: '0.5rem', marginTop: '0.2rem', borderTop: `1px solid ${CV.line}`, fontFamily: FONT.mono, fontSize: '0.6rem' }}>
+        <span style={{ color: CV.steelDim }}>{formatMinutesAgo(summary.fetchedAt)}</span>
+        <span style={{ color: CV.amberDim, letterSpacing: '0.03em' }}>前往系統 ↗</span>
       </div>
     </div>
   )
@@ -336,12 +336,12 @@ export function MindDetailBody({ hhiSummary }: { hhiSummary: DashboardSummary | 
 
   return (
     <>
-            <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+            <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
               面向分數 = {normalizedScore ?? '—'}（公式分 {mc?.score != null ? mc.score.toFixed(1) : '—'}）
             </div>
             <SupportStats items={items} />
             {rep && (
-              <div style={{ fontSize: '0.64rem', color: COLOR.steelDim, marginTop: '0.5rem', lineHeight: 1.6 }}>
+              <div style={{ fontSize: '0.64rem', color: CV.steelDim, marginTop: '0.5rem', lineHeight: 1.6 }}>
                 {rep.parts.map(p => `${p.label} ${p.value}`).join('・')}
               </div>
             )}
@@ -377,11 +377,11 @@ export function MindIndexCard({
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
-      padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
+      padding: '1rem 0.9rem 0.9rem', background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px',
     }}>
-      <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>{dimensionOf('mind')!.label}</div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
+      <Gauge value={normalizedScore} color={themedColor(tone.color)} />
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink }}>{dimensionOf('mind')!.label}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>
         {normalizedScore !== null ? tone.label : (hhiSummary?.status === 'error' ? '暫時無法取得資料' : '資料準備中')}
       </div>
       <div style={{ width: '100%', marginTop: '0.3rem' }}>
@@ -392,7 +392,7 @@ export function MindIndexCard({
           </div>
         )}
       </div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.2rem' }}>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.2rem' }}>
         {formatMinutesAgo(hhiSummary?.fetchedAt ?? summary?.fetchedAt ?? null)}
       </div>
     </div>
@@ -476,7 +476,7 @@ export function SocialDetailBody({ summary, hhiSummary, pw = null }: { summary: 
 
   return (
     <>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginBottom: '0.5rem', lineHeight: 1.5 }}>
         {rawToScoreText(socialScore, normalizedScore)}
       </div>
       <SupportStats items={socialItems} />
@@ -528,21 +528,21 @@ export function SocialIndexCard({
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
-      padding: '1rem 0.9rem 0.9rem', background: COLOR.panelRaised, border: `1px solid ${COLOR.line}`, borderRadius: '5px',
+      padding: '1rem 0.9rem 0.9rem', background: CV.panelRaised, border: `1px solid ${CV.line}`, borderRadius: '5px',
     }}>
-      <Gauge value={normalizedScore} color={tone.color} />
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: COLOR.ink }}>{dimensionOf('social')!.label}</div>
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: COLOR.steelDim }}>
+      <Gauge value={normalizedScore} color={themedColor(tone.color)} />
+      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: CV.ink }}>{dimensionOf('social')!.label}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.62rem', color: CV.steelDim }}>
         {showEmpty ? (summary?.status === 'error' ? '暫時無法取得資料' : '近 14 天沒有日記可供觀測') : tone.label}
       </div>
-      {stale && <div style={{ fontSize: '0.62rem', color: COLOR.warn }}>資料已超過 36 小時未更新</div>}
+      {stale && <div style={{ fontSize: '0.62rem', color: CV.warn }}>資料已超過 36 小時未更新</div>}
       {distinctPersonCount === 0 && !showEmpty && (
-        <div style={{ fontSize: '0.62rem', color: COLOR.steel, textAlign: 'center' }}>這兩週有寫日記，但沒有和家人朋友的互動紀錄——真實的 0 分</div>
+        <div style={{ fontSize: '0.62rem', color: CV.steel, textAlign: 'center' }}>這兩週有寫日記，但沒有和家人朋友的互動紀錄——真實的 0 分</div>
       )}
       {personNames && personNames.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'center', marginTop: '0.2rem' }}>
           {personNames.map(name => (
-            <span key={name} style={{ fontSize: '0.62rem', color: COLOR.steel, background: COLOR.panelDeep, border: `1px solid ${COLOR.line}`, borderRadius: '999px', padding: '2px 8px' }}>{name}</span>
+            <span key={name} style={{ fontSize: '0.62rem', color: CV.steel, background: CV.panelDeep, border: `1px solid ${CV.line}`, borderRadius: '999px', padding: '2px 8px' }}>{name}</span>
           ))}
         </div>
       )}
@@ -556,7 +556,7 @@ export function SocialIndexCard({
           )}
         </div>
       )}
-      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: COLOR.steelDim, marginTop: '0.2rem' }}>
+      <div style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.steelDim, marginTop: '0.2rem' }}>
         {formatMinutesAgo(summary?.fetchedAt ?? null)}
       </div>
     </div>

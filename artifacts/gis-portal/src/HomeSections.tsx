@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { COLOR } from './theme'
+import { CV, inkMix, themedColor } from './theme'
 import type { HhiBreakdown } from './boardView'
 import type { IdeaItem } from './boardApi'
 import { categoryColor } from './ideasView'
@@ -24,7 +24,7 @@ import { HomeCard } from './HomeCard'
 
 type Tone = (score: number) => { color: string; label: string }
 
-const LAMP: Record<SystemLight['level'], string> = { ok: COLOR.ok, warn: COLOR.warn, crit: COLOR.crit, unknown: COLOR.steelDim }
+const LAMP: Record<SystemLight['level'], string> = { ok: CV.ok, warn: CV.warn, crit: CV.crit, unknown: CV.steelDim }
 
 // ── ① 今天 ────────────────────────────────────
 type WantEntry = { name: string; kind: Parameters<typeof statusLabelFor>[0]; area: string | null; days: number }
@@ -55,7 +55,7 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
   const drag = breakdown && scoreVisible ? biggestDrag(breakdown.rows) : null
   const dragMeta = drag ? dimensionOf(drag.key) : undefined
   const dragGap = drag && drag.value !== null ? Math.round(((100 - drag.value) * drag.weightPct) / 10) / 10 : null
-  const sysColor = system ? LAMP[system.level] : COLOR.steelDim
+  const sysColor = system ? LAMP[system.level] : CV.steelDim
   const tone = breakdown ? toneOf(breakdown.displayed) : null
   const d = trend?.delta ?? null
   return (
@@ -67,14 +67,14 @@ export function TodaySection({ greetingText, part, dateLabel, st, breakdown, tre
           {breakdown && tone && (
             <div className="hm-today-body">
               <button type="button" className="hm-score" onClick={onOpen} aria-label={`幸福指數 ${breakdown.displayed}，${tone.label}，點開看詳情`}>
-                <span className="hm-score-n" style={{ color: tone.color }}>{shown ?? breakdown.displayed}</span>
+                <span className="hm-score-n" style={{ color: themedColor(tone.color) }}>{shown ?? breakdown.displayed}</span>
                 <span className="hm-score-of">/100</span>
               </button>
               <div className="hm-today-text">
                 <div className="hm-score-meta">
-                  <span className="hm-tone" style={{ color: tone.color }}>{tone.label}</span>
+                  <span className="hm-tone" style={{ color: themedColor(tone.color) }}>{tone.label}</span>
                   {trendNote === null && d !== null && (
-                    <span className="hm-delta" style={{ color: d > 0 ? COLOR.ok : d < 0 ? COLOR.concern : COLOR.steelDim }} title="與昨天的差">
+                    <span className="hm-delta" style={{ color: d > 0 ? CV.ok : d < 0 ? CV.concern : CV.steelDim }} title="與昨天的差">
                       {d > 0 ? `▲ ${d}` : d < 0 ? `▼ ${-d}` : '— 持平'}
                     </span>
                   )}
@@ -140,7 +140,7 @@ function DimSpark({ series }: { series: DimSeries }) {
         <i className="hm-spark-end" style={pct(g.end)} />
       </span>
       {d !== null && (
-        <span className="hm-spark-delta" style={{ color: d > 0 ? COLOR.ok : d < 0 ? COLOR.concern : COLOR.steelDim }} title="最後一個值與前一天的差">
+        <span className="hm-spark-delta" style={{ color: d > 0 ? CV.ok : d < 0 ? CV.concern : CV.steelDim }} title="最後一個值與前一天的差">
           {d > 0 ? `▲ ${d}` : d < 0 ? `▼ ${-d}` : '— 0'}
         </span>
       )}
@@ -470,9 +470,9 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
               return (
                 <li key={it.id}>
                   <button type="button" className="hm-idea" onClick={onOpenIdeas} title={it.scoreWhy.join('\n')}>
-                    <span className="hm-idea-rank" style={{ color: i === 0 ? COLOR.amber : COLOR.steel }}>{i + 1}</span>
+                    <span className="hm-idea-rank" style={{ color: i === 0 ? CV.amber : CV.steel }}>{i + 1}</span>
                     <span className="hm-idea-title">{it.status === 'doing' && <span aria-label="進行中">🚀 </span>}{it.title}</span>
-                    <span className="hm-cat" style={{ color: c, borderColor: c }}>{it.category ?? '未分類'}</span>
+                    <span className="hm-cat" style={{ color: inkMix(c), borderColor: c }}>{it.category ?? '未分類'}</span>
                     <span className="hm-idea-score">{it.score?.toFixed(1) ?? '—'}</span>
                   </button>
                 </li>
@@ -540,7 +540,7 @@ export function SystemSection({ st, light, onOpen, onRequestUnlock }: {
         </button>
         {alert && light.reasons.length > 1 && (
           <ul className="hm-reasons">
-            {light.reasons.slice(1, 4).map((r, i) => <li key={i} style={{ color: r.level === 'crit' ? COLOR.crit : COLOR.warn }}>{r.text}</li>)}
+            {light.reasons.slice(1, 4).map((r, i) => <li key={i} style={{ color: r.level === 'crit' ? CV.crit : CV.warn }}>{r.text}</li>)}
           </ul>
         )}
       </StateFrame>
