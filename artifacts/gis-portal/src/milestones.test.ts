@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
 import {
-  dayNames, averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseDailyLife, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
+  dayNames, verdict, averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseDailyLife, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
   type TasksDone,
 } from './milestones'
 
@@ -190,5 +190,36 @@ describe('buildMilestones', () => {
     expect(m.current).toMatchObject({ total: 1, ideasNew: 1, noTasks: true })
     expect(m.trend).toHaveLength(12)
     expect(m.tasksSince).toBeNull()
+  })
+})
+
+describe('verdict（成果評語）', () => {
+  const prior = (n: number, since = '2026-10-12') => Object.fromEntries(Array.from({ length: 13 }, (_, i) => [`2026-10-${String(12 + i).padStart(2, '0')}`, n]).filter(([d]) => d >= since)) as Record<string, number>
+  const day = (ideas: IdeaItem[], t: TasksDone | null, today = TODAY) => buildMilestones(ideas, t, 'day', ['2026-10-25', '2026-10-25'], today)!
+  it('偏高：列出差最多的前 2 項', () => {
+    const v = verdict(day([idea('a', '2026-10-25')], tasks({ ...prior(2), '2026-10-25': 5 })))
+    expect(v).toEqual({ tone: 'high', text: '偏高：比近 13 天平均多 4，主要是完成任務多 3、新想法多 1' })
+  })
+  it('偏低：本期為 0 寫「沒有…」，不為 0 寫「少 X」', () => {
+    expect(verdict(day([], tasks(prior(4))))).toEqual({ tone: 'low', text: '偏低：比近 13 天平均少 4，主要是沒有完成任務' })
+    expect(verdict(day([], tasks({ ...prior(4), '2026-10-25': 1 })))).toEqual({ tone: 'low', text: '偏低：比近 13 天平均少 3，主要是完成任務少 3' })
+  })
+  it('正常：差不多，差都不到 0.5 不寫理由', () => {
+    expect(verdict(day([], tasks({ ...prior(2), '2026-10-25': 2 })))).toEqual({ tone: 'normal', text: '正常：和近 13 天平均差不多' })
+  })
+  it('正常但有小差：接最大的一項', () => {
+    expect(verdict(day([], tasks({ ...prior(10), '2026-10-25': 9 })))?.text).toBe('正常：和近 13 天平均差不多，完成任務少 1')
+  })
+  it('avg 為 null 回 null', () => {
+    expect(verdict(day([], tasks({ '2026-10-25': 3 })))).toBeNull()
+  })
+  it('本期整段在任務資料之前（noTasks）：跳過任務，只看想法', () => {
+    const ideas = Array.from({ length: 13 }, (_, i) => idea(`i${i}`, `2026-10-${String(12 + i).padStart(2, '0')}`))
+    const v = verdict(day(ideas, tasks({ '2026-10-30': 1 }, '2026-10-30')))
+    expect(v).toEqual({ tone: 'low', text: '偏低：比近 13 天平均少 1，主要是沒有新想法' })
+  })
+  it('本期還沒結束加註', () => {
+    const v = verdict(day([], tasks(prior(3, '2026-10-12')), '2026-10-24'))
+    expect(v?.text).toMatch(/^偏低：.*（還沒結束）$/)
   })
 })

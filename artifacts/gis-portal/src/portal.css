@@ -1426,6 +1426,9 @@ a.hm-glance-item:hover, button.hm-glance-item:hover { background: var(--c-hover)
 .ms-total b { font-size: 2rem; line-height: 1.1; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
 .ms-total-d { font-size: 0.72rem; color: var(--c-ink-2); }
 .ms-total-d[data-tone='up'] { color: var(--c-ok); }
+.ms-verdict { margin: 0.2rem 0 0; font-size: 0.76rem; line-height: 1.4; color: var(--c-ink-2); }
+.ms-verdict[data-tone='high'] { color: var(--c-ok); }
+.ms-verdict[data-tone='low'] { color: var(--c-warn); }
 .ms-part { border-left: 3px solid var(--ms-k); }
 .ms-part b { font-size: 1.4rem; line-height: 1.15; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--c-ink); }
 .ms-part b small { font-size: 0.7rem; margin-left: 0.2rem; color: var(--c-ink-2); font-family: inherit; }

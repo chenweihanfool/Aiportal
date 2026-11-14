@@ -305,3 +305,38 @@ export function buildMilestones(ideas: readonly IdeaItem[], tasks: TasksDone | n
     badges: badges(level, trend, streak, longest, road), tasksSince: ix.tasksSince,
   }
 }
+
+// ── 成果評語（2026-11-14）：這期成果比近幾期平均高或低，主要差在哪幾項 ──
+const ZERO_PHRASE: Record<PartKey, string> = {
+  tasks: '沒有完成任務', ideasNew: '沒有新想法', ideasDone: '沒有想法實行', social: '沒見家人朋友', newPlaces: '沒去新店', tripDay: '沒旅行', workout: '沒運動',
+}
+const fmt = (n: number) => String(Math.round(n * 10) / 10)
+
+export interface Verdict { tone: 'high' | 'normal' | 'low'; text: string }
+
+/** 平均不足（avg 為 null）回 null。差值小於 max(1, 平均×0.2) 算正常；理由取與方向相同、差最多的前 2 項（正常取 1 項，差都不到 0.5 不寫）。 */
+export function verdict(m: Milestones): Verdict | null {
+  if (m.avg === null) return null
+  const cur = m.current
+  const diff = cur.total - m.avg
+  const tone: Verdict['tone'] = Math.abs(diff) < Math.max(1, m.avg * 0.2) ? 'normal' : diff > 0 ? 'high' : 'low'
+  const others = m.trend.slice(0, -1).filter((b) => b.total > 0)
+  const deltas = PARTS
+    .filter((p) => !(p.key === 'tasks' && cur.noTasks))
+    .map((p) => ({ p, delta: cur[p.key] - others.reduce((s, b) => s + b[p.key], 0) / others.length }))
+  const pick = (tone === 'normal' ? deltas : deltas.filter((d) => (tone === 'high' ? d.delta > 0 : d.delta < 0)))
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, tone === 'normal' ? 1 : 2)
+    .filter((d) => tone !== 'normal' || Math.abs(d.delta) >= 0.5)
+  const phrase = (d: { p: (typeof PARTS)[number]; delta: number }, zeroOk: boolean) =>
+    zeroOk && d.delta < 0 && cur[d.p.key] === 0 ? ZERO_PHRASE[d.p.key] : `${d.p.label}${d.delta > 0 ? '多' : '少'} ${fmt(Math.abs(d.delta))}`
+  const span = `近 ${m.trend.length - 1} ${UNIT_WORD[m.level]}平均`
+  const tail = cur.partial ? '（還沒結束）' : ''
+  let text: string
+  if (tone === 'normal') {
+    text = `正常：和${span}差不多${pick.length > 0 ? `，${phrase(pick[0], false)}` : ''}`
+  } else {
+    text = `${tone === 'high' ? '偏高' : '偏低'}：比${span}${tone === 'high' ? '多' : '少'} ${fmt(Math.abs(diff))}${pick.length > 0 ? `，主要是${pick.map((d) => phrase(d, true)).join('、')}` : ''}`
+  }
+  return { tone, text: text + tail }
+}
