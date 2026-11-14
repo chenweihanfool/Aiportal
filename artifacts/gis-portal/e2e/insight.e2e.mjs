@@ -293,7 +293,8 @@ try {
     const { ctx, page } = await open({ width: 360, height: 740 })
     await page.waitForSelector('[data-testid="insight-leaf"]')
     check(`${T}：無橫向捲動`, await noHScroll(page))
-    check(`${T}：群清單在樹的下方（單欄）、群標籤縮小不壓葉`, await page.evaluate(() => { const t = document.querySelector('.it-stage').getBoundingClientRect(), s = document.querySelector('.it-side').getBoundingClientRect(); return s.top >= t.bottom - 1 && document.querySelectorAll('[data-testid="insight-cap"]').length >= 1 }))
+    // 手機上標籤放不下就縮成色點（使用者要的「自動隱藏、點清單才放大」），所以每群要有膠囊或色點其一
+    check(`${T}：群清單在樹的下方（單欄）、每群都有膠囊或色點`, await page.evaluate(() => { const t = document.querySelector('.it-stage').getBoundingClientRect(), s = document.querySelector('.it-side').getBoundingClientRect(); const n = document.querySelectorAll('[data-testid="insight-cap"]').length + document.querySelectorAll('[data-testid="insight-dot"]').length; return s.top >= t.bottom - 1 && n >= 1 }))
     check(`${T}：樹寬度自適應（svg 不超出容器）`, await page.evaluate(() => { const s = document.querySelector('.it-svg').getBoundingClientRect(), r = document.querySelector('.it-root').getBoundingClientRect(); return s.right <= r.right + 1 && s.left >= r.left - 1 }))
     await page.locator('[data-testid="insight-leaf"]').nth(4).focus()
     await page.keyboard.press('Enter')
