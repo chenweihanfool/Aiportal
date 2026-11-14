@@ -1,8 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { apiFetchInsightDetail, apiFetchInsights } from './insightApi'
 import {
-  PROVENANCE_LABEL, RELATION_LABEL, clusterSummaries, dateToY, focusViewBox, insightIdFromHash, insightStats, layoutInsightTree, leafShape,
-  monthSeries, suggestTreeHeight, taipeiDay, type Insight, type InsightData, type InsightDetail, type InsightLeaf, type InsightLimb, type InsightRelation, type InsightTreeLayout,
+  PROVENANCE_LABEL, RELATION_LABEL, clusterSummaries, focusViewBox, insightIdFromHash, insightStats, layoutInsightTree, leafShape,
+  monthSeries, suggestTreeHeight, taipeiDay, type Insight, type InsightClusterOut, type InsightData, type InsightDetail, type InsightLeaf, type InsightLimb, type InsightRelation, type InsightTreeLayout,
 } from './insightTree'
 import { clusterSlots, paletteColor, type PaletteTheme } from './insightPalette'
 import { useAsync } from './homeHooks'
@@ -14,7 +14,8 @@ import { createPortal } from 'react-dom'
 import { DayReportDialog } from './DayReportDialog'
 import { buildTimelineDayLink } from './timelineLink'
 
-// 首頁「我的心得樹」（2.99.0）：樹高＝時間，心得照日期長成枝葉；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
+// 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
+// 總覽時主題多會自動精簡（葉叢、標籤縮成色點），滑過／聚焦才放大；聚焦一個主題會畫出全部脈絡與沿枝的時間。
 // 排版是純函式（insightTree.ts／insightPalette.ts，有測試），這裡只畫 SVG、群清單側欄與側邊面板。樣式 it- 前綴在 portal.css。
 
 const REPLAY_MS = 6000
@@ -66,7 +67,7 @@ function useTheme(): PaletteTheme {
 const Limb = memo(function Limb({ l, color, lit, dimc, fresh }: { l: InsightLimb; color: string; lit: boolean; dimc: boolean; fresh: boolean }) {
   return (
     <path
-      d={l.d} pathLength={1} data-level={l.level} data-withered={l.withered ? '1' : undefined}
+      d={l.d} pathLength={1} data-level={l.level} data-ci={l.clusterIndex} data-withered={l.withered ? '1' : undefined}
       className={`it-limb${l.withered ? ' it-dead' : ''}${lit ? ' it-lit' : ''}${dimc ? ' it-dimc' : ''}${fresh ? ' it-fresh' : ''}`}
       style={{ fill: l.withered ? undefined : color, color: l.withered ? undefined : color }} />
   )
@@ -80,7 +81,7 @@ const Leaf = memo(function Leaf({ lf, ins, color, lit, dimc, fresh, onOpen, onHo
   return (
     <g
       className={`it-leaf${lf.withered ? ' it-dead' : ''}${lf.glow && !lf.withered ? ' it-glow' : ''}${lit ? ' it-lit' : ''}${dimc ? ' it-dimc' : ''}`} data-relation={lf.relation} data-testid="insight-leaf"
-      role="button" tabIndex={0} aria-label={ins ? `${ins.date} ${ins.text}` : lf.id}
+      role="button" tabIndex={0} aria-label={ins ? `${ins.date} ${ins.text}` : lf.id} data-ci={lf.clusterIndex} data-age={lf.age}
       onClick={() => onOpen(lf.id)} onKeyDown={(e) => onKey(e, lf.id)}
       onMouseEnter={() => onHover(lf.id)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(lf.id)} onBlur={() => onHover(null)}
     >
@@ -94,6 +95,26 @@ const Leaf = memo(function Leaf({ lf, ins, color, lit, dimc, fresh, onOpen, onHo
           </g>
         </g>
       </g>
+    </g>
+  )
+})
+
+/** 主題標籤：放得下就是膠囊；放不下縮成色點，滑過／聚焦／點清單時放大成完整膠囊 */
+const Cap = memo(function Cap({ c, color, open, dimc, on, onPick, onEnter }: { c: InsightClusterOut; color: string; open: boolean; dimc: boolean; on: boolean; onPick: () => void; onEnter: () => void }) {
+  return (
+    <g className={`it-cap${dimc ? ' it-dimc' : ''}${on ? ' it-cap-on' : ''}${open ? '' : ' it-cap-dotmode'}`} style={{ color }} role="button" tabIndex={0}
+      aria-label={`${c.name} ${c.count} 則，點一下聚焦這個主題`} aria-pressed={on} data-testid={open ? 'insight-cap' : 'insight-dot'}
+      onClick={onPick} onFocus={onEnter} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick() } }}>
+      <circle className="it-tipdot" cx={c.x} cy={c.y} r={open ? 2.6 : 5.5} />
+      {!open && <circle className="it-cap-hit" cx={c.x} cy={c.y} r={11} />}
+      {open && (
+        <>
+          <rect className="it-cap-bg" x={c.lx - c.lw / 2} y={c.ly - c.lh / 2} width={c.lw} height={c.lh} rx={c.lh / 2} />
+          <circle className="it-cap-dot" cx={c.lx - c.lw / 2 + 10} cy={c.ly} r={3.6} />
+          <text className="it-cap-t" x={c.lx - c.lw / 2 + 19} y={c.ly + 4}>{c.text}</text>
+          {c.showCount && <text className="it-cap-n" x={c.lx + c.lw / 2 - 9} y={c.ly + 4} textAnchor="end">{c.count}</text>}
+        </>
+      )}
     </g>
   )
 })
@@ -136,7 +157,14 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
   const [hover, setHover] = useState<string | null>(null)
   const [upto, setUpto] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [focus, setFocus] = useState<number | null>(null)
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const [capHover, setCapHover] = useState<number | null>(null)
+  const [vh, setVh] = useState<number>(() => (typeof window === 'undefined' ? 900 : window.innerHeight))
+  useEffect(() => {
+    const f = () => setVh(window.innerHeight)
+    window.addEventListener('resize', f)
+    return () => window.removeEventListener('resize', f)
+  }, [])
   const idxRef = useRef(0)
 
   // #insight/<id>（搜尋、釘選、推送卡的連結）→ 打開那一則的面板
@@ -149,17 +177,18 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
 
   const day = taipeiDay(now)
   const months = useMemo(() => (data ? monthSeries(data, now) : []), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
-  const height = suggestTreeHeight(width, data?.insights.length ?? 0, months.length)
+  const height = suggestTreeHeight(width, vh)
   const layout: InsightTreeLayout | null = useMemo(
-    () => (data && hasTree ? layoutInsightTree(data, { width, height, now, upto: upto ?? undefined }) : null),
-    [data, hasTree, width, height, day, upto], // eslint-disable-line react-hooks/exhaustive-deps
+    () => (data && hasTree ? layoutInsightTree(data, { width, height, now, upto: upto ?? undefined, focus: focusId }) : null),
+    [data, hasTree, width, height, day, upto, focusId], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const stats = useMemo(() => (data ? insightStats(data, now) : null), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const summaries = useMemo(() => (data ? clusterSummaries(data, now) : []), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((data?.insights ?? []).map((i) => [i.id, i])), [data])
-  const slots = useMemo(() => clusterSlots((layout?.clusters ?? []).map((c) => c.id)), [layout?.clusters.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const slots = useMemo(() => clusterSlots((data?.insights ?? []).length === 0 ? [] : [...new Set([...(data?.clusters ?? []).map((c) => c.id), ...(data?.insights ?? []).map((i) => i.cluster)])]), [data]) // eslint-disable-line react-hooks/exhaustive-deps
   const slotOf = (cid: string): number => slots.get(cid) ?? 0
   const clusterIdx = useMemo(() => new Map((layout?.clusters ?? []).map((c, i) => [c.id, i])), [layout])
+  const focus: number | null = focusId !== null && layout && clusterIdx.has(focusId) && layout.clusters[clusterIdx.get(focusId)!]!.count > 0 ? clusterIdx.get(focusId)! : null
 
   // ── 重播：約 6 秒逐月推進到今天（枝逐段描邊長出、葉子彈出）──
   const endTimer = useRef<number | null>(null)
@@ -231,7 +260,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
   }, [target]) // eslint-disable-line react-hooks/exhaustive-deps
-  const toggleFocus = (ci: number) => setFocus((f) => (f === ci ? null : ci))
+  const toggleFocus = (ci: number) => { const id = layout?.clusters[ci]?.id ?? null; setFocusId((f) => (f === id ? null : id)) }
 
   const closePanel = useCallback(() => {
     setSelected(null)
@@ -252,9 +281,9 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
   const lit = useMemo<ReadonlySet<string>>(() => (hovered ? new Set(hovered.path) : EMPTY_SET), [hovered])
   const view = vb ?? { x: 0, y: 0, w: layout?.width ?? width, h: layout?.height ?? height }
   const scale = layout ? layout.width / view.w : 1
-  const sy = (y: number): number => (y - view.y) * scale // 版面座標的高度 → 螢幕座標
-  const col = (ci: number, shade = 0): string => paletteColor(slotOf(layout?.clusters[ci]?.id ?? ''), theme, shade)
+  const col = (ci: number, shade = 0, age = 0): string => paletteColor(slotOf(layout?.clusters[ci]?.id ?? ''), theme, shade, age)
   const year = day.slice(0, 4)
+  const focusC = focus !== null && layout ? layout.clusters[focus] ?? null : null
   const maxBar = Math.max(1, ...summaries.flatMap((s) => s.months))
 
   return (
@@ -279,57 +308,52 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
               <div className="it-stage" ref={stageRef} style={{ height: layout.height }}>
                 <svg
                   className={`it-svg${hovered ? ' it-hl' : ''}${focus !== null ? ' it-fx' : ''}`} viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-                  width={layout.width} height={layout.height} role="group" aria-label="我的心得樹：樹越高越新" data-focus={focus ?? undefined}
+                  width={layout.width} height={layout.height} role="group" aria-label="我的心得樹：一棵樹是我的人生，每條主枝是一個主題，越外越新" data-focus={focus ?? undefined}
+                  onMouseOver={(e) => { const t = (e.target as Element).closest?.('[data-ci]'); const v = t ? Number(t.getAttribute('data-ci')) : null; setCapHover((o) => (o === v ? o : v)) }}
+                  onMouseLeave={() => setCapHover(null)}
+                  onClick={(e) => { const t = (e.target as Element).closest?.('path.it-limb[data-level="cluster"]'); if (t) toggleFocus(Number(t.getAttribute('data-ci'))) }}
                 >
                   <defs>
-                    <linearGradient id="it-trunk-g" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={layout.axis.ground} y2={layout.axis.top}>
+                    <linearGradient id="it-trunk-g" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={layout.axis.ground} y2={layout.axis.trunkTop}>
                       <stop offset="0" className="it-trunk-s0" />
                       <stop offset="1" className="it-trunk-s1" />
                     </linearGradient>
                     <radialGradient id="it-ground-g"><stop offset="0" className="it-ground-s0" /><stop offset="1" className="it-ground-s1" /></radialGradient>
                     <linearGradient id="it-hline-g" x1="0" x2="1" y1="0" y2="0"><stop offset="0" className="it-hline-s1" /><stop offset="0.5" className="it-hline-s0" /><stop offset="1" className="it-hline-s1" /></linearGradient>
                   </defs>
-                  {/* 地面：帶柔光的地平線 */}
-                  <ellipse className="it-ground" cx={layout.width / 2 + 20} cy={layout.axis.ground + 2} rx={layout.width * 0.46} ry={14} fill="url(#it-ground-g)" />
-                  <rect x={layout.axis.x + 6} y={layout.axis.ground} width={layout.width - layout.axis.x - 12} height={1.4} fill="url(#it-hline-g)" />
+                  {/* 地面：帶柔光的地平線（沒有時間刻度：主枝在樹幹上的先後是出現的順序，時間沿著每條主枝往外走） */}
+                  <ellipse className="it-ground" cx={layout.axis.cx} cy={layout.axis.ground + 2} rx={layout.width * 0.46} ry={14} fill="url(#it-ground-g)" />
+                  <rect x={6} y={layout.axis.ground} width={layout.width - 12} height={1.4} fill="url(#it-hline-g)" />
                   <path className="it-trunk" d={layout.trunk.d} fill="url(#it-trunk-g)" />
                   {layout.limbs.map((l) => {
                     const ci = l.clusterIndex ?? 0
                     let color = col(ci, l.shade ?? 0)
-                    if (l.level === 'cluster') { const k = Number(l.id.slice(l.id.lastIndexOf('#') + 1)); color = `color-mix(in srgb, ${col(ci)} ${40 + 15 * k}%, var(--it-trunk1))` }
+                    if (l.level === 'cluster') { const k = Number(l.id.slice(l.id.lastIndexOf('#') + 1)); color = `color-mix(in srgb, ${col(ci)} ${40 + 20 * k}%, var(--it-trunk1))` }
                     return <Limb key={l.id} l={l} color={color} lit={lit.has(l.id)} dimc={focus !== null && ci !== focus} fresh={fresh.has(l.id)} />
                   })}
-                  {layout.clusters.map((c, ci) => c.count > 0 && c.labelShown && (
-                    <g key={c.id} className={`it-cap${focus !== null && ci !== focus ? ' it-dimc' : ''}${focus === ci ? ' it-cap-on' : ''}`} style={{ color: col(ci) }} role="button" tabIndex={0}
-                      aria-label={`${c.name} ${c.count} 則，點一下聚焦這一群`} aria-pressed={focus === ci} data-testid="insight-cap"
-                      onClick={() => toggleFocus(ci)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFocus(ci) } }}>
-                      {c.leader && <line className="it-leader" x1={c.x} y1={c.y} x2={c.lx} y2={c.ly} />}
-                      <circle className="it-tipdot" cx={c.x} cy={c.y} r={2.6} />
-                      <rect className="it-cap-bg" x={c.lx - c.lw / 2} y={c.ly - c.lh / 2} width={c.lw} height={c.lh} rx={c.lh / 2} />
-                      <circle className="it-cap-dot" cx={c.lx - c.lw / 2 + 10} cy={c.ly} r={3.6} />
-                      <text className="it-cap-t" x={c.lx - c.lw / 2 + (c.abbr ? 17 : 19)} y={c.ly + 4}>{c.text}</text>
-                      {c.showCount && <text className="it-cap-n" x={c.lx + c.lw / 2 - 9} y={c.ly + 4} textAnchor="end">{c.count}</text>}
+                  {focusC && focusC.ticks.map((t, k) => (
+                    <g key={`${t.label}${k}`} className="it-btick" data-testid="insight-btick" style={{ color: col(focus!) }}>
+                      <circle cx={t.x} cy={t.y - 9 / scale} r={2 / scale} />
+                      <text x={t.x} y={t.y + 3 / scale} textAnchor="middle" fontSize={11 / scale}>{t.label}</text>
+                    </g>
+                  ))}
+                  {layout.clumps.map((cl) => (
+                    <g key={cl.id} className={`it-clump${focus !== null && cl.clusterIndex !== focus ? ' it-dimc' : ''}`} data-testid="insight-clump" data-ci={cl.clusterIndex} role="button" tabIndex={0}
+                      aria-label={`${layout.clusters[cl.clusterIndex]?.name ?? ''} 另有 ${cl.count} 則，點一下聚焦這一群看全部`} style={{ color: col(cl.clusterIndex) }}
+                      onClick={() => toggleFocus(cl.clusterIndex)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFocus(cl.clusterIndex) } }}>
+                      <circle className="it-clump-c" cx={cl.x} cy={cl.y} r={cl.r} />
+                      <text className="it-clump-t" x={cl.x} y={cl.y + 4} textAnchor="middle">{cl.count}</text>
                     </g>
                   ))}
                   {layout.leaves.map((lf) => (
-                    <Leaf key={lf.id} lf={lf} ins={byId.get(lf.id)} color={col(lf.clusterIndex, lf.shade)} lit={lit.has(lf.id) && hovered?.id === lf.id}
+                    <Leaf key={lf.id} lf={lf} ins={byId.get(lf.id)} color={col(lf.clusterIndex, lf.shade, lf.age)} lit={lit.has(lf.id) && hovered?.id === lf.id}
                       dimc={focus !== null && lf.clusterIndex !== focus} fresh={fresh.has(lf.id)} onOpen={open} onHover={setHover} onKey={onLeafKey} />
                   ))}
-                </svg>
-                {/* 時間刻度（年輪）畫在螢幕座標上：聚焦放大時刻度文字不會跟著被裁掉或放大，只是高度跟著對應日期移動 */}
-                <svg className="it-axis-svg" width={layout.width} height={layout.height} viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden focusable="false">
-                  <rect className="it-gutter" x={0} y={0} width={layout.axis.x + 3} height={layout.height} />
-                  <g className="it-axis">
-                    <line x1={layout.axis.x} x2={layout.axis.x} y1={Math.max(0, sy(layout.axis.top))} y2={Math.min(layout.height, sy(layout.axis.ground))} />
-                    {layout.ticks.filter((t) => sy(t.y) > 8 && sy(t.y) < layout.height - 6).map((t) => (
-                      <g key={`${t.label}${t.y}`} className={t.major ? 'it-tick it-tick-major' : 'it-tick'}>
-                        <line className="it-ref" x1={layout.axis.x} x2={layout.width - 10} y1={sy(t.y)} y2={sy(t.y)} />
-                        <line x1={layout.axis.x - 4} x2={layout.axis.x} y1={sy(t.y)} y2={sy(t.y)} />
-                        <text x={layout.axis.x - 7} y={sy(t.y) + 3.5} textAnchor="end">{layout.compact && !t.major ? t.label.slice(2) : t.label}</text>
-                      </g>
-                    ))}
-                  </g>
-                  {upto && <text className="it-bigmonth" x={layout.axis.x + 12} y={Math.min(layout.height - 8, Math.max(24, sy(dateToY(layout.axis, `${upto}-28`)) - 6))}>{upto}</text>}
+                  {layout.clusters.map((c, ci) => c.count > 0 && (
+                    <Cap key={c.id} c={c} color={col(ci)} open={c.labelShown || capHover === ci || focus === ci} dimc={focus !== null && ci !== focus} on={focus === ci}
+                      onPick={() => toggleFocus(ci)} onEnter={() => setCapHover(ci)} />
+                  ))}
+                  {upto && <text className="it-bigmonth" x={16} y={36}>{upto}</text>}
                 </svg>
                 {hovered && hoveredIns && (
                   <div className="it-tip" role="tooltip" data-testid="insight-tip"
@@ -352,6 +376,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                   <li><LegendLeaf relation="refine" />修正</li>
                   <li><LegendLeaf relation="overturn" />推翻</li>
                   <li><span className="it-lg-glow" aria-hidden />近 30 天發光</li>
+                  <li><span className="it-lg-age" aria-hidden />越舊越深沉</li>
                 </ul>
               </div>
             </div>
@@ -361,7 +386,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
               </p>
               <ul className="it-rows" data-testid="insight-rows">
                 <li>
-                  <button type="button" className={`it-row it-row-all${focus === null ? ' it-row-on' : ''}`} data-testid="insight-all" aria-pressed={focus === null} onClick={() => setFocus(null)}>
+                  <button type="button" className={`it-row it-row-all${focus === null ? ' it-row-on' : ''}`} data-testid="insight-all" aria-pressed={focus === null} onClick={() => setFocusId(null)}>
                     <span className="it-row-name">全部</span><span className="it-row-n">{stats.total}</span>
                   </button>
                 </li>

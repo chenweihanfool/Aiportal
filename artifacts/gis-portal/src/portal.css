@@ -2315,7 +2315,9 @@ button.ms-col { cursor: pointer; }
 /* ─── 首頁新版三塊（2.88.0）：搜尋框｜現在用得上｜STATUS 右欄。class 一律 st- 開頭；顏色只用全站 --c-* token（2.89.0 起不再重複宣告 --nw-*）。 ─── */
 .st-root { min-width: 0; color: var(--c-ink); font-family: var(--font-body); }
 .st-root a:focus-visible, .st-root button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 6px; }
-.st-home { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+/* 3.0.0：心得樹占滿整列寬度，STATUS 儀表板移到樹的下方（桌機橫排成多欄） */
+.st-home { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.st-home > .st-aside { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); align-items: start; }
 .st-home > * { min-width: 0; }
 .st-home > .nw-root { margin: 0; }
 
@@ -2522,8 +2524,6 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 @container (max-width: 640px) { .it-body { grid-template-columns: minmax(0, 1fr); } }
 .it-stage { position: relative; width: 100%; min-width: 0; }
 .it-svg { display: block; max-width: 100%; overflow: hidden; border-radius: var(--r-md); }
-.it-axis-svg { position: absolute; left: 0; top: 0; pointer-events: none; max-width: 100%; }
-.it-gutter { fill: var(--c-surface); opacity: 0.9; }
 
 /* 地面、時間刻度 */
 .it-trunk-s0 { stop-color: var(--it-trunk0); }
@@ -2532,12 +2532,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-ground-s1 { stop-color: var(--c-accent); stop-opacity: 0; }
 .it-hline-s0 { stop-color: var(--c-accent); stop-opacity: 0.55; }
 .it-hline-s1 { stop-color: var(--c-accent); stop-opacity: 0; }
-.it-axis line { stroke: var(--c-ink-3); stroke-width: 1; opacity: 0.55; }
-.it-axis .it-ref { stroke-dasharray: 2 5; opacity: 0.16; }
-.it-axis text { font: 10px var(--font-mono); fill: var(--c-ink-3); }
-.it-tick-major text { font-weight: 700; fill: var(--c-ink-2); }
-.it-tick-major .it-ref { opacity: 0.28; }
-.it-bigmonth { font: 700 22px var(--font-mono); fill: var(--c-accent-ink); opacity: 0.45; pointer-events: none; }
+.it-bigmonth { font: 700 26px var(--font-mono); fill: var(--c-accent-ink); opacity: 0.45; pointer-events: none; }
 
 /* 枝：填色輪廓（由粗到細），細描邊遮住分段接縫 */
 .it-trunk { stroke: var(--it-trunk1); stroke-width: 0.6; stroke-linejoin: round; }
@@ -2547,7 +2542,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-hl .it-trunk { opacity: 0.45; }
 .it-hl .it-limb.it-lit { opacity: 1; stroke-width: 1.4; } /* 不用 drop-shadow：第一次滑過時濾鏡要整片重繪，會有遲滯 */
 .it-fx .it-dimc { opacity: 0.25; }
-.it-fx .it-cap.it-dimc { opacity: 0.35; }
+.it-fx .it-cap.it-dimc, .it-fx .it-clump.it-dimc { opacity: 0.35; }
 
 /* 葉：形狀依關係，顏色＝群色（同群不同脈絡深淺不同）；枯葉灰色 */
 .it-leaf { cursor: pointer; outline: none; transition: opacity 0.12s; }
@@ -2565,6 +2560,16 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-cap-bg { fill: var(--c-surface); stroke: currentColor; stroke-width: 1; opacity: 0.94; }
 .it-cap:hover .it-cap-bg, .it-cap-on .it-cap-bg { fill: color-mix(in srgb, currentColor 14%, var(--c-surface)); stroke-width: 1.6; }
 .it-cap-dot, .it-tipdot { fill: currentColor; }
+.it-cap-dotmode .it-tipdot { stroke: var(--c-surface); stroke-width: 1.2; }
+.it-cap-hit { fill: transparent; }
+.it-btick text { font-family: var(--font-mono); font-weight: 700; fill: var(--c-ink-2); paint-order: stroke; stroke: var(--c-surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.it-btick circle { fill: currentColor; opacity: 0.8; }
+.it-clump { cursor: pointer; outline: none; transition: opacity 0.2s; }
+.it-clump-c { fill: color-mix(in srgb, currentColor 22%, var(--c-surface)); stroke: currentColor; stroke-width: 1.4; stroke-dasharray: 3 2; }
+.it-clump:hover .it-clump-c, .it-clump:focus-visible .it-clump-c { fill: color-mix(in srgb, currentColor 36%, var(--c-surface)); }
+.it-clump-t { font: 700 11px var(--font-mono); fill: var(--c-ink); pointer-events: none; }
+.it-clump:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.it-lg-age { width: 22px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--c-accent), color-mix(in srgb, var(--c-accent) 45%, var(--c-bg))); }
 .it-cap-t { font: 600 12px var(--font-body); fill: var(--c-ink); }
 .it-cap-n { font: 11px var(--font-mono); fill: var(--c-ink-3); }
 .it-leader { stroke: currentColor; stroke-width: 1; opacity: 0.6; stroke-dasharray: 2 2; }
