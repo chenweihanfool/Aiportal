@@ -75,6 +75,17 @@ describe("runSearch：多詞 AND 與排序", () => {
     expect(r.groups[1]!.items).toHaveLength(3);
     expect(r.total).toBe(7);
   });
+  it("countOverride：有給的 kind 用 max(命中數, override) 當 count，total 同步；沒給不變", () => {
+    const list = Array.from({ length: 3 }, (_, i) => cand({ kind: "event", id: `e${i}`, title: `鑑界${i}` }));
+    const r = runSearch({ event: list }, ["鑑界"], 5, { event: 500 });
+    expect(r.groups[0]!.count).toBe(500);
+    expect(r.groups[0]!.items).toHaveLength(3);
+    expect(r.total).toBe(500);
+    const same = runSearch({ event: list }, ["鑑界"], 5);
+    expect(same.groups[0]!.count).toBe(3);
+    expect(same.total).toBe(3);
+    expect(runSearch({ event: list }, ["鑑界"], 5, { event: 2 }).groups[0]!.count).toBe(3);
+  });
   it("best：級別最高者；同級依 kind 順序；沒命中為 null", () => {
     const r = runSearch({
       topic: [cand({ kind: "topic", title: "鑑界" })],
@@ -101,6 +112,14 @@ describe("makeSnippet", () => {
   });
   it("最長 200 字", () => {
     expect(makeSnippet("a".repeat(500) + "x".repeat(300), "x".repeat(300)).length).toBeLessThanOrEqual(200);
+  });
+  it("行首 Markdown 標題記號不出現在摘要（含切片從標題開始的情況）", () => {
+    const s1 = makeSnippet("## 標題\n內文 關鍵字 後面", "關鍵字");
+    expect(s1).not.toContain("#");
+    expect(s1).toBe("標題 內文 關鍵字 後面");
+    const s2 = makeSnippet("前文".repeat(30) + "\n### 小節 關鍵字", "關鍵字");
+    expect(s2).not.toContain("#");
+    expect(s2).toContain("小節 關鍵字");
   });
 });
 

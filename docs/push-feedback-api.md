@@ -16,7 +16,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 
 任何一項不合法 → **400** `{message}`。
 
-- `action="shown"`：同一 `(cardKey, forDate)` 已有 shown → **200** `{id: 既有那筆 id}`，不新增；否則新增 → **201** `{id}`。
+- `action="shown"`：同一 `(cardKey, forDate)` 已有 shown → **200** `{id: 既有那筆 id}`，不新增；否則新增 → **201** `{id}`。由資料庫部分唯一索引保證，同時送兩次也只會有一筆。
 - 其他 action 一律新增 → **201** `{id}`。
 
 ## P2 `GET /api/push/feedback?days=<1～90，預設 30>`
