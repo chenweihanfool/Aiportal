@@ -3,7 +3,7 @@
 // 做什麼：本機靜態伺服器提供 dist/public，Playwright 攔截所有 /api/*（只回最小假資料，沒給的端點回 404，各頁顯示自己的空／錯誤狀態），
 // 驗證：深色（系統深色、沒設主題）、淺色（系統淺色＋hm-theme=system）、強制 dark 在系統淺色下仍為深色、強制 light 在系統深色下為淺色；
 // 頂欄的三段切換（data-testid="theme-toggle"）會寫 localStorage hm-theme、設／移除 <html data-theme>；「舊版首頁」開關在頂欄同一排；
-// 每頁（首頁、舊版首頁、知識、關係、關係宇宙、時間軸、美食地圖、遊記、面向頁、架構）× 深／淺各截一張圖到 E2E_SHOTS_DIR，
+// 每頁（首頁、舊版首頁、知識、卷宗、時間軸、美食地圖、遊記、面向頁、架構）× 深／淺各截一張圖到 E2E_SHOTS_DIR，
 // 並檢查：<html> 計算後的 --c-bg 正確、頁面沒有橫向捲動、沒有 pageerror、沒有「看不見的字」（文字色與有效底色的對比 < 1.5:1）。
 //
 // 執行：
@@ -150,7 +150,7 @@ const noHScroll = (page) => page.evaluate(() => document.documentElement.scrollW
 
 // ═══ 3. 每頁 × 深／淺：截圖、橫向捲動、看不見的字 ═══
 const PAGES = [
-  ['home', ''], ['legacy', '#legacy'], ['knowledge', '#knowledge'], ['universe', '#graph'],
+  ['home', ''], ['legacy', '#legacy'], ['knowledge', '#knowledge'], ['dossier', '#dossier'],
   ['timeline', '#graph/timeline'], ['food', '#food'], ['trips', '#trips'], ['dim', '#dim/lifeFreedom'], ['architecture', '#architecture'],
 ]
 for (const [scheme, tag] of [['dark', 'dark'], ['light', 'light']]) {
