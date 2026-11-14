@@ -69,7 +69,8 @@ router.get("/push/pins", async (req: Request, res: Response) => {
 router.post("/push/pins/:id/done", async (req: Request, res: Response) => {
   if (!isAuthorized(req.headers["x-admin-password"])) return res.status(403).json(FORBIDDEN);
   const raw = req.params["id"];
-  if (typeof raw !== "string" || !/^[1-9]\d*$/.test(raw)) return res.status(400).json({ message: "id 必須是正整數" });
+  // 上限＝Postgres integer 最大值；超過的 id 不可能存在，直接 400（否則查詢會丟 500 並洩出 SQL）
+  if (typeof raw !== "string" || !/^[1-9]\d{0,9}$/.test(raw) || Number(raw) > 2147483647) return res.status(400).json({ message: "id 必須是正整數" });
   const [row] = await db
     .update(pushPinTable)
     .set({ doneAt: new Date() })

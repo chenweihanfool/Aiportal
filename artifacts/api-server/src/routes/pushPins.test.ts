@@ -72,7 +72,7 @@ describe("push pins 路由：未授權與參數驗證", () => {
   });
 
   it("POST /push/pins/:id/done id 非正整數回 400", async () => {
-    for (const id of ["abc", "0", "1.5", "-1"]) {
+    for (const id of ["abc", "0", "1.5", "-1", "2147483648", "99999999999"]) {
       expect((await fetch(`${base}/push/pins/${id}/done`, { method: "POST", headers: authed })).status, id).toBe(400);
     }
   });
