@@ -129,17 +129,14 @@ describe("google login + gate", () => {
       expect(await r.json()).toEqual({ authorized: true });
     });
 
-    it("lets a logged-in account through even when the browser also sends a password-unlock session token (admin writes)", async () => {
-      // 管理後台的寫入（新增／編輯網站）帶的是 /auth/verify 換來的 session token：isAuthorized 認得它，
-      // 但登入閘只認原始密碼與 bridge token——以前 bridge 遇到「已授權的標頭」就不轉換，於是被閘擋成 401。
-      const { createSession } = await import("../lib/adminSession");
-      const { token } = createSession();
+    it("lets a logged-in account through even when the browser still sends an old unlock token", async () => {
+      // 舊版前端可能還在 x-admin-password 留著密碼解鎖的值；只要 cookie 有效，bridge 就會覆蓋它。
       const { session } = await loginAs("me@gmail.com");
-      const r = await get("/api/probe", { headers: { cookie: session!, "x-admin-password": token } });
+      const r = await get("/api/probe", { headers: { cookie: session!, "x-admin-password": "some-legacy-token" } });
       expect(r.status).toBe(200);
       expect(await r.json()).toEqual({ authorized: true });
-      // 沒有 Google 登入時，光有 session token 仍然進不來（強制登入的本意不變）
-      expect((await get("/api/probe", { headers: { "x-admin-password": token } })).status).toBe(401);
+      // 沒有 Google 登入時，光有舊 token 仍然進不來（強制登入的本意不變）
+      expect((await get("/api/probe", { headers: { "x-admin-password": "some-legacy-token" } })).status).toBe(401);
     });
 
     it("fails closed when login is required but not configured", async () => {
