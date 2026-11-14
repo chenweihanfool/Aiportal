@@ -2541,16 +2541,16 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 
 /* 枝：填色輪廓（由粗到細），細描邊遮住分段接縫 */
 .it-trunk { stroke: var(--it-trunk1); stroke-width: 0.6; stroke-linejoin: round; }
-.it-limb { stroke: currentColor; stroke-width: 0.6; stroke-linejoin: round; opacity: 0.92; transition: opacity 0.18s; }
+.it-limb { stroke: currentColor; stroke-width: 0.6; stroke-linejoin: round; opacity: 0.92; transition: opacity 0.12s; }
 .it-limb.it-dead { fill: var(--c-ink-3); stroke: var(--c-ink-3); opacity: 0.4; }
 .it-hl .it-limb:not(.it-lit), .it-hl .it-leaf:not(.it-lit) { opacity: 0.2; }
 .it-hl .it-trunk { opacity: 0.45; }
-.it-hl .it-limb.it-lit { opacity: 1; filter: drop-shadow(0 0 3px currentColor); }
+.it-hl .it-limb.it-lit { opacity: 1; stroke-width: 1.4; } /* 不用 drop-shadow：第一次滑過時濾鏡要整片重繪，會有遲滯 */
 .it-fx .it-dimc { opacity: 0.25; }
 .it-fx .it-cap.it-dimc { opacity: 0.35; }
 
 /* 葉：形狀依關係，顏色＝群色（同群不同脈絡深淺不同）；枯葉灰色 */
-.it-leaf { cursor: pointer; outline: none; transition: opacity 0.18s; }
+.it-leaf { cursor: pointer; outline: none; transition: opacity 0.12s; }
 .it-hit { fill: transparent; }
 .it-shape { stroke: var(--c-surface); stroke-width: 0.12; stroke-linejoin: round; }
 .it-leaf.it-dead .it-shape { fill: var(--c-ink-3); opacity: 0.65; }
