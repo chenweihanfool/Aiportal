@@ -2127,6 +2127,8 @@ button.ms-col { cursor: pointer; }
 .kn-ca-stamp { position: absolute; right: 2.6rem; top: 0; padding: 0 var(--sp-2); border: 2px solid var(--c-crit); color: var(--c-crit); background: var(--c-bg); font-size: 13px; font-weight: 800; line-height: 1.5; border-radius: var(--r-sm); rotate: -10deg; pointer-events: none; animation: kn-ca-stamp 0.45s cubic-bezier(0.2, 1.8, 0.4, 1); }
 .kn-ca-stamp[data-kind="fix"] { border-color: var(--c-mint); color: var(--c-mint); }
 .kn-ca-stamp[data-kind="undo"] { border-color: var(--c-ink-2); color: var(--c-ink-2); animation: kn-ca-stamp 0.45s cubic-bezier(0.2, 1.8, 0.4, 1), kn-ca-fade 0.5s ease-out 2.6s forwards; }
+/* 有印章的列替句子讓出右上角（印章浮在 right: 2.6rem，寬約 4.5rem），免得蓋住句尾 */
+.kn-ca-row:has(> .kn-ca-stamp) > .kn-ca-main { padding-right: 5.5rem; }
 .kn-ca-pend { flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0; font-size: 12px; color: var(--c-ink-2); }
 .kn-ca-pend i { width: 8px; height: 8px; border-radius: 50%; background: var(--c-mint); animation: kn-ca-pulse 1.2s infinite; }
 .kn-ca-pend--stuck { color: var(--c-warn); }
@@ -2154,6 +2156,7 @@ button.ms-col { cursor: pointer; }
 }
 @media (max-width: 479px) {
   .kn-ca-stamp { right: 2.2rem; }
+  .kn-ca-row:has(> .kn-ca-stamp) > .kn-ca-main { padding-right: 4.75rem; }
   .kn-ca-pop { right: 0; max-width: calc(100vw - 32px); }
   .kn-ca-pop .kn-ca-item { white-space: normal; }
 }
