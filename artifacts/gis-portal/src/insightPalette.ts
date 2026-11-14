@@ -28,11 +28,17 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${to(r1)}${to(g1)}${to(b1)}`
 }
 
-/** 色盤第 slot 格（0～11）在某主題下的顏色；shade 0～2 是同群不同脈絡的深淺 */
-export function paletteColor(slot: number, theme: PaletteTheme, shade = 0): string {
+/** 葉的新舊（0 近 30 天、1 一年內：原色；2 一～三年：飽和度漸降；3 三年以上：更深更沉穩，仍清楚、不是灰） */
+const AGE_SAT: readonly number[] = [1, 1, 0.68, 0.58]
+const AGE_L: Record<PaletteTheme, readonly number[]> = { dark: [0, 0, -0.05, -0.1], light: [0, 0, -0.02, -0.05] }
+
+/** 色盤第 slot 格（0～11）在某主題下的顏色；shade 0～2 是同群不同脈絡的深淺；age 0～3 是新舊（預設 0） */
+export function paletteColor(slot: number, theme: PaletteTheme, shade = 0, age = 0): string {
   const sh = SHADE_L[theme][((shade % 3) + 3) % 3]!
-  return hslToHex(paletteHue(slot), SAT[theme], LIGHT[theme] + sh)
+  const a = clamp3(age)
+  return hslToHex(paletteHue(slot), SAT[theme] * AGE_SAT[a]!, LIGHT[theme] + sh + AGE_L[theme][a]!)
 }
+const clamp3 = (n: number): number => Math.min(3, Math.max(0, Math.round(n)))
 
 const hash = (s: string): number => {
   let h = 0x811c9dc5

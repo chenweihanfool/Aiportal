@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  clusterSummaries, dateToY, focusViewBox, insightIdFromHash, insightStats, layoutInsightTree, leafShape, monthSeries, suggestTreeHeight, parseInsightDetail, parseInsights, taipeiDay, threadDots, threadWidth,
+  clusterSummaries, focusViewBox, leafAge, insightIdFromHash, insightStats, layoutInsightTree, leafShape, monthSeries, OVERVIEW_ELEMENT_CAP, suggestTreeHeight, parseInsightDetail, parseInsights, taipeiDay, threadDots, threadWidth,
   type InsightData, type InsightRelation,
 } from './insightTree'
 
@@ -93,119 +93,6 @@ describe('parseInsights', () => {
   })
 })
 
-describe('layoutInsightTree', () => {
-  const data = sample()
-  const opts = { width: 720, height: 480, now: NOW }
-
-  it('同輸入同輸出', () => {
-    expect(JSON.stringify(layoutInsightTree(data, opts))).toBe(JSON.stringify(layoutInsightTree(sample(), opts)))
-  })
-
-  it('座標全落在畫布內（含窄畫布）', () => {
-    for (const [w, h] of [[720, 480], [360, 320], [1000, 520]] as const) {
-      const l = layoutInsightTree(data, { width: w, height: h, now: NOW })
-      expect(l.leaves).toHaveLength(22)
-      for (const lf of l.leaves) {
-        expect(lf.x - lf.r).toBeGreaterThanOrEqual(0)
-        expect(lf.x + lf.r).toBeLessThanOrEqual(w)
-        expect(lf.y - lf.r).toBeGreaterThanOrEqual(0)
-        expect(lf.y + lf.r).toBeLessThanOrEqual(h)
-      }
-      for (const c of l.clusters) {
-        expect(c.x).toBeGreaterThanOrEqual(0); expect(c.x).toBeLessThanOrEqual(w)
-        expect(c.y).toBeGreaterThanOrEqual(0); expect(c.y).toBeLessThanOrEqual(h)
-        expect(c.lx).toBeGreaterThanOrEqual(0); expect(c.lx).toBeLessThanOrEqual(w)
-      }
-      for (const limb of [l.trunk, ...l.limbs]) {
-        for (const m of limb.d.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)) {
-          expect(+m[1]!).toBeGreaterThanOrEqual(0); expect(+m[1]!).toBeLessThanOrEqual(w)
-          expect(+m[2]!).toBeGreaterThanOrEqual(0); expect(+m[2]!).toBeLessThanOrEqual(h)
-        }
-      }
-    }
-  })
-
-  it('群標籤不壓葉子、互不重疊（360 與 1200 寬、12 群 300 片葉）', () => {
-    for (const [w, h] of [[360, 420], [1200, 640]] as const) {
-      for (const d of [data, bigData()]) {
-        const l = layoutInsightTree(d, { width: w, height: h, now: NOW })
-        const shown = l.clusters.filter((c) => c.labelShown)
-        expect(shown.length).toBeGreaterThan(0)
-        const rect = (c: (typeof shown)[number]) => ({ x0: c.lx - c.lw / 2, x1: c.lx + c.lw / 2, y0: c.ly - c.lh / 2, y1: c.ly + c.lh / 2 })
-        for (const c of shown) {
-          const r = rect(c)
-          expect(r.x0).toBeGreaterThanOrEqual(0); expect(r.x1).toBeLessThanOrEqual(w); expect(r.y0).toBeGreaterThanOrEqual(0); expect(r.y1).toBeLessThanOrEqual(h)
-          for (const lf of l.leaves) {
-            const nx = Math.min(r.x1, Math.max(r.x0, lf.x)); const ny = Math.min(r.y1, Math.max(r.y0, lf.y))
-            expect(Math.hypot(lf.x - nx, lf.y - ny)).toBeGreaterThanOrEqual(lf.r)
-          }
-        }
-        for (let i = 0; i < shown.length; i++) for (let j = i + 1; j < shown.length; j++) {
-          const p = rect(shown[i]!), q = rect(shown[j]!)
-          expect(p.x0 < q.x1 && p.x1 > q.x0 && p.y0 < q.y1 && p.y1 > q.y0).toBe(false)
-        }
-      }
-    }
-  })
-
-  it('枝寬隨印證增加且有上限', () => {
-    expect(threadWidth(0)).toBeCloseTo(1.5)
-    expect(threadWidth(3)).toBeCloseTo(5.1)
-    expect(threadWidth(100)).toBe(8)
-    const l = layoutInsightTree(data, opts)
-    const wOf = (th: string) => l.limbs.find((x) => x.id === `t:${th}#0`)?.width ?? 0
-    expect(wOf('TH-a')).toBeCloseTo(1.5 + 1.2 * 4) // a2 a3 a4 a6 之中 a6 在分岔上，主枝 3 次、整條脈絡 4 次
-    expect(wOf('TH-a')).toBeGreaterThan(wOf('TH-x'))
-    for (const x of l.limbs) expect(x.width).toBeLessThanOrEqual(10)
-  })
-
-  it('refine 從 parent 葉分岔出新枝段', () => {
-    const l = layoutInsightTree(data, opts)
-    const fork = l.limbs.find((x) => x.id === 't:TH-a~a5#0')
-    expect(fork).toBeTruthy()
-    const parent = l.leaves.find((x) => x.id === 'a4')!
-    expect(Math.abs(fork!.from[0] - parent.x)).toBeLessThan(0.2)
-    expect(Math.abs(fork!.from[1] - parent.y)).toBeLessThan(0.2)
-    expect(l.limbs.some((x) => x.id === 't:TH-b~b2#0')).toBe(true)
-  })
-
-  it('overturn 讓 parent 到被推翻點的枝與 parent 葉枯萎', () => {
-    const l = layoutInsightTree(data, opts)
-    const seg = l.limbs.find((x) => x.id === 't:TH-c#1')!
-    expect(seg.withered).toBe(true)
-    expect(l.limbs.find((x) => x.id === 't:TH-c#0')!.withered).toBe(false)
-    expect(l.leaves.find((x) => x.id === 'c1')!.withered).toBe(true)
-    expect(l.leaves.find((x) => x.id === 'c2')!.withered).toBe(false)
-    expect(l.leaves.find((x) => x.id === 'a1')!.withered).toBe(false)
-  })
-
-  it('近 30 天的葉才發光', () => {
-    const l = layoutInsightTree(data, opts)
-    expect(l.leaves.filter((x) => x.glow).map((x) => x.id).sort()).toEqual(['d2', 'd3'])
-  })
-
-  it('upto 只輸出該月底以前的枝葉', () => {
-    const l = layoutInsightTree(data, { ...opts, upto: '2026-03' })
-    const ids = l.leaves.map((x) => x.id).sort()
-    expect(ids).toEqual(['a1', 'a2', 'a3', 'b1', 'c1', 'x1'])
-    expect(l.clusters).toHaveLength(4)
-    expect(l.clusters.find((c) => c.id === 'K04')!.count).toBe(0)
-    expect(l.clusters.find((c) => c.id === 'K04')!.labelShown).toBe(false)
-    expect(l.limbs.some((x) => x.id.startsWith('t:TH-r'))).toBe(false)
-    expect(l.limbs.some((x) => x.id.startsWith('t:TH-c#1'))).toBe(false)
-    // 同月份的枝與葉只依可見心得
-    const all = layoutInsightTree(data, opts)
-    expect(l.limbs.length).toBeLessThan(all.limbs.length)
-  })
-
-  it('沒有心得時只有樹幹', () => {
-    const l = layoutInsightTree({ total: 0, thisMonth: 0, clusters: [], insights: [] }, opts)
-    expect(l.leaves).toHaveLength(0)
-    expect(l.limbs).toHaveLength(0)
-    expect(l.trunk.firstMonth).toBeNull()
-  })
-})
-
 describe('monthSeries / insightStats / 其他', () => {
   const data = sample()
   it('monthSeries 從第一則到 now、不缺月', () => {
@@ -244,68 +131,19 @@ describe('monthSeries / insightStats / 其他', () => {
   })
 })
 
-describe('視覺化結構（2.99.0 打磨）', () => {
-  const data = sample()
-  const opts = { width: 720, height: 480, now: NOW }
-  const l = layoutInsightTree(data, opts)
 
-  it('枝輪廓由粗到細：樹幹、主枝、脈絡枝的底部都比末端寬', () => {
-    expect(l.trunk.widthStart).toBeGreaterThan(l.trunk.widthEnd)
-    const c0 = l.limbs.find((x) => x.id === 'c:K01#0')!
-    const c4 = l.limbs.find((x) => x.id === 'c:K01#4')!
-    expect(c0.widthStart).toBeGreaterThan(c4.widthEnd)
-    const t = l.limbs.find((x) => x.id === 't:TH-a#0')!
-    const tEnd = l.limbs.find((x) => x.id === 't:TH-a#3')!
-    expect(t.widthStart).toBeGreaterThan(tEnd.widthEnd)
-    expect(l.limbs.every((x) => x.d.startsWith('M') && x.d.endsWith('Z'))).toBe(true)
-  })
-  it('時間刻度位置隨日期單調（越晚越高）', () => {
-    expect(l.ticks.length).toBeGreaterThanOrEqual(2)
-    for (let i = 1; i < l.ticks.length; i++) expect(l.ticks[i]!.y).toBeLessThan(l.ticks[i - 1]!.y)
-    expect(l.ticks.some((t) => t.major && /^[0-9]{4}$/.test(t.label))).toBe(true)
-    const dates = ['2026-01-01', '2026-03-01', '2026-06-15', '2026-11-14']
-    const ys = dates.map((d) => dateToY(l.axis, d))
-    for (let i = 1; i < ys.length; i++) expect(ys[i]!).toBeLessThan(ys[i - 1]!)
-    // 2.99.1：葉子沿自己的枝排（35%～100%），高度不再等於日期；同一群內較新的葉子不會比較舊的低（refine 分岔葉除外）
-    for (const lf of l.leaves) { expect(lf.y).toBeGreaterThan(0); expect(lf.y).toBeLessThan(l.height) }
-  })
-  it('葉形依 relation 各不相同；推翻是微垂的枯葉', () => {
+describe('小東西', () => {
+  const data = sample()
+  it('葉形依 relation 各不相同', () => {
     const shapes = (['new', 'reinforce', 'refine', 'overturn'] as const).map((r) => leafShape(r))
     expect(new Set(shapes.map((x) => x.d)).size).toBe(4)
     expect(shapes.map((x) => x.kind)).toEqual(['bud', 'leaf', 'fork', 'dead'])
-    expect(l.leaves.find((x) => x.id === 'c2')!.relation).toBe('overturn')
-    expect(l.leaves.every((x) => Number.isFinite(x.angle))).toBe(true)
   })
-  it('滑過葉子的整條路徑：從樹幹出發、經主枝、到它自己的枝段；分岔的葉子也包含 parent 的路徑', () => {
-    const a3 = l.leaves.find((x) => x.id === 'a3')!
-    expect(a3.path[0]).toBe('trunk')
-    expect(a3.path[a3.path.length - 1]).toBe('t:TH-a#2')
-    expect(a3.path.filter((x) => x.startsWith('c:K01#')).length).toBe(5)
-    const a5 = l.leaves.find((x) => x.id === 'a5')!
-    const a4 = l.leaves.find((x) => x.id === 'a4')!
-    expect(a5.path.slice(0, a4.path.length)).toEqual(a4.path)
-    expect(a5.path[a5.path.length - 1]).toBe('t:TH-a~a5#0')
-    const ids = new Set([l.trunk.id, ...l.limbs.map((x) => x.id)])
-    for (const lf of l.leaves) for (const p of lf.path) expect(ids.has(p)).toBe(true)
-  })
-  it('聚焦某群的 viewBox：包住那一群、維持長寬比、不超出畫布；null＝全樹', () => {
-    expect(focusViewBox(l, null)).toEqual({ x: 0, y: 0, w: l.width, h: l.height })
-    const ci = l.clusters.findIndex((c) => c.id === 'K03')
-    const vb = focusViewBox(l, ci)
-    expect(vb.w).toBeLessThan(l.width)
-    expect(vb.x).toBeGreaterThanOrEqual(0); expect(vb.y).toBeGreaterThanOrEqual(0)
-    expect(vb.x + vb.w).toBeLessThanOrEqual(l.width + 0.1); expect(vb.y + vb.h).toBeLessThanOrEqual(l.height + 0.1)
-    expect(Math.abs(vb.w / vb.h - l.width / l.height)).toBeLessThan(0.02)
-    for (const lf of l.leaves.filter((x) => x.clusterIndex === ci)) {
-      expect(lf.x).toBeGreaterThanOrEqual(vb.x); expect(lf.x).toBeLessThanOrEqual(vb.x + vb.w)
-      expect(lf.y).toBeGreaterThanOrEqual(vb.y); expect(lf.y).toBeLessThanOrEqual(vb.y + vb.h)
-    }
-    expect(focusViewBox(l, 99)).toEqual({ x: 0, y: 0, w: l.width, h: l.height })
-  })
-  it('suggestTreeHeight：資料多樹較高、有上下限', () => {
-    expect(suggestTreeHeight(360, 5, 2)).toBeGreaterThanOrEqual(300)
-    expect(suggestTreeHeight(600, 300, 18)).toBeGreaterThan(suggestTreeHeight(600, 20, 4))
-    expect(suggestTreeHeight(2000, 1000, 60)).toBeLessThanOrEqual(680)
+  it('suggestTreeHeight：桌機約 min(78vh, 900)、手機依寬度', () => {
+    expect(suggestTreeHeight(1200, 1000)).toBe(780)
+    expect(suggestTreeHeight(1200, 2000)).toBe(900)
+    expect(suggestTreeHeight(360, 800)).toBeGreaterThanOrEqual(420)
+    expect(suggestTreeHeight(360, 800)).toBeLessThanOrEqual(620)
   })
   it('clusterSummaries：則數、最近長葉日期、近 12 個月每月則數', () => {
     const s = clusterSummaries(data, NOW)
@@ -323,161 +161,187 @@ describe('視覺化結構（2.99.0 打磨）', () => {
     expect(st.topReinforced?.count).toBe(4)
     expect(st.topReinforced?.text.startsWith('虛構心得 a1')).toBe(true)
   })
-  it('12 群 300 片葉：同輸入同輸出、座標在畫布內、排版夠快；upto 不改變位置', () => {
-    const big = bigData()
+})
+
+const W = 1200
+const H = 780
+const dateOf = new Map<string, string>()
+
+/** n 則、k 群的合成資料；每群的心得跨多年（含跨年新葉） */
+function synth(n: number, k: number, years = 5): InsightData {
+  const out: unknown[] = []
+  for (let i = 0; i < n; i++) {
+    const c = i % k
+    const th = `TH-${c}-${Math.floor(i / k) % 7}`
+    const ago = Math.floor(((n - 1 - i) * years * 365) / Math.max(1, n)) + (c % 3) * 3
+    const d = new Date(NOW.getTime() - ago * 86_400_000).toISOString().slice(0, 10)
+    out.push({ id: `S${i}`, date: d, time: null, text: `合成 ${i}`, provenance: 'quote', cluster: `K${String(c + 1).padStart(2, '0')}`, thread: th, relation: 'new', parent: null })
+  }
+  const d = parseInsights({ clusters: Array.from({ length: k }, (_, i) => ({ id: `K${String(i + 1).padStart(2, '0')}`, name: `領域${i + 1}`, count: 1 })), insights: out })
+  if (!d) throw new Error('synth 解析失敗')
+  for (const i of d.insights) dateOf.set(i.id, i.date)
+  return d
+}
+
+describe('人生樹排版（3.0.0）', () => {
+  const data = sample()
+  const l = layoutInsightTree(data, { width: W, height: H, now: NOW })
+  const lAll = layoutInsightTree(data, { width: W, height: H, now: NOW, focus: 'K01' })
+
+  it('同輸入同輸出', () => {
+    expect(JSON.stringify(layoutInsightTree(data, { width: W, height: H, now: NOW }))).toBe(JSON.stringify(l))
+  })
+  it('主枝接點順序＝主題第一次出現的順序，且等距（不帶時間刻度），左右交錯', () => {
+    const firsts = l.clusters.map((c) => c.firstDate)
+    expect(firsts).toEqual([...firsts].sort())
+    expect(l.clusters.map((c) => c.id)).toEqual(['K01', 'K02', 'K03', 'K04'])
+    const ys = l.clusters.map((c) => c.ay)
+    for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeLessThan(ys[i - 1]!)
+    const gaps = ys.slice(1).map((y, i) => ys[i]! - y)
+    for (const g of gaps) expect(Math.abs(g - gaps[0]!)).toBeLessThan(0.3)
+    expect(l.clusters.map((c) => c.side)).toEqual([1, -1, 1, -1])
+  })
+  it('樹幹高度固定、與主枝數無關', () => {
+    const a = layoutInsightTree(synth(40, 3), { width: W, height: H, now: NOW })
+    const b = layoutInsightTree(synth(40, 12), { width: W, height: H, now: NOW })
+    expect(b.axis.ground).toBe(a.axis.ground)
+    expect(b.height).toBe(a.height)
+    expect(b.axis.trunkTop).toBeLessThan(b.axis.ground - 100)
+    expect(a.axis.trunkTop).toBeLessThan(a.axis.ground - 100)
+  })
+  it('同主題的葉沿主枝由內往外日期單調遞增（含跨年新葉在最外側）', () => {
+    const d = synth(120, 6, 6)
+    const ly = layoutInsightTree(d, { width: W, height: H, now: NOW, focus: 'K01' })
+    for (let k = 0; k < ly.clusters.length; k++) {
+      const mine = ly.leaves.filter((x) => x.clusterIndex === k).sort((a, b) => a.bt - b.bt)
+      expect(mine.length).toBeGreaterThan(1)
+      for (let i = 1; i < mine.length; i++) expect(dateOf.get(mine[i]!.id)! >= dateOf.get(mine[i - 1]!.id)!).toBe(true)
+    }
+    const k1 = lAll.leaves.filter((x) => x.clusterIndex === 0).sort((a, b) => a.bt - b.bt)
+    expect(k1[k1.length - 1]!.id).toBe('x3')
+    const more = parseInsights({ clusters: [{ id: 'K01', name: '測量作業', count: 3 }], insights: [mk('o1', '2020-01-05', 'K01', 'T1', 'new'), mk('o2', '2022-03-05', 'K01', 'T1', 'reinforce', 'o1'), mk('o3', '2026-03-05', 'K01', 'T2', 'new')] })!
+    const lm = layoutInsightTree(more, { width: W, height: H, now: NOW })
+    const bts = ['o1', 'o2', 'o3'].map((id) => lm.leaves.find((x) => x.id === id)!.bt)
+    expect(bts[0]!).toBeLessThan(bts[1]!)
+    expect(bts[1]!).toBeLessThan(bts[2]!)
+    const dist = ['o1', 'o2', 'o3'].map((id) => Math.abs(lm.leaves.find((x) => x.id === id)!.x - lm.axis.cx))
+    expect(dist[2]!).toBeGreaterThan(dist[0]!)
+  })
+  it('脈絡細枝分出位置隨脈絡第一則日期單調', () => {
+    const first = new Map<string, { date: string; bt: number }>()
+    for (const lf of lAll.leaves.filter((x) => x.clusterIndex === 0)) {
+      const ins = data.insights.find((i) => i.id === lf.id)!
+      const cur = first.get(ins.thread)
+      if (!cur || ins.date < cur.date) first.set(ins.thread, { date: ins.date, bt: lf.bt })
+    }
+    const arr = [...first.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    expect(arr.length).toBeGreaterThanOrEqual(3)
+    for (let i = 1; i < arr.length; i++) expect(arr[i]!.bt).toBeGreaterThanOrEqual(arr[i - 1]!.bt)
+    const forks = lAll.limbs.filter((x) => x.level === 'thread' && x.clusterIndex === 0 && /#0$/.test(x.id))
+    expect(forks.length).toBeGreaterThanOrEqual(3)
+  })
+  it('沒有葉子落在樹幹上、座標都在畫布內（含手機 360）', () => {
+    for (const [w, h] of [[W, H], [360, 560]] as const) {
+      for (const d of [data, synth(300, 12), synth(1, 1)]) {
+        const ly = layoutInsightTree(d, { width: w, height: h, now: NOW })
+        const trunkHalf = ly.trunk.width / 2
+        for (const lf of [...ly.leaves, ...ly.clumps]) {
+          expect(Math.abs(lf.x - ly.axis.cx)).toBeGreaterThan(trunkHalf)
+          expect(lf.x).toBeGreaterThanOrEqual(0); expect(lf.x).toBeLessThanOrEqual(w)
+          expect(lf.y).toBeGreaterThanOrEqual(0); expect(lf.y).toBeLessThanOrEqual(h)
+        }
+      }
+    }
+  })
+  it('總覽元素數 ≤ 上限：1、13（9 群）、300、5000 則', () => {
+    const cases: Array<[string, InsightData]> = [['1', synth(1, 1)], ['13/9群', synth(13, 9)], ['300', synth(300, 12)], ['5000', synth(5000, 12)]]
+    for (const [name, d] of cases) {
+      const ly = layoutInsightTree(d, { width: W, height: H, now: NOW })
+      expect(ly.elementCount, name).toBeLessThanOrEqual(OVERVIEW_ELEMENT_CAP)
+      expect(ly.limbs.length + ly.leaves.length + ly.clumps.length + 1, name).toBe(ly.elementCount)
+    }
+    const big = layoutInsightTree(synth(5000, 12), { width: W, height: H, now: NOW })
+    expect(big.clumps.length).toBeGreaterThan(0)
+    for (let k = 0; k < 12; k++) expect(big.leaves.filter((x) => x.clusterIndex === k).length).toBeLessThanOrEqual(24)
+    expect(big.clumps.reduce((s, c) => s + c.count, 0) + big.leaves.length).toBe(5000)
+  })
+  it('聚焦一群：畫出該群全部的葉，不聚合', () => {
+    const ly = layoutInsightTree(synth(500, 5), { width: W, height: H, now: NOW, focus: 'K02' })
+    const k = ly.clusters.findIndex((c) => c.id === 'K02')
+    expect(ly.leaves.filter((x) => x.clusterIndex === k).length).toBe(100)
+    expect(ly.clumps.filter((c) => c.clusterIndex === k).length).toBe(0)
+  })
+  it('12 主題時膠囊互不重疊，放不下的縮成色點', () => {
+    for (const [w, h] of [[W, H], [360, 560], [800, 600]] as const) {
+      const ly = layoutInsightTree(synth(300, 12), { width: w, height: h, now: NOW })
+      const shown = ly.clusters.filter((c) => c.labelShown)
+      for (let i = 0; i < shown.length; i++) {
+        const a = shown[i]!
+        expect(a.lx - a.lw / 2).toBeGreaterThanOrEqual(0); expect(a.lx + a.lw / 2).toBeLessThanOrEqual(w)
+        for (let j = i + 1; j < shown.length; j++) {
+          const b = shown[j]!
+          expect(Math.abs(a.lx - b.lx) < (a.lw + b.lw) / 2 && Math.abs(a.ly - b.ly) < (a.lh + b.lh) / 2).toBe(false)
+        }
+      }
+    }
+    expect(layoutInsightTree(synth(300, 12), { width: 360, height: 200, now: NOW }).clusters.some((c) => !c.labelShown)).toBe(true)
+  })
+  it('聚焦時沿主枝的時間標籤單調、在可視範圍內；不到一年標月份', () => {
+    const ly = layoutInsightTree(synth(120, 3, 6), { width: W, height: H, now: NOW, focus: 'K01' })
+    const c = ly.clusters[0]!
+    expect(c.ticks.length).toBeGreaterThanOrEqual(4)
+    for (let i = 1; i < c.ticks.length; i++) expect(c.ticks[i]!.t).toBeGreaterThan(c.ticks[i - 1]!.t)
+    const vb = focusViewBox(ly, 0)
+    for (const t of c.ticks) {
+      expect(/^\d{4}$/.test(t.label)).toBe(true)
+      expect(t.x).toBeGreaterThanOrEqual(vb.x - 1); expect(t.x).toBeLessThanOrEqual(vb.x + vb.w + 1)
+      expect(t.y).toBeGreaterThanOrEqual(vb.y - 1); expect(t.y).toBeLessThanOrEqual(vb.y + vb.h + 1)
+    }
+    const short = layoutInsightTree(data, { width: W, height: H, now: NOW, focus: 'K04' })
+    expect(short.clusters.find((x) => x.id === 'K04')!.ticks.every((t) => /^\d{4}-\d{2}$/.test(t.label))).toBe(true)
+    expect(l.clusters.every((x) => x.ticks.length === 0)).toBe(true)
+  })
+  it('新舊葉色分級：30 天內發光、一年內、1～3 年、3 年以上', () => {
+    expect([0, 30, 31, 365, 366, 1095, 1096, 4000].map(leafAge)).toEqual([0, 0, 1, 1, 2, 2, 3, 3])
+    const d = parseInsights({ clusters: [{ id: 'K01', name: 'x', count: 4 }], insights: [mk('n1', '2026-11-01', 'K01', 'T', 'new'), mk('n2', '2026-01-01', 'K01', 'T2', 'new'), mk('n3', '2024-06-01', 'K01', 'T3', 'new'), mk('n4', '2021-06-01', 'K01', 'T4', 'new')] })!
+    const ly = layoutInsightTree(d, { width: W, height: H, now: NOW })
+    const age = (id: string) => ly.leaves.find((x) => x.id === id)!
+    expect([age('n1').age, age('n2').age, age('n3').age, age('n4').age]).toEqual([0, 1, 2, 3])
+    expect(age('n1').glow).toBe(true)
+    expect(age('n2').glow).toBe(false)
+  })
+  it('refine 從 parent 葉分岔、overturn 讓 parent 葉與那段枝枯萎（聚焦時逐段）', () => {
+    const a5 = lAll.leaves.find((x) => x.id === 'a5')!
+    const a4 = lAll.leaves.find((x) => x.id === 'a4')!
+    expect(a5.relation).toBe('refine')
+    expect(a5.path.slice(0, -1).every((p) => a4.path.includes(p))).toBe(true)
+    const lc = layoutInsightTree(data, { width: W, height: H, now: NOW, focus: 'K03' })
+    expect(lc.leaves.find((x) => x.id === 'c1')!.withered).toBe(true)
+    expect(lc.limbs.some((x) => x.withered)).toBe(true)
+  })
+  it('upto 只輸出該月底以前的枝葉，且不改變位置', () => {
+    const part = layoutInsightTree(data, { width: W, height: H, now: NOW, upto: '2026-04' })
+    for (const lf of part.leaves) { const f = l.leaves.find((x) => x.id === lf.id)!; expect([lf.x, lf.y]).toEqual([f.x, f.y]) }
+    expect(part.leaves.length).toBeLessThan(l.leaves.length)
+    expect(part.leaves.every((x) => data.insights.find((i) => i.id === x.id)!.date.slice(0, 7) <= '2026-04')).toBe(true)
+  })
+  it('沒有心得時只有樹幹；滑過葉子的路徑從樹幹出發', () => {
+    const empty = layoutInsightTree({ total: 0, thisMonth: 0, clusters: [], insights: [] }, { width: W, height: H, now: NOW })
+    expect(empty.leaves).toHaveLength(0)
+    expect(empty.limbs).toHaveLength(0)
+    for (const lf of l.leaves) expect(lf.path[0]).toBe('trunk')
+  })
+  it('focusViewBox：包住那一群、維持長寬比、不超出畫布；null＝全樹', () => {
+    expect(focusViewBox(l, null)).toEqual({ x: 0, y: 0, w: W, h: H })
+    const v = focusViewBox(lAll, 0)
+    expect(v.w / v.h).toBeCloseTo(W / H, 1)
+    expect(v.x).toBeGreaterThanOrEqual(0); expect(v.x + v.w).toBeLessThanOrEqual(W + 0.1)
+    expect(v.y).toBeGreaterThanOrEqual(0); expect(v.y + v.h).toBeLessThanOrEqual(H + 0.1)
+  })
+  it('5000 則排版夠快', () => {
+    const d = synth(5000, 12)
     const t0 = Date.now()
-    const a = layoutInsightTree(big, { width: 600, height: 640, now: NOW })
-    expect(Date.now() - t0).toBeLessThan(1500)
-    expect(a.leaves).toHaveLength(300)
-    expect(JSON.stringify(a)).toBe(JSON.stringify(layoutInsightTree(bigData(), { width: 600, height: 640, now: NOW })))
-    for (const lf of a.leaves) { expect(lf.x - lf.r).toBeGreaterThanOrEqual(0); expect(lf.x + lf.r).toBeLessThanOrEqual(600) }
-    const part = layoutInsightTree(big, { width: 600, height: 640, now: NOW, upto: '2026-03' })
-    for (const lf of part.leaves) { const f = a.leaves.find((x) => x.id === lf.id)!; expect([f.x, f.y]).toEqual([lf.x, lf.y]) }
+    layoutInsightTree(d, { width: W, height: H, now: NOW })
+    expect(Date.now() - t0).toBeLessThan(3000)
   })
-})
-
-describe('稀疏資料像一棵小樹（退回第 1 次）', () => {
-  const day = '2026-11-14'
-  const one = (id: string, cluster: string, thread: string, date = day) => ({ id, date, time: null, text: `稀疏心得 ${id}`, provenance: 'quote', cluster, thread, relation: 'new', parent: null })
-  const mkData = (items: unknown[]): InsightData => {
-    const d = parseInsights({ clusters: [{ id: 'K01', name: '甲群', count: 9 }, { id: 'K02', name: '乙群', count: 9 }, { id: 'K03', name: '丙群', count: 9 }], insights: items })
-    if (!d) throw new Error('解析失敗')
-    return d
-  }
-  const cases: Array<[string, InsightData]> = [
-    ['1 則', mkData([one('s1', 'K01', 'T1')])],
-    ['2 則（同日兩群）', mkData([one('s1', 'K01', 'T1'), one('s2', 'K02', 'T2')])],
-    ['3 則', mkData([one('s1', 'K01', 'T1'), one('s2', 'K02', 'T2'), one('s3', 'K03', 'T3', '2026-11-02')])],
-    ['5 則', mkData([one('s1', 'K01', 'T1'), one('s2', 'K02', 'T2'), one('s3', 'K03', 'T3', '2026-11-02'), one('s4', 'K01', 'T4', '2026-10-20'), one('s5', 'K02', 'T5', '2026-10-01')])],
-  ]
-  for (const [w, h] of [[360, 340], [600, 420], [1000, 520]] as const) {
-    for (const [name, d] of cases) {
-      it(`${name}（${w} 寬）：樹幹 ≥ 繪圖區 50%、每條枝末端高於起點、整棵樹高度 ≥ 70%`, () => {
-        const l = layoutInsightTree(d, { width: w, height: h, now: NOW })
-        const area = l.axis.ground - l.axis.top
-        expect((l.axis.ground - l.axis.trunkTop) / area).toBeGreaterThanOrEqual(0.5)
-        for (const x of l.limbs) {
-          expect(x.to[1], x.id).toBeLessThanOrEqual(x.from[1] + 0.05)
-          if (x.level === 'cluster') expect(x.to[1], x.id).toBeLessThan(x.from[1])
-        }
-        for (const th of ['T1', 'T2', 'T3', 'T4', 'T5']) {
-          const segs = l.limbs.filter((x) => x.id.startsWith(`t:${th}#`))
-          if (segs.length > 0) expect(segs[segs.length - 1]!.to[1]).toBeLessThan(segs[0]!.from[1])
-        }
-        const topTip = Math.min(...l.clusters.filter((c) => c.count > 0).map((c) => c.y))
-        expect((l.axis.ground - topTip) / h).toBeGreaterThanOrEqual(0.7)
-        expect(l.leaves.length).toBe(d.insights.length)
-        for (const lf of l.leaves) { expect(lf.x - lf.r).toBeGreaterThanOrEqual(0); expect(lf.x + lf.r).toBeLessThanOrEqual(w) }
-      })
-    }
-  }
-  it('時間軸最少涵蓋 6 個月；樹寬依群數置中（2 群的樹冠比 12 群窄）；≤5 則葉子較大', () => {
-    const l = layoutInsightTree(cases[1]![1], { width: 800, height: 420, now: NOW })
-    expect((l.axis.dayMax - l.axis.dayMin) / 30.44).toBeGreaterThanOrEqual(5)
-    expect(l.ticks.length).toBeGreaterThanOrEqual(3)
-    const xs = l.leaves.map((x) => x.x)
-    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(400)
-    const cx = (l.width + 60) / 2
-    expect(Math.abs((Math.max(...xs) + Math.min(...xs)) / 2 - cx)).toBeLessThan(80)
-    const big = layoutInsightTree(sample(), { width: 800, height: 420, now: NOW })
-    expect(l.leaves[0]!.r).toBeGreaterThan(big.leaves.find((x) => x.relation === 'new')!.r * 1.4)
-  })
-  it('主枝從樹幹分出的角度離垂直 15°～60°（取枝的第一段起點到第二個取樣點）', () => {
-    for (const [, d] of cases) {
-      const l = layoutInsightTree(d, { width: 600, height: 420, now: NOW })
-      for (const c of l.clusters.filter((x) => x.count > 0)) {
-        const first = l.limbs.find((x) => x.id === `c:${c.id}#0`)!
-        const nums = [...first.d.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].map((m) => [+m[1]!, +m[2]!])
-        // 輪廓前半是左側點：取第 1 與第 3 個點的方向（粗略，輪廓與中心線平行）
-        const dx = nums[2]![0] - nums[0]![0]
-        const dy = nums[0]![1] - nums[2]![1]
-        const ang = (Math.atan2(Math.abs(dx), dy) * 180) / Math.PI
-        expect(ang).toBeGreaterThanOrEqual(8)
-        expect(ang).toBeLessThanOrEqual(75)
-      }
-    }
-  })
-})
-
-describe('群標籤不會消失（退回第 1 次）', () => {
-  it('12 群 300 則在 1200 與 360 寬：每一群都有標籤（膠囊或縮寫），縮寫最多 4 字，且都在畫布內、互不重疊', () => {
-    for (const [w, h] of [[1200, 640], [360, 440], [360, 340]] as const) {
-      const l = layoutInsightTree(bigData(), { width: w, height: h, now: NOW })
-      const withData = l.clusters.filter((c) => c.count > 0)
-      expect(withData).toHaveLength(12)
-      for (const c of withData) {
-        expect(c.labelShown, `${c.id} @${w}`).toBe(true)
-        expect(c.text.length).toBeGreaterThan(0)
-        if (c.abbr) expect([...c.text].length).toBeLessThanOrEqual(4)
-        expect(c.lx - c.lw / 2).toBeGreaterThanOrEqual(0); expect(c.lx + c.lw / 2).toBeLessThanOrEqual(w)
-        expect(c.ly - c.lh / 2).toBeGreaterThanOrEqual(0); expect(c.ly + c.lh / 2).toBeLessThanOrEqual(h)
-      }
-      const rect = (c: (typeof withData)[number]) => ({ x0: c.lx - c.lw / 2, x1: c.lx + c.lw / 2, y0: c.ly - c.lh / 2, y1: c.ly + c.lh / 2 })
-      for (let i = 0; i < withData.length; i++) for (let j = i + 1; j < withData.length; j++) {
-        const p = rect(withData[i]!), q = rect(withData[j]!)
-        expect(p.x0 < q.x1 && p.x1 > q.x0 && p.y0 < q.y1 && p.y1 > q.y0, `${withData[i]!.id}/${withData[j]!.id} @${w}`).toBe(false)
-      }
-    }
-  })
-  it('放不下的膠囊推到外側兩欄並畫引線（leader）', () => {
-    const l = layoutInsightTree(bigData(), { width: 360, height: 440, now: NOW })
-    expect(l.clusters.some((c) => c.leader)).toBe(true)
-  })
-})
-
-describe('聚焦時不裁切（退回第 1 次）', () => {
-  it('聚焦任一群：viewBox 完整包住該群的葉子與標籤膠囊（含引線端點），且不超出畫布', () => {
-    for (const [w, h] of [[360, 440], [1200, 640]] as const) {
-      const l = layoutInsightTree(bigData(), { width: w, height: h, now: NOW })
-      l.clusters.forEach((c, ci) => {
-        if (c.count === 0) return
-        const vb = focusViewBox(l, ci)
-        expect(vb.x).toBeGreaterThanOrEqual(0); expect(vb.y).toBeGreaterThanOrEqual(0)
-        expect(vb.x + vb.w).toBeLessThanOrEqual(w + 0.1); expect(vb.y + vb.h).toBeLessThanOrEqual(h + 0.1)
-        expect(c.lx - c.lw / 2).toBeGreaterThanOrEqual(vb.x - 0.1); expect(c.lx + c.lw / 2).toBeLessThanOrEqual(vb.x + vb.w + 0.1)
-        expect(c.ly - c.lh / 2).toBeGreaterThanOrEqual(vb.y - 0.1); expect(c.ly + c.lh / 2).toBeLessThanOrEqual(vb.y + vb.h + 0.1)
-        expect(c.x).toBeGreaterThanOrEqual(vb.x); expect(c.x).toBeLessThanOrEqual(vb.x + vb.w)
-        for (const lf of l.leaves.filter((x) => x.clusterIndex === ci)) {
-          expect(lf.x - lf.r).toBeGreaterThanOrEqual(vb.x - 0.1); expect(lf.x + lf.r).toBeLessThanOrEqual(vb.x + vb.w + 0.1)
-          expect(lf.y - lf.r).toBeGreaterThanOrEqual(vb.y - 0.1); expect(lf.y + lf.r).toBeLessThanOrEqual(vb.y + vb.h + 0.1)
-        }
-      })
-    }
-  })
-})
-
-describe('葉子一律長在自己脈絡的枝上，不落在樹幹上（2.99.1）', () => {
-  const mkN = (n: number, groups: number): InsightData => {
-    const out: unknown[] = []
-    for (let i = 0; i < n; i++) {
-      const g = groups === 9 && n === 13 ? [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 0, 1][i]! : i % groups
-      const th = `T-${g}-${i % 2}`
-      const prevSame = out.filter((o) => (o as { thread: string }).thread === th) as Array<{ id: string }>
-      const rel = i % 7 === 3 && prevSame.length > 0 ? 'refine' : i % 9 === 8 && prevSame.length > 0 ? 'overturn' : 'new'
-      const d = new Date(NOW.getTime() - (400 - Math.floor((i * 390) / Math.max(1, n))) * 86_400_000).toISOString().slice(0, 10)
-      out.push({ id: `L${i}`, date: d, time: null, text: `心得 ${i}`, provenance: 'quote', cluster: `K${g + 1}`, thread: th, relation: rel, parent: rel === 'new' ? null : prevSame[prevSame.length - 1]!.id })
-    }
-    const d = parseInsights({ clusters: Array.from({ length: groups }, (_, i) => ({ id: `K${i + 1}`, name: `群${i + 1}`, count: 3 })), insights: out })
-    if (!d) throw new Error('解析失敗')
-    return d
-  }
-  const cases: Array<[string, InsightData]> = [
-    ['1 則', mkN(1, 1)], ['2 則', mkN(2, 2)], ['3 則', mkN(3, 3)], ['5 則', mkN(5, 3)],
-    ['13 則 9 群', mkN(13, 9)], ['68 則', mkN(68, 8)], ['300 則', bigData()],
-  ]
-  for (const [w, h] of [[360, 560], [800, 520]] as const) {
-    for (const [name, d] of cases) {
-      it(`${name}（${w} 寬）：葉子離樹幹中心線 ≥ 樹幹半寬＋葉寬；單則群的葉子在枝梢（≤ 枝長 10%）`, () => {
-        const l = layoutInsightTree(d, { width: w, height: h, now: NOW })
-        const tx = l.trunk.from[0]
-        for (const lf of l.leaves) expect(Math.abs(lf.x - tx), lf.id).toBeGreaterThanOrEqual(l.trunk.widthStart / 2 + lf.r)
-        l.clusters.forEach((c, ci) => {
-          if (c.count !== 1) return
-          const lf = l.leaves.find((x) => x.clusterIndex === ci)!
-          const len = l.limbs.filter((x) => x.level === 'cluster' && x.clusterIndex === ci).reduce((s, x) => s + Math.hypot(x.to[0] - x.from[0], x.to[1] - x.from[1]), 0)
-          expect(Math.hypot(lf.x - c.x, lf.y - c.y), `${c.id} 單則群`).toBeLessThanOrEqual(len * 0.1)
-        })
-      })
-    }
-  }
 })
