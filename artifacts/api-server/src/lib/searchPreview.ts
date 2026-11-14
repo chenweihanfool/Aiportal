@@ -211,7 +211,7 @@ export function previewTopic(payload: unknown, id: string): Preview | null {
   };
 }
 
-// ── event／concept／method／source（hermes_doc）──────────────────────────
+// ── event／concept／method／source／diary（hermes_doc）───────────────────
 export interface DocRowInput { kind: unknown; docKey: unknown; title: unknown; bodyMd: unknown; meta: unknown }
 
 export function previewDoc(row: DocRowInput, graph: Graph): Preview | null {
@@ -251,6 +251,8 @@ export function previewDoc(row: DocRowInput, graph: Graph): Preview | null {
       }
     }
     source = n > 0 ? `${n} 件事件` : "";
+  } else if (row.kind === "diary") {
+    source = `日記 ${id}`;
   } else {
     source = date ? `原文 ${date}` : "";
   }

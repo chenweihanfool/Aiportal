@@ -191,7 +191,7 @@ router.get("/search/preview", async (req: Request, res: Response) => {
       p = g ? previewGraphEntity(g, v.kind, v.id) : null;
       break;
     }
-    case "event": case "concept": case "method": case "source": {
+    case "event": case "concept": case "method": case "source": case "diary": {
       if (!isDocKind(v.kind)) break;
       let row: { kind: string; docKey: string; title: string; bodyMd: string; meta: unknown } | undefined;
       try {

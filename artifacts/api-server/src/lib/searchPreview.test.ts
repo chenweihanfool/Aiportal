@@ -98,6 +98,11 @@ describe("previewDoc", () => {
     expect(p.related).toEqual([{ kind: "event", id: "e2", title: "第二件" }, { kind: "event", id: "zz", title: "zz" }]);
     expect(p.source).toBe("2 件事件");
   });
+  it("diary：source 為「日記 YYYY-MM-DD」、bodyMd 給全文", () => {
+    const p = previewDoc({ kind: "diary", docKey: "2026-11-14", title: "今天", bodyMd: "# 今天\n日記內容", meta: {} }, graph)!;
+    expect(p).toMatchObject({ kind: "diary", id: "2026-11-14", one: "日記內容", source: "日記 2026-11-14", related: [], points: [] });
+    expect(p.bodyMd).toBe("# 今天\n日記內容");
+  });
   it("source：related 空、source 為原文日期；壞資料回 null", () => {
     const p = previewDoc({ kind: "source", docKey: "s", title: "原文", bodyMd: "內文", meta: { date: "2026-11-09" } }, graph)!;
     expect(p.related).toEqual([]);
