@@ -422,6 +422,12 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   const byIdAll = new Map(all.map((i) => [i.id, i]))
   const isVisible = (i: Insight): boolean => upto === null || i.date.slice(0, 7) <= upto
 
+  // 樹幹寬（葉子與主枝梢都要離樹幹中心線夠遠，不能長在樹幹上）
+  const totalLeaves = Math.max(1, all.length)
+  const trunkW0 = clamp(14 + 1.6 * Math.sqrt(totalLeaves), 14, 28)
+  const TRUNK_BEND = 5
+  const trunkClear = (r: number): number => trunkW0 / 2 + TRUNK_BEND + r + 3
+
   // ── 群清單 ──
   const fullCount = new Map<string, number>()
   for (const i of all) fullCount.set(i.cluster, (fullCount.get(i.cluster) ?? 0) + 1)
@@ -482,13 +488,20 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const y0 = Math.max(y0raw, y1 + minRise) // 枝的起點一定低於末端：只往上長
     const rise = y0 - y1
     const tipX = cx + laneCenter[ci]! * 0.88
-    const dx = tipX - cx
+    let dx = tipX - cx
+    const minTip = trunkClear(LEAF_R.reinforce * rs)
+    if (Math.abs(dx) < minTip) dx = (Math.abs(dx) < 1 ? (ci % 2 ? 1 : -1) : Math.sign(dx)) * minTip // 枝梢離樹幹中心線至少一個葉寬，梢上的葉子才不會壓在樹幹上
     // 從樹幹分出的角度：離垂直 15°～60°
     const ddy = rise * 0.3
     const ddx = clamp(Math.abs(dx) * 0.45, ddy * Math.tan((15 * Math.PI) / 180), ddy * Math.tan((60 * Math.PI) / 180))
     const sgn = Math.abs(dx) < 1 ? (ci % 2 ? 1 : -1) : Math.sign(dx)
-    cl[ci] = { p0: [cx, y0], p1: [cx + sgn * ddx, y0 - ddy], p2: [cx + dx, y0 - rise * 0.55], p3: [tipX, y1], y0, y1, first: mine[0]!, count: mine.length }
+    cl[ci] = { p0: [cx, y0], p1: [cx + sgn * ddx, y0 - ddy], p2: [cx + dx, y0 - rise * 0.55], p3: [cx + dx, y1], y0, y1, first: mine[0]!, count: mine.length }
   }
+  // 每群最早／最晚一則的日期序號：葉子依日期由舊到新，沿主枝從 35% 排到枝梢 100%
+  const dRange = clusterDefs.map((c) => {
+    const ds = all.filter((i) => i.cluster === c.id).map((i) => dayNumber(i.date))
+    return ds.length > 0 ? { lo: Math.min(...ds), hi: Math.max(...ds) } : { lo: 0, hi: 0 }
+  })
   const pointOnCluster = (ci: number, t: number): P => { const c = cl[ci]!; return cubicAt(c.p0, c.p1, c.p2, c.p3, t) }
   const tAtY = (ci: number, y: number): number => {
     const c = cl[ci]!
@@ -555,25 +568,37 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
         if (b.items.length === 0) continue
         let start: P | null = null
         let startLeaf: string | null = null
+        let mainT0 = 0
         let side = mainSide
         if (b.forkFrom === null) {
           // 從主枝上「稍早於第一則」的位置長出，枝才會斜著往上長到葉子，不是一根橫桿
           const ya = Math.min(ground - 30, yOf(b.items[0]!.date) + (compact ? 12 : 18))
-          start = pointOnCluster(ci, tAtY(ci, ya))
+          mainT0 = Math.min(tAtY(ci, ya), 0.6) // 起點最晚在主枝 60%，後面才有空間排葉子
+          start = pointOnCluster(ci, mainT0)
         } else {
           startLeaf = b.forkFrom
           forkN++
           side = (forkN % 2 === 0 ? 1 : -1) * mainSide
         }
         branchList.push({ b, ci, start, startLeaf, shade, dir: side })
+        // 主枝脈絡的起點在主枝上的參數（葉子不得排在它之前，枝只往上長）
+        const tStart = mainT0
         b.items.forEach((it, k) => {
-          const y = yOf(it.date)
+          let y: number
           let x: number
           if (b.forkFrom === null) {
-            const ct = tAtY(ci, y)
-            x = pointOnCluster(ci, ct)[0] + side * (off0 + 6 * Math.sin(k * 1.9 + phase))
+            // 葉子沿主枝（含延伸段）由舊到新往枝梢排：35%～100%，最新一則在枝梢；只有一則（或同日）就在枝梢
+            const rg = dRange[ci]!
+            const frac = rg.hi > rg.lo ? (dayNumber(it.date) - rg.lo) / (rg.hi - rg.lo) : 1
+            const tt = clamp(Math.max(0.35 + 0.65 * frac, tStart + 0.05), 0, 1)
+            const pt = pointOnCluster(ci, tt)
+            y = pt[1]
+            x = pt[0] + (tt >= 0.999 ? 0 : side * (off0 + 6 * Math.sin(k * 1.9 + phase)))
           } else {
+            // refine 分岔：從 parent 葉往上、往旁邊長出去
             const pr = recById.get(b.forkFrom)
+            const rr = LEAF_R[it.relation] * rs
+            y = Math.max(PAD + rr + 2, (pr ? pr.y : yBottom) - (10 + 8 * Math.sqrt(k + 1)) * (compact ? 0.82 : 1))
             x = (pr ? pr.x : cx) + side * (11 + 9 * Math.sqrt(k + 1)) + 3 * Math.sin(k * 2.3 + phase)
           }
           const rec: LeafRec = { ins: it, branch: b, k, x, y, r: LEAF_R[it.relation] * rs, side, shade, ci }
@@ -593,6 +618,14 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
         }
       }
     })
+  }
+
+  /** 葉子離樹幹中心線至少「樹幹半寬＋葉寬」，再夾回畫布 */
+  const keepOffTrunk = (r: LeafRec): number => {
+    const need = trunkClear(r.r)
+    let x = r.x
+    if (Math.abs(x - cx) < need) x = cx + (x - cx === 0 ? r.side : Math.sign(x - cx)) * need
+    return clamp(x, xMin + r.r, xMax - r.r)
   }
 
   // ── 排擠：高度（日期）固定，只在水平方向把過近的葉子推開，再夾回畫布 ──
@@ -616,17 +649,15 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
         moved = true
       }
     }
-    for (const r of recs) r.x = clamp(r.x, xMin + r.r, xMax - r.r)
+    for (const r of recs) r.x = keepOffTrunk(r)
     if (!moved) break
   }
-  for (const r of recs) r.x = A1(r.x)
+  for (const r of recs) r.x = A1(keepOffTrunk(r))
 
   // ── 枝條：樹幹、主枝分段、脈絡分段（皆為由粗到細的填色輪廓）──
   const limbsAll: InsightLimb[] = []
   const leafPath = new Map<string, string[]>()
   const leafAngle = new Map<string, number>()
-  const totalLeaves = Math.max(1, all.length)
-  const trunkW0 = clamp(14 + 1.6 * Math.sqrt(totalLeaves), 14, 28)
   const earliestMonth = all.length > 0 ? all[0]!.date.slice(0, 7) : null
 
   const CH = 5
@@ -718,7 +749,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   const trunkTop = Math.min(ground - 46, ...visClusterStartY.filter((y) => Number.isFinite(y)).map((y) => y - 4))
   const trunkPts: P[] = []
   const trunkWs: number[] = []
-  const bend = (hash01('trunk') - 0.5) * 10
+  const bend = (hash01('trunk') - 0.5) * 2 * TRUNK_BEND
   for (let s = 0; s <= 14; s++) {
     const t = s / 14
     trunkPts.push([cx + bend * Math.sin(Math.PI * t), ground + (trunkTop - ground) * t])

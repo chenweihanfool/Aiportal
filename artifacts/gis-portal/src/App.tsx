@@ -5,6 +5,7 @@ import { FoodMapView } from './FoodMapView'
 import { ArchitectureView } from './ArchitectureView'
 import { KnowledgeView } from './KnowledgeView'
 import { TimelineView } from './TimelineView'
+import { parseTimelineHash } from './timelineLink'
 import { TripsView } from './TripsView'
 import { DossierView } from './DossierView'
 import { dossierFromHash } from './dossier'
@@ -113,8 +114,9 @@ export default function App() {
     const topicId = hashRoute === '#knowledge' ? null : decodeURIComponent(hashRoute.slice('#knowledge/'.length))
     return <KnowledgeView unlockedPassword={unlockedPassword} topicId={topicId} onRequestUnlock={handleRequestUnlock} />
   }
-  if (hashRoute === '#graph/timeline') {
-    return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
+  const timelineRoute = parseTimelineHash(hashRoute)
+  if (timelineRoute !== null) {
+    return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} initialDay={timelineRoute.day} from={timelineRoute.from} />
   }
   // 美食地圖（2026-10-15）：解鎖後讀知識庫的地點（/api/hermes-places），沒有資料才退回示範資料；入口見首頁按鈕與全站搜尋輸入 >美食。
   if (hashRoute === '#food') {

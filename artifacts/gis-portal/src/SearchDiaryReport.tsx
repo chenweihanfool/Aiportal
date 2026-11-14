@@ -2,13 +2,14 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { MarkdownView } from './MarkdownView'
 import { ReportBody } from './ReportBody'
 import { DIARY_EVENTS_MAX, isDiaryDate } from './omniSearch'
+import { buildTimelineDayLink } from './timelineLink'
 import { apiFetchTimelineDetail, type TimelineDetail } from './timelineApi'
 
 // 搜尋閱讀面板裡「日記」的日報圖表版（跟時間軸日報對話框同一套 ReportBody）。
 
 type State = { date: string; status: 'loading' | 'ok' | 'error'; data: TimelineDetail | null }
 
-export function SearchDiaryReport({ date, pw }: { date: string; pw: string | null }) {
+export function SearchDiaryReport({ date, pw, from = '' }: { date: string; pw: string | null; from?: string }) {
   const valid = isDiaryDate(date)
   const [st, setSt] = useState<State | null>(null)
   useEffect(() => {
@@ -21,7 +22,7 @@ export function SearchDiaryReport({ date, pw }: { date: string; pw: string | nul
     return () => { alive = false }
   }, [date, pw, valid])
 
-  const link = <a className="om-gh om-rp-link" href="#graph/timeline">在時間軸看 →</a>
+  const link = <a className="om-gh om-rp-link" href={buildTimelineDayLink(date, from)}>在時間軸看 →</a>
   let body: ReactNode
   if (!valid) body = <p className="om-one om-dim">這一筆沒有對應的日報。</p>
   else if (!pw) body = <p className="om-one om-dim">解鎖後可看那天的日報圖表</p>

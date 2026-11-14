@@ -259,17 +259,15 @@ describe('視覺化結構（2.99.0 打磨）', () => {
     expect(t.widthStart).toBeGreaterThan(tEnd.widthEnd)
     expect(l.limbs.every((x) => x.d.startsWith('M') && x.d.endsWith('Z'))).toBe(true)
   })
-  it('時間刻度位置隨日期單調（越晚越高），葉子的高度就是它的日期', () => {
+  it('時間刻度位置隨日期單調（越晚越高）', () => {
     expect(l.ticks.length).toBeGreaterThanOrEqual(2)
     for (let i = 1; i < l.ticks.length; i++) expect(l.ticks[i]!.y).toBeLessThan(l.ticks[i - 1]!.y)
     expect(l.ticks.some((t) => t.major && /^[0-9]{4}$/.test(t.label))).toBe(true)
     const dates = ['2026-01-01', '2026-03-01', '2026-06-15', '2026-11-14']
     const ys = dates.map((d) => dateToY(l.axis, d))
     for (let i = 1; i < ys.length; i++) expect(ys[i]!).toBeLessThan(ys[i - 1]!)
-    const byDate = [...data.insights].sort((a, b) => (a.date < b.date ? -1 : 1))
-    const leafY = (id: string) => l.leaves.find((x) => x.id === id)!.y
-    for (let i = 1; i < byDate.length; i++) expect(leafY(byDate[i]!.id)).toBeLessThanOrEqual(leafY(byDate[i - 1]!.id) + 0.05)
-    expect(Math.abs(leafY('a1') - dateToY(l.axis, '2026-01-05'))).toBeLessThan(0.1)
+    // 2.99.1：葉子沿自己的枝排（35%～100%），高度不再等於日期；同一群內較新的葉子不會比較舊的低（refine 分岔葉除外）
+    for (const lf of l.leaves) { expect(lf.y).toBeGreaterThan(0); expect(lf.y).toBeLessThan(l.height) }
   })
   it('葉形依 relation 各不相同；推翻是微垂的枯葉', () => {
     const shapes = (['new', 'reinforce', 'refine', 'overturn'] as const).map((r) => leafShape(r))
@@ -446,4 +444,40 @@ describe('聚焦時不裁切（退回第 1 次）', () => {
       })
     }
   })
+})
+
+describe('葉子一律長在自己脈絡的枝上，不落在樹幹上（2.99.1）', () => {
+  const mkN = (n: number, groups: number): InsightData => {
+    const out: unknown[] = []
+    for (let i = 0; i < n; i++) {
+      const g = groups === 9 && n === 13 ? [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 0, 1][i]! : i % groups
+      const th = `T-${g}-${i % 2}`
+      const prevSame = out.filter((o) => (o as { thread: string }).thread === th) as Array<{ id: string }>
+      const rel = i % 7 === 3 && prevSame.length > 0 ? 'refine' : i % 9 === 8 && prevSame.length > 0 ? 'overturn' : 'new'
+      const d = new Date(NOW.getTime() - (400 - Math.floor((i * 390) / Math.max(1, n))) * 86_400_000).toISOString().slice(0, 10)
+      out.push({ id: `L${i}`, date: d, time: null, text: `心得 ${i}`, provenance: 'quote', cluster: `K${g + 1}`, thread: th, relation: rel, parent: rel === 'new' ? null : prevSame[prevSame.length - 1]!.id })
+    }
+    const d = parseInsights({ clusters: Array.from({ length: groups }, (_, i) => ({ id: `K${i + 1}`, name: `群${i + 1}`, count: 3 })), insights: out })
+    if (!d) throw new Error('解析失敗')
+    return d
+  }
+  const cases: Array<[string, InsightData]> = [
+    ['1 則', mkN(1, 1)], ['2 則', mkN(2, 2)], ['3 則', mkN(3, 3)], ['5 則', mkN(5, 3)],
+    ['13 則 9 群', mkN(13, 9)], ['68 則', mkN(68, 8)], ['300 則', bigData()],
+  ]
+  for (const [w, h] of [[360, 560], [800, 520]] as const) {
+    for (const [name, d] of cases) {
+      it(`${name}（${w} 寬）：葉子離樹幹中心線 ≥ 樹幹半寬＋葉寬；單則群的葉子在枝梢（≤ 枝長 10%）`, () => {
+        const l = layoutInsightTree(d, { width: w, height: h, now: NOW })
+        const tx = l.trunk.from[0]
+        for (const lf of l.leaves) expect(Math.abs(lf.x - tx), lf.id).toBeGreaterThanOrEqual(l.trunk.widthStart / 2 + lf.r)
+        l.clusters.forEach((c, ci) => {
+          if (c.count !== 1) return
+          const lf = l.leaves.find((x) => x.clusterIndex === ci)!
+          const len = l.limbs.filter((x) => x.level === 'cluster' && x.clusterIndex === ci).reduce((s, x) => s + Math.hypot(x.to[0] - x.from[0], x.to[1] - x.from[1]), 0)
+          expect(Math.hypot(lf.x - c.x, lf.y - c.y), `${c.id} 單則群`).toBeLessThanOrEqual(len * 0.1)
+        })
+      })
+    }
+  }
 })
