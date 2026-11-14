@@ -1,4 +1,4 @@
-import { PARTS, UNIT_WORD, partTip, type Bucket, type Milestones } from './milestones'
+import { PARTS, UNIT_WORD, dayNames, partTip, verdict, type Bucket, type Milestones } from './milestones'
 
 // 🏁 里程碑卡（日／週／月／季／年報共用，取代原本日報的「近 14 天 AI 分數走勢」）。圖全是 CSS，不引入圖表套件。
 // 上：本期各項成果＋合計（與近幾期平均比）；中：徽章（連續天數、新高、年度關卡）；下：近 N 期堆疊柱（虛線＝平均）、年度累計關卡進度。
@@ -43,11 +43,21 @@ function Trend({ m, onOpenDay }: { m: Milestones; onOpenDay?: (date: string) => 
   )
 }
 
+/** 日級卡片的見人／運動格：數字下方一行小字列名字（見人最多 4、運動最多 3，多的寫「等 N」）；沒名字不顯示 */
+function PartNames({ k, items }: { k: 'social' | 'workout'; items: readonly string[] }) {
+  const names = dayNames(items)
+  if (names.length === 0) return null
+  const max = k === 'social' ? 4 : 3
+  const text = names.length > max ? `${names.slice(0, max).join('、')} 等 ${names.length} ${k === 'social' ? '位' : '項'}` : names.join('、')
+  return <span className="ms-part-names" data-testid={k === 'social' ? 'ms-social-names' : 'ms-workout-names'}>{text}</span>
+}
+
 export function MilestoneCard({ m, tasksMissing, lifeMissing, onOpenDay }: { m: Milestones; tasksMissing: boolean; lifeMissing: boolean; onOpenDay?: (date: string) => void }) {
   const c = m.current
   const diff = m.avg === null ? null : Math.round((c.total - m.avg) * 10) / 10
   const prevN = m.trend.length - 1
   const tasksUnknown = tasksMissing || c.noTasks
+  const vd = verdict(m)
   return (
     <section className="hm-card ms-card" aria-label="里程碑" data-testid="ms-card" data-level={m.level}>
       <h2 className="hm-h">🏁 里程碑<span className="hm-h-right rp-hint">成果＝任務＋想法＋生活（見人、新店、旅行、運動）；滑過數字看是哪些</span></h2>
@@ -62,6 +72,7 @@ export function MilestoneCard({ m, tasksMissing, lifeMissing, onOpenDay }: { m: 
               {c.partial && '（還沒結束）'}
             </span>
           )}
+          {vd && <p className="ms-verdict" data-tone={vd.tone} data-testid="ms-verdict">{vd.text}</p>}
         </div>
         {PARTS.map((p) => {
           const tip = partTip(p.key, c[p.key], c.items[p.key], p.key === 'tasks' && tasksUnknown)
@@ -69,6 +80,7 @@ export function MilestoneCard({ m, tasksMissing, lifeMissing, onOpenDay }: { m: 
             <div key={p.key} className="ms-part" data-k={p.key} data-testid={`ms-part-${p.key}`} tabIndex={0} title={tip} aria-label={tip.replace(/\n/g, '；')}>
               <span className="ms-part-t"><span aria-hidden>{p.icon}</span>{p.label}</span>
               <b>{p.key === 'tasks' && tasksUnknown ? '—' : c[p.key]}<small>{p.unit}</small></b>
+              {m.level === 'day' && (p.key === 'social' || p.key === 'workout') && <PartNames k={p.key} items={c.items[p.key]} />}
             </div>
           )
         })}

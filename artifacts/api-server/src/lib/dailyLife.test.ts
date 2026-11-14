@@ -13,6 +13,18 @@ describe("lifeDaysOf", () => {
     expect([...m.keys()]).toEqual(["2026-10-01"]);
     expect(m.get("2026-10-01")?.socialPeople).toBe(2);
   });
+  it("見人：socialDays 的 names 去空白、去重、只收字串、最多 20 個；缺漏或格式不對＝空陣列", () => {
+    const m = lifeDaysOf(src({ companion: { socialDays: [
+      { date: "2026-10-01", people: 3, names: [" 阿明 ", "小美", "阿明", 7, "", "老王"] },
+      { date: "2026-10-02", people: 2 },
+      { date: "2026-10-03", people: 1, names: "阿明" },
+    ] } }), TODAY);
+    expect(m.get("2026-10-01")?.socialNames).toEqual(["阿明", "小美", "老王"]);
+    expect(m.get("2026-10-02")?.socialNames).toEqual([]);
+    expect(m.get("2026-10-03")?.socialNames).toEqual([]);
+    const many = lifeDaysOf(src({ companion: { socialDays: [{ date: "2026-10-04", people: 25, names: Array.from({ length: 25 }, (_, i) => `人${i}`) }] } }), TODAY);
+    expect(many.get("2026-10-04")?.socialNames).toHaveLength(20);
+  });
   it("新店：吃過的美食才算；想吃、景點、沒有 visitedAt 不算", () => {
     const m = lifeDaysOf(src({ places: [place("甲"), place("乙", { status: "favorite" }), place("丙", { status: "want" }), place("丁", { kind: "sight" }), place("戊", { visitedAt: null })] }), TODAY);
     expect(m.get("2026-10-20")?.newPlaces).toEqual(["甲", "乙"]);
@@ -29,6 +41,10 @@ describe("lifeDaysOf", () => {
     expect(m.size).toBe(1);
     expect(lifeDaysOf(src({ workoutDays: { bad: true } }), TODAY).size).toBe(0);
   });
+  it("運動：同一動作記兩筆只算 1 項；名稱去空白", () => {
+    const m = lifeDaysOf(src({ workoutDays: [{ date: "2026-10-07", entries: 4, exercises: ["跑步", " 跑步 ", "深蹲", ""] }] }), TODAY);
+    expect(m.get("2026-10-07")?.workouts).toEqual(["跑步", "深蹲"]);
+  });
   it("未來與視窗外的日子不列", () => {
     const m = lifeDaysOf(src({ workoutDays: [{ date: "2026-10-31", exercises: ["深蹲"] }, { date: "2020-01-01", exercises: ["深蹲"] }] }), TODAY);
     expect(m.size).toBe(0);
@@ -37,6 +53,6 @@ describe("lifeDaysOf", () => {
   });
   it("同一天多項併在一起", () => {
     const m = lifeDaysOf(src({ companion: { socialDays: [{ date: "2026-10-11", people: 1 }] }, places: [place("甲", { visitedAt: "2026-10-11" })], trips: [trip()], workoutDays: [{ date: "2026-10-11", exercises: ["跑步"] }] }), TODAY);
-    expect(m.get("2026-10-11")).toEqual({ date: "2026-10-11", socialPeople: 1, newPlaces: ["甲"], trip: "花蓮", workouts: ["跑步"] });
+    expect(m.get("2026-10-11")).toEqual({ date: "2026-10-11", socialPeople: 1, socialNames: [], newPlaces: ["甲"], trip: "花蓮", workouts: ["跑步"] });
   });
 });

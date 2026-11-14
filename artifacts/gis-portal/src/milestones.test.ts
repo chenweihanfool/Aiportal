@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
 import {
-  averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseDailyLife, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
+  dayNames, verdict, averageOthers, badges, bucketLabel, buckets, buildMilestones, dailyIndex, itemsRange, longestStreak, parseDailyLife, parseTasksDone, partTip, roads, streakEndingAt, sumRange,
   type TasksDone,
 } from './milestones'
 
@@ -48,24 +48,38 @@ describe('任務與想法的標題（提示窗）', () => {
 
 describe('生活項目', () => {
   const life = parseDailyLife({ days: [
-    { date: '2026-10-20', socialPeople: 3, newPlaces: ['甲店', '乙店'], trip: '花蓮', workouts: ['深蹲', '臥推'] },
+    { date: '2026-10-20', socialPeople: 3, socialNames: ['阿明', '小美', '老王'], newPlaces: ['甲店', '乙店'], trip: '花蓮', workouts: ['深蹲', '臥推'] },
     { date: '2026-10-21', socialPeople: 0, newPlaces: [], trip: '花蓮', workouts: [] },
     { date: 'x', socialPeople: 1, newPlaces: [], trip: null, workouts: [] },
   ] })
   const ix = dailyIndex([], tasks({ '2026-10-20': 1 }), life)
-  it('parseDailyLife：丟壞列；格式不對回 null', () => {
+  it('parseDailyLife：丟壞列；格式不對回 null；缺 socialNames 的舊資料補空陣列', () => {
     expect(Object.keys(life!)).toEqual(['2026-10-20', '2026-10-21'])
+    expect(life!['2026-10-21'].socialNames).toEqual([])
+    expect(parseDailyLife({ days: [{ date: '2026-10-22', socialPeople: 2, newPlaces: [], trip: null, workouts: [] }] })?.['2026-10-22'].socialNames).toEqual([])
     expect(parseDailyLife({ days: 'x' })).toBeNull()
   })
-  it('見人、旅行、運動一天算一次，新店每間算一次', () => {
-    expect(ix.at('2026-10-20')).toEqual({ tasks: 1, ideasNew: 0, ideasDone: 0, social: 1, newPlaces: 2, tripDay: 1, workout: 1 })
+  it('見人算人數、運動算項數、旅行一天算一次，新店每間算一次', () => {
+    expect(ix.at('2026-10-20')).toEqual({ tasks: 1, ideasNew: 0, ideasDone: 0, social: 3, newPlaces: 2, tripDay: 1, workout: 2 })
     expect(ix.at('2026-10-22')).toMatchObject({ social: 0, newPlaces: 0, tripDay: 0, workout: 0 })
   })
   it('提示窗列出具體項目；區間合計與合計數都含生活項目', () => {
-    expect(ix.items('2026-10-20')).toMatchObject({ social: ['10/20 3 位家人朋友'], newPlaces: ['甲店', '乙店'], tripDay: ['10/20 花蓮'], workout: ['10/20 深蹲、臥推'] })
+    expect(ix.items('2026-10-20')).toMatchObject({ social: ['10/20 阿明、小美、老王'], newPlaces: ['甲店', '乙店'], tripDay: ['10/20 花蓮'], workout: ['10/20 深蹲、臥推'] })
     expect(itemsRange(ix, ['2026-10-20', '2026-10-21'], TODAY).tripDay).toEqual(['10/20 花蓮', '10/21 花蓮'])
     expect(partTip('tripDay', 2, ['10/20 花蓮', '10/21 花蓮'])).toBe('🧳 旅行 2\n• 10/20 花蓮\n• 10/21 花蓮')
     expect(buckets(ix, 'day', ['2026-10-21', '2026-10-21'], TODAY, 1)[0].total).toBe(1)
+  })
+  it('舊資料沒有名字：見人提示窗維持「N 位家人朋友」；dayNames 取出名字', () => {
+    const old = dailyIndex([], null, parseDailyLife({ days: [{ date: '2026-10-22', socialPeople: 2, newPlaces: [], trip: null, workouts: [] }] }))
+    expect(old.items('2026-10-22').social).toEqual(['10/22 2 位家人朋友'])
+    expect(dayNames(old.items('2026-10-22').social)).toEqual([])
+    expect(dayNames(ix.items('2026-10-20').social)).toEqual(['阿明', '小美', '老王'])
+    expect(dayNames(ix.items('2026-10-20').workout)).toEqual(['深蹲', '臥推'])
+    expect(dayNames([])).toEqual([])
+  })
+  it('partTip：見人、運動數量多於標題行數時不補「另 N 項沒有標題紀錄」', () => {
+    expect(partTip('social', 3, ['10/20 阿明、小美、老王'])).toBe('🫶 見家人朋友 3\n• 10/20 阿明、小美、老王')
+    expect(partTip('workout', 2, ['10/20 深蹲、臥推'])).toBe('🏋️ 運動 2\n• 10/20 深蹲、臥推')
   })
   it('只有生活項目的日子也算連續有成果', () => {
     expect(streakEndingAt(ix, '2026-10-21', TODAY)).toBe(2)
@@ -176,5 +190,36 @@ describe('buildMilestones', () => {
     expect(m.current).toMatchObject({ total: 1, ideasNew: 1, noTasks: true })
     expect(m.trend).toHaveLength(12)
     expect(m.tasksSince).toBeNull()
+  })
+})
+
+describe('verdict（成果評語）', () => {
+  const prior = (n: number, since = '2026-10-12') => Object.fromEntries(Array.from({ length: 13 }, (_, i) => [`2026-10-${String(12 + i).padStart(2, '0')}`, n]).filter(([d]) => d >= since)) as Record<string, number>
+  const day = (ideas: IdeaItem[], t: TasksDone | null, today = TODAY) => buildMilestones(ideas, t, 'day', ['2026-10-25', '2026-10-25'], today)!
+  it('偏高：列出差最多的前 2 項', () => {
+    const v = verdict(day([idea('a', '2026-10-25')], tasks({ ...prior(2), '2026-10-25': 5 })))
+    expect(v).toEqual({ tone: 'high', text: '偏高：比近 13 天平均多 4，主要是完成任務多 3、新想法多 1' })
+  })
+  it('偏低：本期為 0 寫「沒有…」，不為 0 寫「少 X」', () => {
+    expect(verdict(day([], tasks(prior(4))))).toEqual({ tone: 'low', text: '偏低：比近 13 天平均少 4，主要是沒有完成任務' })
+    expect(verdict(day([], tasks({ ...prior(4), '2026-10-25': 1 })))).toEqual({ tone: 'low', text: '偏低：比近 13 天平均少 3，主要是完成任務少 3' })
+  })
+  it('正常：差不多，差都不到 0.5 不寫理由', () => {
+    expect(verdict(day([], tasks({ ...prior(2), '2026-10-25': 2 })))).toEqual({ tone: 'normal', text: '正常：和近 13 天平均差不多' })
+  })
+  it('正常但有小差：接最大的一項', () => {
+    expect(verdict(day([], tasks({ ...prior(10), '2026-10-25': 9 })))?.text).toBe('正常：和近 13 天平均差不多，完成任務少 1')
+  })
+  it('avg 為 null 回 null', () => {
+    expect(verdict(day([], tasks({ '2026-10-25': 3 })))).toBeNull()
+  })
+  it('本期整段在任務資料之前（noTasks）：跳過任務，只看想法', () => {
+    const ideas = Array.from({ length: 13 }, (_, i) => idea(`i${i}`, `2026-10-${String(12 + i).padStart(2, '0')}`))
+    const v = verdict(day(ideas, tasks({ '2026-10-30': 1 }, '2026-10-30')))
+    expect(v).toEqual({ tone: 'low', text: '偏低：比近 13 天平均少 1，主要是沒有新想法' })
+  })
+  it('本期還沒結束加註', () => {
+    const v = verdict(day([], tasks(prior(3, '2026-10-12')), '2026-10-24'))
+    expect(v?.text).toMatch(/^偏低：.*（還沒結束）$/)
   })
 })

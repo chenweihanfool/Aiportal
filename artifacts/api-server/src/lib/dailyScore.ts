@@ -6,6 +6,7 @@
 //
 // 評分公式與前端 gis-portal/src/dailyScore.ts 相同（時間軸要逐日現算，兩邊各一份）；
 // 常數一致由 gis-portal 的 dailyScore.test.ts 讀這支檔比對。生活面向（見人、新店、旅行、運動）的逐日資料見 dailyLife.ts。
+// 使用者 2026-11-14 選定：見人計數改算人數但點數不變（一天最多 2 點）；運動改每項 1 點、上限 4（2 項＝2 點，與舊制同）。
 import type { HermesIdea } from "@workspace/db";
 import { HAPPINESS_CONFIG, clamp, type HappinessConfig } from "./happinessIndex";
 import type { LifeDay } from "./dailyLife";
@@ -16,12 +17,14 @@ export const IDEA_DONE_POINTS = 2;
 export const SOCIAL_POINTS = 2;
 export const NEW_PLACE_POINTS = 1;
 export const TRIP_DAY_POINTS = 2;
-export const WORKOUT_POINTS = 2;
+export const WORKOUT_POINTS = 1;
+/** 運動一天最多算幾點（使用者 2026-11-14 選 4） */
+export const WORKOUT_CAP = 4;
 export const HALF_POINTS = 3;
 /** 基準線至少要幾天才修正；不足時修正為 0 */
 export const MIN_BASELINE_DAYS = 7;
 
-/** social、tripDay、workout 一天最多 1；newPlaces 每間算一次 */
+/** social＝見面人數、workout＝運動項目數（2026-11-14 起；先前一天都只算 1）；tripDay 一天最多 1；newPlaces 每間算一次 */
 export interface DayCounts { tasks: number; ideasNew: number; ideasDone: number; social: number; newPlaces: number; tripDay: number; workout: number }
 
 export interface DayScore {
@@ -35,7 +38,7 @@ export interface DayScore {
 
 export function dayScoreOf(counts: DayCounts, ai: number | null): DayScore {
   const points = counts.tasks + counts.ideasNew + IDEA_DONE_POINTS * counts.ideasDone
-    + SOCIAL_POINTS * counts.social + NEW_PLACE_POINTS * counts.newPlaces + TRIP_DAY_POINTS * counts.tripDay + WORKOUT_POINTS * counts.workout;
+    + SOCIAL_POINTS * Math.min(1, counts.social) + NEW_PLACE_POINTS * counts.newPlaces + TRIP_DAY_POINTS * counts.tripDay + WORKOUT_POINTS * Math.min(WORKOUT_CAP, counts.workout);
   const achievement = Math.round(100 * (1 - 0.5 ** (Math.max(0, points) / HALF_POINTS)));
   const total = ai === null ? achievement : ACHIEVEMENT_WEIGHT * achievement + AI_WEIGHT * ai;
   return { total: Math.round(total), achievement, points, counts, ai };
@@ -58,7 +61,7 @@ export function dayCounter(ideas: HermesIdea[], tasksByDate: Map<string, number>
     const l = life.get(date);
     return {
       tasks: tasksByDate.get(date) ?? 0, ideasNew: born.get(date) ?? 0, ideasDone: done.get(date) ?? 0,
-      social: l && l.socialPeople > 0 ? 1 : 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l && l.workouts.length > 0 ? 1 : 0,
+      social: l?.socialPeople ?? 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l?.workouts.length ?? 0,
     };
   };
 }

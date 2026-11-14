@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { HermesIdea } from "@workspace/db";
-import { dayAdjustOf, dayCounter, dayScoreOf, tasksByDateOf, type DayCounts } from "./dailyScore";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { dayAdjustOf, dayCounter, dayScoreOf, tasksByDateOf, SOCIAL_POINTS, WORKOUT_CAP, WORKOUT_POINTS, type DayCounts } from "./dailyScore";
 
 const flat = (v: number, n = 28) => Array<number>(n).fill(v);
 const counts = (over: Partial<DayCounts> = {}): DayCounts => ({ tasks: 0, ideasNew: 0, ideasDone: 0, social: 0, newPlaces: 0, tripDay: 0, workout: 0, ...over });
@@ -12,9 +14,14 @@ describe("dayScoreOf", () => {
   it("實行算兩點；沒有 AI 自評只用成果分", () => {
     expect(dayScoreOf(counts({ ideasDone: 1 }), null)).toMatchObject({ points: 2, total: 37 });
   });
-  it("生活面向：見人 2、新店每間 1、旅行 2、運動 2，與前端同一組例子", () => {
+  it("生活面向：見人 2、新店每間 1、旅行 2、運動每項 1 上限 4，與前端同一組例子", () => {
     expect(dayScoreOf(counts({ social: 1, tripDay: 1, newPlaces: 1 }), null)).toMatchObject({ points: 5, total: 69 });
-    expect(dayScoreOf(counts({ workout: 1 }), null).points).toBe(2);
+    expect([1, 2, 5].map((n) => dayScoreOf(counts({ workout: n }), null).points)).toEqual([1, 2, 4]);
+    expect(dayScoreOf(counts({ social: 3 }), null).points).toBe(2);
+  });
+  it("常數與前端 dailyScore.ts 相同", () => {
+    const src = readFileSync(resolve(__dirname, "../../../gis-portal/src/dailyScore.ts"), "utf8");
+    for (const [name, v] of Object.entries({ SOCIAL_POINTS, WORKOUT_POINTS, WORKOUT_CAP })) expect(src, name).toContain(`export const ${name} = ${v}`);
   });
 });
 
@@ -29,9 +36,9 @@ describe("dayCounter", () => {
     expect(at("2026-10-03")).toEqual(counts({ tasks: 2, ideasDone: 1 }));
     expect(at("2026-10-05").ideasDone).toBe(0);
   });
-  it("生活項目：見人、旅行、運動一天算一次，新店每間算一次", () => {
-    const at = dayCounter([], new Map(), new Map([["2026-10-03", { date: "2026-10-03", socialPeople: 3, newPlaces: ["甲", "乙"], trip: "花蓮", workouts: ["深蹲", "臥推"] }]]));
-    expect(at("2026-10-03")).toEqual(counts({ social: 1, newPlaces: 2, tripDay: 1, workout: 1 }));
+  it("生活項目：見人算人數、運動算項數、旅行一天算一次，新店每間算一次", () => {
+    const at = dayCounter([], new Map(), new Map([["2026-10-03", { date: "2026-10-03", socialPeople: 3, socialNames: ["甲", "乙", "丙"], newPlaces: ["甲", "乙"], trip: "花蓮", workouts: ["深蹲", "臥推"] }]]));
+    expect(at("2026-10-03")).toEqual(counts({ social: 3, newPlaces: 2, tripDay: 1, workout: 2 }));
     expect(at("2026-10-04")).toEqual(counts());
   });
   it("回補想法的 done 是補登日，不算實行", () => {

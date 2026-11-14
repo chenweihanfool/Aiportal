@@ -16,10 +16,10 @@ export const PARTS: ReadonlyArray<{ key: PartKey; icon: string; label: string; u
   { key: 'tasks', icon: '✅', label: '完成任務', unit: '項' },
   { key: 'ideasNew', icon: '💡', label: '新想法', unit: '個' },
   { key: 'ideasDone', icon: '🚀', label: '想法實行', unit: '個' },
-  { key: 'social', icon: '🫶', label: '見家人朋友', unit: '天' },
+  { key: 'social', icon: '🫶', label: '見家人朋友', unit: '位' },
   { key: 'newPlaces', icon: '🍜', label: '去新店', unit: '間' },
   { key: 'tripDay', icon: '🧳', label: '旅行', unit: '天' },
-  { key: 'workout', icon: '🏋️', label: '運動', unit: '天' },
+  { key: 'workout', icon: '🏋️', label: '運動', unit: '項' },
 ]
 /** 走勢要畫幾期（含本期） */
 export const TREND_N: Record<MsLevel, number> = { day: 14, week: 12, month: 12, quarter: 8, year: 5 }
@@ -59,14 +59,15 @@ export async function apiFetchTasksDone(pw: string): Promise<TasksDone | null> {
 }
 
 // ── 資料：每天的生活項目（GET /api/daily-life，算法見 api-server lib/dailyLife.ts） ──
-export interface LifeDay { date: string; socialPeople: number; newPlaces: string[]; trip: string | null; workouts: string[] }
+export interface LifeDay { date: string; socialPeople: number; socialNames: string[]; newPlaces: string[]; trip: string | null; workouts: string[] }
 export type DailyLife = Record<string, LifeDay>
 
 export function parseDailyLife(raw: unknown): DailyLife | null {
   const days = (raw as { days?: unknown } | null)?.days
   if (!Array.isArray(days)) return null
   const out: DailyLife = {}
-  for (const d of days as LifeDay[]) if (d && typeof d.date === 'string' && DATE.test(d.date)) out[d.date] = d
+  // 舊資料沒有 socialNames：補空陣列，不可丟錯
+  for (const d of days as LifeDay[]) if (d && typeof d.date === 'string' && DATE.test(d.date)) out[d.date] = { ...d, socialNames: Array.isArray(d.socialNames) ? d.socialNames : [] }
   return out
 }
 
@@ -79,6 +80,7 @@ export async function apiFetchDailyLife(pw: string): Promise<DailyLife | null> {
 }
 
 // ── 每天的計數 ──
+/** social＝見面人數、workout＝運動項目數（2026-11-14 起；先前一天都只算 1） */
 export type Counts = Record<PartKey, number>
 /** 每項的具體標題（任務、想法、店名；一天算一次的生活項目帶日期，合併區間時才分得出來）；任務標題推送端沒給的日子是空陣列，數量照 Counts */
 export type Items = Record<PartKey, string[]>
@@ -102,7 +104,7 @@ export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null, 
       const l = life?.[d]
       return {
         tasks: byDate[d] ?? 0, ideasNew: born[d]?.length ?? 0, ideasDone: done[d]?.length ?? 0,
-        social: l && l.socialPeople > 0 ? 1 : 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l && l.workouts.length > 0 ? 1 : 0,
+        social: l?.socialPeople ?? 0, newPlaces: l?.newPlaces.length ?? 0, tripDay: l?.trip ? 1 : 0, workout: l?.workouts.length ?? 0,
       }
     },
     items: (d) => {
@@ -110,7 +112,7 @@ export function dailyIndex(ideas: readonly IdeaItem[], tasks: TasksDone | null, 
       const md = `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`
       return {
         tasks: titles[d] ?? [], ideasNew: born[d] ?? [], ideasDone: done[d] ?? [],
-        social: l && l.socialPeople > 0 ? [`${md} ${l.socialPeople} 位家人朋友`] : [],
+        social: l && l.socialPeople > 0 ? [l.socialNames.length > 0 ? `${md} ${l.socialNames.join('、')}` : `${md} ${l.socialPeople} 位家人朋友`] : [],
         newPlaces: l?.newPlaces ?? [],
         tripDay: l?.trip ? [`${md} ${l.trip}`] : [],
         workout: l && l.workouts.length > 0 ? [`${md} ${l.workouts.join('、')}`] : [],
@@ -149,7 +151,7 @@ export function itemsRange(ix: DailyIndex, r: Range, today: string): Items {
   return out
 }
 
-/** 一項的提示窗：「✅ 完成任務 4」＋逐條標題（超過 8 項寫「另 N 項」）；數量多於標題時補一句（舊資料沒有任務標題） */
+/** 一項的提示窗：「✅ 完成任務 4」＋逐條標題（超過 8 項寫「另 N 項」）；只有任務在數量多於標題時補一句（舊資料沒有任務標題；見人是人數、運動是項數，一天只有一行標題，不能拿來比） */
 export function partTip(key: PartKey, count: number, titles: readonly string[], unknown = false): string {
   const p = PARTS.find((x) => x.key === key)!
   const head = `${p.icon} ${p.label} ${unknown ? '—' : count}`
@@ -157,7 +159,16 @@ export function partTip(key: PartKey, count: number, titles: readonly string[], 
   if (count === 0) return head
   if (titles.length === 0) return `${head}（這段時間沒有標題紀錄）`
   const text = tipText(head, titles)
-  return titles.length < count ? `${text}\n（另 ${count - titles.length} 項沒有標題紀錄）` : text
+  return key === 'tasks' && titles.length < count ? `${text}\n（另 ${count - titles.length} 項沒有標題紀錄）` : text
+}
+
+/** 日級卡片用：取出那天的名字（見人的人名、運動的項目名）；items 一天一行「M/D 甲、乙」，舊資料見人只有「N 位家人朋友」就回空陣列 */
+export function dayNames(items: readonly string[]): string[] {
+  const line = items[0]
+  if (!line) return []
+  const body = line.replace(/^\d+\/\d+ /, '')
+  if (/^\d+ 位家人朋友$/.test(body)) return []
+  return body.split('、').filter((x) => x !== '')
 }
 
 // ── 走勢：本期往前 N 期 ──
@@ -293,4 +304,39 @@ export function buildMilestones(ideas: readonly IdeaItem[], tasks: TasksDone | n
     level, current: trend[trend.length - 1], trend, avg: averageOthers(trend), streak, longest, road,
     badges: badges(level, trend, streak, longest, road), tasksSince: ix.tasksSince,
   }
+}
+
+// ── 成果評語（2026-11-14）：這期成果比近幾期平均高或低，主要差在哪幾項 ──
+const ZERO_PHRASE: Record<PartKey, string> = {
+  tasks: '沒有完成任務', ideasNew: '沒有新想法', ideasDone: '沒有想法實行', social: '沒見家人朋友', newPlaces: '沒去新店', tripDay: '沒旅行', workout: '沒運動',
+}
+const fmt = (n: number) => String(Math.round(n * 10) / 10)
+
+export interface Verdict { tone: 'high' | 'normal' | 'low'; text: string }
+
+/** 平均不足（avg 為 null）回 null。差值小於 max(1, 平均×0.2) 算正常；理由取與方向相同、差最多的前 2 項（正常取 1 項，差都不到 0.5 不寫）。 */
+export function verdict(m: Milestones): Verdict | null {
+  if (m.avg === null) return null
+  const cur = m.current
+  const diff = cur.total - m.avg
+  const tone: Verdict['tone'] = Math.abs(diff) < Math.max(1, m.avg * 0.2) ? 'normal' : diff > 0 ? 'high' : 'low'
+  const others = m.trend.slice(0, -1).filter((b) => b.total > 0)
+  const deltas = PARTS
+    .filter((p) => !(p.key === 'tasks' && cur.noTasks))
+    .map((p) => ({ p, delta: cur[p.key] - others.reduce((s, b) => s + b[p.key], 0) / others.length }))
+  const pick = (tone === 'normal' ? deltas : deltas.filter((d) => (tone === 'high' ? d.delta > 0 : d.delta < 0)))
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, tone === 'normal' ? 1 : 2)
+    .filter((d) => tone !== 'normal' || Math.abs(d.delta) >= 0.5)
+  const phrase = (d: { p: (typeof PARTS)[number]; delta: number }, zeroOk: boolean) =>
+    zeroOk && d.delta < 0 && cur[d.p.key] === 0 ? ZERO_PHRASE[d.p.key] : `${d.p.label}${d.delta > 0 ? '多' : '少'} ${fmt(Math.abs(d.delta))}`
+  const span = `近 ${m.trend.length - 1} ${UNIT_WORD[m.level]}平均`
+  const tail = cur.partial ? '（還沒結束）' : ''
+  let text: string
+  if (tone === 'normal') {
+    text = `正常：和${span}差不多${pick.length > 0 ? `，${phrase(pick[0], false)}` : ''}`
+  } else {
+    text = `${tone === 'high' ? '偏高' : '偏低'}：比${span}${tone === 'high' ? '多' : '少'} ${fmt(Math.abs(diff))}${pick.length > 0 ? `，主要是${pick.map((d) => phrase(d, true)).join('、')}` : ''}`
+  }
+  return { tone, text: text + tail }
 }
