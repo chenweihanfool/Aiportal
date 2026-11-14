@@ -7,6 +7,8 @@ import { ArchitectureView } from './ArchitectureView'
 import { KnowledgeView } from './KnowledgeView'
 import { TimelineView } from './TimelineView'
 import { TripsView } from './TripsView'
+import { DossierView } from './DossierView'
+import { dossierFromHash } from './dossier'
 import { dimKeyFromHash } from './dimensionPage'
 import { YearReview } from './YearReview'
 import { yearFromHash } from './yearReview'
@@ -97,6 +99,11 @@ export default function App() {
   const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
   if (reviewYear !== null) {
     return <YearReview year={reviewYear} unlocked={unlocked} unlockedPassword={unlockedPassword} toneOf={hhiTone} onRequestUnlock={handleRequestUnlock} />
+  }
+  // 卷宗頁（2026-11-14）：#dossier＝索引、#dossier/<kind>/<名稱>＝單一案件／人／物
+  const dossierRoute = dossierFromHash(hashRoute)
+  if (dossierRoute !== null) {
+    return <DossierView unlockedPassword={unlockedPassword} route={dossierRoute} onRequestUnlock={handleRequestUnlock} />
   }
   if (hashRoute === '#graph') {
     return <RelationshipUniverse unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />

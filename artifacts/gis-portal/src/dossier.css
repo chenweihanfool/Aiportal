@@ -1,0 +1,51 @@
+/* 卷宗頁（#dossier）樣式：class 一律 .dz- 開頭，只用 --c-* token */
+.dz-page { min-height: 100vh; background: var(--c-bg); color: var(--c-ink); padding: 16px; box-sizing: border-box; overflow-x: hidden; }
+.dz-wrap { max-width: 1180px; margin: 0 auto; }
+.dz-nav { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 0.85rem; }
+.dz-nav a, .dz-link { color: var(--c-accent-ink); text-decoration: none; }
+.dz-nav a:hover, .dz-link:hover { text-decoration: underline; }
+.dz-nav a:focus-visible, .dz-link:focus-visible, .dz-btn:focus-visible, .dz-row:focus-visible, .dz-mhead:focus-visible, .dz-ev-btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.dz-head { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.dz-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; font-size: 1.4rem; word-break: break-word; }
+.dz-tag { font-size: 0.72rem; padding: 2px 10px; border: 1px solid var(--c-accent-dim); border-radius: 999px; color: var(--c-accent-ink); white-space: nowrap; }
+.dz-sentence { margin: 0 0 14px; color: var(--c-ink-2); line-height: 1.6; word-break: break-word; }
+.dz-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.dz-stat { background: var(--c-raised); border: 1px solid var(--c-line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.dz-stat b { display: block; font-size: 1.05rem; color: var(--c-ink); overflow-wrap: anywhere; }
+.dz-stat span { font-size: 0.72rem; color: var(--c-ink-2); }
+.dz-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 900px) { .dz-cols { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } .dz-stats { max-width: 720px; } }
+.dz-card { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: 10px; padding: 14px; margin-bottom: 16px; min-width: 0; }
+.dz-card h2 { margin: 0 0 12px; font-size: 0.95rem; color: var(--c-ink); }
+.dz-month { border-left: 2px solid var(--c-line-strong); margin-left: 6px; padding-left: 14px; margin-bottom: 10px; }
+.dz-mhead { background: none; border: 0; color: var(--c-ink); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; padding: 4px 0; text-align: left; }
+.dz-mhead span { color: var(--c-ink-2); font-weight: 400; }
+.dz-evs { list-style: none; margin: 0; padding: 0; }
+.dz-ev { margin: 6px 0; }
+.dz-ev-btn { background: none; border: 0; color: var(--c-ink); font: inherit; font-size: 0.85rem; cursor: pointer; text-align: left; padding: 2px 0; display: flex; gap: 10px; width: 100%; }
+.dz-ev-btn time { color: var(--c-ink-2); font-family: monospace; font-size: 0.78rem; white-space: nowrap; flex-shrink: 0; }
+.dz-ev-btn span { min-width: 0; overflow-wrap: anywhere; }
+.dz-ev-body { margin: 6px 0 8px 0; padding: 8px 10px; background: var(--c-raised); border: 1px solid var(--c-line); border-radius: 8px; font-size: 0.82rem; color: var(--c-ink-2); }
+.dz-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.dz-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px 28px; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 6px; color: var(--c-ink); text-decoration: none; font-size: 0.85rem; cursor: pointer; }
+.dz-row:hover { background: var(--c-hover); }
+.dz-row-name { min-width: 0; overflow-wrap: anywhere; }
+.dz-row-name small { color: var(--c-ink-2); margin-left: 6px; }
+.dz-bar { height: 8px; background: var(--c-raised-2); border-radius: 4px; overflow: hidden; }
+.dz-bar i { display: block; height: 100%; background: var(--c-accent-dim); border-radius: 4px; }
+.dz-num { color: var(--c-ink-2); font-size: 0.78rem; text-align: right; font-family: monospace; }
+.dz-ego { width: 100%; height: auto; display: block; }
+.dz-ego line { stroke: var(--c-line-strong); }
+.dz-node circle { fill: var(--c-raised-2); stroke: var(--c-accent-dim); stroke-width: 1.5; }
+.dz-node.dz-center circle { fill: var(--c-accent-dim); stroke: var(--c-accent); }
+.dz-node text { fill: var(--c-ink); font-size: 12px; text-anchor: middle; pointer-events: none; }
+.dz-node { cursor: pointer; }
+.dz-node:focus-visible { outline: none; }
+.dz-node:focus-visible circle, .dz-node:hover circle { stroke: var(--c-accent); stroke-width: 3; }
+.dz-topics { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 0.85rem; }
+.dz-topics p { margin: 2px 0 0; color: var(--c-ink-2); font-size: 0.78rem; }
+.dz-note { color: var(--c-ink-2); font-size: 0.88rem; line-height: 1.6; }
+.dz-btn { background: var(--c-raised); color: var(--c-ink); border: 1px solid var(--c-line-strong); border-radius: 6px; padding: 6px 14px; font: inherit; font-size: 0.85rem; cursor: pointer; margin-top: 8px; }
+.dz-btn:hover { background: var(--c-hover); }
+.dz-idx-row { grid-template-columns: minmax(0, 1fr) 96px 84px; }
+@media (max-width: 480px) { .dz-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dz-idx-row { grid-template-columns: minmax(0, 1fr) 56px 76px; } }
