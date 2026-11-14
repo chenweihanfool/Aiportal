@@ -20,12 +20,13 @@ export interface TraceCtx {
 const TraceContext = createContext<TraceCtx | null>(null)
 export const TraceProvider = TraceContext.Provider
 
-/** 開啟主題時載入 topic doc；404 或失敗靜默降級成 null */
+/** 開啟主題時載入 topic doc；404 或失敗靜默降級成 null。沒有密碼或題目 id 時不打 API。 */
 export function useTopicQuotes(pw: string, topicId: string): HermesTopicQuote[] | null {
   const [quotes, setQuotes] = useState<HermesTopicQuote[] | null>(null)
   useEffect(() => {
     let cancelled = false
     setQuotes(null)
+    if (!pw || !topicId) return () => { cancelled = true }
     apiFetchHermesDoc(pw, 'topic', topicId)
       .then((doc) => { if (!cancelled) setQuotes(Array.isArray(doc?.meta?.quotes) ? doc!.meta.quotes : null) })
       .catch(() => { if (!cancelled) setQuotes(null) })

@@ -6,6 +6,8 @@ import {
   RAIL_TICKS, addDays, atHours, buildCards, countLabel, defaultDay, nowReady, railPos, remainingPending, visibleCards, type FeedbackState, type NowCard, type NowDay,
 } from './nowCards'
 import { knowledgeHref, type TopicNudges } from './topicNudges'
+import { requestGraphFocus } from './graphFocus'
+import { personId } from './graphInsights'
 
 // 首頁「現在用得上」（2.87.0）：搜尋區正下方的時間軌＋最多 5 張推送卡，每張說得出「為什麼是現在」。
 // 純邏輯在 nowCards.ts；樣式 nw- 前綴在 portal.css，顏色變數只定義在 .nw-root。
@@ -284,7 +286,7 @@ function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUsef
         {card.kind === 'topic' || card.kind === 'recall' ? (
           <a className="nw-cta" href={knowledgeHref(card.topicId ?? '')} onClick={onOpened}>看這一頁</a>
         ) : card.kind === 'resume' ? (
-          <a className="nw-cta" href="#relations" onClick={onOpened}>看關係</a>
+          <a className="nw-cta" href="#graph" onClick={() => { if (card.person) requestGraphFocus({ kind: 'person', id: personId(card.person) }); onOpened() }}>看關係</a>
         ) : card.kind === 'brief' ? (
           <button type="button" className="nw-cta" onClick={scrollToBrief}>看全文</button>
         ) : card.kind === 'onthisday' ? null : (

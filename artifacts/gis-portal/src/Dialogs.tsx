@@ -1,7 +1,7 @@
 // 解鎖、管理後台（匯出資料）的對話框。
 import { useState } from 'react'
 import { CV, FONT } from './theme'
-import { UNLOCK_KEY, apiExportData, apiVerifyPassword } from './portalApi'
+import { apiExportData, apiVerifyPassword, writeUnlock } from './portalApi'
 
 // ─────────────────────────────────────────────
 // Password / Admin dialogs — same structure/logic as before, restyled to
@@ -26,7 +26,7 @@ export function PasswordModal({
     const token = await apiVerifyPassword(input)
     setLoading(false)
     if (token) {
-      localStorage.setItem(UNLOCK_KEY, token)
+      writeUnlock(token)
       if (pendingUrl) window.open(pendingUrl, '_blank', 'noopener,noreferrer')
       onSuccess(token)
     } else {

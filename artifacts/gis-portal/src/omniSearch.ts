@@ -1,5 +1,6 @@
 // 首頁「一個框搜全部」的純邏輯（2.86.0）：不碰 DOM、不打網路（網路在 omniSearchApi.ts，畫面在 OmniSearch.tsx）。
 // 契約（S1～S3）見 docs/search-api.md 與規格；這裡的解析一律寬容：欄位不對的項目略過，整體不丟錯。
+import { caseId, objectId, personId } from './graphInsights'
 
 export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'tool'
 
@@ -64,13 +65,14 @@ export type OpenAction =
   | { type: 'chat' }
   | { type: 'tool'; id: string }
   | { type: 'expand' }
+  | { type: 'graph'; kind: 'case' | 'person' | 'object'; id: string }
 
 export interface OmniCommand { id: string; label: string; hint: string; keywords: string[]; action: OpenAction }
 
 export const COMMANDS: readonly OmniCommand[] = [
   { id: 'timeline', label: '時間軸', hint: '日／週／月／季／年報', keywords: ['時間軸', '日報', '週報', '月報', '報告', 'timeline'], action: { type: 'hash', hash: 'graph/timeline' } },
   { id: 'ideas', label: '想法庫', hint: '全部想法與狀態', keywords: ['想法', '想法庫', 'ideas'], action: { type: 'ideas' } },
-  { id: 'relations', label: '關係', hint: '找人、找案件、見面前準備', keywords: ['關係', '人', '案件', 'relations'], action: { type: 'hash', hash: 'relations' } },
+  { id: 'relations', label: '關係', hint: '事人物關係宇宙', keywords: ['關係', '人', '案件', 'relations'], action: { type: 'hash', hash: 'graph' } },
   { id: 'graph', label: '關係宇宙', hint: '3D 關係圖', keywords: ['關係宇宙', '宇宙', '圖', 'graph'], action: { type: 'hash', hash: 'graph' } },
   { id: 'knowledge', label: '知識', hint: '知識頁與全樹', keywords: ['知識', '知識頁', 'knowledge'], action: { type: 'hash', hash: 'knowledge' } },
   { id: 'food', label: '美食地圖', hint: '口袋名單與地圖', keywords: ['美食', '吃', '餐廳', '地圖', '附近', 'food'], action: { type: 'hash', hash: 'food' } },
@@ -122,7 +124,9 @@ export function openAction(kind: SearchKind, id: string): OpenAction {
     case 'place': return { type: 'hash', hash: 'food' }
     case 'trip': return { type: 'hash', hash: `trips/${encodeURIComponent(id)}` }
     case 'tool': return { type: 'tool', id }
-    case 'case': case 'person': case 'object': return { type: 'hash', hash: 'relations' }
+    case 'case': return { type: 'graph', kind: 'case', id: caseId(id) }
+    case 'person': return { type: 'graph', kind: 'person', id: personId(id) }
+    case 'object': return { type: 'graph', kind: 'object', id: objectId(id) }
     case 'event': case 'concept': case 'method': case 'source': return { type: 'expand' }
   }
 }

@@ -4,6 +4,7 @@ import {
   KIND_ORDER, PREFIX_HINTS, addRecent, commandAnswer, filterCommands, flattenHits, isAbandoned, kindLabel, loadRecent, logKey, moveIndex,
   keepKnownTools, openAction, parseQuery, quickAnswer, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
 } from './omniSearch'
+import { requestGraphFocus } from './graphFocus'
 import { Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
 import type { SiteData } from './portalApi'
 
@@ -53,7 +54,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const [raw, setRaw] = useState('')
   const [focused, setFocused] = useState(false)
   const [status, setStatus] = useState<Status>('idle')
-  const [resp, setResp] = useState<SearchResponse | null>(null)
+  const [rawResp, setRawResp] = useState<SearchResponse | null>(null)
   const [sel, setSel] = useState(0)
   const [detour, setDetour] = useState<PreviewRelated | null>(null)
   const [prev, setPrev] = useState<PreviewState | null>(null)
@@ -83,6 +84,13 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const searchQ = parsed.mode === 'search' ? parsed.q : ''
   const searchKind = parsed.mode === 'search' ? parsed.kind : null
   const cmds: OmniCommand[] = useMemo(() => (parsed.mode === 'command' ? filterCommands(parsed.q) : []), [parsed])
+  // 存的是原始回應；工具只留 sites 認識的。sites 還沒載完（空陣列）時先不濾，
+  // 等 sites 到了再依它重算——否則回應比清單先到，工具會被整組濾掉且不會補回。
+  const knownToolIds = useMemo(() => new Set(sites.map((x) => String(x.id))), [sites])
+  const resp = useMemo(
+    () => (rawResp === null || knownToolIds.size === 0 ? rawResp : keepKnownTools(rawResp, knownToolIds)),
+    [rawResp, knownToolIds],
+  )
   const flat = useMemo(() => flattenHits(resp?.groups ?? []), [resp])
   const hitsLen = parsed.mode === 'command' ? cmds.length : status === 'ok' ? flat.length : 0
 
@@ -104,7 +112,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     flushAbandon()
     setDetour(null)
     setExpanded(false)
-    if (!searchQ || !pw) { setStatus('idle'); setResp(null); setSel(0); return }
+    if (!searchQ || !pw) { setStatus('idle'); setRawResp(null); setSel(0); return }
     setStatus('loading')
     const ctl = new AbortController()
     const t = setTimeout(() => {
@@ -112,12 +120,15 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       apiSearch(pw, searchQ, searchKind, ctl.signal)
         .then((r) => {
           if (ctl.signal.aborted) return
-          if (r === null) { setStatus('offline'); setResp(null); return }
-          r = keepKnownTools(r, new Set(sitesRef.current.map((x) => String(x.id))))
-          setResp(r)
+          if (r === null) { setStatus('offline'); setRawResp(null); return }
+          setRawResp(r)
           setStatus('ok')
-          setSel(r.groups.length > 0 ? 0 : -1)
-          session.current = { q: searchQ, kind: searchKind, total: r.total, shownAt: Date.now(), clicked: false }
+          // 先照「當下」的 sites 推導一次（sites 未到＝原樣不濾）；之後 sites 到了，
+          // 畫面會用 useMemo 重算，不必重打 API。
+          const known = new Set(sitesRef.current.map((x) => String(x.id)))
+          const shown = known.size === 0 ? r : keepKnownTools(r, known)
+          setSel(shown.groups.length > 0 ? 0 : -1)
+          session.current = { q: searchQ, kind: searchKind, total: shown.total, shownAt: Date.now(), clicked: false }
         })
         .catch(() => { if (!ctl.signal.aborted) setStatus('error') })
     }, DEBOUNCE_MS)
@@ -171,12 +182,14 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       case 'ideas': onOpenIdeas(); break
       case 'chat': onOpenChat(q || undefined); break
       case 'tool': {
+        // sites 裡沒有這個工具（清單尚未載入或已被撤掉）只顯示提示，不開空白頁
         const site = sites.find((s) => String(s.id) === a.id)
         if (site) onSelectSite(site)
         else setNotice('找不到這個工具連結')
         break
       }
       case 'expand': setExpanded((v) => !v); break
+      case 'graph': requestGraphFocus({ kind: a.kind, id: a.id }); window.location.hash = '#graph'; break
     }
   }
   const openItem = (h: ReaderItem) => {
