@@ -238,7 +238,11 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
       try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 取不到 history 就維持原網址 */ }
     }
   }, [])
-  const open = useCallback((id: string) => { setHover(null); setSelected(id) }, [])
+  // 開面板時寫入 #insight/<id>（一般 hash 導航會留歷史），從時間軸按瀏覽器上一頁才回得到這則心得
+  const open = useCallback((id: string) => {
+    setHover(null); setSelected(id)
+    if (insightIdFromHash(window.location.hash) !== id) window.location.hash = `insight/${encodeURIComponent(id)}`
+  }, [])
   const onLeafKey = useCallback((e: ReactKeyboardEvent, id: string) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(id) } }, [open])
 
   // ── 滑過／聚焦一片葉子：從樹幹到它的整條路徑亮起 ──
