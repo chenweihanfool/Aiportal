@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  insightIdFromHash, insightStats, layoutInsightTree, monthSeries, parseInsightDetail, parseInsights, taipeiDay, threadDots, threadWidth,
+  clusterSummaries, dateToY, focusViewBox, insightIdFromHash, insightStats, layoutInsightTree, leafShape, monthSeries, suggestTreeHeight, parseInsightDetail, parseInsights, taipeiDay, threadDots, threadWidth,
   type InsightData, type InsightRelation,
 } from './insightTree'
 
@@ -43,6 +43,26 @@ function sample(): InsightData {
   }
   const d = parseInsights(raw)
   if (!d) throw new Error('sample 解析失敗')
+  return d
+}
+
+/** 12 群、300 則、跨 18 個月的合成資料（效能與標籤碰撞用） */
+function bigData(): InsightData {
+  const raw: Array<{ id: string; thread: string }> = []
+  const out: unknown[] = []
+  for (let i = 0; i < 300; i++) {
+    const c = (i * 7) % 12
+    const th = `TH-${c}-${Math.floor(i / 12) % 9}`
+    const ago = 540 - Math.floor((i * 540) / 300)
+    const rel: InsightRelation = i % 11 === 5 ? 'refine' : i % 13 === 7 ? 'overturn' : i % 3 === 1 ? 'reinforce' : 'new'
+    const prev = raw.filter((x) => x.thread === th)
+    const parent = rel === 'new' || prev.length === 0 ? null : prev[prev.length - 1]!.id
+    const d = new Date(NOW.getTime() - ago * 86_400_000).toISOString().slice(0, 10)
+    raw.push({ id: `B${i}`, thread: th })
+    out.push({ id: `B${i}`, date: d, time: null, text: `合成心得 ${i}`, provenance: 'quote', cluster: `K${String(c + 1).padStart(2, '0')}`, thread: th, relation: parent === null ? 'new' : rel, parent })
+  }
+  const d = parseInsights({ clusters: Array.from({ length: 12 }, (_, i) => ({ id: `K${String(i + 1).padStart(2, '0')}`, name: `領域${i + 1}`, count: 25 })), insights: out })
+  if (!d) throw new Error('big 解析失敗')
   return d
 }
 
@@ -105,15 +125,25 @@ describe('layoutInsightTree', () => {
     }
   })
 
-  it('群標籤互不重疊（放不下的 labelShown=false）', () => {
-    const l = layoutInsightTree(data, { width: 300, height: 320, now: NOW })
-    const shown = l.clusters.filter((c) => c.labelShown)
-    expect(shown.length).toBeGreaterThan(0)
-    for (let i = 0; i < shown.length; i++) {
-      for (let j = i + 1; j < shown.length; j++) {
-        const a = shown[i]!, b = shown[j]!
-        const overlap = Math.abs(a.lx - b.lx) < 20 && Math.abs(a.ly - b.ly) < 10
-        expect(overlap).toBe(false)
+  it('群標籤不壓葉子、互不重疊（360 與 1200 寬、12 群 300 片葉）', () => {
+    for (const [w, h] of [[360, 420], [1200, 640]] as const) {
+      for (const d of [data, bigData()]) {
+        const l = layoutInsightTree(d, { width: w, height: h, now: NOW })
+        const shown = l.clusters.filter((c) => c.labelShown)
+        expect(shown.length).toBeGreaterThan(0)
+        const rect = (c: (typeof shown)[number]) => ({ x0: c.lx - c.lw / 2, x1: c.lx + c.lw / 2, y0: c.ly - c.lh / 2, y1: c.ly + c.lh / 2 })
+        for (const c of shown) {
+          const r = rect(c)
+          expect(r.x0).toBeGreaterThanOrEqual(0); expect(r.x1).toBeLessThanOrEqual(w); expect(r.y0).toBeGreaterThanOrEqual(0); expect(r.y1).toBeLessThanOrEqual(h)
+          for (const lf of l.leaves) {
+            const nx = Math.min(r.x1, Math.max(r.x0, lf.x)); const ny = Math.min(r.y1, Math.max(r.y0, lf.y))
+            expect(Math.hypot(lf.x - nx, lf.y - ny)).toBeGreaterThanOrEqual(lf.r)
+          }
+        }
+        for (let i = 0; i < shown.length; i++) for (let j = i + 1; j < shown.length; j++) {
+          const p = rect(shown[i]!), q = rect(shown[j]!)
+          expect(p.x0 < q.x1 && p.x1 > q.x0 && p.y0 < q.y1 && p.y1 > q.y0).toBe(false)
+        }
       }
     }
   })
@@ -134,9 +164,8 @@ describe('layoutInsightTree', () => {
     const fork = l.limbs.find((x) => x.id === 't:TH-a~a5#0')
     expect(fork).toBeTruthy()
     const parent = l.leaves.find((x) => x.id === 'a4')!
-    const m = /^M(-?[\d.]+),(-?[\d.]+)/.exec(fork!.d)!
-    expect(Math.abs(+m[1]! - parent.x)).toBeLessThan(0.2)
-    expect(Math.abs(+m[2]! - parent.y)).toBeLessThan(0.2)
+    expect(Math.abs(fork!.from[0] - parent.x)).toBeLessThan(0.2)
+    expect(Math.abs(fork!.from[1] - parent.y)).toBeLessThan(0.2)
     expect(l.limbs.some((x) => x.id === 't:TH-b~b2#0')).toBe(true)
   })
 
@@ -212,5 +241,99 @@ describe('monthSeries / insightStats / 其他', () => {
     expect(insightIdFromHash('#insight/a%20b')).toBe('a b')
     expect(insightIdFromHash('#insight/')).toBeNull()
     expect(insightIdFromHash('#food')).toBeNull()
+  })
+})
+
+describe('視覺化結構（2.99.0 打磨）', () => {
+  const data = sample()
+  const opts = { width: 720, height: 480, now: NOW }
+  const l = layoutInsightTree(data, opts)
+
+  it('枝輪廓由粗到細：樹幹、主枝、脈絡枝的底部都比末端寬', () => {
+    expect(l.trunk.widthStart).toBeGreaterThan(l.trunk.widthEnd)
+    const c0 = l.limbs.find((x) => x.id === 'c:K01#0')!
+    const c4 = l.limbs.find((x) => x.id === 'c:K01#4')!
+    expect(c0.widthStart).toBeGreaterThan(c4.widthEnd)
+    const t = l.limbs.find((x) => x.id === 't:TH-a#0')!
+    const tEnd = l.limbs.find((x) => x.id === 't:TH-a#3')!
+    expect(t.widthStart).toBeGreaterThan(tEnd.widthEnd)
+    expect(l.limbs.every((x) => x.d.startsWith('M') && x.d.endsWith('Z'))).toBe(true)
+  })
+  it('時間刻度位置隨日期單調（越晚越高），葉子的高度就是它的日期', () => {
+    expect(l.ticks.length).toBeGreaterThanOrEqual(2)
+    for (let i = 1; i < l.ticks.length; i++) expect(l.ticks[i]!.y).toBeLessThan(l.ticks[i - 1]!.y)
+    expect(l.ticks.some((t) => t.major && /^[0-9]{4}$/.test(t.label))).toBe(true)
+    const dates = ['2026-01-01', '2026-03-01', '2026-06-15', '2026-11-14']
+    const ys = dates.map((d) => dateToY(l.axis, d))
+    for (let i = 1; i < ys.length; i++) expect(ys[i]!).toBeLessThan(ys[i - 1]!)
+    const byDate = [...data.insights].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const leafY = (id: string) => l.leaves.find((x) => x.id === id)!.y
+    for (let i = 1; i < byDate.length; i++) expect(leafY(byDate[i]!.id)).toBeLessThanOrEqual(leafY(byDate[i - 1]!.id) + 0.05)
+    expect(Math.abs(leafY('a1') - dateToY(l.axis, '2026-01-05'))).toBeLessThan(0.1)
+  })
+  it('葉形依 relation 各不相同；推翻是微垂的枯葉', () => {
+    const shapes = (['new', 'reinforce', 'refine', 'overturn'] as const).map((r) => leafShape(r))
+    expect(new Set(shapes.map((x) => x.d)).size).toBe(4)
+    expect(shapes.map((x) => x.kind)).toEqual(['bud', 'leaf', 'fork', 'dead'])
+    expect(l.leaves.find((x) => x.id === 'c2')!.relation).toBe('overturn')
+    expect(l.leaves.every((x) => Number.isFinite(x.angle))).toBe(true)
+  })
+  it('滑過葉子的整條路徑：從樹幹出發、經主枝、到它自己的枝段；分岔的葉子也包含 parent 的路徑', () => {
+    const a3 = l.leaves.find((x) => x.id === 'a3')!
+    expect(a3.path[0]).toBe('trunk')
+    expect(a3.path[a3.path.length - 1]).toBe('t:TH-a#2')
+    expect(a3.path.filter((x) => x.startsWith('c:K01#')).length).toBe(5)
+    const a5 = l.leaves.find((x) => x.id === 'a5')!
+    const a4 = l.leaves.find((x) => x.id === 'a4')!
+    expect(a5.path.slice(0, a4.path.length)).toEqual(a4.path)
+    expect(a5.path[a5.path.length - 1]).toBe('t:TH-a~a5#0')
+    const ids = new Set([l.trunk.id, ...l.limbs.map((x) => x.id)])
+    for (const lf of l.leaves) for (const p of lf.path) expect(ids.has(p)).toBe(true)
+  })
+  it('聚焦某群的 viewBox：包住那一群、維持長寬比、不超出畫布；null＝全樹', () => {
+    expect(focusViewBox(l, null)).toEqual({ x: 0, y: 0, w: l.width, h: l.height })
+    const ci = l.clusters.findIndex((c) => c.id === 'K03')
+    const vb = focusViewBox(l, ci)
+    expect(vb.w).toBeLessThan(l.width)
+    expect(vb.x).toBeGreaterThanOrEqual(0); expect(vb.y).toBeGreaterThanOrEqual(0)
+    expect(vb.x + vb.w).toBeLessThanOrEqual(l.width + 0.1); expect(vb.y + vb.h).toBeLessThanOrEqual(l.height + 0.1)
+    expect(Math.abs(vb.w / vb.h - l.width / l.height)).toBeLessThan(0.02)
+    for (const lf of l.leaves.filter((x) => x.clusterIndex === ci)) {
+      expect(lf.x).toBeGreaterThanOrEqual(vb.x); expect(lf.x).toBeLessThanOrEqual(vb.x + vb.w)
+      expect(lf.y).toBeGreaterThanOrEqual(vb.y); expect(lf.y).toBeLessThanOrEqual(vb.y + vb.h)
+    }
+    expect(focusViewBox(l, 99)).toEqual({ x: 0, y: 0, w: l.width, h: l.height })
+  })
+  it('suggestTreeHeight：資料多樹較高、有上下限', () => {
+    expect(suggestTreeHeight(360, 5, 2)).toBeGreaterThanOrEqual(300)
+    expect(suggestTreeHeight(600, 300, 18)).toBeGreaterThan(suggestTreeHeight(600, 20, 4))
+    expect(suggestTreeHeight(2000, 1000, 60)).toBeLessThanOrEqual(680)
+  })
+  it('clusterSummaries：則數、最近長葉日期、近 12 個月每月則數', () => {
+    const s = clusterSummaries(data, NOW)
+    const k4 = s.find((c) => c.id === 'K04')!
+    expect(k4.count).toBe(3)
+    expect(k4.lastDate).toBe('2026-11-10')
+    expect(k4.months).toHaveLength(12)
+    expect(k4.months[11]).toBe(1)
+    expect(k4.months[10]).toBe(1)
+    expect(s.reduce((n, c) => n + c.count, 0)).toBe(22)
+  })
+  it('insightStats 多了脈絡條數與最常被印證的那一句（前 20 字）', () => {
+    const st = insightStats(data, NOW)
+    expect(st.threads).toBe(new Set(data.insights.map((i) => i.thread)).size)
+    expect(st.topReinforced?.count).toBe(4)
+    expect(st.topReinforced?.text.startsWith('虛構心得 a1')).toBe(true)
+  })
+  it('12 群 300 片葉：同輸入同輸出、座標在畫布內、排版夠快；upto 不改變位置', () => {
+    const big = bigData()
+    const t0 = Date.now()
+    const a = layoutInsightTree(big, { width: 600, height: 640, now: NOW })
+    expect(Date.now() - t0).toBeLessThan(1500)
+    expect(a.leaves).toHaveLength(300)
+    expect(JSON.stringify(a)).toBe(JSON.stringify(layoutInsightTree(bigData(), { width: 600, height: 640, now: NOW })))
+    for (const lf of a.leaves) { expect(lf.x - lf.r).toBeGreaterThanOrEqual(0); expect(lf.x + lf.r).toBeLessThanOrEqual(600) }
+    const part = layoutInsightTree(big, { width: 600, height: 640, now: NOW, upto: '2026-03' })
+    for (const lf of part.leaves) { const f = a.leaves.find((x) => x.id === lf.id)!; expect([f.x, f.y]).toEqual([lf.x, lf.y]) }
   })
 })
