@@ -134,6 +134,7 @@ describe('pinTargetFor', () => {
     expect(pinTargetFor({ kind: 'place', id: 'F1', title: '店' })?.href).toBe('#food')
     expect(pinTargetFor({ kind: 'event', id: 'e', title: 'e' })).toBeNull()
     expect(pinTargetFor({ kind: 'idea', id: 'e', title: 'e' })).toBeNull()
+    expect(pinTargetFor({ kind: 'repo', id: 'r', title: 'r' })).toBeNull()
     expect(pinTargetFor({ kind: 'diary', id: '2026-01-01', title: 'e' })).toBeNull()
   })
 })

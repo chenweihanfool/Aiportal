@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildIndex } from './graphInsights'
 import type { Topic } from './knowledgeView'
 import { flattenHits, parseSearchResponse, type SearchGroup, type SearchHit, type SearchKind } from './omniSearch'
-import { cardModel, kindSegments, monthBuckets, sampleTicks, shiftMonth, splitDate, taipeiYm, tickPosition, type CardCtx } from './searchViz'
+import { cardModel, kindSegments, languageColor, monthBuckets, sampleTicks, shiftMonth, splitDate, taipeiYm, tickPosition, type CardCtx } from './searchViz'
 import type { Trip } from './tripsApi'
 
 const hit = (kind: SearchKind, id: string, title = id, date: string | null = null, snippet = ''): SearchHit => ({ kind, id, title, snippet, date })
@@ -110,5 +110,21 @@ describe('parseSearchResponse facets', () => {
   it('缺 facets 當空、壞項目略過', () => {
     expect(parseSearchResponse({ q: 'a', groups: [] }).facets).toEqual({ months: [] })
     expect(parseSearchResponse({ facets: { months: [{ ym: '2026-03', n: 2 }, { ym: 'x', n: 1 }, { ym: '2026-04', n: 0 }] } }).facets.months).toEqual([{ ym: '2026-03', n: 2 }])
+  })
+})
+
+describe('倉庫卡（2.95.0）', () => {
+  const ctx: CardCtx = { index: null, topics: null, trips: null }
+  it('cardModel：有 meta 回 repo 型、沒 meta 退回文字列', () => {
+    const meta = { language: 'TypeScript', private: true, archived: false, url: 'https://github.com/o/r' }
+    expect(cardModel({ ...hit('repo', 'r', 'r', '2026-11-10', '描述'), meta }, ctx)).toEqual({ type: 'repo', language: 'TypeScript', private: true, archived: false, pushed: '2026-11-10', summary: '描述' })
+    expect(cardModel(hit('repo', 'r'), ctx)).toEqual({ fallback: true })
+  })
+  it('languageColor：已知語言不分大小寫、未知穩定、null 中性', () => {
+    expect(languageColor('TypeScript')).toBe('#3178c6')
+    expect(languageColor('typescript')).toBe('#3178c6')
+    expect(languageColor('Zig')).toBe(languageColor('Zig'))
+    expect(languageColor('Zig')).toMatch(/^var\(--c-/)
+    expect(languageColor(null)).toBe('var(--c-ink-3)')
   })
 })

@@ -90,8 +90,31 @@ export type CardModel =
   | { type: 'topic'; points: string[]; sources: number }
   | { type: 'dated'; day: string | null; ym: string | null; summary: string }
   | { type: 'trip'; start: string; end: string }
+  | { type: 'repo'; language: string | null; private: boolean; archived: boolean; pushed: string | null; summary: string }
 
 const FALLBACK: CardModel = { fallback: true }
+
+// ─────────────────────────────────────────────
+// 語言色點
+// ─────────────────────────────────────────────
+
+const LANG_COLORS: Readonly<Record<string, string>> = {
+  typescript: '#3178c6', javascript: '#f1e05a', python: '#3572a5', html: '#e34c26', css: '#563d7c',
+  powershell: '#012456', shell: '#89e051', go: '#00add8', rust: '#dea584', java: '#b07219',
+  'c#': '#178600', vue: '#41b883',
+}
+
+const LANG_FALLBACK = ['var(--c-accent)', 'var(--c-sky)', 'var(--c-warn)', 'var(--c-ok)', 'var(--c-concern)', 'var(--c-mint)'] as const
+
+/** GitHub 語言色點：已知語言照固定對照；其他語言用名稱字元碼對一組主題色；null＝中性灰 */
+export function languageColor(lang: string | null): string {
+  if (lang === null) return 'var(--c-ink-3)'
+  const known = LANG_COLORS[lang.toLowerCase()]
+  if (known) return known
+  let sum = 0
+  for (const ch of lang) sum += ch.codePointAt(0) ?? 0
+  return LANG_FALLBACK[sum % LANG_FALLBACK.length]
+}
 const DATE_RE = /^(\d{4}-\d{2})-(\d{2})/
 
 /** 日期字串（YYYY-MM-DD 開頭）拆成日與年月；沒有或格式不對＝null */
@@ -163,6 +186,10 @@ export function cardModel(item: SearchHit, ctx: CardCtx): CardModel {
       const d = splitDate(item.date)
       return { type: 'dated', day: d?.day ?? null, ym: d?.ym ?? null, summary: item.snippet }
     }
+    case 'repo':
+      return item.meta
+        ? { type: 'repo', language: item.meta.language, private: item.meta.private, archived: item.meta.archived, pushed: item.date, summary: item.snippet }
+        : FALLBACK
     case 'tool':
       return FALLBACK
   }

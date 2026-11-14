@@ -8,9 +8,10 @@ import { HitCard } from './SearchCards'
 import { SearchOverview, type DateFilter } from './SearchOverview'
 import { cardModel, taipeiYm, type CardCtx, type CardModel } from './searchViz'
 import {
-  KIND_ORDER, PREFIX_HINTS, addRecent, commandAnswer, filterCommands, flattenHits, isAbandoned, kindLabel, loadRecent, logKey, moveIndex,
-  keepKnownTools, openAction, parseQuery, quickAnswer, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
+  KIND_ORDER, PREFIX_HINTS, addRecent, commandAnswer, filterCommands, flattenHits, isAbandoned, isRepoListQuery, kindLabel, loadRecent, logKey, moveIndex,
+  keepKnownTools, openAction, parseQuery, quickAnswer, recentRepoHits, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
 } from './omniSearch'
+import { apiFetchRepos, type RepoItem } from './repoApi'
 import { dossierHref } from './dossier'
 import { Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
 import type { SiteData } from './portalApi'
@@ -73,6 +74,9 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const [flt, setFlt] = useState<{ key: string; kind: SearchKind | null; date: DateFilter | null }>({ key: '', kind: null, date: null })
   const [listState, setListState] = useState<{ key: string; resp: SearchResponse } | null>(null)
   const [ctx, setCtx] = useState<CardCtx | null>(null)
+  // 倉庫列表（>倉庫）：同一個元件生命週期只抓一次；失敗時下次再進入可以重試
+  const [repoList, setRepoList] = useState<RepoItem[] | null>(null)
+  const [repoState, setRepoState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
 
   const rootRef = useRef<HTMLElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -81,6 +85,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const interacted = useRef(false)
   const lastQKey = useRef('')
   const ctxStarted = useRef(false)
+  const repoStarted = useRef(false)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const pwRef = useRef(pw)
@@ -97,9 +102,21 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   }, [seed?.n])
 
   const parsed = useMemo(() => parseQuery(raw), [raw])
+  const repoMode = parsed.mode === 'command' && isRepoListQuery(parsed.q)
   const searchQ = parsed.mode === 'search' ? parsed.q : ''
   const searchKind = parsed.mode === 'search' ? parsed.kind : null
   const cmds: OmniCommand[] = useMemo(() => (parsed.mode === 'command' ? filterCommands(parsed.q) : []), [parsed])
+  const repoHits = useMemo(() => (repoList ? recentRepoHits(repoList) : []), [repoList])
+
+  // 進入「>倉庫」時抓一次清單；抓到了就一路沿用，失敗則下次再進入時重試
+  useEffect(() => {
+    if (!repoMode || !pw || repoList !== null || repoStarted.current) return
+    repoStarted.current = true
+    setRepoState('loading')
+    apiFetchRepos(pw)
+      .then((d) => { if (mounted.current) { setRepoList(d.repos); setRepoState('ok') } })
+      .catch(() => { if (mounted.current) { repoStarted.current = false; setRepoState('error') } })
+  }, [repoMode, pw, repoList])
   // 存的是原始回應；工具只留 sites 認識的。sites 還沒載完（空陣列）時先不濾，
   // 等 sites 到了再依它重算——否則回應比清單先到，工具會被整組濾掉且不會補回。
   const knownToolIds = useMemo(() => new Set(sites.map((x) => String(x.id))), [sites])
@@ -128,7 +145,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     if (ctx) for (const h of flat) m.set(`${h.kind}:${h.id}`, cardModel(h, ctx))
     return m
   }, [flat, ctx])
-  const hitsLen = parsed.mode === 'command' ? cmds.length : status === 'ok' ? flat.length : 0
+  const hitsLen = repoMode ? repoHits.length : parsed.mode === 'command' ? cmds.length : status === 'ok' ? flat.length : 0
 
   // ── 紀錄（F10）──
   const flushAbandon = useCallback(() => {
@@ -204,7 +221,10 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   useEffect(() => { if (parsed.mode === 'command') setSel(0) }, [parsed.mode, parsed.mode === 'command' ? parsed.q : ''])
 
   // ── 目前選中的那一筆（脈絡圖跳過去的那筆優先）──
-  const cur: ReaderItem | null = detour ?? (parsed.mode === 'search' && status === 'ok' && sel >= 0 ? flat[sel] ?? null : null)
+  const cur: ReaderItem | null = detour ?? (
+    repoMode ? (repoState === 'ok' && sel >= 0 ? repoHits[sel] ?? null : null)
+      : parsed.mode === 'search' && status === 'ok' && sel >= 0 ? flat[sel] ?? null : null
+  )
   const curKind = cur?.kind
   const curId = cur?.id
   useEffect(() => { setExpanded(false) }, [curKind, curId])
@@ -241,6 +261,14 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   }, [notice])
 
   // ── 開啟（F8、F10、F11）──
+  /** 倉庫網址：先看畫面上那一筆 hit 的 meta.url，沒有再看同一筆的預覽 */
+  const repoUrlFor = (id: string): string | null => {
+    const h = flat.find((x) => x.kind === 'repo' && x.id === id) ?? repoHits.find((x) => x.kind === 'repo' && x.id === id)
+    if (h?.meta?.url) return h.meta.url
+    const pv = prev
+    if (pv && pv.kind === 'repo' && pv.id === id && pv.state === 'ok' && pv.data?.url) return pv.data.url
+    return null
+  }
   const run = (a: OpenAction, q: string) => {
     switch (a.type) {
       case 'hash': window.location.hash = a.hash; break
@@ -255,6 +283,13 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       }
       case 'expand': setExpanded((v) => !v); break
       case 'dossier': window.location.hash = dossierHref(a.kind, a.name); break
+      case 'repo': {
+        const url = repoUrlFor(a.id)
+        if (url) window.open(url, '_blank', 'noopener,noreferrer')
+        else setNotice('找不到這個倉庫的連結')
+        break
+      }
+      case 'repoList': setRaw('>倉庫'); break
     }
   }
   const openItem = (h: ReaderItem) => {
@@ -273,6 +308,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     run(openAction(h.kind, h.id), '')
   }
   const runCommand = (c: OmniCommand) => run(c.action, '')
+  /** 倉庫列表的 Enter：直接開 GitHub（不記搜尋紀錄、不加最近找過） */
+  const openRepo = (h: ReaderItem) => run(openAction('repo', h.id), '')
 
   const pick = (i: number) => { setDetour(null); setSel(i) }
   const jump = (r: PreviewRelated) => {
@@ -289,7 +326,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       setSel((s) => moveIndex(s, e.key === 'ArrowDown' ? 1 : -1, hitsLen))
     } else if (e.key === 'Enter') {
       if (e.nativeEvent.isComposing) return
-      if (parsed.mode === 'command') { const c = cmds[sel >= 0 ? sel : 0]; if (c) { e.preventDefault(); runCommand(c) } }
+      if (repoMode) { if (cur) { e.preventDefault(); openRepo(cur) } }
+      else if (parsed.mode === 'command') { const c = cmds[sel >= 0 ? sel : 0]; if (c) { e.preventDefault(); runCommand(c) } }
       else if (cur) { e.preventDefault(); openItem(cur) }
     } else if (e.key === 'Escape') {
       setRaw('')
@@ -312,8 +350,14 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   // ── 顯示用文字 ──
   const noResult = parsed.mode === 'search' && status === 'ok' && flat.length === 0
   const filtering = kindFilter !== null || dateFilter !== null
+  const repoAnswer = !repoMode ? null
+    : !pw ? ''
+    : repoState === 'ok' ? (repoHits.length > 0 ? `最近更新的 ${repoHits.length} 個倉庫　↑↓ 選擇、Enter 在 GitHub 開啟` : '')
+    : repoState === 'error' ? ''
+    : '載入倉庫中…'
   const answer =
     parsed.mode === 'empty' ? ''
+    : repoAnswer !== null ? repoAnswer
     : parsed.mode === 'command' ? commandAnswer(cmds)
     : !pw ? ''
     : status === 'loading' ? '搜尋中…'
@@ -339,10 +383,10 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
           <span className="om-pfx" aria-hidden="true">{parsed.prefix ?? '⌕'}</span>
           <input
             ref={inputRef} type="text" value={raw} autoComplete="off" spellCheck={false}
-            aria-label="搜尋全部：人、案件、知識、原文、想法、地點、工具"
+            aria-label="搜尋全部：人、案件、知識、原文、想法、地點、倉庫、工具"
             role="combobox" aria-expanded={showPanel && hitsLen > 0} aria-controls="om-listbox" aria-autocomplete="list"
             aria-activedescendant={showPanel && hitsLen > 0 && sel >= 0 ? `om-opt-${sel}` : undefined}
-            placeholder="找人、案件、知識、原文、想法、地點、工具…"
+            placeholder="找人、案件、知識、原文、想法、地點、倉庫、工具…"
             onChange={(e) => setRaw(e.target.value)} onKeyDown={onKeyDown}
             onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
           />
@@ -381,14 +425,28 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       {notice && <div className="om-toast" role="status">{notice}</div>}
 
       {showPanel && (
-        <div className={`om-results${parsed.mode === 'command' ? ' om-results-cmd' : ''}`}>
+        <div className={`om-results${parsed.mode === 'command' && !repoMode ? ' om-results-cmd' : ''}`}>
           <div className={`om-panel om-rs${busy ? ' om-busy' : ''}`} onMouseMove={glow}>
             {showOverview && resp && (
               <SearchOverview resp={resp} kindFilter={kindFilter} date={dateFilter} todayYm={taipeiYm()} onKind={pickKind} onDate={pickDate} />
             )}
-            <div id="om-listbox" role="listbox" aria-label={parsed.mode === 'command' ? '指令' : '搜尋結果'}>
-              {parsed.mode === 'command' && cmds.length === 0 && <div className="om-none">沒有符合的指令</div>}
-              {parsed.mode === 'command' && cmds.map((c, i) => (
+            <div id="om-listbox" role="listbox" aria-label={repoMode ? '倉庫' : parsed.mode === 'command' ? '指令' : '搜尋結果'}>
+              {repoMode && !pw && (
+                <p className="om-lock">🔒 解鎖後可列出倉庫 <button type="button" className="om-gh" onClick={onRequestUnlock}>解鎖</button></p>
+              )}
+              {repoMode && pw && (repoState === 'idle' || repoState === 'loading') && <div className="om-none">載入倉庫中…</div>}
+              {repoMode && pw && repoState === 'error' && <div className="om-none">倉庫清單暫時讀不到</div>}
+              {repoMode && pw && repoState === 'ok' && repoHits.length === 0 && <div className="om-none">沒有倉庫</div>}
+              {repoMode && pw && repoState === 'ok' && repoHits.length > 0 && (
+                <div role="group" aria-label="最近更新的倉庫">
+                  <div className="om-grp" aria-hidden="true"><span className="om-lb">最近更新的倉庫</span><span className="om-lb">{repoHits.length}</span></div>
+                  {repoHits.map((h, i) => (
+                    <HitCard key={`repo:${h.id}`} hit={h} i={i} on={!detour && i === sel} q="" model={cardModel(h, ctx ?? { index: null, topics: null, trips: null })} onPick={pick} onSearch={startWith} />
+                  ))}
+                </div>
+              )}
+              {parsed.mode === 'command' && !repoMode && cmds.length === 0 && <div className="om-none">沒有符合的指令</div>}
+              {parsed.mode === 'command' && !repoMode && cmds.map((c, i) => (
                 <div key={c.id} id={`om-opt-${i}`} role="option" aria-selected={i === sel} className={`om-hit${i === sel ? ' om-on' : ''}`}
                   style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }} onClick={() => { setSel(i); runCommand(c) }}>
                   <span className="om-kd">指令</span>
@@ -425,11 +483,13 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
               })}
             </div>
           </div>
-          {parsed.mode === 'search' && (
+          {(parsed.mode === 'search' || repoMode) && (
             <div className="om-panel om-reader" onMouseMove={glow}>
               <OmniSearchReader pw={pw}
-                item={status === 'ok' ? cur : null} preview={prev} q={searchQ} expanded={expanded}
-                onToggleExpand={() => setExpanded((v) => !v)} onOpen={() => { if (cur) openItem(cur) }} onJump={jump}
+                item={repoMode ? (repoState === 'ok' ? cur : null) : status === 'ok' ? cur : null}
+                preview={prev} q={repoMode ? '' : searchQ} expanded={expanded}
+                onToggleExpand={() => setExpanded((v) => !v)}
+                onOpen={() => { if (cur) { if (repoMode) openRepo(cur); else openItem(cur) } }} onJump={jump}
               />
             </div>
           )}

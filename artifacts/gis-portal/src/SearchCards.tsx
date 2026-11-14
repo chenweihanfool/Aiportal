@@ -1,6 +1,7 @@
 import { Marked } from './OmniSearchReader'
 import { kindLabel, type SearchHit } from './omniSearch'
-import { tickPosition, type CardModel } from './searchViz'
+import { pushedLabel } from './repoView'
+import { languageColor, tickPosition, type CardModel } from './searchViz'
 
 // 搜尋結果的視覺卡（2.92.0）：依類別畫不同的卡；資料不足（model 為 null 或 fallback）就退回原本的文字列。
 
@@ -75,6 +76,26 @@ function Body({ hit, model, q, onSearch }: { hit: SearchHit; model: Exclude<Card
             <span className="os-card-dot" />
           </div>
           <div className="os-card-spanlb om-s"><span>{md(model.start)}</span><span>{md(model.end)}</span></div>
+        </div>
+      )
+    case 'repo':
+      return (
+        <div className="os-card-main">
+          <div className="os-card-head">
+            <span className="om-t os-card-title"><Marked text={hit.title} q={q} /></span>
+            {model.private && <span className="os-card-lock" role="img" aria-label="私有">🔒</span>}
+            {model.archived && <span className="os-card-badge">封存</span>}
+            <span className="os-card-badge os-card-repo-meta">
+              {model.language && (
+                <>
+                  <span className="os-card-lang" style={{ background: languageColor(model.language) }} aria-hidden="true" />
+                  {model.language}・
+                </>
+              )}
+              {model.pushed ? `${pushedLabel(model.pushed, new Date())}更新` : '—'}
+            </span>
+          </div>
+          {model.summary && <div className="om-s os-card-clamp"><Marked text={model.summary} q={q} /></div>}
         </div>
       )
   }
