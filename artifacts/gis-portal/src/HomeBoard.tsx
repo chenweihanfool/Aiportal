@@ -31,6 +31,7 @@ import { apiFetchReports, crowdOf, parseBrief, pickBrief } from './briefView'
 import { apiFetchGantt } from './taskGantt'
 import { apiFetchTopicNudges } from './topicNudges'
 import { NowSection } from './NowSection'
+import { InsightTree } from './InsightTree'
 import { nowReady } from './nowCards'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
@@ -64,7 +65,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   opsDetail: ReactNode
   /** 面向對應的子系統連結（/api/sites，要解鎖才有內容） */
   sites: SiteData[]
-  /** 'v3'＝新版三塊（搜尋｜現在用得上｜STATUS）；'classic'＝舊版首頁（九個區塊＋左側導覽，DOM 與 2.87.0 相同） */
+  /** 'v3'＝新版三塊（搜尋｜我的心得樹｜STATUS，現在用得上收在角落）；'classic'＝舊版首頁（九個區塊＋左側導覽，DOM 與 2.87.0 相同） */
   layout?: HomeLayout
 }) {
   const pw = unlocked && unlockedPassword ? unlockedPassword : null
@@ -260,10 +261,13 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
           onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
           onRequestUnlock={onRequestUnlock} />
         <div className="st-home">
-          <NowSection pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
-            briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
-            onActionsChange={personActions.reload}
-            todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
+          <div className="st-left">
+            <InsightTree pw={pw} now={now} onRequestUnlock={onRequestUnlock} />
+            <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
+              briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
+              onActionsChange={personActions.reload}
+              todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
+          </div>
           <StatusAside
             on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
             hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}

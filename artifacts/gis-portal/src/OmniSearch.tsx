@@ -5,6 +5,7 @@ import { buildIndex } from './graphInsights'
 import { apiFetchTopicsData } from './statsApi'
 import { apiFetchTrips } from './tripsApi'
 import { HitCard } from './SearchCards'
+import { threadDots } from './insightTree'
 import { SearchOverview, type DateFilter } from './SearchOverview'
 import { cardModel, taipeiYm, type CardCtx, type CardModel } from './searchViz'
 import {
@@ -13,7 +14,7 @@ import {
 } from './omniSearch'
 import { apiFetchRepos, type RepoItem } from './repoApi'
 import { dossierHref } from './dossier'
-import { Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
+import { InsightHit, Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
 import type { SiteData } from './portalApi'
 
 // 首頁最上方「一個框搜全部」（2.86.0，取代原本的指令面板）。純邏輯在 omniSearch.ts、網路在 omniSearchApi.ts、閱讀面板在 OmniSearchReader.tsx。
@@ -145,6 +146,11 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     if (ctx) for (const h of flat) m.set(`${h.kind}:${h.id}`, cardModel(h, ctx))
     return m
   }, [flat, ctx])
+  // 心得結果卡的脈絡迷你時間線：同 thread 在目前結果中可見的心得
+  const insightHits = useMemo(
+    () => flat.filter((h) => h.kind === 'insight').map((h) => ({ id: h.id, date: h.meta && 'date' in h.meta ? h.meta.date : h.date, meta: h.meta && 'thread' in h.meta ? h.meta : undefined })),
+    [flat],
+  )
   const hitsLen = repoMode ? repoHits.length : parsed.mode === 'command' ? cmds.length : status === 'ok' ? flat.length : 0
 
   // ── 紀錄（F10）──
@@ -475,6 +481,9 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
                       idx += 1
                       const i = idx
                       const on = !detour && i === sel
+                      if (h.kind === 'insight') {
+                        return <InsightHit key={`${h.kind}:${h.id}`} hit={h} i={i} on={on} q={searchQ} onPick={pick} dots={h.meta && 'thread' in h.meta ? threadDots(h.id, h.meta.thread, insightHits) : []} />
+                      }
                       return (
                         <HitCard key={`${h.kind}:${h.id}`} hit={h} i={i} on={on} q={searchQ} model={models.get(`${h.kind}:${h.id}`) ?? null} onPick={pick} onSearch={startWith} />
                       )
