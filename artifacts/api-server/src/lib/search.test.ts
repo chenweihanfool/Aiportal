@@ -20,9 +20,10 @@ describe("validateSearchParams", () => {
     const ok = validateSearchParams("  " + "a".repeat(50) + " ", undefined, undefined);
     expect(ok.ok).toBe(true);
   });
-  it("kind 只接受 14 種（diary 在 source 之後、repo 在 tool 之前）；limit 1～20 整數、預設 5", () => {
+  it("kind 只接受 15 種（insight 第一、diary 在 source 之後、repo 在 tool 之前）；limit 1～20 整數、預設 5", () => {
     expect(validateSearchParams("x", "nope", undefined).ok).toBe(false);
     for (const k of SEARCH_KINDS) expect(validateSearchParams("x", k, undefined).ok).toBe(true);
+    expect(SEARCH_KINDS[0]).toBe("insight");
     expect(SEARCH_KINDS).toContain("diary");
     expect(SEARCH_KINDS.indexOf("diary")).toBe(SEARCH_KINDS.indexOf("source") + 1);
     expect(SEARCH_KINDS.indexOf("repo")).toBe(SEARCH_KINDS.indexOf("tool") - 1);
@@ -209,6 +210,17 @@ describe("各 kind 轉換", () => {
     expect(docRowToCandidate({ kind: "concept", docKey: "K", title: "概念", bodyMd: "內文", meta: { date: "2026-03-04" } }))
       .toEqual({ kind: "concept", id: "K", title: "概念", text: "內文", date: "2026-03-04" });
     expect(docRowToCandidate({ kind: "topic", docKey: "K", title: "t", bodyMd: "", meta: {} })).toBeNull();
+  });
+  it("insight：date 取 meta.date，meta 帶 cluster／thread／relation", () => {
+    expect(docRowToCandidate({
+      kind: "insight", docKey: "INS-2026-10-18-1a2b3c4d", title: "心得", bodyMd: "日記原文",
+      meta: { date: "2026-10-18", cluster: { id: "K03", name: "時間管理" }, thread: "TH-1a2b3c4d", relation: "refine" },
+    })).toEqual({
+      kind: "insight", id: "INS-2026-10-18-1a2b3c4d", title: "心得", text: "日記原文", date: "2026-10-18",
+      meta: { date: "2026-10-18", cluster: "K03", thread: "TH-1a2b3c4d", relation: "refine" },
+    });
+    expect(docRowToCandidate({ kind: "insight", docKey: "INS-1", title: "心得", bodyMd: "", meta: { date: 5, cluster: "x" } }))
+      .toEqual({ kind: "insight", id: "INS-1", title: "心得", text: "", date: null, meta: { date: null, cluster: null, thread: null, relation: null } });
   });
   it("diary：date 取 key、沒有 title 用日期當標題", () => {
     expect(docRowToCandidate({ kind: "diary", docKey: "2026-11-14", title: "", bodyMd: "今天", meta: {} }))
