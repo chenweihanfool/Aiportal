@@ -49,5 +49,11 @@ body：`{ q(1～50), kind|null, total(整數>=0), clickedKind|null, clickedId|nu
 - 依 `q` 去重（完全相同字串才算重複），每個詞用它**最後一次**出現的 `created_at` 排序，新到舊，最多 `limit` 個（SQL `group by q order by max(created_at) desc, q limit n`）。
 - 表是空的 → `{ "recent": [] }`。
 
+## 心得 `GET /api/insights`、`GET /api/insights/:id`（2.98.0）
+資料全在 `hermes_doc` kind=`insight`（key `INS-YYYY-MM-DD-xxxxxxxx`，推送端 kb-pipeline `docs/insights.md`）；兩支都要 `x-admin-password`（否則 403），DB 失敗 500。meta 欄位型別不對的那一筆略過。
+- 列表：`{ total, thisMonth, clusters:[{id,name,count}], insights:[{id,date,time,text,provenance,cluster,thread,relation,parent}] }`。insights 依 date、time（null 視為 00:00）、id 由舊到新；clusters 的 name 取該群最新一則，依 count 多到少、同數依 id；thisMonth＝台北時間本月的則數。
+- 單筆：`{ id,date,time,text,evidence,provenance,cluster:{id,name},thread,relation,parent,source,threadItems:[列表項，同 thread 含自己，由舊到新] }`；id 格式不對 400、找不到 404。
+- 範例：`{"id":"INS-2026-10-18-1a2b3c4d","date":"2026-10-18","time":"20:28","text":"…","provenance":"quote","cluster":"K03","thread":"TH-1a2b3c4d","relation":"new","parent":null}`
+
 ## 部署
 新增資料表 `search_log`（migration `0029_*`），**部署要先跑 db-migrate**，再重建 api-server，最後才是 gis-portal。kb-pipeline 不用動。
