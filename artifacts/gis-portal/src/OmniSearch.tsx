@@ -264,7 +264,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   /** 倉庫網址：先看畫面上那一筆 hit 的 meta.url，沒有再看同一筆的預覽 */
   const repoUrlFor = (id: string): string | null => {
     const h = flat.find((x) => x.kind === 'repo' && x.id === id) ?? repoHits.find((x) => x.kind === 'repo' && x.id === id)
-    if (h?.meta?.url) return h.meta.url
+    if (h?.meta && 'url' in h.meta && h.meta.url) return h.meta.url
     const pv = prev
     if (pv && pv.kind === 'repo' && pv.id === id && pv.state === 'ok' && pv.data?.url) return pv.data.url
     return null

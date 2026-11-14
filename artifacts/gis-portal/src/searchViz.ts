@@ -187,10 +187,10 @@ export function cardModel(item: SearchHit, ctx: CardCtx): CardModel {
       return { type: 'dated', day: d?.day ?? null, ym: d?.ym ?? null, summary: item.snippet }
     }
     case 'repo':
-      return item.meta
+      return item.meta && 'url' in item.meta
         ? { type: 'repo', language: item.meta.language, private: item.meta.private, archived: item.meta.archived, pushed: item.date, summary: item.snippet }
         : FALLBACK
-    case 'tool':
+    case 'tool': case 'insight':
       return FALLBACK
   }
 }

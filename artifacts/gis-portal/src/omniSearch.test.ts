@@ -171,6 +171,31 @@ describe('開啟去處', () => {
   })
 })
 
+describe('心得（insight）', () => {
+  it('排第一、標籤「心得」、開啟去 #insight/<id>', () => {
+    expect(KIND_ORDER[0]).toBe('insight')
+    expect(kindLabel('insight')).toBe('心得')
+    expect(openAction('insight', 'I 1/2')).toEqual({ type: 'hash', hash: `insight/${encodeURIComponent('I 1/2')}` })
+  })
+  it('parseHit：insight 的 meta 合法才帶，壞掉就忽略', () => {
+    const good = { date: '2026-03-01', cluster: 'K01', thread: 'TH-1', relation: 'reinforce' }
+    const r = parseSearchResponse({
+      groups: [{ kind: 'insight', count: 3, items: [
+        { kind: 'insight', id: 'i1', title: '心得一', meta: good },
+        { kind: 'insight', id: 'i2', title: '心得二', meta: { ...good, relation: 'weird' } },
+        { kind: 'insight', id: 'i3', title: '心得三' },
+      ] }],
+    })
+    expect(r.groups[0].items[0].meta).toEqual(good)
+    expect('meta' in r.groups[0].items[1]).toBe(false)
+    expect('meta' in r.groups[0].items[2]).toBe(false)
+  })
+  it('flattenHits：心得組在最前面', () => {
+    const g = (kind: 'case' | 'insight') => ({ kind, count: 1, items: [{ kind, id: kind, title: kind, snippet: '', date: null }] })
+    expect(flattenHits([g('case'), g('insight')]).map((h) => h.kind)).toEqual(['insight', 'case'])
+  })
+})
+
 describe('倉庫清單與 meta', () => {
   const repo = (name: string, pushedAt: string | null, over: Partial<RepoItem> = {}, url = `https://github.com/o/${name}`): RepoItem => ({
     name, fullName: `o/${name}`, description: null, url, homepage: null, private: false, fork: false, archived: false,
