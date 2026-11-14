@@ -12,13 +12,23 @@ import {
 const router = Router();
 const FORBIDDEN = { message: "需要解鎖私領域才能查看" };
 
-// 記錄卡片被看到／點開／標有用、晚點、沒用。shown 同一 (cardKey, forDate) 只留一筆：
-// 已存在就回 200 既有 id，不新增；其他 action 一律新增回 201。
+// 記錄卡片被看到／點開／標有用、晚點、沒用。shown 同一 (cardKey, forDate) 只留一筆，
+// 由部分唯一索引 push_feedback_shown_uniq 保證：插入衝突就回 200 既有 id；
+// 其他 action 一律新增回 201。
 router.post("/push/feedback", async (req: Request, res: Response) => {
   if (!isAuthorized(req.headers["x-admin-password"])) return res.status(403).json(FORBIDDEN);
   const parsed = parsePushFeedbackBody(req.body);
   if (typeof parsed === "string") return res.status(400).json({ message: parsed });
   if (parsed.action === "shown") {
+    const [inserted] = await db
+      .insert(pushFeedbackTable)
+      .values({ cardKey: parsed.cardKey, cardKind: parsed.cardKind, action: parsed.action, forDate: parsed.forDate })
+      .onConflictDoNothing({
+        target: [pushFeedbackTable.cardKey, pushFeedbackTable.forDate],
+        where: sql`action = 'shown'`,
+      })
+      .returning({ id: pushFeedbackTable.id });
+    if (inserted) return res.status(201).json({ id: inserted.id });
     const [existing] = await db
       .select({ id: pushFeedbackTable.id })
       .from(pushFeedbackTable)
@@ -28,7 +38,7 @@ router.post("/push/feedback", async (req: Request, res: Response) => {
         eq(pushFeedbackTable.action, "shown"),
       ))
       .limit(1);
-    if (existing) return res.json({ id: existing.id });
+    return res.json({ id: existing!.id });
   }
   const [row] = await db
     .insert(pushFeedbackTable)

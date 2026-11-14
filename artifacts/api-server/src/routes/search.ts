@@ -74,18 +74,23 @@ router.get("/search", async (req: Request, res: Response) => {
   const candidates: Partial<Record<SearchKind, Candidate[]>> = {};
 
   // hermes_doc 的四個 kind：一次 SQL（每個詞 title ILIKE OR body_md ILIKE，詞與詞 AND），排序級別在 JS 算。
-  // 每 kind 最多保留 200 筆（為了算 count），SQL 總上限 = 200 × 要查的 kind 數，依 meta.date 新到舊。
+  // 每 kind 最多保留 200 筆（給 items 用），SQL 總上限 = 200 × 要查的 kind 數，依 meta.date 新到舊。
+  // 另跑一次同條件的 count 查詢，把真實數量傳給 runSearch，count 不再被 200 截斷；
+  // count 查詢失敗只記 log，降級成用命中數。
   const docKinds = DOC_KINDS.filter(want);
-  const docsPromise = docKinds.length === 0 ? Promise.resolve([]) : (async () => {
+  const docWhere = docKinds.length === 0 ? null : and(
+    inArray(hermesDocTable.kind, docKinds),
+    ...v.terms.map((t) => {
+      const p = `%${escapeLike(t)}%`;
+      return or(sql`${hermesDocTable.title} ILIKE ${p}`, sql`${hermesDocTable.bodyMd} ILIKE ${p}`);
+    }),
+  );
+  const docsPromise = docWhere === null ? Promise.resolve([]) : (async () => {
     try {
-      const terms = v.terms.map((t) => {
-        const p = `%${escapeLike(t)}%`;
-        return or(sql`${hermesDocTable.title} ILIKE ${p}`, sql`${hermesDocTable.bodyMd} ILIKE ${p}`);
-      });
       return await db
         .select({ kind: hermesDocTable.kind, docKey: hermesDocTable.docKey, title: hermesDocTable.title, bodyMd: hermesDocTable.bodyMd, meta: hermesDocTable.meta })
         .from(hermesDocTable)
-        .where(and(inArray(hermesDocTable.kind, docKinds), ...terms))
+        .where(docWhere)
         .orderBy(sql`(${hermesDocTable.meta}->>'date') DESC NULLS LAST`)
         .limit(DOC_SQL_LIMIT_PER_KIND * docKinds.length);
     } catch (err) {
@@ -93,10 +98,26 @@ router.get("/search", async (req: Request, res: Response) => {
       return [];
     }
   })();
+  const docCountsPromise = docWhere === null ? Promise.resolve(undefined) : (async () => {
+    try {
+      const rows = await db
+        .select({ kind: hermesDocTable.kind, n: sql<number>`count(*)::int` })
+        .from(hermesDocTable)
+        .where(docWhere)
+        .groupBy(hermesDocTable.kind);
+      const counts: Partial<Record<SearchKind, number>> = {};
+      for (const row of rows) if (isDocKind(row.kind)) counts[row.kind] = row.n;
+      return counts;
+    } catch (err) {
+      logger.error({ err }, "search hermes_doc count query failed");
+      return undefined;
+    }
+  })();
 
   const needGraph = want("case") || want("person") || want("object");
-  const [docs, graph, topics, ideas, places, trips, sites] = await Promise.all([
+  const [docs, docCounts, graph, topics, ideas, places, trips, sites] = await Promise.all([
     docsPromise,
+    docCountsPromise,
     needGraph ? loadGraph() : null,
     want("topic") ? loadTopics() : null,
     want("idea") ? loadIdeas() : null,
@@ -122,7 +143,7 @@ router.get("/search", async (req: Request, res: Response) => {
   }
   if (v.kind !== null) for (const k of Object.keys(candidates) as SearchKind[]) if (k !== v.kind) delete candidates[k];
 
-  const r = runSearch(candidates, v.terms, v.limit);
+  const r = runSearch(candidates, v.terms, v.limit, docCounts);
   return res.json({ q: v.q, total: r.total, tookMs: Date.now() - started, groups: r.groups, best: r.best });
 });
 

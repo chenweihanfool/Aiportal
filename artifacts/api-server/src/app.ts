@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -48,5 +48,16 @@ app.use("/api", (_req, res, next) => {
 });
 
 app.use("/api", router);
+
+// express.json 的解析錯誤在這裡收尾：壞 JSON 回一致的 {message} 形狀，
+// 其他錯誤原樣交給下一個錯誤處理器（沒有就交給 Express 預設）。
+export function jsonErrorHandler(err: unknown, _req: Request, res: Response, next: NextFunction): void {
+  const type = (err as { type?: unknown } | null)?.type;
+  if (type === "entity.parse.failed") return void res.status(400).json({ message: "請求內容不是合法的 JSON" });
+  if (type === "entity.too.large") return void res.status(413).json({ message: "請求內容太大" });
+  next(err);
+}
+
+app.use(jsonErrorHandler);
 
 export default app;

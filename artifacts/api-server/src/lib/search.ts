@@ -158,7 +158,7 @@ function cmpCandidates(a: { rank: number; c: Candidate }, b: { rank: number; c: 
  * 沒有內文為空字串；最長 200 字。空白一律壓成單一空格。
  */
 export function makeSnippet(text: string, firstTerm: string): string {
-  const body = text.replace(/\s+/g, " ").trim();
+  const body = text.replace(/^\s{0,3}#{1,6}\s+/gm, "").replace(/\s+/g, " ").trim();
   if (body.length === 0) return "";
   const needle = firstTerm.toLowerCase();
   const idx = needle.length > 0 ? body.toLowerCase().indexOf(needle) : -1;
@@ -170,6 +170,9 @@ export function makeSnippet(text: string, firstTerm: string): string {
     const end = Math.min(body.length, idx + needle.length + SNIPPET_CONTEXT);
     out = (start > 0 ? "…" : "") + body.slice(start, end) + (end < body.length ? "…" : "");
   }
+  // 切片可能從一個 Markdown 標題記號開始，去掉開頭（跳過「…」）的一串 # 與其後空白。
+  const heading = /^(…\s*)?#{1,6}\s+/.exec(out);
+  if (heading) out = (heading[1] ?? "") + out.slice(heading[0].length);
   return out.length > SNIPPET_MAX ? out.slice(0, SNIPPET_MAX - 1) + "…" : out;
 }
 
@@ -181,11 +184,13 @@ function toItem(c: Candidate, terms: string[]): SearchItem {
 /**
  * 把各 kind 的候選項濾出命中、排序、截斷，組成 groups／total／best。
  * groups 依 SEARCH_KINDS 固定順序；沒有命中的組不出現；count 是該組命中總數；best 是全部命中中級別最高的一筆（同級依 kind 順序）。
+ * countOverride 有給的 kind，該組 count（與 total）取 max(命中數, override)——候選只撈部分列時用來回報真實總數。
  */
 export function runSearch(
   candidates: Partial<Record<SearchKind, Candidate[]>>,
   terms: string[],
   limit: number,
+  countOverride?: Partial<Record<SearchKind, number>>,
 ): SearchResult {
   const groups: SearchGroup[] = [];
   let total = 0;
@@ -198,8 +203,9 @@ export function runSearch(
     if (hits.length === 0) continue;
     hits.sort(cmpCandidates);
     const items = hits.slice(0, limit).map((h) => toItem(h.c, terms));
-    groups.push({ kind, count: hits.length, items });
-    total += hits.length;
+    const count = Math.max(hits.length, countOverride?.[kind] ?? 0);
+    groups.push({ kind, count, items });
+    total += count;
     if (hits[0]!.rank < bestRank) {
       bestRank = hits[0]!.rank;
       best = toItem(hits[0]!.c, terms);
