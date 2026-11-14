@@ -37,10 +37,20 @@ describe("validateDocs", () => {
     expect(validateDocs({ docs: [doc({ kind: "concept", key: "X" }), doc({ kind: "method", key: "X" })] }).ok).toBe(true);
   });
 
-  it("isDocKind accepts the known kinds (event/concept/method/source/topic)", () => {
-    expect(["event", "concept", "method", "source", "topic"].every(isDocKind)).toBe(true);
+  it("isDocKind accepts the known kinds (event/concept/method/source/topic/diary)", () => {
+    expect(["event", "concept", "method", "source", "topic", "diary"].every(isDocKind)).toBe(true);
     expect(isDocKind("person")).toBe(false);
     expect(isDocKind(undefined)).toBe(false);
+  });
+
+  it("diary：key 是日期才收，meta.date 有給必須等於 key", () => {
+    const diary = (over: Record<string, unknown> = {}) => doc({ kind: "diary", key: "2026-11-14", meta: { date: "2026-11-14" }, ...over });
+    expect(validateDocs({ docs: [diary()] }).ok).toBe(true);
+    expect(validateDocs({ docs: [diary({ meta: {} })] }).ok).toBe(true);
+    for (const key of ["2026-13-01", "2026-02-30", "abc"]) {
+      expect(validateDocs({ docs: [diary({ key, meta: { date: key } })] }).ok, key).toBe(false);
+    }
+    expect(validateDocs({ docs: [diary({ meta: { date: "2026-11-13" } })] }).ok).toBe(false);
   });
 });
 
