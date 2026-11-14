@@ -2,11 +2,16 @@
 
 export const GOOGLE_SESSION_SENTINEL = 'google-session'
 
+/** 登入入口的網址；base 是網站掛載路徑（例如 '/' 或 '/aiportal/'）。 */
+export function loginHref(base: string): string {
+  return `${base}api/auth/login`
+}
+
 export type AuthStatus =
   | { kind: 'loading' }
   | { kind: 'in'; email: string }                                   // 已用 Google 登入
   | { kind: 'login-required'; configured: boolean }                 // 伺服器強制登入且尚未登入
-  | { kind: 'optional' }                                            // 沒有強制登入：維持原本（密碼解鎖）行為
+  | { kind: 'optional' }                                            // 沒有強制登入：公開內容照常顯示，解鎖一律走 Google 登入
 
 /** /api/auth/me 的回應 → 狀態。網路錯誤或舊版伺服器（沒有這支）一律視為 optional，不擋住網站。 */
 export function interpretMe(status: number, body: unknown): AuthStatus {

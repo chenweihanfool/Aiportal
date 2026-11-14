@@ -63,8 +63,8 @@ A full-screen 3D GIS portal built with React + Three.js (via @react-three/fiber 
 - Always-visible name labels; public (cyan #00e5ff) vs private (purple #c084fc)
 - **Zone separation**: private sites on right side (X > 0), public sites on left side (X < 0)
 - 3D zone labels "私 領 域" and "公 領 域" visible in scene
-- Private site access: password modal → POST /api/auth/verify; device remembered via `portal_unlocked` localStorage
-- Admin panel: ⚙ button → POST /api/auth/verify → CRUD panel (add/edit/delete) — all changes persist to DB
+- Private site access: Google login only (`/api/auth/login`); unlocked state remembered via `portal_unlocked` localStorage
+- Admin panel: ⚙ button while logged in → data export panel
 - Single password `85097110` for everything (verified server-side via API)
 - New sites positioned in PRIVATE_POSITION_POOL or PUBLIC_POSITION_POOL based on isPrivate
 - Version history panel (bottom-left): hardcoded `VERSION_HISTORY` — update before each release

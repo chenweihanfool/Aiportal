@@ -11,7 +11,8 @@ import { dimKeyFromHash } from './dimensionPage'
 import { YearReview } from './YearReview'
 import { yearFromHash } from './yearReview'
 import { CV } from './theme'
-import { AdminAuthModal, AdminPanel, PasswordModal } from './Dialogs'
+import { AdminPanel } from './Dialogs'
+import { loginHref } from './authView'
 import { DimensionDetail, dimensionLinks } from './DimensionDetail'
 import { InstrumentPanelView } from './InstrumentPanelView'
 import { hhiTone } from './format'
@@ -30,10 +31,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState<DashboardSummary[]>([])
   const [unlockedPassword, setUnlockedPassword] = useState<string | null>(() => readUnlock())
   const unlocked = !!unlockedPassword
-  const [modal, setModal] = useState<{ visible: boolean; pendingUrl: string }>({ visible: false, pendingUrl: '' })
-  const [adminAuth, setAdminAuth] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
-  const [adminPassword, setAdminPassword] = useState('')
   // 全頁 3D 關係宇宙走 hash route（#graph），不是路徑 route——這個 SPA 沒
   // 有接路由庫，路徑 route 在 refresh/直接貼網址時需要伺服端 SPA fallback
   // 設定，hash 則完全是前端狀態，不需要動部署那端的反向代理規則。
@@ -82,7 +80,7 @@ export default function App() {
     if (!isPrivate || unlocked) {
       window.open(url, '_blank', 'noopener,noreferrer')
     } else {
-      setModal({ visible: true, pendingUrl: url })
+      window.location.assign(loginHref(import.meta.env.BASE_URL ?? '/'))
     }
   }, [unlocked])
 
@@ -90,25 +88,10 @@ export default function App() {
     openUrl(site.links[0]?.url ?? '', site.isPrivate)
   }, [openUrl])
 
+  // 解鎖一律走 Google 登入：不再有密碼框，直接導去登入流程。
   const handleRequestUnlock = useCallback(() => {
-    setModal({ visible: true, pendingUrl: '' })
+    window.location.assign(loginHref(import.meta.env.BASE_URL ?? '/'))
   }, [])
-
-  const handleModalSuccess = useCallback((password: string) => {
-    setUnlockedPassword(password)
-    setModal({ visible: false, pendingUrl: '' })
-  }, [])
-
-  const handleAdminAuthSuccess = useCallback((pw: string) => {
-    setAdminPassword(pw)
-    setAdminAuth(false)
-    setAdminOpen(true)
-  }, [])
-
-  // 全頁路由提早 return，密碼框要跟著帶上，不然頁內的「解鎖」按了沒反應
-  const unlockModal = modal.visible && (
-    <PasswordModal pendingUrl={modal.pendingUrl} onSuccess={handleModalSuccess} onCancel={() => setModal({ visible: false, pendingUrl: '' })} />
-  )
 
   // 年度回顧（P2-1）：#year＝今年，#year/<年>＝指定的年；年份不合理就當首頁
   const reviewYear = yearFromHash(hashRoute, Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric' }).format(new Date())))
@@ -120,12 +103,12 @@ export default function App() {
   }
   // 知識庫架構頁（2026-10-22）：分層架構圖＋L1～L5 即時狀態；入口在首頁「成長軌跡」與戰情室旁
   if (hashRoute === '#architecture') {
-    return <><ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />{unlockModal}</>
+    return <ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />
   }
   // 知識頁（2026-11-05）：#knowledge＝題目牆、#knowledge/<id>＝單題頁；id 經 decodeURIComponent
   if (hashRoute === '#knowledge' || hashRoute.startsWith('#knowledge/')) {
     const topicId = hashRoute === '#knowledge' ? null : decodeURIComponent(hashRoute.slice('#knowledge/'.length))
-    return <><KnowledgeView unlockedPassword={unlockedPassword} topicId={topicId} onRequestUnlock={handleRequestUnlock} />{unlockModal}</>
+    return <KnowledgeView unlockedPassword={unlockedPassword} topicId={topicId} onRequestUnlock={handleRequestUnlock} />
   }
   if (hashRoute === '#graph/timeline') {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} />
@@ -152,7 +135,7 @@ export default function App() {
         onSiteSelect={handleSiteClick}
         onRequestUnlock={handleRequestUnlock}
         legacy={hashRoute === '#legacy'}
-        onOpenAdmin={() => setAdminAuth(true)}
+        onOpenAdmin={() => { if (unlockedPassword) setAdminOpen(true); else handleRequestUnlock() }}
       />
 
 
@@ -169,13 +152,7 @@ export default function App() {
         )
       })()}
 
-      {unlockModal}
-
-      {adminAuth && !adminOpen && (
-        <AdminAuthModal onSuccess={handleAdminAuthSuccess} onCancel={() => setAdminAuth(false)} />
-      )}
-
-      {adminOpen && <AdminPanel adminPassword={adminPassword} onClose={() => setAdminOpen(false)} />}
+      {adminOpen && unlockedPassword && <AdminPanel adminPassword={unlockedPassword} onClose={() => setAdminOpen(false)} />}
     </div>
   )
 }

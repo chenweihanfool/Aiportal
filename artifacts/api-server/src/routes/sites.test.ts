@@ -31,9 +31,9 @@ describe("sites 路由表", () => {
   const has = (method: string, path: string) =>
     router.stack.some((l) => l.route && ([] as string[]).concat(l.route.path).includes(path) && l.route.methods[method]);
 
-  it("只剩 GET /sites 與 POST /auth/verify", () => {
+  it("只剩 GET /sites（密碼換 token 的 POST /auth/verify 已移除）", () => {
     expect(has("get", "/sites")).toBe(true);
-    expect(has("post", "/auth/verify")).toBe(true);
+    expect(has("post", "/auth/verify")).toBe(false);
   });
   it.each(["post", "put", "patch", "delete"])("%s 站台寫入端點已移除（兩種前綴都沒有）", (method) => {
     for (const path of ["/sites", "/admin/sites", "/sites/:id", "/admin/sites/:id"]) expect(has(method, path)).toBe(false);
