@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { interpretMe, loginErrorMessage } from './authView'
+import { interpretMe, loginErrorMessage, loginHref } from './authView'
+
+describe('loginHref', () => {
+  it('points at the API login route under the mount base', () => {
+    expect(loginHref('/')).toBe('/api/auth/login')
+    expect(loginHref('/aiportal/')).toBe('/aiportal/api/auth/login')
+  })
+})
 
 describe('interpretMe', () => {
   it('recognises a logged-in session', () => {

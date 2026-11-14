@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { CV, FONT } from './theme'
-import { GOOGLE_SESSION_SENTINEL, interpretMe, loginErrorMessage, type AuthStatus } from './authView'
+import { GOOGLE_SESSION_SENTINEL, interpretMe, loginErrorMessage, loginHref, type AuthStatus } from './authView'
 
 // 整站入口：先問 /api/auth/me。
-//  - 已用 Google 登入 → 放行，並把「已解鎖」狀態交給 App（沿用既有的 UNLOCK_KEY 機制，過渡期用固定哨兵值；
+//  - 已用 Google 登入 → 放行，並把「已解鎖」狀態交給 App（沿用既有的 UNLOCK_KEY 機制，存固定哨兵值；
 //    伺服器認的是 cookie，header 值不重要）。
 //  - 伺服器強制登入且未登入 → 只顯示登入頁。
-//  - 沒有強制登入 → 原樣顯示 App（密碼解鎖照舊），右下角多一個「Google 登入」入口。
+//  - 沒有強制登入 → 原樣顯示 App（公開內容照常可見），右下角多一個「Google 登入」入口；
+//    按解鎖或開私領域內容一律導去 Google 登入。
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 const UNLOCK_KEY = 'portal_unlocked'
 
@@ -20,7 +21,7 @@ async function fetchMe(): Promise<AuthStatus> {
   }
 }
 
-function loginUrl(): string { return `${API_BASE}api/auth/login` }
+function loginUrl(): string { return loginHref(API_BASE) }
 
 function takeLoginError(): string | null {
   const params = new URLSearchParams(window.location.search)
@@ -64,7 +65,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 interface AuthContextValue { status: AuthStatus; logout: () => Promise<void> }
 const AuthContext = createContext<AuthContextValue>({ status: { kind: 'optional' }, logout: async () => {} })
 
-/** 網頁標頭上的登入狀態：已登入顯示 email＋登出；尚未用 Google 登入（過渡期仍可密碼解鎖）顯示「Google 登入」入口。 */
+/** 網頁標頭上的登入狀態：已登入顯示 email＋登出；尚未用 Google 登入時顯示「Google 登入」入口。 */
 export function AccountBadge() {
   const { status, logout } = useContext(AuthContext)
   if (status.kind === 'loading' || status.kind === 'login-required') return null

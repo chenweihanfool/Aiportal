@@ -24,7 +24,7 @@
 2. **強制**：`.env` 加 `REQUIRE_GOOGLE_LOGIN=1`，`docker compose up -d api-server`。未登入者只看到登入頁，所有 `/api` 都需登入。
    回滾：拿掉這一行重啟即可。
    - 強制模式下若設定不全（沒白名單／用戶端），**失敗即關閉**：只剩原始 `ADMIN_PASSWORD` 的伺服器推送能通過。
-3. 之後（下一個 PR）才移除前端的密碼解鎖與 `/api/auth/verify`。
+3. 2.91.0 已移除前端密碼解鎖與 `/api/auth/verify`；`x-admin-password` 只剩伺服器推送用的原始 `ADMIN_PASSWORD` 與登入後的內部 bridge。
 
 ## 驗證
 
