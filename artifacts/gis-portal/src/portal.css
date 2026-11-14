@@ -2573,6 +2573,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-tip-d { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; font: 11px var(--font-mono); color: var(--c-ink-3); }
 .it-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
+.it-seedling { margin: var(--sp-2) 0 0; text-align: center; font-size: 0.78rem; color: var(--c-ink-3); letter-spacing: 0.04em; }
 /* 底部：月份、圖例（小圖示列） */
 .it-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-3); margin-top: var(--sp-2); }
 .it-month { font: 12.5px var(--font-mono); color: var(--c-accent-ink); }

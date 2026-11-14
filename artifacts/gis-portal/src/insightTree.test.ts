@@ -337,3 +337,66 @@ describe('視覺化結構（2.99.0 打磨）', () => {
     for (const lf of part.leaves) { const f = a.leaves.find((x) => x.id === lf.id)!; expect([f.x, f.y]).toEqual([lf.x, lf.y]) }
   })
 })
+
+describe('稀疏資料像一棵小樹（退回第 1 次）', () => {
+  const day = '2026-11-14'
+  const one = (id: string, cluster: string, thread: string, date = day) => ({ id, date, time: null, text: `稀疏心得 ${id}`, provenance: 'quote', cluster, thread, relation: 'new', parent: null })
+  const mkData = (items: unknown[]): InsightData => {
+    const d = parseInsights({ clusters: [{ id: 'K01', name: '甲群', count: 9 }, { id: 'K02', name: '乙群', count: 9 }, { id: 'K03', name: '丙群', count: 9 }], insights: items })
+    if (!d) throw new Error('解析失敗')
+    return d
+  }
+  const cases: Array<[string, InsightData]> = [
+    ['1 則', mkData([one('s1', 'K01', 'T1')])],
+    ['2 則（同日兩群）', mkData([one('s1', 'K01', 'T1'), one('s2', 'K02', 'T2')])],
+    ['3 則', mkData([one('s1', 'K01', 'T1'), one('s2', 'K02', 'T2'), one('s3', 'K03', 'T3', '2026-11-02')])],
+    ['5 則', mkData([one('s1', 'K01', 'T1'), one('s2', 'K02', 'T2'), one('s3', 'K03', 'T3', '2026-11-02'), one('s4', 'K01', 'T4', '2026-10-20'), one('s5', 'K02', 'T5', '2026-10-01')])],
+  ]
+  for (const [w, h] of [[360, 340], [600, 420], [1000, 520]] as const) {
+    for (const [name, d] of cases) {
+      it(`${name}（${w} 寬）：樹幹 ≥ 繪圖區 50%、每條枝末端高於起點、整棵樹高度 ≥ 70%`, () => {
+        const l = layoutInsightTree(d, { width: w, height: h, now: NOW })
+        const area = l.axis.ground - l.axis.top
+        expect((l.axis.ground - l.axis.trunkTop) / area).toBeGreaterThanOrEqual(0.5)
+        for (const x of l.limbs) {
+          expect(x.to[1], x.id).toBeLessThanOrEqual(x.from[1] + 0.05)
+          if (x.level === 'cluster') expect(x.to[1], x.id).toBeLessThan(x.from[1])
+        }
+        for (const th of ['T1', 'T2', 'T3', 'T4', 'T5']) {
+          const segs = l.limbs.filter((x) => x.id.startsWith(`t:${th}#`))
+          if (segs.length > 0) expect(segs[segs.length - 1]!.to[1]).toBeLessThan(segs[0]!.from[1])
+        }
+        const topTip = Math.min(...l.clusters.filter((c) => c.count > 0).map((c) => c.y))
+        expect((l.axis.ground - topTip) / h).toBeGreaterThanOrEqual(0.7)
+        expect(l.leaves.length).toBe(d.insights.length)
+        for (const lf of l.leaves) { expect(lf.x - lf.r).toBeGreaterThanOrEqual(0); expect(lf.x + lf.r).toBeLessThanOrEqual(w) }
+      })
+    }
+  }
+  it('時間軸最少涵蓋 6 個月；樹寬依群數置中（2 群的樹冠比 12 群窄）；≤5 則葉子較大', () => {
+    const l = layoutInsightTree(cases[1]![1], { width: 800, height: 420, now: NOW })
+    expect((l.axis.dayMax - l.axis.dayMin) / 30.44).toBeGreaterThanOrEqual(5)
+    expect(l.ticks.length).toBeGreaterThanOrEqual(3)
+    const xs = l.leaves.map((x) => x.x)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(400)
+    const cx = (l.width + 60) / 2
+    expect(Math.abs((Math.max(...xs) + Math.min(...xs)) / 2 - cx)).toBeLessThan(80)
+    const big = layoutInsightTree(sample(), { width: 800, height: 420, now: NOW })
+    expect(l.leaves[0]!.r).toBeGreaterThan(big.leaves.find((x) => x.relation === 'new')!.r * 1.4)
+  })
+  it('主枝從樹幹分出的角度離垂直 15°～60°（取枝的第一段起點到第二個取樣點）', () => {
+    for (const [, d] of cases) {
+      const l = layoutInsightTree(d, { width: 600, height: 420, now: NOW })
+      for (const c of l.clusters.filter((x) => x.count > 0)) {
+        const first = l.limbs.find((x) => x.id === `c:${c.id}#0`)!
+        const nums = [...first.d.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].map((m) => [+m[1]!, +m[2]!])
+        // 輪廓前半是左側點：取第 1 與第 3 個點的方向（粗略，輪廓與中心線平行）
+        const dx = nums[2]![0] - nums[0]![0]
+        const dy = nums[0]![1] - nums[2]![1]
+        const ang = (Math.atan2(Math.abs(dx), dy) * 180) / Math.PI
+        expect(ang).toBeGreaterThanOrEqual(8)
+        expect(ang).toBeLessThanOrEqual(75)
+      }
+    }
+  })
+})

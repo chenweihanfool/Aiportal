@@ -329,6 +329,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                 )}
                 {upto && <span className="it-sr" data-testid="insight-month-big">{upto}</span>}
               </div>
+              {stats.total <= 5 && <p className="it-seedling" data-testid="insight-seedling">小樹苗：HERMES 每晚會從日記補上你的心得</p>}
               <div className="it-foot">
                 <span className="it-month" data-testid="insight-month" aria-live="polite">
                   {upto ? `${playing ? '重播中' : '停在'} ${monthLabel}` : `${monthLabel}・至今`}

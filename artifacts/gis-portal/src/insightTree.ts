@@ -245,6 +245,8 @@ export interface InsightLimb {
   shade?: number
   /** 中心線起點 */
   from: [number, number]
+  /** 中心線終點（一律不低於起點：枝只往上長） */
+  to: [number, number]
 }
 export interface InsightLeaf {
   id: string
@@ -294,7 +296,7 @@ export interface InsightTreeLayout {
   clusters: InsightClusterOut[]
   /** 時間刻度：年（major）與每半年／季／月（minor），y 隨日期單調（越晚越高） */
   ticks: TimeTick[]
-  axis: { x: number; top: number; bottom: number; ground: number; dayMin: number; dayMax: number }
+  axis: { x: number; top: number; bottom: number; ground: number; dayMin: number; dayMax: number; trunkTop: number }
 }
 export interface InsightTreeOptions {
   width: number
@@ -405,7 +407,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   const compact = W < 520
   const PAD = 12
   const AXIS_W = compact ? 44 : 60
-  const rs = compact ? 0.82 : 1
+  const rs = (compact ? 0.82 : 1) * (data.insights.length <= 5 ? 1.6 : 1) // 心得很少時葉子放大，小樹苗也看得清楚
   const today = taipeiDay(opts.now)
   const todayN = dayNumber(today)
   const upto = opts.upto !== undefined && MONTH_RE.test(opts.upto) ? opts.upto : null
@@ -424,13 +426,17 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   const cidx = new Map(clusterDefs.map((c, i) => [c.id, i]))
 
   // ── 時間軸 ──
-  const dayMin = all.length > 0 ? dayNumber(all[0]!.date) : todayN
   let dayMax = Math.max(todayN, all.length > 0 ? dayNumber(all[all.length - 1]!.date) : todayN)
+  // 時間軸最少涵蓋 6 個月（最新月份往前 5 個月），資料很少時樹幹也有高度
+  const endD = new Date(dayMax * 86_400_000)
+  const minStart = Date.UTC(endD.getUTCFullYear(), endD.getUTCMonth() - 5, 1) / 86_400_000
+  const dayMin = Math.min(all.length > 0 ? dayNumber(all[0]!.date) : todayN, minStart)
   if (dayMax <= dayMin) dayMax = dayMin + 1
+  const few = all.length <= 12
   const ground = H - PAD - 6
   const yBottom = ground - 26
   const yTop = PAD + (compact ? 30 : 34)
-  const axis = { x: AXIS_W - 8, top: yTop, bottom: yBottom, ground, dayMin, dayMax }
+  const axis = { x: AXIS_W - 8, top: yTop, bottom: yBottom, ground, dayMin, dayMax, trunkTop: ground }
   const yOfDn = (dn: number): number => yBottom - clamp((dn - dayMin) / (dayMax - dayMin), 0, 1) * (yBottom - yTop)
   const yOf = (date: string): number => yOfDn(dayNumber(date))
   const cx = AXIS_W + (W - AXIS_W) / 2
@@ -447,10 +453,11 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   sortedIdx.forEach((ci, k) => { if (k % 2 === 0) ordered.push(ci); else ordered.unshift(ci) })
   const wsum = ordered.reduce((s, ci) => s + weight(ci), 0) || 1
   const laneCenter = new Array<number>(nc).fill(0)
-  const laneHalf = new Array<number>(nc).fill(halfW)
-  let cur = -halfW
+  const spreadW = few ? Math.min(halfW, 56 * nc + 40) : halfW // 群少時樹冠不用撐滿，依群數置中
+  const laneHalf = new Array<number>(nc).fill(spreadW)
+  let cur = -spreadW
   for (const ci of ordered) {
-    const w = (2 * halfW * weight(ci)) / wsum
+    const w = (2 * spreadW * weight(ci)) / wsum
     laneCenter[ci] = cur + w / 2
     laneHalf[ci] = w / 2
     cur += w
@@ -462,11 +469,19 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   for (let ci = 0; ci < nc; ci++) {
     const mine = all.filter((i) => i.cluster === clusterDefs[ci]!.id)
     if (mine.length === 0) continue
-    const y0 = yOf(mine[0]!.date)
-    const y1 = Math.max(yTop - 10, Math.min(yOf(mine[mine.length - 1]!.date) - 22, y0 - 46))
+    const y0raw = yOf(mine[0]!.date)
+    let y1 = Math.max(yTop - 10, Math.min(yOf(mine[mine.length - 1]!.date) - 22, y0raw - 46))
+    if (few) y1 = yTop + 4 + (ci % 2) * 18 // 心得少：每群的枝都長到樹冠高度，錯開高低讓膠囊不打架
+    const minRise = few ? Math.max(70, 0.3 * (yBottom - yTop)) : 46
+    const y0 = Math.max(y0raw, y1 + minRise) // 枝的起點一定低於末端：只往上長
+    const rise = y0 - y1
     const tipX = cx + laneCenter[ci]! * 0.88
     const dx = tipX - cx
-    cl[ci] = { p0: [cx, y0], p1: [cx + dx * 0.45, y0 - (y0 - y1) * 0.16], p2: [cx + dx * 1.0, y0 - (y0 - y1) * 0.5], p3: [tipX, y1], y0, y1, first: mine[0]!, count: mine.length }
+    // 從樹幹分出的角度：離垂直 15°～60°
+    const ddy = rise * 0.3
+    const ddx = clamp(Math.abs(dx) * 0.45, ddy * Math.tan((15 * Math.PI) / 180), ddy * Math.tan((60 * Math.PI) / 180))
+    const sgn = Math.abs(dx) < 1 ? (ci % 2 ? 1 : -1) : Math.sign(dx)
+    cl[ci] = { p0: [cx, y0], p1: [cx + sgn * ddx, y0 - ddy], p2: [cx + dx, y0 - rise * 0.55], p3: [tipX, y1], y0, y1, first: mine[0]!, count: mine.length }
   }
   const pointOnCluster = (ci: number, t: number): P => { const c = cl[ci]!; return cubicAt(c.p0, c.p1, c.p2, c.p3, t) }
   const tAtY = (ci: number, y: number): number => {
@@ -634,7 +649,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
       ids.push(id)
       limbsAll.push({
         id, d: ribbon(pts, ws), level: 'cluster', width: A1(ws[0]!), widthStart: A1(ws[0]!), widthEnd: A1(ws[ws.length - 1]!), withered: false,
-        firstMonth: fm < c.first.date.slice(0, 7) ? c.first.date.slice(0, 7) : fm, clusterIndex: ci, from: [A1(pts[0]![0]), A1(pts[0]![1])],
+        firstMonth: fm < c.first.date.slice(0, 7) ? c.first.date.slice(0, 7) : fm, clusterIndex: ci, from: [A1(pts[0]![0]), A1(pts[0]![1])], to: [A1(pts[pts.length - 1]![0]), A1(pts[pts.length - 1]![1])],
       })
     }
   }
@@ -661,8 +676,11 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
       const p1 = anchors[j]!
       const p2 = anchors[j + 1]!
       const p3 = anchors[Math.min(n, j + 2)]!
-      const c1: P = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
-      const c2: P = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
+      // 控制點的高度夾在起終點之間：每一段只往上，不會下垂再上翹
+      const c1y = clamp(p1[1] + (p2[1] - p0[1]) / 6, p2[1], p1[1])
+      const c2y = clamp(p2[1] - (p3[1] - p1[1]) / 6, p2[1], c1y)
+      const c1: P = [p1[0] + (p2[0] - p0[0]) / 6, c1y]
+      const c2: P = [p2[0] - (p3[0] - p1[0]) / 6, c2y]
       const pts: P[] = []
       const ws: number[] = []
       for (let s = 0; s <= 8; s++) {
@@ -675,7 +693,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
       segIds.push(id)
       limbsAll.push({
         id, d: ribbon(pts, ws), level: 'thread', width: A1(ws[0]!), widthStart: A1(ws[0]!), widthEnd: A1(ws[ws.length - 1]!),
-        withered: deadSeg.has(id), firstMonth: it.date.slice(0, 7), clusterIndex: ci, shade: bl.shade, from: [A1(p1[0]), A1(p1[1])],
+        withered: deadSeg.has(id), firstMonth: it.date.slice(0, 7), clusterIndex: ci, shade: bl.shade, from: [A1(p1[0]), A1(p1[1])], to: [A1(p2[0]), A1(p2[1])],
       })
       leafPath.set(it.id, [...basePath, ...segIds])
       const d = cubicDir(p1, c1, c2, p2, 1)
@@ -709,7 +727,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   }
   const trunk: InsightLimb = {
     id: 'trunk', d: ribbon(trunkPts, trunkWs), level: 'trunk', width: A1(trunkWs[0]!), widthStart: A1(trunkWs[0]!), widthEnd: A1(trunkWs[trunkWs.length - 1]!),
-    withered: false, firstMonth: earliestMonth, from: [A1(trunkPts[0]![0]), A1(trunkPts[0]![1])],
+    withered: false, firstMonth: earliestMonth, from: [A1(trunkPts[0]![0]), A1(trunkPts[0]![1])], to: [A1(trunkPts[trunkPts.length - 1]![0]), A1(trunkPts[trunkPts.length - 1]![1])],
   }
 
   const leaves: InsightLeaf[] = visLeaves.map((i) => {
@@ -774,7 +792,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   // ── 時間刻度：年與每半年／季／月 ──
   const ticks: TimeTick[] = []
   const spanMonths = (dayMax - dayMin) / 30.44
-  const step = spanMonths >= 14 ? 6 : spanMonths >= 5 ? 3 : 1
+  const step = spanMonths >= 14 ? 6 : spanMonths >= 8 ? 3 : 1
   const d0 = new Date(dayMin * 86_400_000)
   let ty = d0.getUTCFullYear()
   let tm = d0.getUTCMonth() // 下一步先 +1 ＝從最早那個月的 1 號開始（可能比最早的心得早幾天，y 夾在底部）
@@ -791,7 +809,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     ticks.push({ y: A1(y), label: tm === 1 ? String(ty) : `${ty}-${String(tm).padStart(2, '0')}`, major: tm === 1 })
   }
 
-  return { width: W, height: H, compact, trunk, limbs, leaves, clusters, ticks, axis }
+  return { width: W, height: H, compact, trunk, limbs, leaves, clusters, ticks, axis: { ...axis, trunkTop: A1(trunkTop) } }
 }
 
 /** 群標籤顯示文字（太長截短） */
