@@ -1,7 +1,7 @@
 // GET /api/search/preview 的純邏輯：各 kind 把原始資料推導成 { one, points, related, source, bodyMd }。
 // 不碰 DB；資料一律當不可信：欄位型別不對就略過。不回傳 sourcePath。
 import {
-  SEARCH_KINDS, dateOf, graphEntities, isDocKind, isObj, narrativesOf, str,
+  SEARCH_KINDS, dateOf, graphEntities, isDocKind, isObj, narrativesOf, str, strList,
   type GraphEntity, type SearchKind,
 } from "./search";
 
@@ -22,6 +22,8 @@ export interface Preview {
   related: PreviewRelated[];
   source: string;
   bodyMd: string | null;
+  /** 只有 repo 會給：GitHub 連結。 */
+  url?: string;
 }
 
 export function validatePreviewParams(kindRaw: unknown, idRaw: unknown): { ok: true; kind: SearchKind; id: string } | { ok: false; message: string } {
@@ -293,6 +295,42 @@ export function previewTrip(trips: unknown, id: string): Preview | null {
   const title = t && str(t["name"]);
   if (!t || !title) return null;
   return plain("trip", id, title, str(t["summary"]) ?? "", "遊記");
+}
+
+// ── repo ──────────────────────────────────────────────────────────────────
+/** GitHub 倉庫（RepoInfo[]）：以 name 找；points 依語言、主題、最後推送、可見性、預設分支，空值略過。 */
+export function previewRepo(repos: unknown, id: string): Preview | null {
+  if (!Array.isArray(repos)) return null;
+  for (const r of repos as unknown[]) {
+    if (!isObj(r)) continue;
+    const name = str(r["name"]);
+    const url = str(r["url"]);
+    if (!name || !url) continue;
+    if (name !== id) continue;
+    const language = str(r["language"]);
+    const topics = strList(r["topics"]);
+    const pushed = dateOf(r["pushedAt"]);
+    const defaultBranch = str(r["defaultBranch"]);
+    const points: string[] = [];
+    if (language) points.push(`語言：${language}`);
+    if (topics.length > 0) points.push(`主題：${topics.join("、")}`);
+    if (pushed) points.push(`最後推送：${pushed}`);
+    let visibility = r["private"] === true ? "🔒 私有" : "公開";
+    if (r["archived"] === true) visibility += "・已封存";
+    if (r["fork"] === true) visibility += "・fork";
+    points.push(visibility);
+    if (defaultBranch) points.push(`預設分支：${defaultBranch}`);
+    return {
+      kind: "repo", id: name, title: name,
+      one: cut(str(r["description"]) ?? "", ONE_MAX),
+      points: points.slice(0, POINTS_LIMIT).map((p) => cut(p, POINT_MAX)),
+      related: [],
+      source: cut(`GitHub ${str(r["fullName"]) ?? ""}`, SOURCE_MAX),
+      bodyMd: null,
+      url,
+    };
+  }
+  return null;
 }
 
 export function previewTool(sites: unknown, id: string): Preview | null {
