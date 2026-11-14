@@ -735,7 +735,7 @@ function NetworkCard({ pw }: { pw: string }) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: '0.7rem', color: CV.steel }}>
             <span>{m.mostActivePerson ? <>這陣子最活躍：<b style={{ color: CV.amber }}>{m.mostActivePerson.name}</b><span style={{ color: CV.steelDim }}>（{m.mostActivePerson.eventCount} 個事件）</span></> : ''}</span>
-            <button type="button" onClick={() => { window.location.hash = 'graph' }} style={btn}>完整關係宇宙 →</button>
+            <button type="button" onClick={() => { window.location.hash = 'dossier' }} style={btn}>看卷宗 →</button>
           </div>
         </>
       )}

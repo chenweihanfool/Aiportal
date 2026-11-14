@@ -72,6 +72,6 @@ export function dimensionLinks(dimKey: string, sites: SiteData[], open: (s: Site
   if (site && site.links[0]?.url) out.push({ label: `前往 ${site.name} ↗`, onClick: () => open(site) })
   if (dimKey === 'travel') out.push({ label: '遊記 →', hash: 'trips' }, { label: '美食及旅遊地圖 →', hash: 'food' })
   if (dimKey === 'mind') out.push({ label: '時間軸（日報分數）→', hash: 'graph/timeline' })
-  if (dimKey === 'social') out.push({ label: '關係宇宙 →', hash: 'graph' })
+  if (dimKey === 'social') out.push({ label: '卷宗 →', hash: 'dossier' })
   return out
 }
