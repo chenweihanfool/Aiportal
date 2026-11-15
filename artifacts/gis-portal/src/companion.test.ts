@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HhiRow } from './boardView'
-import { MIN_INSIGHT_DAYS, activityInsight, bestMove, parseCompanion, rotateQuiet, visibleQuietPeople, type CompanionData, type PersonAction, type QuietPerson } from './companion'
+import { MIN_INSIGHT_DAYS, MIN_RECIPE_DAYS, activityInsight, bestMove, monthlyRecipe, parseCompanion, prevMonth, recipeLine, rotateQuiet, visibleQuietPeople, type CompanionData, type PersonAction, type QuietPerson } from './companion'
 import type { DailyLife } from './milestones'
 
 const row = (key: string, label: string, value: number | null, weightPct: number): HhiRow => ({ key, label, value, weightPct, points: null })
@@ -142,5 +142,82 @@ describe('activityInsight', () => {
   it('換尺之前的分數不比；沒資料不亂講', () => {
     expect(activityInsight([{ date: '2026-10-01', displayedScore: 50 }, { date: '2026-10-02', displayedScore: 60 }], life({})).pending).toContain('見人 0／')
     expect(activityInsight([], null).ready).toBe(false)
+  })
+})
+
+/** deltas[i]＝11/1+i 的隔天分數 − 當天；尾端再多一點當最後一天的隔天 */
+const recipeHist = (deltas: number[], start = 60) => {
+  const scores = [start]
+  for (const d of deltas) scores.push(scores[scores.length - 1]! + d)
+  const dates = Array.from({ length: deltas.length + 1 }, (_, i) => new Date(Date.UTC(2026, 10, 1 + i)).toISOString().slice(0, 10))
+  return dates.map((date, i) => ({ date, displayedScore: scores[i]! }))
+}
+
+describe('monthlyRecipe', () => {
+  it('只看該月：11/30 的隔天跨到 12 月也算，10 月的不算', () => {
+    const deltas = Array.from({ length: 30 }, (_, i) => (i % 2 === 0 ? 1 : 0))
+    const entries: Record<number, Partial<DailyLife[string]>> = {}
+    for (let i = 0; i < 30; i++) if (i % 2 === 0) entries[i] = { socialPeople: 1 }
+    const h = [...recipeHist(deltas), { date: '2026-10-31', displayedScore: 50 }]
+    const r = monthlyRecipe(h, life({ ...entries, [-1]: { socialPeople: 1 } }), '2026-11')
+    expect(r.items[0]).toEqual({ label: '見人', diff: 1, yes: 15, no: 15 })
+    expect(r.pending).toEqual([`新店 0／${MIN_RECIPE_DAYS}`, `旅行 0／${MIN_RECIPE_DAYS}`, `運動 0／${MIN_RECIPE_DAYS}`])
+  })
+  it('SCALE_SINCE 之前的日期不算', () => {
+    const hist2026_10 = Array.from({ length: 31 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, '0')}`, displayedScore: 60 }))
+    const entries: Record<number, Partial<DailyLife[string]>> = {}
+    for (let i = 0; i < 29; i++) entries[i] = { socialPeople: 1 }
+    const r = monthlyRecipe(hist2026_10, life(entries), '2026-10')
+    expect(r.items).toEqual([])
+    expect(r.pending).toContain(`見人 0／${MIN_RECIPE_DAYS}`)
+  })
+  it('門檻 3：兩邊都要滿 3 天才成立', () => {
+    const h = recipeHist([1, 1, 1, 0, 0, 0])
+    const two = monthlyRecipe(h, life({ 0: { socialPeople: 1 }, 1: { socialPeople: 1 } }), '2026-11')
+    expect(two.items).toEqual([])
+    expect(two.pending).toContain(`見人 2／${MIN_RECIPE_DAYS}`)
+    const three = monthlyRecipe(h, life({ 0: { socialPeople: 1 }, 1: { socialPeople: 1 }, 2: { socialPeople: 1 } }), '2026-11')
+    expect(three.items).toEqual([{ label: '見人', diff: 1, yes: 3, no: 3 }])
+  })
+  it('差四捨五入到 0.1', () => {
+    const h = recipeHist([0.1, 0.2, 0.4, 0, 0, 0])
+    const r = monthlyRecipe(h, life({ 0: { socialPeople: 1 }, 1: { socialPeople: 1 }, 2: { socialPeople: 1 } }), '2026-11')
+    expect(r.items[0]?.diff).toBe(0.2)
+  })
+  it('四項都成立：依 |差| 降冪取前 3', () => {
+    const deltas = Array.from({ length: 12 }, (_, i) => i)
+    const entries: Record<number, Partial<DailyLife[string]>> = {}
+    for (let i = 0; i < 12; i++) {
+      const e: Partial<DailyLife[string]> = {}
+      if (i < 6) e.socialPeople = 1
+      if (i >= 1 && i <= 6) e.newPlaces = ['店']
+      if (i >= 2 && i <= 7) e.trip = '旅'
+      if (i % 2 === 0) e.workouts = ['跑步']
+      entries[i] = e
+    }
+    const r = monthlyRecipe(recipeHist(deltas), life(entries), '2026-11')
+    expect(r.items.map((x) => x.label)).toEqual(['見人', '新店', '旅行'])
+    expect(r.items.map((x) => x.diff)).toEqual([-6, -4, -2])
+    expect(r.pending).toEqual([])
+  })
+  it('life 為 null 回空', () => {
+    expect(monthlyRecipe(recipeHist([1, 1, 1, 1, 1, 1]), null, '2026-11')).toEqual({ ym: '2026-11', items: [], pending: [] })
+  })
+})
+
+describe('recipeLine', () => {
+  it('差不到 0.5 寫差不多；其餘寫多／少幾分', () => {
+    expect(recipeLine({ label: '見人', diff: 0.4, yes: 5, no: 4 })).toBe('見人的日子，隔天和平常差不多（5／4 天）')
+    expect(recipeLine({ label: '見人', diff: 1.3, yes: 5, no: 4 })).toBe('見人的日子，隔天幸福指數多 1.3 分（5／4 天）')
+    expect(recipeLine({ label: '旅行', diff: -2, yes: 3, no: 5 })).toBe('旅行的日子，隔天幸福指數少 2 分（3／5 天）')
+    expect(recipeLine({ label: '運動', diff: 0.5, yes: 3, no: 3 })).toBe('運動的日子，隔天幸福指數多 0.5 分（3／3 天）')
+  })
+})
+
+describe('prevMonth', () => {
+  it('上個月；1 月跨到去年 12 月', () => {
+    expect(prevMonth('2026-11-15')).toBe('2026-10')
+    expect(prevMonth('2026-03-31')).toBe('2026-02')
+    expect(prevMonth('2026-01-03')).toBe('2025-12')
   })
 })

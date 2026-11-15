@@ -4,8 +4,8 @@ import { KIND_LABEL, pctText } from './statusAside'
 
 // STATUS 右欄兩個小抽屜的內容（2.88.0）：搜尋統計、推送統計，都是近 14 天，打開時才讀。
 
-/** 3.4.0：最弱面向卡的標籤（KIND_LABEL 在 statusAside.ts，這裡只補推送統計用得到的） */
-const EXTRA_KIND_LABEL: Record<string, string> = { boost: '最弱面向' }
+/** 3.4.0：最弱面向卡、3.6.0：幸福配方卡的標籤（KIND_LABEL 在 statusAside.ts，這裡只補推送統計用得到的） */
+const EXTRA_KIND_LABEL: Record<string, string> = { boost: '最弱面向', recipe: '幸福配方' }
 
 function Kv({ k, v, hint }: { k: string; v: string; hint?: string }) {
   return (

@@ -171,5 +171,53 @@ export function activityInsight(history: readonly HhiHistoryPoint[], life: Daily
   return { ready: lines.length > 0, lines, pending: waiting.length > 0 ? `累積中：${waiting.join('、')}` : '' }
 }
 
+// ── 每月配方（3.6.0）：看上個月每天做了哪些事，隔天分數比較高還是低 ──
+export const MIN_RECIPE_DAYS = 3
+
+export interface RecipeItem { label: string; diff: number; yes: number; no: number }
+export interface MonthlyRecipe { ym: string; items: RecipeItem[]; pending: string[] }
+
+/** today 的上個月 YYYY-MM（1 月 → 去年 12 月） */
+export function prevMonth(today: string): string {
+  const y = Number(today.slice(0, 4))
+  const m = Number(today.slice(5, 7))
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
+}
+
+/**
+ * 上個月的配方：只看日期以 ym 開頭、SCALE_SINCE 之後、且隔天也有分數的日子（隔天可跨月）。
+ * 每項同 activityInsight 的比法；有／沒有兩邊各滿 MIN_RECIPE_DAYS 天才成立。
+ * items＝成立項目依 |差| 降冪前 3（差四捨五入到 0.1）；pending＝還沒成立項目的進度。
+ */
+export function monthlyRecipe(history: readonly HhiHistoryPoint[], life: DailyLife | null, ym: string): MonthlyRecipe {
+  if (!life) return { ym, items: [], pending: [] }
+  const score = new Map(history.filter((h) => h.date >= SCALE_SINCE).map((h) => [h.date.slice(0, 10), h.displayedScore]))
+  const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length
+  const done: RecipeItem[] = []
+  const pending: string[] = []
+  for (const k of INSIGHT_KEYS) {
+    const yes: number[] = []
+    const no: number[] = []
+    for (const [d, v] of score) {
+      if (d.slice(0, 7) !== ym) continue
+      const next = score.get(nextDay(d))
+      if (next === undefined) continue
+      const l = life[d]
+      ;(l && k.has(l) ? yes : no).push(next - v)
+    }
+    if (yes.length >= MIN_RECIPE_DAYS && no.length >= MIN_RECIPE_DAYS) {
+      done.push({ label: k.label, diff: Math.round((avg(yes) - avg(no)) * 10) / 10, yes: yes.length, no: no.length })
+    } else pending.push(`${k.label} ${Math.min(yes.length, no.length)}／${MIN_RECIPE_DAYS}`)
+  }
+  done.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+  return { ym, items: done.slice(0, 3), pending }
+}
+
+/** 配方的一行說明 */
+export function recipeLine(item: RecipeItem): string {
+  if (Math.abs(item.diff) < 0.5) return `${item.label}的日子，隔天和平常差不多（${item.yes}／${item.no} 天）`
+  return `${item.label}的日子，隔天幸福指數${item.diff > 0 ? '多' : '少'} ${Math.abs(item.diff)} 分（${item.yes}／${item.no} 天）`
+}
+
 /** 幸福指數換成絕對分的第一天（之前的分數是另一把尺） */
 export const SCALE_SINCE = '2026-10-30'
