@@ -36,6 +36,10 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
 
 // ── 假資料（全部虛構）──
 const tpDate = (offset = 0) => new Date(Date.now() + 8 * 3600e3 + offset * 86400e3).toISOString().slice(0, 10)
+// 3.7.0：假的每日幸福指數（只收換尺 2026-10-30 之後）；偶數日 82（高分）、奇數日 52（低分）
+const SCALE_SINCE = '2026-10-30'
+const scoreAt = (date) => (Number(date.slice(8, 10)) % 2 === 0 ? 82 : 52)
+const HHI_HISTORY = Array.from({ length: 400 }, (_, i) => tpDate(-i)).filter((d) => d >= SCALE_SINCE).map((date) => ({ date, displayedScore: scoreAt(date) }))
 const mk = (id, ago, cluster, thread, relation, parent = null) => ({ id, date: tpDate(-ago), time: '21:30', text: `虛構心得 ${id}：事情要先講清楚再動手`, provenance: 'quote', cluster, thread, relation, parent })
 const HAND = [
   mk('I-01', 300, 'K01', 'TH-a', 'new'), mk('I-02', 250, 'K01', 'TH-a', 'reinforce', 'I-01'), mk('I-03', 200, 'K01', 'TH-a', 'reinforce', 'I-02'),
@@ -147,6 +151,7 @@ async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorSc
     }
     if (p === '/api/hermes-graph' && mode === 'roots') return json(ROOT_GRAPH)
     if (m) { const d = detailOf(decodeURIComponent(m[1])); return d ? json(d) : json({ message: 'none' }, 404) }
+    if (p === '/api/happiness/history') return json({ history: HHI_HISTORY })
     if (p === '/api/hermes-ideas') return json(IDEAS_BODY)
     if (p === '/api/search') return json(searchBody)
     if (p === '/api/timeline/day' || p.startsWith('/api/hermes-timeline')) return json({}, 404)
@@ -612,6 +617,53 @@ try {
     await r.page.waitForSelector('[data-testid="insight-leaf"]')
     check(`${T}：360×740 首頁無橫向捲動`, await noHScroll(r.page))
     await r.ctx.close()
+  }
+
+  // ── 11. 誕生那天的幸福指數（3.7.0）──
+  {
+    const T = '誕生那天幸福指數'
+    const { ctx, page, errors } = await open({ width: 1440, height: 900 })
+    await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    const line = page.locator('[data-testid="insight-born-bands"]')
+    await line.waitFor({ timeout: 10000 })
+    const lineText = (await line.innerText()).replace(/\s+/g, '')
+    const nums = lineText.match(/\d+/g) ?? []
+    const highN = Number(nums[1] ?? 0), lowN = Number(nums[3] ?? 0)
+    check(`${T}：側欄多一行「高分日子（≥75）長出 N 則・低分日子（<60）M 則」`, /^高分日子（≥75）長出\d+則・低分日子（<60）\d+則$/.test(lineText) && highN > 0 && lowN > 0, lineText)
+    // 點高分的數字 → 群清單上方列出該組心得（最多 8 則）
+    await page.locator('.it-born-n').nth(0).click()
+    await page.waitForSelector('[data-testid="insight-born-list"]')
+    const rowsN = await page.locator('[data-testid="insight-born-list"] li').count()
+    check(`${T}：點高分數字列出該組心得（最多 8 則、日期＋一句話）、按鈕亮起`,
+      rowsN === Math.min(highN, 8) && (await page.locator('.it-born-n').nth(0).getAttribute('aria-pressed')) === 'true'
+      && (await page.locator('[data-testid="insight-born-list"] li').first().innerText()).includes('虛構心得'), `rows=${rowsN} high=${highN}`)
+    check(`${T}：清單在群清單上方`, await page.evaluate(() => {
+      const l = document.querySelector('[data-testid="insight-born-list"]'), r = document.querySelector('[data-testid="insight-rows"]')
+      return !!l && !!r && !!(l.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_FOLLOWING)
+    }))
+    // 點清單一則 → 開卷宗，看得見「那天幸福指數」
+    await page.locator('[data-testid="insight-born-list"] button').first().click()
+    await page.waitForSelector('[data-testid="insight-born-score"]', { timeout: 10000 })
+    check(`${T}：卷宗有「那天幸福指數 N」徽章（高分標 高、用既有 token）`, /^那天幸福指數 82\s*高$/.test((await page.locator('[data-testid="insight-born-score"]').innerText()).trim()), await page.locator('[data-testid="insight-born-score"]').innerText())
+    await page.keyboard.press('Escape')
+    // 再點一次收起
+    await page.locator('.it-born-n').nth(0).click()
+    check(`${T}：再點一次收起清單、按鈕恢復`, (await page.locator('[data-testid="insight-born-list"]').count()) === 0 && (await page.locator('.it-born-n').nth(0).getAttribute('aria-pressed')) === 'false')
+    // 低分那一組
+    await page.locator('.it-born-n').nth(1).click()
+    await page.waitForSelector('[data-testid="insight-born-list"]')
+    check(`${T}：點低分數字列出低分日子長出的心得`, (await page.locator('.it-born-n').nth(1).getAttribute('aria-pressed')) === 'true' && (await page.locator('[data-testid="insight-born-list"] li').count()) === Math.min(lowN, 8), `low=${lowN}`)
+    await page.locator('[data-testid="insight-born-list"] button').first().click()
+    await page.waitForSelector('[data-testid="insight-born-score"]', { timeout: 10000 })
+    check(`${T}：低分那則標「那天幸福指數 52 低」`, /^那天幸福指數 52\s*低$/.test((await page.locator('[data-testid="insight-born-score"]').innerText()).trim()), await page.locator('[data-testid="insight-born-score"]').innerText())
+    await page.keyboard.press('Escape')
+    // 換尺之前的心得沒有分數就不顯示
+    await page.evaluate(() => { location.hash = '#insight/I-01' })
+    await page.waitForSelector('[data-testid="insight-panel"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="insight-evidence"]')
+    check(`${T}：換尺之前（無分數）的心得卷宗不顯示徽章`, (await page.locator('[data-testid="insight-born-score"]').count()) === 0)
+    check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))
+    await ctx.close()
   }
 
   // ── 8. 狀態：未解鎖／空／失敗 ──
