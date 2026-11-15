@@ -49,9 +49,6 @@ export function categoryCounts(ideas: IdeaItem[]): Array<[string, number]> {
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 }
 
-/** 'merged'＝有合併關係（被併入別人，或吸收了別人），不分目前狀態 */
-export type StatusFilter = 'open' | 'done' | 'closed' | 'merged' | 'all'
-
 /** 有合併關係：被併入別的想法，或承接了別的想法（兩個方向都算） */
 export const hasMerge = (i: Pick<IdeaItem, 'mergedInto' | 'absorbed'>): boolean => !!i.mergedInto || (i.absorbed?.length ?? 0) > 0
 
@@ -62,17 +59,6 @@ export function matchesQuery(i: IdeaItem, query: string): boolean {
   if (tokens.length === 0) return true
   const hay = norm([i.id, i.title, i.why, i.category, i.dimension, i.source, i.mergedInto, ...(i.absorbed ?? [])].filter(Boolean).join('\n'))
   return tokens.every((t) => hay.includes(t))
-}
-
-export function filterIdeas(ideas: IdeaItem[], category: string | null, status: StatusFilter, query = ''): IdeaItem[] {
-  return ideas.filter((i) => {
-    if (category && (i.category ?? '未分類') !== category) return false
-    if (status === 'open' && !isOpen(i.status)) return false
-    if (status === 'done' && i.status !== 'done') return false
-    if (status === 'closed' && !(i.status === 'shelved' || i.status === 'dropped' || i.status === 'absorbed')) return false
-    if (status === 'merged' && !hasMerge(i)) return false
-    return matchesQuery(i, query)
-  })
 }
 
 /** 合併清單排序：同一組（承接者＋被併入者）排在一起，承接者在前 */
@@ -91,15 +77,6 @@ export function sortMergedGroups(ideas: IdeaItem[]): IdeaItem[] {
   })
 }
 
-export function statusCounts(ideas: IdeaItem[]): { open: number; doing: number; done: number; total: number } {
-  return {
-    open: ideas.filter((i) => isOpen(i.status)).length,
-    doing: ideas.filter((i) => i.status === 'doing').length,
-    done: ideas.filter((i) => i.status === 'done').length,
-    total: ideas.length,
-  }
-}
-
 /** 🔀 併入關係的文字徽章：被併入者「🔀 併入 → IDEA-0022」、承接者「吸收：IDEA-0039、IDEA-0040 等 N 個」 */
 export function absorbBadges(idea: Pick<IdeaItem, 'mergedInto' | 'absorbed'>): { mergedInto: string | null; absorbed: string | null } {
   const list = idea.absorbed ?? []
@@ -110,26 +87,6 @@ export function absorbBadges(idea: Pick<IdeaItem, 'mergedInto' | 'absorbed'>): {
 
 /** 1–5 的點數（價值／難度），null 顯示「—」 */
 export const pips = (n: number | null) => (n === null ? '—' : '●'.repeat(n) + '○'.repeat(5 - n))
-
-// 「複製給 HERMES」：入口網不寫入，狀態一律由 HERMES 寫進日記（docs/ideas.md 的 💡✅／🚀… 標記）。
-// 使用者 2026-10-09：用 Telegram 告訴 HERMES 進度，按鈕只負責把要貼的那句話複製好。
-// 併入（🔀）要指定承接者，不在一鍵複製的範圍（入口網一鍵併入列為後續）。
-export type CopyStatus = Exclude<IdeaStatus, 'new' | 'absorbed'>
-export const STATUS_MARK: Record<CopyStatus, string> = {
-  evaluating: '🔍', doing: '🚀', done: '✅', shelved: '🗄️', dropped: '❌',
-}
-export const STATUS_ACTION: Record<CopyStatus, string> = {
-  evaluating: '評估中', doing: '開始做', done: '已實行', shelved: '擱置', dropped: '放棄',
-}
-/** 這筆想法可以改成哪些狀態（不含目前的、也不回到「新想法」） */
-export function nextStatuses(current: IdeaStatus): CopyStatus[] {
-  return (['done', 'doing', 'evaluating', 'shelved', 'dropped'] as const).filter((s) => s !== current)
-}
-/** 貼到 Telegram 給 HERMES 的一句話；第一行就是 HERMES 寫進日記時用的標記 */
-export function statusMessage(idea: Pick<IdeaItem, 'id' | 'title'>, status: CopyStatus, note = ''): string {
-  const line = `💡${STATUS_MARK[status]} ${idea.id}「${idea.title}」${STATUS_ACTION[status]}`
-  return note.trim() ? `${line}\n${note.trim()}` : `${line}\n（請照想法庫格式寫進今天的日記）`
-}
 
 // ── 三階段與聚焦（2026-11-15：想法庫改成候選／封存／已完成＋聚焦旗標）─────────
 // status 是 HERMES 日記標記的原始值，不改；三態與聚焦旗標都在前端推導。
@@ -164,10 +121,27 @@ export function nextActions(status: IdeaStatus): IdeaAction[] {
   return isFocus(status) ? ['unfocus', 'done', 'archive'] : ['focus', 'done', 'archive']
 }
 
-/** 貼給 HERMES 的一句話（與 statusMessage 同慣例）：第一行是日記標記，第二行是備註或提示 */
+/** 貼給 HERMES 的一句話（入口網不寫入，狀態一律由 HERMES 寫進日記；併入要指定承接者，不在一鍵複製範圍）：第一行是日記標記，第二行是備註或提示 */
 export function actionMessage(idea: Pick<IdeaItem, 'id' | 'title'>, action: IdeaAction, note = ''): string {
   const line = `💡${ACTION_MARK[action]} ${idea.id}「${idea.title}」${ACTION_LABEL[action]}`
   return note.trim() ? `${line}\n${note.trim()}` : `${line}\n（請照想法庫格式寫進今天的日記）`
+}
+
+/** 封存的原因小字：放棄、併入；擱置或其他狀態回 null */
+export function archiveReason(status: IdeaStatus): '放棄' | '併入' | null {
+  return status === 'dropped' ? '放棄' : status === 'absorbed' ? '併入' : null
+}
+
+/** 聚焦了幾天：最後一次轉 doing 的時間到現在；不是聚焦或歷程沒記到回 null */
+export function focusDays(idea: Pick<IdeaItem, 'status' | 'history'>, nowMs: number): number | null {
+  if (!isFocus(idea.status)) return null
+  let last = NaN
+  for (const h of idea.history ?? []) {
+    if (h.status !== 'doing') continue
+    const ms = toMs(h.at)
+    if (Number.isFinite(ms) && (!Number.isFinite(last) || ms > last)) last = ms
+  }
+  return Number.isFinite(last) ? Math.max(0, Math.floor((nowMs - last) / DAY_MS)) : null
 }
 
 export type StageFilter = 'candidate' | 'focus' | 'done' | 'archived' | 'merged' | 'all'

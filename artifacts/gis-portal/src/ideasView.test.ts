@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
-import { STATUS_ICON, STATUS_LABEL, absorbBadges, categoryColor, categoryCounts, filterIdeas, nextStatuses, pips, sortForList, statusCounts, statusMessage, topIdeas } from './ideasView'
+import { STATUS_ICON, STATUS_LABEL, absorbBadges, categoryColor, categoryCounts, pips, sortForList, topIdeas } from './ideasView'
 
 const idea = (id: string, over: Partial<IdeaItem> = {}): IdeaItem => ({
   id, title: id, category: '系統', dimension: null, source: 'HERMES', why: null, value: 3, effort: 3, status: 'new',
@@ -22,13 +22,13 @@ describe('ideasView', () => {
     ]
     expect(sortForList(list).map((i) => i.id)).toEqual(['IDEA-0003', 'IDEA-0001', 'IDEA-0004', 'IDEA-0002'])
   })
-  it('filters by category and status', () => {
+  it('filters by category and stage', () => {
     const list = [idea('A', { category: '旅遊' }), idea('B', { status: 'done' }), idea('C', { category: null, status: 'shelved' })]
-    expect(filterIdeas(list, '旅遊', 'open').map((i) => i.id)).toEqual(['A'])
-    expect(filterIdeas(list, null, 'done').map((i) => i.id)).toEqual(['B'])
-    expect(filterIdeas(list, '未分類', 'closed').map((i) => i.id)).toEqual(['C'])
+    expect(filterByStage(list, '旅遊', 'candidate').map((i) => i.id)).toEqual(['A'])
+    expect(filterByStage(list, null, 'done').map((i) => i.id)).toEqual(['B'])
+    expect(filterByStage(list, '未分類', 'archived').map((i) => i.id)).toEqual(['C'])
     expect(categoryCounts(list)).toEqual([['旅遊', 1], ['未分類', 1], ['系統', 1]])
-    expect(statusCounts(list)).toEqual({ open: 1, doing: 0, done: 1, total: 3 })
+    expect(stageCounts(list)).toEqual({ candidate: 1, focus: 0, archived: 1, done: 1, total: 3 })
   })
   it('gives stable colors and pips', () => {
     expect(categoryColor('系統')).toBe('#5f9bf0')
@@ -39,26 +39,14 @@ describe('ideasView', () => {
   })
 })
 
-describe('copy-to-HERMES message', () => {
-  it('uses the diary status mark, id and title', () => {
-    expect(statusMessage({ id: 'IDEA-0012', title: '年度回顧影片' }, 'done')).toBe('💡✅ IDEA-0012「年度回顧影片」已實行\n（請照想法庫格式寫進今天的日記）')
-    expect(statusMessage({ id: 'IDEA-0003', title: 'x' }, 'doing', ' 今晚開始 ')).toBe('💡🚀 IDEA-0003「x」開始做\n今晚開始')
-  })
-  it('offers every status except the current one and never back to new', () => {
-    expect(nextStatuses('new')).toEqual(['done', 'doing', 'evaluating', 'shelved', 'dropped'])
-    expect(nextStatuses('doing')).toEqual(['done', 'evaluating', 'shelved', 'dropped'])
-  })
-})
-
 describe('🔀 absorbed ideas', () => {
-  it('have a label and icon, count as closed, and are never a copy-to-HERMES target', () => {
+  it('have a label and icon, count as archived, and are never an action target', () => {
     expect([STATUS_ICON.absorbed, STATUS_LABEL.absorbed]).toEqual(['🔀', '封存（併入）'])
     const list = [idea('IDEA-0039', { status: 'absorbed', score: null, mergedInto: 'IDEA-0022' }), idea('IDEA-0022'), idea('IDEA-0005', { status: 'dropped', score: null })]
-    expect(filterIdeas(list, null, 'closed').map((i) => i.id)).toEqual(['IDEA-0039', 'IDEA-0005'])
-    expect(filterIdeas(list, null, 'open').map((i) => i.id)).toEqual(['IDEA-0022'])
-    expect(statusCounts(list)).toMatchObject({ open: 1, total: 3 })
-    expect(nextStatuses('absorbed')).not.toContain('absorbed')
-    expect(nextStatuses('new')).not.toContain('absorbed')
+    expect(filterByStage(list, null, 'archived').map((i) => i.id)).toEqual(['IDEA-0039', 'IDEA-0005'])
+    expect(filterByStage(list, null, 'candidate').map((i) => i.id)).toEqual(['IDEA-0022'])
+    expect(stageCounts(list)).toMatchObject({ candidate: 1, archived: 2, total: 3 })
+    expect(nextActions('absorbed')).toEqual(['reopen'])
   })
   it('badges: merged-into arrow, and absorbed list capped at two plus a count', () => {
     expect(absorbBadges({ mergedInto: 'IDEA-0022', absorbed: [] })).toEqual({ mergedInto: '🔀 併入 → IDEA-0022', absorbed: null })
@@ -131,7 +119,7 @@ describe('idea provenance (來龍去脈)', () => {
 
 import { hasMerge, matchesQuery, sortMergedGroups } from './ideasView'
 import type { IdeaStatus } from './boardApi'
-import { ACTION_LABEL, ACTION_MARK, FOCUS_COLOR, FOCUS_ICON, FOCUS_LABEL, FOCUS_LIMIT, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, actionMessage, filterByStage, ideaDashboard, isFocus, nextActions, stageCounts, stageOf } from './ideasView'
+import { archiveReason, focusDays, ACTION_LABEL, ACTION_MARK, FOCUS_COLOR, FOCUS_ICON, FOCUS_LABEL, FOCUS_LIMIT, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, actionMessage, filterByStage, ideaDashboard, isFocus, nextActions, stageCounts, stageOf } from './ideasView'
 describe('idea search & merged filter', () => {
   const list = [
     idea('IDEA-0001', { title: '日記自動摘要', absorbed: ['IDEA-0002'] }),
@@ -141,10 +129,10 @@ describe('idea search & merged filter', () => {
   ]
   it('detects merges in both directions', () => {
     expect(list.map(hasMerge)).toEqual([true, true, false, true])
-    expect(filterIdeas(list, null, 'merged').map((i) => i.id)).toEqual(['IDEA-0001', 'IDEA-0002', 'IDEA-0004'])
+    expect(filterByStage(list, null, 'merged').map((i) => i.id)).toEqual(['IDEA-0001', 'IDEA-0002', 'IDEA-0004'])
   })
   it('searches id, title, why, category, partner id; all tokens must hit; case & width insensitive', () => {
-    const ids = (q: string) => filterIdeas(list, null, 'all', q).map((i) => i.id)
+    const ids = (q: string) => filterByStage(list, null, 'all', q).map((i) => i.id)
     expect(ids('摘要')).toEqual(['IDEA-0001', 'IDEA-0002'])
     expect(ids('摘要 回顧')).toEqual(['IDEA-0002'])
     expect(ids('docker')).toEqual(['IDEA-0004'])
@@ -156,7 +144,7 @@ describe('idea search & merged filter', () => {
     expect(matchesQuery(list[0]!, '不存在')).toBe(false)
   })
   it('combines search with the merged filter', () => {
-    expect(filterIdeas(list, null, 'merged', '備份').map((i) => i.id)).toEqual(['IDEA-0004'])
+    expect(filterByStage(list, null, 'merged', '備份').map((i) => i.id)).toEqual(['IDEA-0004'])
   })
   it('groups merged ideas under their absorber', () => {
     const shuffled = [list[1]!, list[3]!, list[0]!]
@@ -293,5 +281,18 @@ describe('ideaDashboard', () => {
     const d = ideaDashboard([idea('T', { bornAt: '2026-09-30T16:30:00.000Z', history: [{ status: 'done', at: '2026-10-31T16:30:00.000Z' }] })], NOW)
     expect(d.monthly.find((m) => m.month === '2026-10')).toMatchObject({ born: 1 })
     expect(d.monthly.find((m) => m.month === '2026-11')).toMatchObject({ done: 1 })
+  })
+})
+
+describe('archiveReason 與 focusDays', () => {
+  it('封存原因只有放棄與併入', () => {
+    expect([archiveReason('dropped'), archiveReason('absorbed'), archiveReason('shelved'), archiveReason('new')]).toEqual(['放棄', '併入', null, null])
+  })
+  it('聚焦天數取最後一次轉 doing；非聚焦或沒記到回 null', () => {
+    const now = Date.parse('2026-11-15T12:00:00+08:00')
+    const hist = [{ status: 'doing', at: '2026-10-01T10:00:00+08:00' }, { status: 'evaluating', at: '2026-10-05T10:00:00+08:00' }, { status: 'doing', at: '2026-11-05T10:00:00+08:00' }]
+    expect(focusDays({ status: 'doing', history: hist }, now)).toBe(10)
+    expect(focusDays({ status: 'doing', history: [] }, now)).toBeNull()
+    expect(focusDays({ status: 'new', history: hist }, now)).toBeNull()
   })
 })
