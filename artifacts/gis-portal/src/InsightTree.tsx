@@ -16,6 +16,7 @@ import { buildTimelineDayLink } from './timelineLink'
 import { dossierHref } from './dossier'
 import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } from './ideasView'
 import type { IdeaItem } from './boardApi'
+import { rootPaths, rootTargets } from './insightLinks'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
 // 總覽時主題多會自動精簡（葉叢、標籤縮成色點），滑過／聚焦才放大；聚焦一個主題會畫出全部脈絡與沿枝的時間。
@@ -125,6 +126,48 @@ const Cap = memo(function Cap({ c, ci, scale, color, open, dimc, on, onPick, onE
 })
 
 /** 圖例用的小葉形 */
+const ROOT_DEPTH = 56
+const idea6 = (t: string): string => { const a = Array.from(t); return a.length > 6 ? `${a.slice(0, 6).join('')}…` : t }
+
+/** 滑過葉子時，地面下浮出的根：連到這則心得相關的人物頭像與想法小卡（只有連結才畫；不擋滑鼠） */
+function Roots({ ins, cx, top, width }: { ins: Insight; cx: number; top: number; width: number }) {
+  const t = rootTargets(ins)
+  type Slot = { kind: 'person'; name: string } | { kind: 'idea'; title: string } | { kind: 'more'; n: number; of: 'person' | 'idea' }
+  const slots: Slot[] = [
+    ...t.people.map((p): Slot => ({ kind: 'person', name: p.name })),
+    ...(t.morePeople > 0 ? [{ kind: 'more', n: t.morePeople, of: 'person' } as Slot] : []),
+    ...t.ideas.map((i): Slot => ({ kind: 'idea', title: i.title })),
+    ...(t.moreIdeas > 0 ? [{ kind: 'more', n: t.moreIdeas, of: 'idea' } as Slot] : []),
+  ]
+  if (t.people.length + t.ideas.length === 0) return null
+  const paths = rootPaths(cx, width, slots.length, ROOT_DEPTH)
+  return (
+    <svg className="it-roots" data-testid="insight-roots" width={width} height={ROOT_DEPTH + 14} style={{ top }} aria-hidden>
+      {paths.map((p, k) => <path key={`p${k}`} className="it-root-p" d={p.d} />)}
+      {paths.map((p, k) => {
+        const sl = slots[k]!
+        if (sl.kind === 'person') {
+          return (
+            <g key={`n${k}`} className="it-root-n" data-testid="insight-root-person">
+              <circle cx={p.x} cy={p.y} r={9} /><text x={p.x} y={p.y + 3.5} textAnchor="middle">{Array.from(sl.name)[0] ?? ''}</text>
+            </g>
+          )
+        }
+        if (sl.kind === 'idea') {
+          const w = 100
+          const x = Math.min(Math.max(p.x, w / 2 + 2), Math.max(w / 2 + 2, width - w / 2 - 2))
+          return (
+            <g key={`n${k}`} className="it-root-i" data-testid="insight-root-idea">
+              <rect x={x - w / 2} y={p.y - 9} width={w} height={18} rx={6} /><text x={x} y={p.y + 3.5} textAnchor="middle">{`💡${idea6(sl.title)}`}</text>
+            </g>
+          )
+        }
+        return <text key={`n${k}`} className="it-root-more" data-testid="insight-root-more" x={p.x} y={p.y + 3.5} textAnchor="middle">+{sl.n}</text>
+      })}
+    </svg>
+  )
+}
+
 function LegendLeaf({ relation }: { relation: InsightRelation }) {
   const sh = leafShape(relation)
   return (
@@ -367,6 +410,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
                   ))}
                   {upto && <text className="it-bigmonth" x={16} y={36}>{upto}</text>}
                 </svg>
+                {hovered && hoveredIns && <Roots ins={hoveredIns} cx={(layout.axis.cx - view.x) * scale} top={(layout.axis.ground - view.y) * scale} width={layout.width} />}
                 {hovered && hoveredIns && (
                   <div className="it-tip" role="tooltip" data-testid="insight-tip"
                     style={{ left: Math.min(Math.max((hovered.x - view.x) * scale, 120), Math.max(120, layout.width - 120)), top: (hovered.y - view.y - hovered.r * 1.5) * scale - 6 }}>

@@ -13,6 +13,9 @@ import {
 } from './dossier'
 import { DossierIndex } from './DossierIndex'
 import { PinButton } from './PinButton'
+import { apiFetchInsights } from './insightApi'
+import { insightsForPerson } from './insightLinks'
+import { RELATION_LABEL, type Insight } from './insightTree'
 import './dossier.css'
 
 const go = (hash: string) => { window.location.hash = hash }
@@ -101,6 +104,14 @@ function Dossier({ index, kind, name, pw, nudges }: { index: GraphIndex; kind: D
   const topics = useMemo(() => relatedTopics(nudges, kind, name), [nudges, kind, name])
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({})
   useEffect(() => { setOpenMonths({}) }, [kind, name])
+  const [learned, setLearned] = useState<Insight[]>([])
+  useEffect(() => {
+    setLearned([])
+    if (kind !== 'person' || !pw) return
+    let dead = false
+    apiFetchInsights(pw).then(d => { if (!dead) setLearned(insightsForPerson(d, name)) }, () => { /* 讀不到就不顯示 */ })
+    return () => { dead = true }
+  }, [kind, name, pw])
   if (!sum) {
     return <p className="dz-note">找不到「{name}」的卷宗。<a className="dz-link" href="#dossier">看卷宗索引</a></p>
   }
@@ -136,6 +147,21 @@ function Dossier({ index, kind, name, pw, nudges }: { index: GraphIndex; kind: D
           })}
         </section>
         <div>
+          {kind === 'person' && learned.length > 0 && (
+            <section className="dz-card" aria-label="從他身上學到的心得" data-testid="dossier-insights">
+              <h2>從他身上學到的心得</h2>
+              <ul className="dz-ins">
+                {learned.map(i => (
+                  <li key={i.id}>
+                    <a className="dz-ins-row" href={'#insight/' + encodeURIComponent(i.id)}>
+                      <span className="dz-ins-d">{i.date}<span className={`it-rel it-rel-${i.relation}`}>{RELATION_LABEL[i.relation]}</span></span>
+                      <span className="dz-ins-t">{i.text}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section className="dz-card" aria-label="相關的人案物">
             <h2>相關的人／案／物</h2>
             {related.length === 0 ? <p className="dz-note">沒有共同事件的對象。</p> : (

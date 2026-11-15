@@ -2706,3 +2706,35 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .ib-next i { display: inline-block; width: 4.5rem; height: 4px; border-radius: 2px; background: var(--c-raised); overflow: hidden; }
 .ib-next u { display: block; height: 100%; background: var(--c-ok); text-decoration: none; }
 .ib-open { margin-left: auto; }
+
+/* 心得樹根系（滑過葉子才出現，貼在地面線下，不佔版面） */
+.it-roots { position: absolute; left: 0; z-index: 2; overflow: visible; pointer-events: none; }
+.it-root-p { fill: none; stroke: var(--c-accent-dim); stroke-width: 1.2; stroke-linecap: round; opacity: 0.55; }
+.it-root-n circle { fill: var(--c-surface); stroke: var(--c-accent); stroke-width: 1.2; }
+.it-root-n text { font-size: 10px; fill: var(--c-ink); }
+.it-root-i rect { fill: var(--c-surface); stroke: var(--c-accent-dim); stroke-width: 1; }
+.it-root-i text { font-size: 10px; fill: var(--c-ink-2); }
+.it-root-more { font: 11px var(--font-mono); fill: var(--c-ink-3); }
+@media (prefers-reduced-motion: no-preference) {
+  .it-roots { animation: it-roots-in 0.15s ease-out; }
+  @keyframes it-roots-in { from { opacity: 0; } to { opacity: 1; } }
+}
+@media (hover: none) { .it-roots { display: none; } }
+
+/* 人物卷宗：從他身上學到的心得 */
+.dz-ins { list-style: none; margin: 0; padding: 0; }
+.dz-ins-row { display: block; padding: 5px 6px; border-radius: 6px; color: var(--c-ink); text-decoration: none; font-size: 0.85rem; line-height: 1.5; }
+.dz-ins-row:hover, .dz-ins-row:focus-visible { background: var(--c-accent-soft); }
+.dz-ins-d { display: flex; align-items: center; gap: 6px; font: 11px var(--font-mono); color: var(--c-ink-3); }
+.dz-ins-t { display: block; overflow-wrap: anywhere; }
+
+/* 想法卡：驗證或推翻了哪些心得 */
+.bd-idea-ins { margin: 6px 0; }
+.bd-idea-ins-h { margin: 2px 0; }
+.bd-idea-ins-g { margin: 4px 0; }
+.bd-idea-ins-gh { font-weight: 500; color: var(--c-ink); }
+.bd-idea-ins-l { list-style: none; margin: 2px 0 0; padding: 0; }
+.bd-idea-ins-row { display: block; padding: 3px 4px; border-radius: 6px; color: var(--c-ink-2); text-decoration: none; }
+.bd-idea-ins-row:hover, .bd-idea-ins-row:focus-visible { background: var(--c-accent-soft); }
+.bd-idea-ins-d { display: flex; align-items: center; gap: 6px; font: 11px var(--font-mono); color: var(--c-ink-3); }
+.bd-idea-ins-t { display: block; overflow-wrap: anywhere; }

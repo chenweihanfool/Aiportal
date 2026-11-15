@@ -10,6 +10,9 @@ import { prefillHermesChat } from './chatView'
 import { UsedChart } from './HermesDiskPanel'
 import { IdeaLifeSummary, IdeaLifeline, IdeaLineage, IdeaScatter } from './IdeaViz'
 import { IdeaDashboard } from './IdeaDashboard'
+import { apiFetchInsights } from './insightApi'
+import { insightsForIdea } from './insightLinks'
+import { RELATION_LABEL, type Insight, type InsightData } from './insightTree'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
 
@@ -504,8 +507,37 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
   )
 }
 
-export function IdeasPanel({ pw, focusIdeaId = null }: { pw: string; focusIdeaId?: string | null }) {
+/** 想法卡裡「驗證或推翻了哪些心得」：點了連到 #insight/<id>，並關掉想法庫抽屜回首頁 */
+function IdeaInsights({ insights, ideaId, onClose }: { insights: InsightData | null; ideaId: string; onClose?: () => void }) {
+  const r = insightsForIdea(insights, ideaId)
+  if (r.confirm.length === 0 && r.overturn.length === 0) return null
+  const group = (label: string, list: Insight[], key: string) => list.length > 0 && (
+    <div className="bd-idea-ins-g" data-group={key}>
+      <b className="bd-idea-ins-gh">{label}</b>
+      <ul className="bd-idea-ins-l">
+        {list.map(i => (
+          <li key={i.id}>
+            <a className="bd-idea-ins-row" href={'#insight/' + encodeURIComponent(i.id)} onClick={() => onClose?.()}>
+              <span className="bd-idea-ins-d">{i.date}<span className={`it-rel it-rel-${i.relation}`}>{RELATION_LABEL[i.relation]}</span></span>
+              <span className="bd-idea-ins-t">{i.text}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+  return (
+    <div className="bd-idea-ins" data-testid="idea-insights">
+      <p className="bd-idea-ins-h"><b>驗證或推翻了哪些心得</b></p>
+      {group('驗證', r.confirm, 'confirm')}
+      {group('推翻', r.overturn, 'overturn')}
+    </div>
+  )
+}
+
+export function IdeasPanel({ pw, focusIdeaId = null, onClose }: { pw: string; focusIdeaId?: string | null; onClose?: () => void }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
+  const { data: insightData } = useLoad<InsightData>(pw, apiFetchInsights)
   const [cat, setCat] = useState<string | null>(null)
   const [st, setSt] = useState<StageFilter>(focusIdeaId ? 'all' : 'candidate')
   const [dashCopied, setDashCopied] = useState<{ text: string; ok: boolean; chat: boolean } | null>(null)
@@ -587,6 +619,7 @@ export function IdeasPanel({ pw, focusIdeaId = null }: { pw: string; focusIdeaId
                 <IdeaLineage ideas={data.ideas} id={it.id} />
                 <p><b>出現在日記：</b>{it.days.join('、') || '—'}</p>
                 <p><b>狀態歷程：</b>{it.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${STATUS_LABEL[h.status as keyof typeof STATUS_LABEL] ?? h.status}`).join(' → ')}</p>
+                <IdeaInsights insights={insightData ?? null} ideaId={it.id} onClose={onClose} />
                 <CopyToHermes idea={it} />
               </div>
             </details>

@@ -290,7 +290,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             tripsSt={tripsSt} trip={trip} onOpenIdeas={openIdeas} />
         </div>
         {drawer === 'hhi' && <Drawer title="幸福指數詳情：活動洞察・雷達・30 天洞察・趨勢・六維度子系統・成長軌跡" onClose={closeDrawer}>{insightBlock}{hhiDetail}{growthBlock}</Drawer>}
-        {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} focusIdeaId={focusIdea} /></Drawer>}
+        {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} focusIdeaId={focusIdea} onClose={closeDrawer} /></Drawer>}
         {drawer === 'svc' && pw && <Drawer title="付費服務：用量與連結・Ollama 更新餘額" onClose={() => { closeDrawer(); usage.reload() }}><PaidServicesPanel pw={pw} usage={usage.data} paid={paid.data} /></Drawer>}
         {drawer === 'searchStats' && pw && <Drawer title="搜尋統計：近 14 天" onClose={closeDrawer}><SearchStatsPanel pw={pw} /></Drawer>}
         {drawer === 'pushStats' && pw && <Drawer title="推送統計：近 14 天" onClose={closeDrawer}><PushStatsPanel pw={pw} /></Drawer>}
@@ -335,7 +335,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         onRetryIdeas={ideas.reload} onRetryFood={food.reload} onRetryTrips={trips.reload} />
       <ReposSection st={reposSt} data={repos.data} now={now} onRequestUnlock={onRequestUnlock} onRetry={repos.reload} />
       {drawer === 'hhi' && <Drawer title="幸福指數詳情：雷達・30 天洞察・趨勢・六維度子系統" onClose={closeDrawer}>{hhiDetail}</Drawer>}
-      {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} focusIdeaId={focusIdea} /></Drawer>}
+      {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} focusIdeaId={focusIdea} onClose={closeDrawer} /></Drawer>}
       {drawer === 'svc' && pw && <Drawer title="付費服務：用量與連結・Ollama 更新餘額" onClose={() => { closeDrawer(); usage.reload() }}><PaidServicesPanel pw={pw} usage={usage.data} paid={paid.data} /></Drawer>}
       {pw && <ChatDock pw={pw} />}
       {drawer === 'ops' && pw && <Drawer title="HERMES 戰情室：推送健康・關係網路・管線・硬碟・排程・活動・容器・趨勢" onClose={closeDrawer}><PusherHealthPanel pw={pw} />{opsDetail}</Drawer>}
