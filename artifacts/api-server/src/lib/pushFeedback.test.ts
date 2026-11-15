@@ -13,6 +13,7 @@ describe("parsePushFeedbackBody", () => {
     for (const cardKind of CARD_KINDS) expect(typeof parsePushFeedbackBody({ ...good, cardKind })).toBe("object");
     expect(typeof parsePushFeedbackBody({ ...good, cardKind: "onthisday" })).toBe("object");
     expect(typeof parsePushFeedbackBody({ ...good, cardKind: "boost" })).toBe("object");
+    expect(typeof parsePushFeedbackBody({ ...good, cardKind: "recipe" })).toBe("object");
     for (const action of PUSH_ACTIONS) expect(typeof parsePushFeedbackBody({ ...good, action })).toBe("object");
     expect(isRealDate("2024-02-29")).toBe(true);
   });
@@ -90,7 +91,7 @@ describe("buildPushFeedback", () => {
 });
 
 describe("buildPushStats", () => {
-  it("分母 0 時比率為 0；byKind 十種固定順序全列", () => {
+  it("分母 0 時比率為 0；byKind 十一種固定順序全列", () => {
     const s = buildPushStats(14, [], [], 0);
     expect(s).toEqual({
       days: 14, shown: 0, opened: 0, openRate: 0, useful: 0, useless: 0, uselessRate: 0,
@@ -123,6 +124,7 @@ describe("buildPushStats", () => {
       { kind: "nearby", shown: 0, opened: 0, useless: 0 },
       { kind: "meeting", shown: 0, opened: 0, useless: 0 },
       { kind: "boost", shown: 0, opened: 0, useless: 0 },
+      { kind: "recipe", shown: 0, opened: 0, useless: 0 },
     ]);
   });
 });
