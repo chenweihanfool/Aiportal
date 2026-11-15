@@ -10,8 +10,6 @@ import {
   ACTION_LABEL, ACTION_MARK, FOCUS_ICON, FOCUS_LIMIT, actionMessage, categoryColor, focusDays, ideaDashboard, isFocus, stageOf,
 } from './ideasView'
 
-const STALE_FOCUS_DAYS = 30
-
 function CatChip({ category }: { category: string | null }) {
   const c = categoryColor(category)
   return <span className="ib-cat" style={{ color: inkMix(c), borderColor: c, background: alpha(c, 10) }}>{category ?? '未分類'}</span>
@@ -32,6 +30,8 @@ export function IdeaBoard({ st, data, top, nowMs, onOpenIdeas, onRequestUnlock, 
   const dash = useMemo(() => ideaDashboard(ideas, nowMs), [ideas, nowMs])
   const [sent, setSent] = useState<{ text: string; ok: boolean; chat: boolean } | null>(null)
   const shown = focus.slice(0, FOCUS_LIMIT)
+  // 久沒動＝最後一次被提到 ≥30 天（與抽屜儀表的 staleFocus 同一份名單，PM 修正）
+  const stale = useMemo(() => new Set(dash.staleFocus.map((s) => s.id)), [dash])
   const picks = top.filter((i) => stageOf(i.status) === 'candidate' && !isFocus(i.status)).slice(0, 3)
   const monthDone = dash.monthly[dash.monthly.length - 1]?.done ?? 0
   return (
@@ -50,7 +50,7 @@ export function IdeaBoard({ st, data, top, nowMs, onOpenIdeas, onRequestUnlock, 
                   <span className="ib-card-m">
                     <CatChip category={it.category} />
                     {days !== null && <span>聚焦 {days} 天</span>}
-                    {days !== null && days >= STALE_FOCUS_DAYS && <span className="ib-stale">久沒動</span>}
+                    {stale.has(it.id) && <span className="ib-stale">久沒動</span>}
                   </span>
                 </li>
               )
