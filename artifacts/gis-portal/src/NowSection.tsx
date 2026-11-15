@@ -52,7 +52,7 @@ function useNarrow(): boolean {
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, onActionsChange, todayLine, onOpenBrief, corner = false }: {
+export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, boost, onActionsChange, todayLine, onOpenBrief, corner = false }: {
   /** null＝未解鎖：整個區塊不顯示 */
   pw: string | null
   nowMs: number
@@ -65,6 +65,8 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   sourcesSettled: boolean
   /** 明日報告：date＝報告日、summary＝一行摘要；沒有就 null */
   briefInfo: { date: string; summary: string } | null
+  /** 3.4.0：最弱面向推播卡（只併進「今天」）；沒給就沒有 */
+  boost?: NowCard | null
   /** 很久沒聯絡的動作寫入成功後，通知上層重新讀取陪伴資料 */
   onActionsChange: () => void
   /** 新版首頁（v3）：今天的趨勢一句話＋下一步建議合成一行，放在標題列上方；沒給就不顯示 */
@@ -144,9 +146,14 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
       ...pinnedCards((pins.data ?? []).filter((p) => !donePins.includes(p.id)), todayIso),
       ...(matcher.data ? meetingCards(calendar.data, clock, matcher.data.match) : []),
       ...(near.card ? [near.card] : []),
+      ...(boost ? [boost] : []),
     ]
-    return extra.length === 0 ? base : orderTriggerFirst(sortCards([...base, ...extra]))
-  }, [base, day, pins.data, donePins, matcher.data, calendar.data, clock, near.card, todayIso])
+    if (extra.length === 0) return base
+    // boost 點名的人可能和「很久沒聯絡」卡同一人：只留在 boost 那張，免得一天推兩次同一個人
+    const person = boost?.person
+    const merged = person ? [...base, ...extra].filter((c) => !(c.kind === 'quiet' && c.person === person)) : [...base, ...extra]
+    return orderTriggerFirst(sortCards(merged))
+  }, [base, day, pins.data, donePins, matcher.data, calendar.data, clock, near.card, todayIso, boost])
   const fb: FeedbackState = useMemo(() => {
     const server = feedback.data ?? NO_FEEDBACK
     return {
@@ -368,6 +375,16 @@ function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUsef
           </>
         ) : card.kind === 'meeting' || card.kind === 'nearby' ? (
           <a className="nw-cta" href={card.href ?? '#'} onClick={onOpened}>{card.kind === 'meeting' ? '會前看' : '打開'}</a>
+        ) : card.kind === 'boost' ? (
+          card.href ? (
+            <a className="nw-cta" href={card.href} onClick={onOpened}>打開</a>
+          ) : card.person ? (
+            <>
+              <button type="button" className="nw-cta" onClick={onContacted} aria-label={`已聯絡：${card.person}`}>已聯絡</button>
+              <button type="button" className="nw-gh" onClick={onSnooze} aria-label={`暫緩 30 天：${card.person}`}>暫緩 30 天</button>
+              <button type="button" className="nw-gh" onClick={onNever} aria-label={`不再提醒：${card.person}`}>不再提醒</button>
+            </>
+          ) : null
         ) : card.kind === 'onthisday' ? null : (
           <>
             <button type="button" className="nw-cta" onClick={onContacted} aria-label={`已聯絡：${card.person}`}>已聯絡</button>
