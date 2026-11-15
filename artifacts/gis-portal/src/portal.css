@@ -2648,6 +2648,21 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-rel-refine { color: var(--c-warn); }
 .it-rel-overturn { color: var(--c-crit); }
 .it-act { margin-top: var(--sp-4); }
+.it-day-lead { margin: var(--sp-2) 0 4px; font-size: 0.8rem; }
+.it-day-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 0.84rem; color: var(--c-ink-2); }
+.it-day-list li { overflow-wrap: anywhere; }
+.it-more { margin-top: 4px; font: 12px var(--font-mono); color: var(--c-accent-ink); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 2px 10px; }
+.it-more:hover, .it-more:focus-visible { border-color: var(--c-accent); }
+.it-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.it-chips li { min-width: 0; max-width: 100%; }
+.it-chip { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; max-width: 100%; box-sizing: border-box; font-size: 0.84rem; color: var(--c-ink); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 2px 10px; background: transparent; text-decoration: none; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); background: var(--c-accent-soft); }
+.it-chip:focus-visible, .it-x:focus-visible, .it-more:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.it-chip-off { color: var(--c-ink-3); cursor: default; }
+.it-chip-x { min-width: 0; overflow-wrap: anywhere; }
+.it-chip-tag { font: 10.5px var(--font-mono); color: var(--c-ink-3); border: 1px solid var(--c-line); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+.it-chip-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.it-nolinks { margin-top: var(--sp-2); }
 .it-mini-row { display: flex; align-items: center; gap: var(--sp-2); margin-top: 3px; }
 .it-mini { display: inline-flex; align-items: center; gap: 4px; }
 .it-mini-dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; border: 0; padding: 0; }

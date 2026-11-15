@@ -504,12 +504,12 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
   )
 }
 
-export function IdeasPanel({ pw }: { pw: string }) {
+export function IdeasPanel({ pw, focusIdeaId = null }: { pw: string; focusIdeaId?: string | null }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
   const [cat, setCat] = useState<string | null>(null)
-  const [st, setSt] = useState<StageFilter>('candidate')
+  const [st, setSt] = useState<StageFilter>(focusIdeaId ? 'all' : 'candidate')
   const [dashCopied, setDashCopied] = useState<{ text: string; ok: boolean; chat: boolean } | null>(null)
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(focusIdeaId ?? '')
   const cats = useMemo(() => categoryCounts(data?.ideas ?? []), [data])
   const list = useMemo(() => {
     const f = filterByStage(data?.ideas ?? [], cat, st, q)
@@ -560,7 +560,7 @@ export function IdeasPanel({ pw }: { pw: string }) {
       {list.length === 0 ? <Muted>{q.trim() ? `沒有符合「${q.trim()}」的想法（目前篩選：${st === 'all' ? '全部' : st === 'candidate' ? STAGE_LABEL.candidate : st === 'focus' ? FOCUS_LABEL : st === 'done' ? STAGE_LABEL.done : st === 'archived' ? STAGE_LABEL.archived : '有合併過'}）` : '沒有符合的想法'}</Muted> : (
         <div className="bd-idea-list">
           {list.map((it: IdeaItem) => (
-            <details key={it.id} className="bd-idea-item">
+            <details key={it.id} className="bd-idea-item" open={focusIdeaId === it.id ? true : undefined}>
               <summary>
                 <span className="bd-idea-id">{it.id}</span>
                 <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
