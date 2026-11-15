@@ -10,7 +10,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 | 欄位 | 規則 |
 |---|---|
 | `cardKey` | 字串，trim 後 1～200 字 |
-| `cardKind` | `topic｜resume｜recall｜quiet｜brief｜onthisday｜pinned｜nearby｜meeting` |
+| `cardKind` | `topic｜resume｜recall｜quiet｜brief｜onthisday｜pinned｜nearby｜meeting｜boost` |
 | `action` | `shown｜opened｜useful｜useless｜later` |
 | `forDate` | `^\d{4}-\d{2}-\d{2}$` 且是真實日曆日（擋 `2026-02-30`） |
 
@@ -47,7 +47,7 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 
 - `shown`／`opened`／`useful`／`useless`＝範圍內各 action 筆數（shown 本來就同一 `(cardKey, forDate)` 只一筆）。
 - `openRate`＝opened÷shown、`uselessRate`＝useless÷shown：0～1、四捨五入到小數 3 位；分母 0 時為 0；大於 1 截為 1。
-- `byKind`：九種 kind 固定順序 `topic, resume, recall, quiet, brief, onthisday, pinned, nearby, meeting` 全列（0 也列）。
+- `byKind`：十種 kind 固定順序 `topic, resume, recall, quiet, brief, onthisday, pinned, nearby, meeting, boost` 全列（0 也列）。
 - `daysWithCards`：範圍內有 shown 的不同 `for_date` 數。
 
 ## cardKey 組法
@@ -61,15 +61,16 @@ body：`{ cardKey, cardKind, action, forDate }`，必須是物件、不認得的
 | quiet | `quiet:<人名雜湊>` |
 | brief | `brief:<日期>` |
 | onthisday | `onthisday:<原日期 YYYY-MM-DD>:<標題雜湊>`（companion 的 onThisDay 沒有 id） |
+| boost | `boost:<面向 key>:<日期 YYYY-MM-DD>`（每天每面向一把鍵） |
 
-`cardKind` 必須是上表九種；`cardKey` 前綴與 `cardKind` 是否一致不在此端點驗證（前端自行遵守）。卡種 `pinned`（📌 需要時提醒我）、`nearby`（4-4b）、`meeting`（4-4c）為 2026-11-14 新增，先加進驗證與統計，前端後續再接。
+`cardKind` 必須是上表十種；`cardKey` 前綴與 `cardKind` 是否一致不在此端點驗證（前端自行遵守）。卡種 `pinned`（📌 需要時提醒我）、`nearby`（4-4b）、`meeting`（4-4c）為 2026-11-14 新增，先加進驗證與統計，前端後續再接；`boost`（最弱面向推播卡）為 3.4.0 新增，2026-11-15。
 
 ## 表 `push_feedback`（只新增）
 | 欄位 | 型別 | 說明 |
 |---|---|---|
 | `id` | serial pk | |
 | `card_key` | text not null | 見上表 |
-| `card_kind` | text not null | 六種 kind |
+| `card_kind` | text not null | 十種 kind |
 | `action` | text not null | 五種 action |
 | `for_date` | text not null | 卡片代表的日期 `YYYY-MM-DD` |
 | `created_at` | timestamptz not null default now() | |

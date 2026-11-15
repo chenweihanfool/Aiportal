@@ -47,7 +47,7 @@ export async function apiFetchCompanion(pw: string): Promise<CompanionData | nul
   return parseCompanion(await r.json())
 }
 
-const MOVES: Record<string, string> = {
+export const MOVES: Record<string, string> = {
   fitness: '今天動一下，排一次訓練',
   calm: '清掉一件逾期或快到期的任務',
   mind: '把一個想法往前推一步，或記下一個新想法',
