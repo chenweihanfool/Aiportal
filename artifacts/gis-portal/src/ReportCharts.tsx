@@ -67,7 +67,7 @@ function IdeasCard({ r }: { r: PeriodReport }) {
   return (
     <section className="hm-card" aria-label="想法" data-testid="rp-ideas">
       <h2 className="hm-h">💡 想法</h2>
-      <h3 className="rp-sub">本期新想法的現況（{FUNNEL_STEPS.map((s) => s.label.slice(2)).join('→')}）</h3>
+      <h3 className="rp-sub">本期新想法的現況（{FUNNEL_STEPS.map((s) => s.label.replace(/^\S+\s+/, '')).join('→')}）</h3>
       <ul className="rp-bars" aria-label="想法漏斗">
         {funnel.map((f) => (
           <li key={f.key}><span className="rp-bar-l">{f.label}</span><span className="rp-bar-track" aria-hidden><i style={{ width: `${f.pct}%` }} /></span><b>{f.value}</b></li>

@@ -86,7 +86,7 @@ const ideaItems = IDEA_CATS.map((category, i) => {
     weakBoost: weak,
   }
 })
-// 🔀 併入：最後一筆併到 IDEA-0002（進行中、會在前三名）
+// 🔀 併入：最後一筆併到 IDEA-0002（聚焦、會在前三名）
 Object.assign(ideaItems[11], { status: 'absorbed', score: null, scoreWhy: [], mergedInto: 'IDEA-0002', absorbed: [] })
 ideaItems[1].absorbed = ['IDEA-0012']
 const ideasTop = ideaItems.filter((i) => i.score !== null).sort((a, b) => b.score - a.score).slice(0, 3).map((i) => i.id)
@@ -179,7 +179,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
   const ranks = await page.locator('.bd-idea .bd-idea-rank').allInnerTexts()
   check(`${w}×${h}：想法庫顯示前三名（名次 1–3、系統類也參加排名）`, ranks.join('') === '123' && /系統/.test(ideaTxt) && /把 HERMES 的管線健康度/.test(ideaTxt), ranks.join(','))
   check(`${w}×${h}：前三名附類別徽章、價值與難度`, (await page.locator('.bd-idea .bd-idea-row .bd-cat').count()) === 3 && /價值/.test(ideaTxt) && /難度/.test(ideaTxt))
-  check(`${w}×${h}：想法庫有本週統計與開放中數量`, /本週 新想法/.test(ideaTxt) && /個開放中/.test(ideaTxt))
+  check(`${w}×${h}：想法庫有本週統計與候選數量`, /本週 新想法/.test(ideaTxt) && /個候選/.test(ideaTxt))
   check(`${w}×${h}：想法庫卡顯示心智分數（合成版，計入幸福指數）`, /心智\s*62\.9/.test(ideaTxt) && !/並行中/.test(ideaTxt))
   const rowOver = await page.evaluate(() => [...document.querySelectorAll('.bd-idea-row')].filter((e) => e.scrollHeight > e.clientHeight + 2).length)
   check(`${w}×${h}：前三名每列沒有被撐破（長標題兩行截斷）`, rowOver === 0, String(rowOver))
@@ -229,9 +229,9 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     check('日報五項明細', /📊 日報（.*）推進 3・決策 2・卡點 3・覺察 2・能量 3/.test(mindTxt))
     check('曲線只剩心智分數與想法分數兩條（不再有日記篇數版）', (await page.locator('.bd-drawer svg[aria-label="心智分數與想法分數"] polyline').count()) === 2 && !/日記篇數/.test(mindTxt))
     const nOpen = await page.locator('.bd-drawer .bd-idea-list .bd-idea-item').count()
-    check(`想法庫抽屜預設列出開放中的想法（${nOpen} 筆）`, nOpen === ideaItems.filter((i) => i.score !== null).length)
+    check(`想法庫抽屜預設列出候選的想法（${nOpen} 筆）`, nOpen === ideaItems.filter((i) => i.score !== null).length)
     await page.locator('.bd-drawer button', { hasText: /^全部$/ }).click()
-    check('想法庫抽屜「全部」含已實行與放棄', (await page.locator('.bd-drawer .bd-idea-list .bd-idea-item').count()) === ideaItems.length)
+    check('想法庫抽屜「全部」含已完成與封存', (await page.locator('.bd-drawer .bd-idea-list .bd-idea-item').count()) === ideaItems.length)
     check('🔀 被併入者顯示「併入 → 承接者」、承接者顯示「吸收：…」',
       (await page.locator('.bd-drawer [data-testid=idea-merged-into]').allInnerTexts()).join() === '🔀 併入 → IDEA-0002'
       && (await page.locator('.bd-drawer [data-testid=idea-absorbed]').allInnerTexts()).join() === '吸收：IDEA-0012')
@@ -248,13 +248,13 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     const open1 = page.locator('.bd-drawer .bd-idea-list .bd-idea-item[open]')
     const firstId = (await open1.locator('.bd-idea-id').innerText()).trim()
     await open1.locator('input[aria-label="補充說明"]').fill('花了三個晚上')
-    await open1.getByRole('button', { name: '✅ 已實行' }).click()
+    await open1.getByRole('button', { name: '✅ 已完成' }).click()
     await page.waitForSelector('.bd-drawer .bd-idea-copytext')
     const clip = await page.evaluate(() => navigator.clipboard.readText())
-    check('按「✅ 已實行」複製含編號、標題、標記與補充的一句話', clip.startsWith(`💡✅ ${firstId}「`) && /」已實行\n花了三個晚上$/.test(clip), JSON.stringify(clip))
+    check('按「✅ 已完成」複製含編號、標題、標記與補充的一句話', clip.startsWith(`💡✅ ${firstId}「`) && /」已完成\n花了三個晚上$/.test(clip), JSON.stringify(clip))
     check('複製後畫面顯示已複製的內容', /已複製/.test(await open1.innerText()))
     check('複製按鈕不送出任何寫入請求（入口網只顯示）', reqs.length === 0, reqs.join(','))
-    check('不提供目前狀態的按鈕（新想法不能再選「新想法」）', (await open1.getByRole('button', { name: /新想法/ }).count()) === 0)
+    check('候選想法不提供「重新列為候選」按鈕', (await open1.getByRole('button', { name: /重新列為候選/ }).count()) === 0)
     await page.screenshot({ path: path.join(SHOTS, 'drawer-ideas.png') })
     await page.keyboard.press('Escape')
   }

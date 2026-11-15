@@ -325,8 +325,8 @@ for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
   check(`${T}：熱圖沒資料的日子是空格（空 ${emptyCells} / 有 ${filled}）`, emptyCells > 100 && filled > 150 && emptyCells + filled === 365)
   check(`${T}：③ 知識庫 186／1,156／74／31 與本週 +23`, /186/.test(txt) && /1,156/.test(txt) && /74/.test(txt) && /本週 \+23/.test(txt))
   const badges = await page.locator('.hm-mile').allInnerTexts()
-  check(`${T}：③ 里程碑膠囊（事件突破 1,000／人物突破 100／概念突破 50／方法突破 25／已實行 1 個想法／去過 25 個地點，共 ${badges.length} 顆 ≤ 6）`,
-    badges.length === 6 && ['事件突破 1,000', '人物突破 100', '概念突破 50', '方法突破 25', '已實行 1 個想法', '去過 25 個地點'].every((b, k) => badges[k].includes(b)), badges.join('|'))
+  check(`${T}：③ 里程碑膠囊（事件突破 1,000／人物突破 100／概念突破 50／方法突破 25／已完成 1 個想法／去過 25 個地點，共 ${badges.length} 顆 ≤ 6）`,
+    badges.length === 6 && ['事件突破 1,000', '人物突破 100', '概念突破 50', '方法突破 25', '已完成 1 個想法', '去過 25 個地點'].every((b, k) => badges[k].includes(b)), badges.join('|'))
   const nextTxt = await page.locator('.hm-next-text').innerText()
   check(`${T}：③ 「下一個」＝比例最高的一組（人物 200，186/200）`, /下一個：人物 200（目前 186，還差 14）/.test(nextTxt), nextTxt)
   check(`${T}：③ 「下一個」進度條 93%`, (await page.locator('.hm-next-bar').getAttribute('aria-valuenow')) === '93')
@@ -710,7 +710,7 @@ for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
   check('空：① 趨勢顯示「資料累積中：再 N 天」而不是 0', /資料累積中：再 1 天會畫出趨勢/.test(t) && !/▲|▼/.test(await page.locator('.hm-today').innerText()))
   check('空：想法庫「還沒有想法」、地點「還沒有想吃的紀錄」、遊記「還沒有遊記」', /還沒有想法/.test(t) && /還沒有想吃的紀錄/.test(t) && /還沒有遊記/.test(t))
   const badges = await page.locator('.hm-mile').allInnerTexts()
-  check(`空：里程碑只列確定的（事件突破 1,000、人物突破 100、概念突破 50、方法突破 25；遊記 0 與地點 0 不列膠囊，下一個＝人物 200）`, badges.join('|').includes('事件突破 1,000') && !/遊記|去過|已實行|幸福指數紀錄/.test(badges.join('|')) && /下一個：人物 200/.test(await page.locator('.hm-next-text').innerText()), badges.join('|'))
+  check(`空：里程碑只列確定的（事件突破 1,000、人物突破 100、概念突破 50、方法突破 25；遊記 0 與地點 0 不列膠囊，下一個＝人物 200）`, badges.join('|').includes('事件突破 1,000') && !/遊記|去過|已完成|幸福指數紀錄/.test(badges.join('|')) && /下一個：人物 200/.test(await page.locator('.hm-next-text').innerText()), badges.join('|'))
   await page.screenshot({ path: path.join(SHOTS, 'home-state-empty-1440x900.png') })
   check('空：沒有頁面錯誤', errors.length === 0, errors.join('|'))
   await ctx.close()
@@ -1021,6 +1021,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     const T = 'v3 桌機 1440×900'
     const tops = { om: await top(page, '.om-root'), now: await top(page, '[data-testid="now-section"]'), aside: await top(page, '.st-aside') }
     check(`${T}：搜尋框、現在用得上、STATUS 的上緣都在首屏內`, Object.values(tops).every((t) => t !== null && t < 900), JSON.stringify(tops))
+    check(`${T}：想法板在心得樹之後、現在用得上之前（有聚焦卡）`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-tree"]'); const b = document.querySelector('[data-testid="idea-board"]'); const n = document.querySelector('[data-testid="now-section"]'); return !!t && !!b && !!n && !!(t.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card').length === 1 }))
     check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
     check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
     check(`${T}：兩欄（左現在用得上、右 STATUS）`, await page.evaluate(() => { const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); return n.right <= a.left + 1 && a.width > 250 }))

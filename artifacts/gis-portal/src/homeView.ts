@@ -264,7 +264,7 @@ export const MILESTONE_GROUPS: readonly MilestoneGroup[] = [
   { id: 'people', icon: '👥', ladder: [50, 100, 200, 500], badge: (n) => `人物突破 ${fmtInt(n)}`, next: (n) => `人物 ${fmtInt(n)}`, unit: '位人物' },
   { id: 'concepts', icon: '🧩', ladder: [50, 100, 200, 500], badge: (n) => `概念突破 ${fmtInt(n)}`, next: (n) => `概念 ${fmtInt(n)}`, unit: '個概念' },
   { id: 'methods', icon: '🛠️', ladder: [25, 50, 100, 200], badge: (n) => `方法突破 ${fmtInt(n)}`, next: (n) => `方法 ${fmtInt(n)}`, unit: '個方法' },
-  { id: 'ideasDone', icon: '💡', ladder: [1, 5, 10, 25], badge: (n) => `已實行 ${n} 個想法`, next: (n) => `已實行想法 ${n}`, unit: '個已實行' },
+  { id: 'ideasDone', icon: '💡', ladder: [1, 5, 10, 25], badge: (n) => `已完成 ${n} 個想法`, next: (n) => `已完成想法 ${n}`, unit: '個已完成' },
   { id: 'placesBeen', icon: '📍', ladder: [10, 25, 50, 100], badge: (n) => `去過 ${n} 個地點`, next: (n) => `去過地點 ${n}`, unit: '個地點' },
   { id: 'trips', icon: '🧳', ladder: [1, 5, 10, 25], badge: (n) => `遊記 ${n} 趟`, next: (n) => `遊記 ${n} 趟`, unit: '趟遊記' },
   { id: 'hhiDays', icon: '📈', ladder: [30, 100, 365], badge: (n) => `幸福指數紀錄 ${n} 天`, next: (n) => `幸福指數紀錄 ${n} 天`, unit: '天紀錄' },

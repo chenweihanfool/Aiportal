@@ -1,12 +1,13 @@
 // 💡 想法庫卡片與抽屜用的純函式（排序、篩選、類別徽章顏色、狀態文字）。
 // 使用者 2026-10-09：系統／工作改善類也一起排名，只用徽章標出類別。
 import type { IdeaItem, IdeaStatus } from './boardApi'
+import { LADDER } from './milestones'
 
 export const STATUS_LABEL: Record<IdeaStatus, string> = {
-  new: '新想法', evaluating: '評估中', doing: '進行中', done: '已實行', shelved: '擱置', dropped: '放棄', absorbed: '併入',
+  new: '候選', evaluating: '候選', doing: '聚焦', done: '已完成', shelved: '封存', dropped: '封存（放棄）', absorbed: '封存（併入）',
 }
 export const STATUS_ICON: Record<IdeaStatus, string> = {
-  new: '💭', evaluating: '🔍', doing: '🚀', done: '✅', shelved: '🗄️', dropped: '❌', absorbed: '🔀',
+  new: '🌱', evaluating: '🌱', doing: '🎯', done: '✅', shelved: '📦', dropped: '📦', absorbed: '🔀',
 }
 const OPEN: IdeaStatus[] = ['new', 'evaluating', 'doing']
 export const isOpen = (s: IdeaStatus) => OPEN.includes(s)
@@ -48,9 +49,6 @@ export function categoryCounts(ideas: IdeaItem[]): Array<[string, number]> {
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 }
 
-/** 'merged'＝有合併關係（被併入別人，或吸收了別人），不分目前狀態 */
-export type StatusFilter = 'open' | 'done' | 'closed' | 'merged' | 'all'
-
 /** 有合併關係：被併入別的想法，或承接了別的想法（兩個方向都算） */
 export const hasMerge = (i: Pick<IdeaItem, 'mergedInto' | 'absorbed'>): boolean => !!i.mergedInto || (i.absorbed?.length ?? 0) > 0
 
@@ -61,17 +59,6 @@ export function matchesQuery(i: IdeaItem, query: string): boolean {
   if (tokens.length === 0) return true
   const hay = norm([i.id, i.title, i.why, i.category, i.dimension, i.source, i.mergedInto, ...(i.absorbed ?? [])].filter(Boolean).join('\n'))
   return tokens.every((t) => hay.includes(t))
-}
-
-export function filterIdeas(ideas: IdeaItem[], category: string | null, status: StatusFilter, query = ''): IdeaItem[] {
-  return ideas.filter((i) => {
-    if (category && (i.category ?? '未分類') !== category) return false
-    if (status === 'open' && !isOpen(i.status)) return false
-    if (status === 'done' && i.status !== 'done') return false
-    if (status === 'closed' && !(i.status === 'shelved' || i.status === 'dropped' || i.status === 'absorbed')) return false
-    if (status === 'merged' && !hasMerge(i)) return false
-    return matchesQuery(i, query)
-  })
 }
 
 /** 合併清單排序：同一組（承接者＋被併入者）排在一起，承接者在前 */
@@ -90,15 +77,6 @@ export function sortMergedGroups(ideas: IdeaItem[]): IdeaItem[] {
   })
 }
 
-export function statusCounts(ideas: IdeaItem[]): { open: number; doing: number; done: number; total: number } {
-  return {
-    open: ideas.filter((i) => isOpen(i.status)).length,
-    doing: ideas.filter((i) => i.status === 'doing').length,
-    done: ideas.filter((i) => i.status === 'done').length,
-    total: ideas.length,
-  }
-}
-
 /** 🔀 併入關係的文字徽章：被併入者「🔀 併入 → IDEA-0022」、承接者「吸收：IDEA-0039、IDEA-0040 等 N 個」 */
 export function absorbBadges(idea: Pick<IdeaItem, 'mergedInto' | 'absorbed'>): { mergedInto: string | null; absorbed: string | null } {
   const list = idea.absorbed ?? []
@@ -110,24 +88,217 @@ export function absorbBadges(idea: Pick<IdeaItem, 'mergedInto' | 'absorbed'>): {
 /** 1–5 的點數（價值／難度），null 顯示「—」 */
 export const pips = (n: number | null) => (n === null ? '—' : '●'.repeat(n) + '○'.repeat(5 - n))
 
-// 「複製給 HERMES」：入口網不寫入，狀態一律由 HERMES 寫進日記（docs/ideas.md 的 💡✅／🚀… 標記）。
-// 使用者 2026-10-09：用 Telegram 告訴 HERMES 進度，按鈕只負責把要貼的那句話複製好。
-// 併入（🔀）要指定承接者，不在一鍵複製的範圍（入口網一鍵併入列為後續）。
-export type CopyStatus = Exclude<IdeaStatus, 'new' | 'absorbed'>
-export const STATUS_MARK: Record<CopyStatus, string> = {
-  evaluating: '🔍', doing: '🚀', done: '✅', shelved: '🗄️', dropped: '❌',
+// ── 三階段與聚焦（2026-11-15：想法庫改成候選／封存／已完成＋聚焦旗標）─────────
+// status 是 HERMES 日記標記的原始值，不改；三態與聚焦旗標都在前端推導。
+
+export type IdeaStage = 'candidate' | 'archived' | 'done'
+
+/** 目前階段：new／evaluating／doing 是候選（doing 另帶聚焦旗標）；shelved／dropped／absorbed 封存；done 已完成 */
+export function stageOf(status: IdeaStatus): IdeaStage {
+  if (status === 'done') return 'done'
+  if (status === 'shelved' || status === 'dropped' || status === 'absorbed') return 'archived'
+  return 'candidate'
 }
-export const STATUS_ACTION: Record<CopyStatus, string> = {
-  evaluating: '評估中', doing: '開始做', done: '已實行', shelved: '擱置', dropped: '放棄',
+
+/** 聚焦旗標：doing 就是聚焦 */
+export const isFocus = (status: IdeaStatus): boolean => status === 'doing'
+
+export const FOCUS_LIMIT = 3
+export const STAGE_LABEL: Record<IdeaStage, string> = { candidate: '候選', archived: '封存', done: '已完成' }
+export const STAGE_ICON: Record<IdeaStage, string> = { candidate: '🌱', archived: '📦', done: '✅' }
+export const STAGE_COLOR: Record<IdeaStage, string> = { candidate: '#e8b23d', archived: '#7a8190', done: '#5fbf7a' }
+export const FOCUS_LABEL = '聚焦'
+export const FOCUS_ICON = '🎯'
+export const FOCUS_COLOR = '#f5a623'
+
+export type IdeaAction = 'focus' | 'unfocus' | 'done' | 'archive' | 'reopen'
+export const ACTION_MARK: Record<IdeaAction, string> = { focus: '🚀', unfocus: '🔍', done: '✅', archive: '🗄️', reopen: '🔍' }
+export const ACTION_LABEL: Record<IdeaAction, string> = { focus: '聚焦', unfocus: '回候選', done: '已完成', archive: '封存', reopen: '重新列為候選' }
+
+/** 這筆想法現在能做的動作：候選可聚焦＋完成＋封存，聚焦先回候選或直接完成／封存，封存與已完成只能重開 */
+export function nextActions(status: IdeaStatus): IdeaAction[] {
+  if (stageOf(status) !== 'candidate') return ['reopen']
+  return isFocus(status) ? ['unfocus', 'done', 'archive'] : ['focus', 'done', 'archive']
 }
-/** 這筆想法可以改成哪些狀態（不含目前的、也不回到「新想法」） */
-export function nextStatuses(current: IdeaStatus): CopyStatus[] {
-  return (['done', 'doing', 'evaluating', 'shelved', 'dropped'] as const).filter((s) => s !== current)
-}
-/** 貼到 Telegram 給 HERMES 的一句話；第一行就是 HERMES 寫進日記時用的標記 */
-export function statusMessage(idea: Pick<IdeaItem, 'id' | 'title'>, status: CopyStatus, note = ''): string {
-  const line = `💡${STATUS_MARK[status]} ${idea.id}「${idea.title}」${STATUS_ACTION[status]}`
+
+/** 貼給 HERMES 的一句話（入口網不寫入，狀態一律由 HERMES 寫進日記；併入要指定承接者，不在一鍵複製範圍）：第一行是日記標記，第二行是備註或提示 */
+export function actionMessage(idea: Pick<IdeaItem, 'id' | 'title'>, action: IdeaAction, note = ''): string {
+  const line = `💡${ACTION_MARK[action]} ${idea.id}「${idea.title}」${ACTION_LABEL[action]}`
   return note.trim() ? `${line}\n${note.trim()}` : `${line}\n（請照想法庫格式寫進今天的日記）`
+}
+
+/** 封存的原因小字：放棄、併入；擱置或其他狀態回 null */
+export function archiveReason(status: IdeaStatus): '放棄' | '併入' | null {
+  return status === 'dropped' ? '放棄' : status === 'absorbed' ? '併入' : null
+}
+
+/** 聚焦了幾天：最後一次轉 doing 的時間到現在；不是聚焦或歷程沒記到回 null */
+export function focusDays(idea: Pick<IdeaItem, 'status' | 'history'>, nowMs: number): number | null {
+  if (!isFocus(idea.status)) return null
+  let last = NaN
+  for (const h of idea.history ?? []) {
+    if (h.status !== 'doing') continue
+    const ms = toMs(h.at)
+    if (Number.isFinite(ms) && (!Number.isFinite(last) || ms > last)) last = ms
+  }
+  return Number.isFinite(last) ? Math.max(0, Math.floor((nowMs - last) / DAY_MS)) : null
+}
+
+export type StageFilter = 'candidate' | 'focus' | 'done' | 'archived' | 'merged' | 'all'
+
+/** 依階段篩選：focus 只留聚焦、candidate 含聚焦；merged 沿用合併關係、不分階段 */
+export function filterByStage(ideas: IdeaItem[], category: string | null, filter: StageFilter, query = ''): IdeaItem[] {
+  return ideas.filter((i) => {
+    if (category && (i.category ?? '未分類') !== category) return false
+    if (filter === 'focus' && !isFocus(i.status)) return false
+    if (filter === 'candidate' && stageOf(i.status) !== 'candidate') return false
+    if (filter === 'done' && i.status !== 'done') return false
+    if (filter === 'archived' && stageOf(i.status) !== 'archived') return false
+    if (filter === 'merged' && !hasMerge(i)) return false
+    return matchesQuery(i, query)
+  })
+}
+
+/** 三階段統計；focus 也算在 candidate 內 */
+export function stageCounts(ideas: IdeaItem[]): { candidate: number; focus: number; archived: number; done: number; total: number } {
+  const out = { candidate: 0, focus: 0, archived: 0, done: 0, total: ideas.length }
+  for (const i of ideas) {
+    out[stageOf(i.status)] += 1
+    if (isFocus(i.status)) out.focus += 1
+  }
+  return out
+}
+
+// ── 想法庫儀表板（2026-11-15）：聚焦超額、久未想起、月度誕生／完成、完成率與徽章 ──
+export interface DashboardBadge { id: string; icon: string; title: string; detail: string }
+export interface IdeaDashboard {
+  counts: ReturnType<typeof stageCounts>
+  focusOver: boolean
+  staleFocus: Array<{ id: string; title: string; days: number }>
+  staleCandidates: number
+  monthly: Array<{ month: string; born: number; done: number }>
+  medianDaysToDone: number | null
+  doneRate: number | null
+  byCategory: Array<{ category: string; total: number; done: number; rate: number }>
+  badges: DashboardBadge[]
+  next: { target: number; remaining: number; ratio: number } | null
+}
+
+const TPE_OFFSET_MS = 8 * 3_600_000
+/** 台北時間的月份 'YYYY-MM' */
+const monthOf = (ms: number): string => {
+  const d = new Date(ms + TPE_OFFSET_MS)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** history 裡第一次 done 的時間；沒有回 NaN */
+function firstDoneAt(idea: Pick<IdeaItem, 'history'>): number {
+  let best = NaN
+  for (const h of idea.history ?? []) {
+    if (h.status !== 'done') continue
+    const ms = toMs(h.at)
+    if (Number.isFinite(ms) && (!Number.isFinite(best) || ms < best)) best = ms
+  }
+  return best
+}
+
+function median(nums: number[]): number | null {
+  if (nums.length === 0) return null
+  const s = [...nums].sort((a, b) => a - b)
+  const mid = s.length >> 1
+  return s.length % 2 ? s[mid]! : Math.round((s[mid - 1]! + s[mid]!) / 2)
+}
+
+export function ideaDashboard(ideas: IdeaItem[], nowMs: number): IdeaDashboard {
+  const counts = stageCounts(ideas)
+  const ageDays = (i: IdeaItem): number | null => {
+    const ms = toMs(i.lastMentioned)
+    return Number.isFinite(ms) ? Math.floor((nowMs - ms) / DAY_MS) : null
+  }
+  const staleFocus = ideas
+    .filter((i) => isFocus(i.status))
+    .flatMap((i) => {
+      const days = ageDays(i)
+      return days !== null && days >= 30 ? [{ id: i.id, title: i.title, days }] : []
+    })
+    .sort((a, b) => b.days - a.days || a.id.localeCompare(b.id))
+  const staleCandidates = ideas
+    .filter((i) => stageOf(i.status) === 'candidate' && !isFocus(i.status))
+    .filter((i) => { const days = ageDays(i); return days !== null && days >= 90 })
+    .length
+
+  // 含本月共 12 個月，舊→新；切月以台北時間為準
+  const nowTpe = new Date(nowMs + TPE_OFFSET_MS)
+  const endIdx = nowTpe.getUTCFullYear() * 12 + nowTpe.getUTCMonth()
+  const monthly = Array.from({ length: 12 }, (_, k) => {
+    const idx = endIdx - 11 + k
+    return { month: `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`, born: 0, done: 0 }
+  })
+  const monthAt = new Map(monthly.map((m, i) => [m.month, i]))
+
+  const spans: Array<{ idea: IdeaItem; born: number; doneMs: number; days: number }> = []
+  for (const i of ideas) {
+    const born = toMs(i.bornAt)
+    if (Number.isFinite(born)) {
+      const k = monthAt.get(monthOf(born))
+      if (k !== undefined) monthly[k]!.born += 1
+    }
+    const doneMs = firstDoneAt(i)
+    if (!Number.isFinite(doneMs)) continue
+    const k = monthAt.get(monthOf(doneMs))
+    if (k !== undefined) monthly[k]!.done += 1
+    if (Number.isFinite(born)) spans.push({ idea: i, born, doneMs, days: Math.max(0, Math.round((doneMs - born) / DAY_MS)) })
+  }
+
+  const doneCount = ideas.filter((i) => i.status === 'done').length
+  const denom = doneCount + ideas.filter((i) => i.status === 'shelved' || i.status === 'dropped').length
+  const doneRate = denom > 0 ? Math.round((doneCount / denom) * 100) / 100 : null
+
+  const cats = new Map<string, { total: number; done: number }>()
+  for (const i of ideas) {
+    if (i.status === 'absorbed') continue
+    const key = i.category ?? '未分類'
+    const row = cats.get(key) ?? { total: 0, done: 0 }
+    row.total += 1
+    if (i.status === 'done') row.done += 1
+    cats.set(key, row)
+  }
+  const byCategory = [...cats.entries()]
+    .map(([category, r]) => ({ category, total: r.total, done: r.done, rate: r.total > 0 ? Math.round((r.done / r.total) * 100) / 100 : 0 }))
+    .sort((a, b) => b.total - a.total || a.category.localeCompare(b.category))
+
+  const badges: DashboardBadge[] = []
+  const earliest = spans.reduce<(typeof spans)[number] | null>(
+    (best, s) => (!best || s.doneMs < best.doneMs || (s.doneMs === best.doneMs && s.idea.id < best.idea.id) ? s : best), null,
+  )
+  if (earliest) badges.push({ id: 'first', icon: '🥇', title: '第一個完成', detail: `${earliest.idea.title}（${shortDate(earliest.doneMs)}）` })
+  const tier = [...LADDER].filter((t) => t <= doneCount).pop()
+  if (tier !== undefined) badges.push({ id: `ladder-${tier}`, icon: '🏁', title: `完成 ${tier} 個想法`, detail: `累計完成 ${doneCount} 個想法` })
+  const fastest = spans.reduce<(typeof spans)[number] | null>(
+    (best, s) => (!best || s.days < best.days || (s.days === best.days && s.idea.id < best.idea.id) ? s : best), null,
+  )
+  if (fastest) badges.push({ id: 'fastest', icon: '⚡', title: '最快完成', detail: `${fastest.idea.title}（${fastest.days} 天）` })
+  // 連續有完成的月數：本月還沒完成時從上個月往回數
+  let from = monthly[11]!.done > 0 ? 11 : 10
+  let streak = 0
+  while (from >= 0 && monthly[from]!.done > 0) { streak += 1; from -= 1 }
+  if (streak >= 2) badges.push({ id: 'streak', icon: '🔥', title: `連續 ${streak} 個月有完成`, detail: `${monthly[from + 1]!.month}～${monthly[from + streak]!.month}` })
+  const bestMonth = monthly.reduce((best, m) => (m.done > best.done ? m : best), monthly[0]!)
+  if (bestMonth.done >= 2) badges.push({ id: 'best-month', icon: '🏆', title: '完成最多的月份', detail: `${bestMonth.month}（${bestMonth.done} 個）` })
+
+  const target = LADDER.find((t) => t > doneCount) ?? null
+  return {
+    counts,
+    focusOver: counts.focus > FOCUS_LIMIT,
+    staleFocus,
+    staleCandidates,
+    monthly,
+    medianDaysToDone: median(spans.map((s) => s.days)),
+    doneRate,
+    byCategory,
+    badges,
+    next: ideas.length === 0 || target === null ? null : { target, remaining: target - doneCount, ratio: doneCount / target },
+  }
 }
 
 // ── 來龍去脈（2026-10-22 使用者：「我想看每個想法的來龍去脈」）──────────────

@@ -5,6 +5,7 @@
 import type { IdeaItem, IdeasData } from './boardApi'
 import type { FoodPlace } from './foodMap'
 import type { Trip } from './tripsApi'
+import { isFocus, stageOf } from './ideasView'
 
 export type Range = readonly [string, string]
 /** 每天一列：數量＋當天具體是哪些（滑過格子時顯示）。ideaTitles／foodNames／tripNames 與 ideas／food／travel 對應 */
@@ -14,7 +15,8 @@ export interface SeriesRow {
 }
 export interface Pin { name: string; lat: number; lng: number; status: 'visited' | 'favorite' | 'want' }
 export interface TripBar { id: string; title: string; start: string; end: string; daysInPeriod: number; photos: number; area: string | null }
-export type Funnel = Record<'new' | 'evaluating' | 'doing' | 'done', number>
+/** 本期出生的想法依「目前階段」計；聚焦只算聚焦、候選只算非聚焦的候選，兩者不重複 */
+export type Funnel = Record<'candidate' | 'focus' | 'done' | 'archived', number>
 
 export interface PeriodReport {
   range: [string, string]
@@ -118,8 +120,11 @@ function ideasStats(input: StatsInput, r: Range, today: string): PeriodReport['i
   const started = all.filter((it) => hist(it, 'doing'))
   const open = all.filter((it) => OPEN.has(it.status) && valid(it.bornAt) && it.bornAt.slice(0, 10) <= r[1])
   const base = done.length + open.length
-  const funnel: Funnel = { new: 0, evaluating: 0, doing: 0, done: 0 }
-  for (const it of born) if (it.status in funnel) funnel[it.status as keyof Funnel] += 1
+  const funnel: Funnel = { candidate: 0, focus: 0, done: 0, archived: 0 }
+  for (const it of born) {
+    if (isFocus(it.status)) funnel.focus += 1
+    else funnel[stageOf(it.status)] += 1
+  }
   const oldest = open.filter((it) => valid(it.bornAt)).sort((a, b) => a.bornAt.localeCompare(b.bornAt) || a.id.localeCompare(b.id))[0]
   const byId = new Map(all.map((it) => [it.id, it]))
   const includesToday = r[0] <= today && today <= r[1]

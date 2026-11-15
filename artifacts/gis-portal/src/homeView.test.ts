@@ -297,11 +297,11 @@ describe('milestones', () => {
   })
   it('every group has the specified rungs', () => {
     const m = milestones({ events: 5000, people: 500, concepts: 500, methods: 200, ideasDone: 25, placesBeen: 100, trips: 25, hhiDays: 365 })
-    expect(m.badges.map((b) => b.title)).toEqual(['事件突破 5,000', '人物突破 500', '概念突破 500', '方法突破 200', '已實行 25 個想法', '去過 100 個地點'])
+    expect(m.badges.map((b) => b.title)).toEqual(['事件突破 5,000', '人物突破 500', '概念突破 500', '方法突破 200', '已完成 25 個想法', '去過 100 個地點'])
     expect(m.next).toBeNull()
     expect(milestones({ ...none, concepts: 50 }).badges[0]!.title).toBe('概念突破 50')
     expect(milestones({ ...none, methods: 25 }).badges[0]!.title).toBe('方法突破 25')
-    expect(milestones({ ...none, ideasDone: 1 }).badges[0]!.title).toBe('已實行 1 個想法')
+    expect(milestones({ ...none, ideasDone: 1 }).badges[0]!.title).toBe('已完成 1 個想法')
     expect(milestones({ ...none, placesBeen: 10 }).badges[0]!.title).toBe('去過 10 個地點')
     expect(milestones({ ...none, trips: 5 }).badges[0]!.title).toBe('遊記 5 趟')
     expect(milestones({ ...none, hhiDays: 100 }).badges[0]!.title).toBe('幸福指數紀錄 100 天')
@@ -330,7 +330,7 @@ describe('milestones', () => {
     expect(milestones({ ...none, events: 99.9 }).next).toMatchObject({ current: 99, remaining: 1 })
   })
   it('per-group next text', () => {
-    expect(milestones({ ...none, ideasDone: 1 }).next!.text).toBe('下一個：已實行想法 5（目前 1，還差 4）')
+    expect(milestones({ ...none, ideasDone: 1 }).next!.text).toBe('下一個：已完成想法 5（目前 1，還差 4）')
     expect(milestones({ ...none, trips: 0 }).next!.text).toBe('下一個：遊記 1 趟（目前 0，還差 1）')
     expect(milestones({ ...none, hhiDays: 80 }).next!.text).toBe('下一個：幸福指數紀錄 100 天（目前 80，還差 20）')
   })

@@ -1,5 +1,5 @@
 // 週／月報圖表的純函式（不碰 DOM，方便測）：差異文字、長條比例、地圖釘位置、旅程甘特條。
-import type { Pin, PeriodReport, SeriesRow, TripBar } from './periodStats'
+import type { Funnel, Pin, PeriodReport, SeriesRow, TripBar } from './periodStats'
 
 export interface Delta { text: string; tone: 'up' | 'down' | 'flat' }
 /** 與上期比：多了 ▲、少了 ▼、一樣「持平」。沒有「好壞」判斷——想法多不一定好、美食少不一定壞 */
@@ -15,11 +15,11 @@ export function barPct(value: number, max: number): number {
   return Math.max(4, Math.round((value / max) * 100))
 }
 
-export const FUNNEL_STEPS: ReadonlyArray<{ key: 'new' | 'evaluating' | 'doing' | 'done'; label: string }> = [
-  { key: 'new', label: '💭 新想法' }, { key: 'evaluating', label: '🔍 評估中' }, { key: 'doing', label: '🚀 進行中' }, { key: 'done', label: '✅ 已實行' },
+export const FUNNEL_STEPS: ReadonlyArray<{ key: keyof Funnel; label: string }> = [
+  { key: 'candidate', label: '🌱 候選' }, { key: 'focus', label: '🎯 聚焦' }, { key: 'done', label: '✅ 已完成' }, { key: 'archived', label: '📦 封存' },
 ]
 
-export function funnelRows(funnel: Record<'new' | 'evaluating' | 'doing' | 'done', number>) {
+export function funnelRows(funnel: Funnel) {
   const max = Math.max(0, ...FUNNEL_STEPS.map((s) => funnel[s.key]))
   return FUNNEL_STEPS.map((s) => ({ ...s, value: funnel[s.key], pct: barPct(funnel[s.key], max) }))
 }

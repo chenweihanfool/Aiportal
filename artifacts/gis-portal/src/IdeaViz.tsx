@@ -2,10 +2,9 @@
 import { useMemo, useState } from 'react'
 import type { IdeaItem } from './boardApi'
 import { CV, FONT } from './theme'
-import { SCATTER_QUADRANTS, STATUS_COLOR, STATUS_ICON, STATUS_LABEL, buildLifeline, buildLineage, buildScatter, lifeStats, quadrantOf, scaleTime, type LineageNode } from './ideasView'
+import { FOCUS_COLOR, FOCUS_ICON, FOCUS_LABEL, SCATTER_QUADRANTS, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, STATUS_COLOR, STATUS_ICON, STATUS_LABEL, isFocus, stageOf, buildLifeline, buildLineage, buildScatter, lifeStats, quadrantOf, scaleTime, type LineageNode } from './ideasView'
 
-const ORDER = ['new', 'evaluating', 'doing', 'done'] as const
-/** 階梯線的高度：新→評估→進行→已實行由低到高，擱置／放棄／併入落回底部 */
+/** 階梯線的高度：候選→聚焦→已完成由低到高，封存落回底部 */
 const LEVEL: Record<string, number> = { new: 0, evaluating: 1, doing: 2, done: 3, shelved: 0, dropped: 0, absorbed: 0 }
 
 export function IdeaLifeline({ idea, nowMs }: { idea: IdeaItem; nowMs: number }) {
@@ -110,19 +109,19 @@ export function IdeaScatter({ ideas }: { ideas: IdeaItem[] }) {
         <text x={(L + R) / 2} y={H - 2} fontSize={10} fill={CV.steel} textAnchor="middle">難度 →</text>
         <text x={8} y={(T + B) / 2} fontSize={10} fill={CV.steel} textAnchor="middle" transform={`rotate(-90 8 ${(T + B) / 2})`}>價值 →</text>
         {place.map(({ p, cx, cy }) => (
-          <circle key={p.id} cx={cx} cy={cy} r={p.r} fill={STATUS_COLOR[p.status]} fillOpacity={p.open ? 0.85 : 0.4} stroke={hover === p.id ? CV.ink : CV.panelDeep} strokeWidth={1.5}
+          <circle key={p.id} cx={cx} cy={cy} r={p.r} fill={isFocus(p.status) ? FOCUS_COLOR : STAGE_COLOR[stageOf(p.status)]} fillOpacity={p.open ? 0.85 : 0.4} stroke={hover === p.id ? CV.ink : CV.panelDeep} strokeWidth={1.5}
             tabIndex={0} onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(p.id)} onBlur={() => setHover(null)}>
             <title>{`${p.id} ${p.title}（價值 ${p.y}・難度 ${p.x}）`}</title>
           </circle>
         ))}
       </svg>
       <figcaption style={{ fontSize: '0.68rem', color: CV.steelDim, minHeight: '2.6em' }}>
-        {hv ? <><b style={{ color: CV.ink }}>{hv.p.id} {hv.p.title}</b>　{quad}</> : '點大小＝被想起次數；顏色＝狀態；淡色＝已結束。'}
+        {hv ? <><b style={{ color: CV.ink }}>{hv.p.id} {hv.p.title}</b>　{quad}</> : '點大小＝被想起次數；顏色＝階段（候選、聚焦、已完成、封存）；淡色＝已結束。'}
         {skipped > 0 && <> 另有 {skipped} 筆尚未估價值／難度，未畫出。</>}
       </figcaption>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', fontSize: '0.64rem', color: CV.steelDim }}>
-        {ORDER.concat(['shelved', 'dropped', 'absorbed'] as never[]).map((s) => (
-          <span key={s}><span style={{ color: STATUS_COLOR[s] }}>●</span> {STATUS_LABEL[s]}</span>
+        {([[FOCUS_ICON, FOCUS_LABEL, FOCUS_COLOR], [STAGE_ICON.candidate, STAGE_LABEL.candidate, STAGE_COLOR.candidate], [STAGE_ICON.done, STAGE_LABEL.done, STAGE_COLOR.done], [STAGE_ICON.archived, STAGE_LABEL.archived, STAGE_COLOR.archived]] as const).map(([icon, label, color]) => (
+          <span key={label}><span style={{ color }}>●</span> {icon} {label}</span>
         ))}
       </div>
     </figure>
