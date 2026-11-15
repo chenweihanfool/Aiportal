@@ -386,3 +386,56 @@ describe('人生樹排版（3.0.0）', () => {
     expect(Date.now() - t0).toBeLessThan(3000)
   })
 })
+
+describe('聚焦時日期標籤與膠囊（3.0.1）', () => {
+  const sets: Array<[string, InsightData]> = [['sample', sample()], ['synth120', synth(120, 3, 6)], ['synth300', synth(300, 12)], ['synth40', synth(40, 5, 1)]]
+  const labelOfDate = (d: string, byYear: boolean): string => (byYear ? d.slice(0, 4) : d.slice(0, 7))
+  it('任兩個日期標籤 bbox 不重疊、首尾必留、同月不重複、跨 2 年標年份否則標年月', () => {
+    for (const [name, d] of sets) {
+      for (const cl of d.clusters.length > 0 ? d.clusters : []) {
+        const ly = layoutInsightTree(d, { width: W, height: H, now: NOW, focus: cl.id })
+        const c = ly.clusters.find((x) => x.id === cl.id)!
+        const its = d.insights.filter((i) => i.cluster === cl.id).sort((a, b) => (a.date < b.date ? -1 : 1))
+        if (its.length === 0) continue
+        const byYear = (Date.parse(its[its.length - 1]!.date) - Date.parse(its[0]!.date)) / 86_400_000 >= 730
+        expect(c.ticks.length, `${name}/${cl.id}`).toBeGreaterThanOrEqual(1)
+        expect(c.ticks[0]!.label).toBe(labelOfDate(its[0]!.date, byYear))
+        expect(c.ticks[c.ticks.length - 1]!.label).toBe(labelOfDate(its[its.length - 1]!.date, byYear))
+        expect(new Set(c.ticks.map((t) => t.label)).size).toBe(c.ticks.length)
+        for (const t of c.ticks) expect(byYear ? /^\d{4}$/.test(t.label) : /^\d{4}-\d{2}$/.test(t.label)).toBe(true)
+        for (let i = 0; i < c.ticks.length; i++) for (let j = i + 1; j < c.ticks.length; j++) {
+          const a = c.ticks[i]!
+          const b = c.ticks[j]!
+          expect(Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2, `${name}/${cl.id} ${a.label}/${b.label}`).toBe(false)
+        }
+      }
+    }
+  })
+  it('日期標籤在主枝外下側：不蓋主枝取樣點，字在聚焦後螢幕上約 11px 以上', () => {
+    const d = synth(120, 3, 6)
+    const ly = layoutInsightTree(d, { width: W, height: H, now: NOW, focus: 'K01' })
+    const vb = focusViewBox(ly, 0)
+    const scale = W / vb.w
+    for (const t of ly.clusters[0]!.ticks) {
+      expect(t.fs * scale).toBeGreaterThanOrEqual(10)
+      expect(Math.hypot(t.x - t.px, t.y - t.py)).toBeGreaterThan(t.h / 2)
+    }
+  })
+  it('聚焦時膠囊與所有葉子（含發光光暈）、日期標籤 bbox 不重疊，且在畫布內', () => {
+    for (const [name, d] of sets) {
+      for (const cl of d.clusters) {
+        const ly = layoutInsightTree(d, { width: W, height: H, now: NOW, focus: cl.id })
+        const c = ly.clusters.find((x) => x.id === cl.id)!
+        if (c.count === 0) continue
+        expect(c.labelShown).toBe(true)
+        const r = { x0: c.lx - c.lw / 2, x1: c.lx + c.lw / 2, y0: c.ly - c.lh / 2, y1: c.ly + c.lh / 2 }
+        for (const l of ly.leaves) {
+          const dd = Math.hypot(l.x - Math.min(Math.max(l.x, r.x0), r.x1), l.y - Math.min(Math.max(l.y, r.y0), r.y1))
+          expect(dd, `${name}/${cl.id}/${l.id}`).toBeGreaterThanOrEqual(l.glow ? l.r * 1.9 : l.r)
+        }
+        for (const t of c.ticks) expect(Math.abs(t.x - c.lx) < (t.w + c.lw) / 2 && Math.abs(t.y - c.ly) < (t.h + c.lh) / 2, `${name}/${cl.id}/${t.label}`).toBe(false)
+        expect(r.x0).toBeGreaterThanOrEqual(0); expect(r.x1).toBeLessThanOrEqual(W)
+      }
+    }
+  })
+})

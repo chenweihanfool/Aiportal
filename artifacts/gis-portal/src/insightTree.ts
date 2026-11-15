@@ -269,7 +269,8 @@ export interface InsightLeaf {
 export interface InsightClump { id: string; clusterIndex: number; x: number; y: number; r: number; count: number; bt: number }
 /** 一條畫出來的脈絡細枝：分出點、理想末端、與主枝切線的夾角（度）、長度 */
 export interface InsightTwig { id: string; clusterIndex: number; fx: number; fy: number; ex: number; ey: number; angle: number; length: number }
-export interface BranchTick { label: string; t: number; x: number; y: number }
+/** 聚焦時沿主枝的日期標籤：(x,y) 是標籤中心，(px,py) 是主枝上被指到的點；w、h、fs 是版面座標（依聚焦後的螢幕縮放換算成 11.5px 字） */
+export interface BranchTick { label: string; t: number; x: number; y: number; px: number; py: number; w: number; h: number; fs: number }
 export interface InsightClusterOut {
   id: string
   name: string
@@ -292,6 +293,8 @@ export interface InsightClusterOut {
   lh: number
   /** true＝膠囊放得下、預設顯示；false＝縮成色點，滑過／聚焦／點清單時才放大 */
   labelShown: boolean
+  /** 膠囊離枝梢較遠，需要畫細引線 */
+  leader: boolean
   text: string
   showCount: boolean
   /** 這一群所有枝葉（含標籤）的外框，聚焦時用 */
@@ -504,16 +507,6 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const n = itemsOf.get(cids[k]!)!.length
     const df = hi[k]! > lo[k]! ? (dn - lo[k]!) / (hi[k]! - lo[k]!) : 1
     const rf = n <= 1 ? 1 : i / (n - 1)
-    const tc = br[k]!.tc
-    return tc + (1 - tc) * (0.3 * df + 0.7 * rf)
-  }
-  const tOfDay = (k: number, dn: number): number => {
-    const its = itemsOf.get(cids[k]!)!
-    let c = 0
-    while (c < its.length && dayNumber(its[c]!.date) < dn) c++
-    const n = its.length
-    const df = hi[k]! > lo[k]! ? clamp((dn - lo[k]!) / (hi[k]! - lo[k]!), 0, 1) : 1
-    const rf = n <= 1 ? 1 : Math.min(c, n - 1) / (n - 1)
     const tc = br[k]!.tc
     return tc + (1 - tc) * (0.3 * df + 0.7 * rf)
   }
@@ -832,13 +825,14 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     const tip = br[k]!.p3
     return {
       id, name, count: cnt, x: A1(tip[0]), y: A1(tip[1]), ax: A1(br[k]!.p0[0]), ay: A1(br[k]!.p0[1]), side: br[k]!.side, len: A1(Math.hypot(br[k]!.p3[0] - br[k]!.p0[0], br[k]!.p3[1] - br[k]!.p0[1])), firstDate: firstOf.get(id)!.date,
-      lx: A1(tip[0]), ly: A1(tip[1]), lw: A1(lw), lh: A1(lh), labelShown: false, text: t, showCount: sc, bbox: { x0: tip[0], y0: tip[1], x1: tip[0], y1: tip[1] }, ticks: [],
+      lx: A1(tip[0]), ly: A1(tip[1]), lw: A1(lw), lh: A1(lh), labelShown: false, leader: false, text: t, showCount: sc, bbox: { x0: tip[0], y0: tip[1], x1: tip[0], y1: tip[1] }, ticks: [],
     }
   })
   type Rect = { x0: number; y0: number; x1: number; y1: number }
   const placed: Rect[] = []
   const order = clusters.map((_, i) => i).filter((i) => clusters[i]!.count > 0).sort((a, b) => clusters[b]!.count - clusters[a]!.count || a - b)
   for (const i of order) {
+    if (i === focusK) continue // 聚焦的群在下面依螢幕大小另外擺
     const c = clusters[i]!
     const hw = c.lw / 2
     const hh = c.lh / 2
@@ -849,7 +843,7 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
       const y = clamp(c.y + oy, hh + 2, H - hh - 2)
       const r = { x0: x - hw, y0: y - hh, x1: x + hw, y1: y + hh }
       if (ci === 0) { c.lx = A1(x); c.ly = A1(y) }
-      const onLeaf = leaves.some((l) => Math.hypot(l.x - clamp(l.x, r.x0, r.x1), l.y - clamp(l.y, r.y0, r.y1)) < l.r * 1.1 + 1)
+      const onLeaf = leaves.some((l) => Math.hypot(l.x - clamp(l.x, r.x0, r.x1), l.y - clamp(l.y, r.y0, r.y1)) < (l.glow ? l.r * 1.95 : l.r * 1.1 + 1))
       if (ok) return
       if (onLeaf || placed.some((o) => r.x0 < o.x1 + 3 && r.x1 > o.x0 - 3 && r.y0 < o.y1 + 3 && r.y1 > o.y0 - 3)) return
       placed.push(r)
@@ -858,44 +852,109 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     })
   }
 
-  // ── 外框與（聚焦時）沿主枝的時間標籤 ──
-  const labelOf = (dn: number, byYear: boolean): string => {
-    const d = new Date(dn * 86_400_000)
-    return byYear ? String(d.getUTCFullYear()) : `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
-  }
+  // ── 外框，以及聚焦時沿主枝的日期標籤與膠囊（依聚焦後的螢幕縮放避讓） ──
+  type R4 = { x0: number; y0: number; x1: number; y1: number }
+  const rectsHit = (a: R4, b: R4, gap = 0): boolean => a.x0 < b.x1 + gap && a.x1 > b.x0 - gap && a.y0 < b.y1 + gap && a.y1 > b.y0 - gap
+  const labelFor = (date: string, byYear: boolean): string => (byYear ? date.slice(0, 4) : date.slice(0, 7))
   clusters.forEach((c, k) => {
     if (c.count === 0) return
     const bb = { x0: c.x - 8, y0: c.y - 8, x1: c.x + 8, y1: c.y + 8 }
     const grow = (x: number, y: number, m: number): void => { bb.x0 = Math.min(bb.x0, x - m); bb.y0 = Math.min(bb.y0, y - m); bb.x1 = Math.max(bb.x1, x + m); bb.y1 = Math.max(bb.y1, y + m) }
+    const growR = (r: R4): void => { bb.x0 = Math.min(bb.x0, r.x0); bb.y0 = Math.min(bb.y0, r.y0); bb.x1 = Math.max(bb.x1, r.x1); bb.y1 = Math.max(bb.y1, r.y1) }
     for (let s = 0; s <= 8; s++) { const p = pointOn(k, s / 8); grow(p[0], p[1], 8) }
-    for (const i of itemsOf.get(c.id)!) { const r = recById.get(i.id)!; grow(r.x, r.y, r.r * 1.6) }
-    bb.x0 = Math.min(bb.x0, c.lx - c.lw / 2); bb.x1 = Math.max(bb.x1, c.lx + c.lw / 2); bb.y0 = Math.min(bb.y0, c.ly - c.lh / 2); bb.y1 = Math.max(bb.y1, c.ly + c.lh / 2)
-    if (k === focusK) {
+    for (const i of itemsOf.get(c.id)!) { const r = recById.get(i.id)!; grow(r.x, r.y, r.r * 1.9) }
+    if (k !== focusK) {
+      growR({ x0: c.lx - c.lw / 2, x1: c.lx + c.lw / 2, y0: c.ly - c.lh / 2, y1: c.ly + c.lh / 2 })
+    } else {
       const its = itemsOf.get(c.id)!
       const d0 = dayNumber(its[0]!.date)
       const d1 = dayNumber(its[its.length - 1]!.date)
-      const byYear = d1 - d0 >= 365
-      const marks: Array<{ dn: number; label: string }> = [{ dn: d0, label: labelOf(d0, byYear) }]
-      const e = new Date(d0 * 86_400_000)
-      let y = e.getUTCFullYear()
-      let m = byYear ? 0 : e.getUTCMonth() + 1
-      for (let g = 0; g < 400; g++) {
-        if (byYear) { y++; m = 0 } else { m++; if (m > 11) { m = 0; y++ } }
-        const dn = Date.UTC(y, m, 1) / 86_400_000
-        if (dn > d1) break
-        marks.push({ dn, label: labelOf(dn, byYear) })
-      }
-      const dnTick = marks.length > 24 ? marks.filter((_, q) => q % Math.ceil(marks.length / 24) === 0) : marks
-      c.ticks = dnTick.map((mk) => {
-        const t = tOfDay(k, mk.dn)
-        const p = pointOn(k, t)
-        const un = upNormal(k, t)
-        const off = 0 // 年份標在主枝上（白色描邊讓字清楚），不壓到兩側的細枝與葉
-        const x = clamp(p[0] + un[0] * off, PAD + 16, W - PAD - 16)
-        const yy = clamp(p[1] + un[1] * off, PAD + 8, ground - 4)
-        grow(x, yy, 14)
-        return { label: mk.label, t: A1(t * 1000) / 1000, x: A1(x), y: A1(yy) }
+      const byYear = d1 - d0 >= 730
+      // 候選：資料裡每個月（跨 2 年以上＝每年）第一次出現的那一則，標在它在主枝上的位置
+      const cand: Array<{ label: string; t: number }> = []
+      const seen = new Set<string>()
+      its.forEach((it, i) => {
+        const lb = labelFor(it.date, byYear)
+        if (seen.has(lb)) return
+        seen.add(lb)
+        cand.push({ label: lb, t: tOfIndex(k, i, dayNumber(it.date)) })
       })
+      const lastLb = labelFor(its[its.length - 1]!.date, byYear)
+      const aspect = W / H
+      const scaleOf = (b: R4): number => {
+        const w = Math.min(W, Math.max(b.x1 - b.x0 + 32, (b.y1 - b.y0 + 32) * aspect, W * 0.5))
+        return W / w
+      }
+      const base: R4 = { ...bb }
+      let scale = scaleOf(base)
+      let ticks: BranchTick[] = []
+      let cap: R4 | null = null
+      let capLeader = false
+      const hw = c.lw / 2
+      const hh = c.lh / 2
+      for (let pass = 0; pass < 3; pass++) {
+        const fsT = 11.5 / scale
+        const mk = (cd: { label: string; t: number }): BranchTick & { r: R4; hitL: boolean } => {
+          const w = cd.label.length * fsT * 0.62 + 8 / scale
+          const h = fsT + 6 / scale
+          const pp = pointOn(k, cd.t)
+          const dn = upNormal(k, cd.t)
+          let best: { x: number; y: number; r: R4 } | null = null
+          let hitL = true
+          for (const extra of [0, 16 / scale, 32 / scale]) {
+            const off = 10 / scale + h / 2 + extra
+            const x = clamp(pp[0] - dn[0] * off, PAD + w / 2, W - PAD - w / 2)
+            const y = clamp(pp[1] - dn[1] * off, PAD + h / 2, ground - h / 2)
+            const r = { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 }
+            if (best === null) best = { x, y, r }
+            if (!leaves.some((l) => Math.hypot(l.x - clamp(l.x, r.x0, r.x1), l.y - clamp(l.y, r.y0, r.y1)) < l.r * 1.1 + 1)) { best = { x, y, r }; hitL = false; break }
+          }
+          const { x, y, r } = best!
+          return { label: cd.label, t: A1(cd.t * 1000) / 1000, x: A1(x), y: A1(y), px: A1(pp[0]), py: A1(pp[1]), w: A1(w), h: A1(h), fs: A1(fsT * 100) / 100, r, hitL }
+        }
+        const all2 = cand.map(mk)
+        const first = all2[0]!
+        const lastC = all2.find((t) => t.label === lastLb) ?? all2[all2.length - 1]!
+        const kept: Array<BranchTick & { r: R4; hitL: boolean }> = [first]
+        for (const t of all2) {
+          if (t === first || t === lastC || t.hitL) continue
+          if (rectsHit(t.r, kept[kept.length - 1]!.r, 4 / scale) || rectsHit(t.r, lastC.r, 4 / scale)) continue
+          kept.push(t)
+        }
+        if (lastC !== first) kept.push(lastC)
+        ticks = kept.map(({ r: _r, hitL: _h, ...t }) => t)
+        const tickRects = kept.map((t) => t.r)
+        // 膠囊：放在枝梢往外上方，避開所有葉子（含發光光暈）與日期標籤，必要時拉引線
+        const sx = br[k]!.side
+        const dirs: P[] = [[sx * 0.7, -0.7], [0, -1], [sx, -0.35], [-sx * 0.55, -0.85], [sx, 0.35], [0, 1]]
+        const avoid = (r: R4): boolean =>
+          r.x0 < PAD || r.x1 > W - PAD || r.y0 < 2 || r.y1 > H - 2 ||
+          leaves.some((l) => Math.hypot(l.x - clamp(l.x, r.x0, r.x1), l.y - clamp(l.y, r.y0, r.y1)) < (l.glow ? l.r * 1.95 : l.r * 1.25) + 2) ||
+          tickRects.some((q) => rectsHit(r, q, 3)) || placed.some((q) => rectsHit(r, q, 3))
+        cap = null
+        outer: for (const R of [hh + 14, hh + 34, hh + 60, hh + 92, hh + 130]) {
+          for (const d of dirs) {
+            const cxx = c.x + d[0] * (hw * 0.7 + R * 0.6)
+            const cyy = c.y + d[1] * R
+            const r = { x0: cxx - hw, y0: cyy - hh, x1: cxx + hw, y1: cyy + hh }
+            if (!avoid(r)) { cap = r; break outer }
+          }
+        }
+        if (cap === null) {
+          const cxx = clamp(c.x, PAD + hw, W - PAD - hw)
+          const cyy = clamp(c.y - hh - 14, hh + 2, H - hh - 2)
+          cap = { x0: cxx - hw, y0: cyy - hh, x1: cxx + hw, y1: cyy + hh }
+        }
+        capLeader = Math.hypot((cap.x0 + cap.x1) / 2 - c.x, (cap.y0 + cap.y1) / 2 - c.y) > hh * 1.2 + 6
+        const fin: R4 = { ...base }
+        for (const r of [...tickRects, cap]) { fin.x0 = Math.min(fin.x0, r.x0); fin.y0 = Math.min(fin.y0, r.y0); fin.x1 = Math.max(fin.x1, r.x1); fin.y1 = Math.max(fin.y1, r.y1) }
+        const ns = scaleOf(fin)
+        if (Math.abs(ns - scale) / scale < 0.04) { growR(fin); break }
+        scale = ns
+        growR(fin)
+      }
+      c.ticks = ticks
+      if (cap) { c.lx = A1((cap.x0 + cap.x1) / 2); c.ly = A1((cap.y0 + cap.y1) / 2); c.labelShown = true; c.leader = capLeader; placed.push(cap) }
     }
     c.bbox = { x0: A1(bb.x0), y0: A1(bb.y0), x1: A1(bb.x1), y1: A1(bb.y1) }
   })
