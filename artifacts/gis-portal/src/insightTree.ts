@@ -1,4 +1,4 @@
-// 首頁「我的心得樹」的純函式（2.99.0）：寬容解析 /api/insights、把心得排成由下往上長的樹、統計與月份序列。
+// 首頁「我的心得樹」的純函式（2.99.0；3.0.0 改成一棵人生樹）：寬容解析 /api/insights、把心得排成由下往上長的樹、統計與月份序列。
 // 不碰 DOM、不用 Math.random（抖動一律用 id 的雜湊），同一輸入永遠得到同一輸出。元件在 InsightTree.tsx，網路在 insightApi.ts。
 // 名詞：心得＝一句話；群（cluster）＝主枝；脈絡（thread）＝同一體會的一串，長成一條枝；relation：new 新生／reinforce 印證／refine 修正／overturn 推翻。
 
@@ -222,48 +222,54 @@ export function insightIdFromHash(hash: string): string | null {
 }
 
 // ─────────────────────────────────────────────
-// 排版（樹高＝時間）
+// 排版（3.0.0：一棵樹＝人生；主枝＝主題；時間沿主枝往外走）
 // ─────────────────────────────────────────────
 
 export type InsightLimbLevel = 'trunk' | 'cluster' | 'thread'
+/** 葉的新舊：0 近 30 天（發光）、1 一年內、2 一～三年、3 三年以上 */
+export type InsightAge = 0 | 1 | 2 | 3
 
 export interface InsightLimb {
   id: string
-  /** 填色輪廓的 SVG path（由粗到細；座標已落在 [0,width]×[0,height] 內） */
+  /** 填色輪廓的 SVG path（由粗到細） */
   d: string
   level: InsightLimbLevel
-  /** 起點寬度（＝widthStart；脈絡枝＝1.5＋1.2×印證次數，上限 8） */
   width: number
   widthStart: number
   widthEnd: number
   withered: boolean
   /** 這一段最早的心得月份 YYYY-MM（重播用）；樹幹是整棵樹最早的月份，沒有心得時為 null */
   firstMonth: string | null
-  /** 所屬群在 layout.clusters 的序號（樹幹沒有） */
   clusterIndex?: number
-  /** 同群不同脈絡的深淺（0～2） */
   shade?: number
-  /** 中心線起點 */
   from: [number, number]
-  /** 中心線終點（一律不低於起點：枝只往上長） */
   to: [number, number]
 }
 export interface InsightLeaf {
   id: string
   x: number
   y: number
-  /** 碰撞半徑（葉形依它放大） */
   r: number
   clusterIndex: number
   glow: boolean
   withered: boolean
   relation: InsightRelation
-  /** 葉尖方向：與垂直線夾角（度，正＝向右），沿所在枝條的切線 */
+  /** 葉尖方向（度，正＝向右），沿所在細枝的切線 */
   angle: number
   shade: number
+  age: InsightAge
+  /** 所屬脈絡細枝從主枝分出的位置 0（樹幹）～1（枝梢）：隨脈絡第一則的日期由內往外單調遞增 */
+  bt: number
+  /** 沿所在細枝的位置 0～1（同脈絡內由舊到新遞增，最新在細枝梢） */
+  tw: number
   /** 從樹幹到這片葉子的整條路徑上的枝段 id（滑過葉子時整條亮起） */
   path: string[]
 }
+/** 總覽時被聚合的一叢葉子 */
+export interface InsightClump { id: string; clusterIndex: number; x: number; y: number; r: number; count: number; bt: number }
+/** 一條畫出來的脈絡細枝：分出點、理想末端、與主枝切線的夾角（度）、長度 */
+export interface InsightTwig { id: string; clusterIndex: number; fx: number; fy: number; ex: number; ey: number; angle: number; length: number }
+export interface BranchTick { label: string; t: number; x: number; y: number }
 export interface InsightClusterOut {
   id: string
   name: string
@@ -272,37 +278,41 @@ export interface InsightClusterOut {
   /** 主枝末端 */
   x: number
   y: number
-  /** 標籤膠囊的中心與大小；labelShown=false 時沒有意義 */
+  /** 主枝與樹幹的接點（該主題第一次出現） */
+  ax: number
+  ay: number
+  side: 1 | -1
+  /** 主枝長度（接點到枝梢的直線距離） */
+  len: number
+  firstDate: string
+  /** 膠囊的中心與大小 */
   lx: number
   ly: number
   lw: number
   lh: number
+  /** true＝膠囊放得下、預設顯示；false＝縮成色點，滑過／聚焦／點清單時才放大 */
   labelShown: boolean
-  /** 膠囊離主枝末端較遠，需要畫細引線 */
-  leader: boolean
-  /** 膠囊上顯示的群名（太長截短；退成縮寫時最多 4 字） */
   text: string
-  /** 是否顯示則數 */
   showCount: boolean
-  /** 放不下完整膠囊，退成「色點＋縮寫群名」 */
-  abbr: boolean
   /** 這一群所有枝葉（含標籤）的外框，聚焦時用 */
   bbox: { x0: number; y0: number; x1: number; y1: number }
+  /** 聚焦這一群時沿主枝的時間標籤（其他時候為空） */
+  ticks: BranchTick[]
 }
-export interface TimeTick { y: number; label: string; major: boolean }
 export interface InsightTreeLayout {
   width: number
   height: number
-  /** 窄畫布（手機）：葉子與標籤縮小 */
   compact: boolean
   trunk: InsightLimb
   limbs: InsightLimb[]
   leaves: InsightLeaf[]
-  /** 與資料的群同序（全部都在；upto 內沒有心得的群 count＝0、不畫枝、不顯示標籤） */
+  clumps: InsightClump[]
+  twigs: InsightTwig[]
+  /** 依「該主題第一次出現」由舊到新排序（最早的在樹幹最下面）；與資料的群順序可能不同 */
   clusters: InsightClusterOut[]
-  /** 時間刻度：年（major）與每半年／季／月（minor），y 隨日期單調（越晚越高） */
-  ticks: TimeTick[]
-  axis: { x: number; top: number; bottom: number; ground: number; dayMin: number; dayMax: number; trunkTop: number }
+  /** 總覽元素數（枝＋葉＋葉叢＋樹幹） */
+  elementCount: number
+  axis: { x: number; ground: number; top: number; bottom: number; trunkTop: number; cx: number }
 }
 export interface InsightTreeOptions {
   width: number
@@ -310,6 +320,8 @@ export interface InsightTreeOptions {
   now: Date
   /** YYYY-MM：重播用，只輸出 date 在該月底以前的枝葉 */
   upto?: string
+  /** 聚焦的群 id：該群畫出全部脈絡與每片葉；沒有（或不存在）就是總覽 */
+  focus?: string | null
 }
 
 type P = [number, number]
@@ -333,10 +345,9 @@ export function threadWidth(reinforceCount: number): number {
   return Math.min(8, 1.5 + 1.2 * Math.max(0, reinforceCount))
 }
 
-/** 葉子半徑（依關係；窄畫布乘 0.82） */
 const LEAF_R: Record<InsightRelation, number> = { new: 6, reinforce: 8.5, refine: 8, overturn: 7.5 }
 
-/** 葉形（單位座標，葉尖朝上、中心在原點；乘上 r 後使用）。新生＝嫩芽水滴、印證＝飽滿葉＋葉脈、修正＝葉＋旁邊多一小分岔、推翻＝微垂的枯葉 */
+/** 葉形（單位座標，葉尖朝上、中心在原點；乘上 r 後使用） */
 export interface LeafShape { kind: 'bud' | 'leaf' | 'fork' | 'dead'; d: string; vein: string | null }
 const SHAPES: Record<InsightRelation, LeafShape> = {
   new: { kind: 'bud', d: 'M0,-1.15 C0.75,-0.35 0.62,0.7 0,1 C-0.62,0.7 -0.75,-0.35 0,-1.15Z', vein: null },
@@ -346,7 +357,6 @@ const SHAPES: Record<InsightRelation, LeafShape> = {
 }
 export function leafShape(relation: InsightRelation): LeafShape { return SHAPES[relation] }
 
-// ── 小工具 ──
 const cubicAt = (a: P, b: P, c: P, d: P, t: number): P => {
   const u = 1 - t
   return [
@@ -382,371 +392,404 @@ function ribbon(pts: P[], ws: number[]): string {
 }
 const angleOf = (dir: P): number => (Math.atan2(dir[0], -dir[1]) * 180) / Math.PI
 
-/** 從 YYYY-MM-DD 的天數回推 YYYY-MM */
-const monthOfDayNumber = (dn: number): string => new Date(Math.round(dn) * 86_400_000).toISOString().slice(0, 7)
-
-/** 日期對應的高度（樹高＝時間）：最早的心得在 bottom、最晚（今天）在 top */
-export function dateToY(axis: { top: number; bottom: number; dayMin: number; dayMax: number }, date: string): number {
-  const span = Math.max(1, axis.dayMax - axis.dayMin)
-  const f = clamp((dayNumber(date) - axis.dayMin) / span, 0, 1)
-  return axis.bottom - f * (axis.bottom - axis.top)
+/** Catmull-Rom 一段（p1→p2）的取樣點（含兩端） */
+function segPts(p0: P, p1: P, p2: P, p3: P, n = 6): P[] {
+  const c1: P = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
+  const c2: P = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
+  const out: P[] = []
+  for (let s = 0; s <= n; s++) out.push(cubicAt(p1, c1, c2, p2, s / n))
+  return out
 }
 
-/** 依資料量與寬度建議的樹高：樹冠撐滿卡片，不留大片空白 */
-export function suggestTreeHeight(width: number, leafCount: number, monthCount: number): number {
-  const base = Math.max(300, width * 0.6)
-  return Math.round(Math.min(680, base + Math.min(220, leafCount * 1.1 + monthCount * 5)))
+/** 葉的新舊分級（以天數） */
+export function leafAge(ageDays: number): InsightAge {
+  return ageDays <= GLOW_DAYS ? 0 : ageDays <= 365 ? 1 : ageDays <= 1095 ? 2 : 3
 }
 
-interface Branch { id: string; thread: string; items: Insight[]; forkFrom: string | null; width: number }
-interface LeafRec { ins: Insight; branch: Branch; k: number; x: number; y: number; r: number; side: number; shade: number; ci: number }
+/** 建議的樹繪圖區高度：桌機約 min(78vh, 900)，手機依寬度 */
+export function suggestTreeHeight(width: number, viewportH = 900): number {
+  if (width < 520) return Math.round(clamp(width * 1.45, 420, 620))
+  return Math.round(clamp(Math.min(viewportH * 0.78, 900), 480, 900))
+}
+
+/** 總覽元素數上限（枝＋葉＋葉叢） */
+export const OVERVIEW_ELEMENT_CAP = 400
+const TWIG_CAP = 5
+const CLUMP_CAP = 2
+const RECENT_DAYS = 90
 
 /**
- * 排版。座標直接是畫布座標：樹高＝時間（最早的心得貼近地面、今天在最上面，葉子的高度就是它的日期）；
- * 群＝從樹幹在「該群第一則心得的高度」分出去的主枝（橫向位置依心得數分配，多的居中）；
- * 脈絡＝從主枝上依第一則日期長出、沿著主枝一路長上去的枝；refine 從 parent 葉分岔，overturn 讓 parent 葉與 parent 到被推翻點的那段枝枯萎。
- * 位置一律用全部資料算（重播時枝葉不會亂跳），upto 只決定輸出哪些。不用 Math.random。
+ * 排版。一棵樹＝人生：每個群一條從樹幹長出的主枝，接點依「該群第一則心得的日期」由下往上等距排開（只是先後，不是比例），左右交錯；
+ * 時間沿主枝由內往外走，越外越新、最新在枝梢；脈絡是從主枝分出、沿主枝並行的細枝，內部同樣由舊到新。
+ * 位置一律用全部資料算（重播、聚焦時枝葉不會亂跳），總覽時每群只畫約 24 片葉，其餘聚成葉叢；聚焦的群畫全部。不用 Math.random。
  */
 export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): InsightTreeLayout {
   const W = Math.max(200, opts.width)
   const H = Math.max(200, opts.height)
   const compact = W < 520
   const PAD = 12
-  const AXIS_W = compact ? 44 : 60
-  const rs = (compact ? 0.82 : 1) * (data.insights.length <= 5 ? 1.6 : 1) // 心得很少時葉子放大，小樹苗也看得清楚
-  const today = taipeiDay(opts.now)
-  const todayN = dayNumber(today)
-  const upto = opts.upto !== undefined && MONTH_RE.test(opts.upto) ? opts.upto : null
-
   const all = [...data.insights].sort(cmpInsight)
+  const rs = (compact ? 0.82 : 1) * (all.length <= 5 ? 1.6 : 1)
+  const todayN = dayNumber(taipeiDay(opts.now))
+  const upto = opts.upto !== undefined && MONTH_RE.test(opts.upto) ? opts.upto : null
   const byIdAll = new Map(all.map((i) => [i.id, i]))
   const isVisible = (i: Insight): boolean => upto === null || i.date.slice(0, 7) <= upto
 
-  // 樹幹寬（葉子與主枝梢都要離樹幹中心線夠遠，不能長在樹幹上）
-  const totalLeaves = Math.max(1, all.length)
-  const trunkW0 = clamp(14 + 1.6 * Math.sqrt(totalLeaves), 14, 28)
-  const TRUNK_BEND = 5
-  const trunkClear = (r: number): number => trunkW0 / 2 + TRUNK_BEND + r + 3
-
-  // ── 群清單 ──
-  const fullCount = new Map<string, number>()
-  for (const i of all) fullCount.set(i.cluster, (fullCount.get(i.cluster) ?? 0) + 1)
-  const clusterDefs: Array<{ id: string; name: string }> = []
-  for (const c of data.clusters) if ((fullCount.get(c.id) ?? 0) > 0 && !clusterDefs.some((x) => x.id === c.id)) clusterDefs.push({ id: c.id, name: c.name })
-  for (const id of fullCount.keys()) if (!clusterDefs.some((x) => x.id === id)) clusterDefs.push({ id, name: id })
-  const nc = clusterDefs.length
-  const cidx = new Map(clusterDefs.map((c, i) => [c.id, i]))
-
-  // ── 時間軸 ──
-  let dayMax = Math.max(todayN, all.length > 0 ? dayNumber(all[all.length - 1]!.date) : todayN)
-  // 時間軸最少涵蓋 6 個月（最新月份往前 5 個月），資料很少時樹幹也有高度
-  const endD = new Date(dayMax * 86_400_000)
-  const minStart = Date.UTC(endD.getUTCFullYear(), endD.getUTCMonth() - 5, 1) / 86_400_000
-  const dayMin = Math.min(all.length > 0 ? dayNumber(all[0]!.date) : todayN, minStart)
-  if (dayMax <= dayMin) dayMax = dayMin + 1
-  const few = all.length <= 12
-  const ground = H - PAD - 6
-  const yBottom = ground - 26
-  const yTop = PAD + (compact ? 30 : 34)
-  const axis = { x: AXIS_W - 8, top: yTop, bottom: yBottom, ground, dayMin, dayMax, trunkTop: ground }
-  const yOfDn = (dn: number): number => yBottom - clamp((dn - dayMin) / (dayMax - dayMin), 0, 1) * (yBottom - yTop)
-  const yOf = (date: string): number => yOfDn(dayNumber(date))
-  const cx = AXIS_W + (W - AXIS_W) / 2
-  const halfW = (W - AXIS_W) / 2 - PAD - 8
-  const xMin = AXIS_W + PAD
-  const xMax = W - PAD
-
-  // ── 群的橫向位置：心得數多的居中，欄寬依份量 ──
-  const nonEmpty = clusterDefs.map((_, i) => i)
-  const avg = nc === 0 ? 0 : all.length / nc
-  const weight = (i: number): number => (fullCount.get(clusterDefs[i]!.id) ?? 0) + avg * 0.5
-  const sortedIdx = [...nonEmpty].sort((a, b) => weight(b) - weight(a) || a - b)
-  const ordered: number[] = []
-  sortedIdx.forEach((ci, k) => { if (k % 2 === 0) ordered.push(ci); else ordered.unshift(ci) })
-  const wsum = ordered.reduce((s, ci) => s + weight(ci), 0) || 1
-  const laneCenter = new Array<number>(nc).fill(0)
-  const spreadW = few ? Math.min(halfW, 56 * nc + 40) : halfW // 群少時樹冠不用撐滿，依群數置中
-  const laneHalf = new Array<number>(nc).fill(spreadW)
-  let cur = -spreadW
-  for (const ci of ordered) {
-    const w = (2 * spreadW * weight(ci)) / wsum
-    laneCenter[ci] = cur + w / 2
-    laneHalf[ci] = w / 2
-    cur += w
-  }
-
-  // ── 每群的主枝中心線（三次貝茲）：從樹幹在第一則的高度分出去，彎向外側再往上 ──
-  interface CL { p0: P; p1: P; p2: P; p3: P; y0: number; y1: number; first: Insight; count: number }
-  const cl: Array<CL | null> = new Array<CL | null>(nc).fill(null)
-  for (let ci = 0; ci < nc; ci++) {
-    const mine = all.filter((i) => i.cluster === clusterDefs[ci]!.id)
-    if (mine.length === 0) continue
-    const y0raw = yOf(mine[0]!.date)
-    let y1 = Math.max(yTop - 10, Math.min(yOf(mine[mine.length - 1]!.date) - 22, y0raw - 46))
-    if (few) y1 = yTop + 4 + (ci % 2) * 18 // 心得少：每群的枝都長到樹冠高度，錯開高低讓膠囊不打架
-    const minRise = few ? Math.max(70, 0.3 * (yBottom - yTop)) : 46
-    const y0 = Math.max(y0raw, y1 + minRise) // 枝的起點一定低於末端：只往上長
-    const rise = y0 - y1
-    const tipX = cx + laneCenter[ci]! * 0.88
-    let dx = tipX - cx
-    const minTip = trunkClear(LEAF_R.reinforce * rs)
-    if (Math.abs(dx) < minTip) dx = (Math.abs(dx) < 1 ? (ci % 2 ? 1 : -1) : Math.sign(dx)) * minTip // 枝梢離樹幹中心線至少一個葉寬，梢上的葉子才不會壓在樹幹上
-    // 從樹幹分出的角度：離垂直 15°～60°
-    const ddy = rise * 0.3
-    const ddx = clamp(Math.abs(dx) * 0.45, ddy * Math.tan((15 * Math.PI) / 180), ddy * Math.tan((60 * Math.PI) / 180))
-    const sgn = Math.abs(dx) < 1 ? (ci % 2 ? 1 : -1) : Math.sign(dx)
-    cl[ci] = { p0: [cx, y0], p1: [cx + sgn * ddx, y0 - ddy], p2: [cx + dx, y0 - rise * 0.55], p3: [cx + dx, y1], y0, y1, first: mine[0]!, count: mine.length }
-  }
-  // 每群最早／最晚一則的日期序號：葉子依日期由舊到新，沿主枝從 35% 排到枝梢 100%
-  const dRange = clusterDefs.map((c) => {
-    const ds = all.filter((i) => i.cluster === c.id).map((i) => dayNumber(i.date))
-    return ds.length > 0 ? { lo: Math.min(...ds), hi: Math.max(...ds) } : { lo: 0, hi: 0 }
-  })
-  const pointOnCluster = (ci: number, t: number): P => { const c = cl[ci]!; return cubicAt(c.p0, c.p1, c.p2, c.p3, t) }
-  const tAtY = (ci: number, y: number): number => {
-    const c = cl[ci]!
-    if (y >= c.y0) return 0
-    if (y <= c.y1) return 1
-    let lo = 0
-    let hi = 1
-    for (let k = 0; k < 24; k++) {
-      const m = (lo + hi) / 2
-      if (pointOnCluster(ci, m)[1] > y) lo = m; else hi = m
-    }
-    return (lo + hi) / 2
-  }
-
-  // ── 脈絡與分岔 → 每片葉子的暫定位置 ──
-  const owner = new Map<string, string>()
-  for (const i of all) if (!owner.has(i.thread)) owner.set(i.thread, i.cluster)
-  const threadsOf = new Map<string, Insight[]>()
+  // ── 群：依第一則日期排序（最早在最下面） ──
+  const nameOf = new Map(data.clusters.map((c) => [c.id, c.name]))
+  const firstOf = new Map<string, Insight>()
+  const itemsOf = new Map<string, Insight[]>()
   for (const i of all) {
-    if (!threadsOf.has(i.thread)) threadsOf.set(i.thread, [])
-    threadsOf.get(i.thread)!.push(i)
+    if (!firstOf.has(i.cluster)) firstOf.set(i.cluster, i)
+    if (!itemsOf.has(i.cluster)) itemsOf.set(i.cluster, [])
+    itemsOf.get(i.cluster)!.push(i)
   }
-  const recs: LeafRec[] = []
-  const recById = new Map<string, LeafRec>()
-  const branchList: Array<{ b: Branch; ci: number; start: P | null; startLeaf: string | null; shade: number; dir: number }> = []
-  const witheredLeaf = new Set<string>()
-  const deadSeg = new Set<string>()
+  const cids = [...itemsOf.keys()].sort((a, b) => (firstOf.get(a)!.date < firstOf.get(b)!.date ? -1 : firstOf.get(a)!.date > firstOf.get(b)!.date ? 1 : a < b ? -1 : 1))
+  const nc = cids.length
+  const cidx = new Map(cids.map((c, i) => [c, i]))
 
-  for (let ci = 0; ci < nc; ci++) {
-    const c = cl[ci]
-    if (!c) continue
-    const cid = clusterDefs[ci]!.id
-    const threads = [...threadsOf.keys()].filter((t) => owner.get(t) === cid)
-    threads.sort((a, b) => (threadsOf.get(a)![0]!.date < threadsOf.get(b)![0]!.date ? -1 : threadsOf.get(a)![0]!.date > threadsOf.get(b)![0]!.date ? 1 : a < b ? -1 : 1))
-    threads.forEach((th, ti) => {
-      const items = threadsOf.get(th)!
-      const branches: Branch[] = []
-      const branchOf = new Map<string, Branch>()
-      const main: Branch = { id: th, thread: th, items: [], forkFrom: null, width: threadWidth(items.filter((x) => x.relation === 'reinforce').length) }
-      branches.push(main)
-      for (const it of items) {
-        const p = it.parent !== null ? byIdAll.get(it.parent) : undefined
-        const pb = p && p.thread === th ? branchOf.get(p.id) : undefined
-        if (it.relation === 'refine' && p && pb) {
-          const b: Branch = { id: `${th}~${it.id}`, thread: th, items: [it], forkFrom: p.id, width: 1.5 }
-          branches.push(b)
-          branchOf.set(it.id, b)
-        } else if ((it.relation === 'reinforce' || it.relation === 'overturn') && pb) {
-          pb.items.push(it)
-          branchOf.set(it.id, pb)
-        } else {
-          main.items.push(it)
-          branchOf.set(it.id, main)
-        }
-      }
-      for (const b of branches) if (b.forkFrom !== null) b.width = threadWidth(b.items.filter((x) => x.relation === 'reinforce').length)
-      const side0 = hash01(`side:${th}`) < 0.5 ? -1 : 1
-      const mainSide = ti % 2 === 0 ? side0 : -side0
-      const shade = ti % 3
-      const off0 = 15 + 8 * (ti % 3)
-      const phase = hash01(`ph:${th}`) * Math.PI * 2
-      let forkN = 0
-      for (const b of branches) {
-        if (b.items.length === 0) continue
-        let start: P | null = null
-        let startLeaf: string | null = null
-        let mainT0 = 0
-        let side = mainSide
-        if (b.forkFrom === null) {
-          // 從主枝上「稍早於第一則」的位置長出，枝才會斜著往上長到葉子，不是一根橫桿
-          const ya = Math.min(ground - 30, yOf(b.items[0]!.date) + (compact ? 12 : 18))
-          mainT0 = Math.min(tAtY(ci, ya), 0.6) // 起點最晚在主枝 60%，後面才有空間排葉子
-          start = pointOnCluster(ci, mainT0)
-        } else {
-          startLeaf = b.forkFrom
-          forkN++
-          side = (forkN % 2 === 0 ? 1 : -1) * mainSide
-        }
-        branchList.push({ b, ci, start, startLeaf, shade, dir: side })
-        // 主枝脈絡的起點在主枝上的參數（葉子不得排在它之前，枝只往上長）
-        const tStart = mainT0
-        b.items.forEach((it, k) => {
-          let y: number
-          let x: number
-          if (b.forkFrom === null) {
-            // 葉子沿主枝（含延伸段）由舊到新往枝梢排：35%～100%，最新一則在枝梢；只有一則（或同日）就在枝梢
-            const rg = dRange[ci]!
-            const frac = rg.hi > rg.lo ? (dayNumber(it.date) - rg.lo) / (rg.hi - rg.lo) : 1
-            const tt = clamp(Math.max(0.35 + 0.65 * frac, tStart + 0.05), 0, 1)
-            const pt = pointOnCluster(ci, tt)
-            y = pt[1]
-            x = pt[0] + (tt >= 0.999 ? 0 : side * (off0 + 6 * Math.sin(k * 1.9 + phase)))
+  // ── 樹幹與主枝接點（等距） ──
+  const trunkW0 = clamp(14 + 1.6 * Math.sqrt(Math.max(1, all.length)), 14, compact ? 20 : 28)
+  const TRUNK_BEND = 4
+  const cx = W / 2
+  const ground = H - PAD - 6
+  const yBottom = ground - 30
+  const yTop = PAD + (compact ? 40 : 50)
+  const span = yBottom - yTop
+  const step = span / Math.max(4, nc)
+  const attachY = (k: number): number => yBottom - step * (k + 0.5)
+    const maxLen = W / 2 - PAD - (compact ? 4 : 10) - trunkW0 / 2
+  const minLen = Math.min(maxLen * 0.45, 90)
+  const clear = (r: number): number => trunkW0 / 2 + TRUNK_BEND + r + 3
+  const ls = clamp((2 * step) / 110, 0.5, 1) // 脈絡細枝橫向（離主枝）距離的縮放
+
+  interface Br { p0: P; p1: P; p2: P; p3: P; side: 1 | -1; tc: number; len: number }
+  const br: Br[] = []
+  for (let k = 0; k < nc; k++) {
+    const its = itemsOf.get(cids[k]!)!
+    const n = its.length
+    const spanDays = dayNumber(its[n - 1]!.date) - dayNumber(its[0]!.date)
+    const frac = 0.6 * clamp(Math.log(1 + n) / Math.log(41), 0, 1) + 0.4 * clamp(spanDays / 1095, 0, 1)
+    // 樹冠接近橢圓：中段的主枝長、上下兩端的短
+    const u = nc <= 1 ? 0 : (k / (nc - 1)) * 2 - 1
+    const ell = 0.62 + 0.38 * Math.sqrt(Math.max(0, 1 - u * u))
+    const len = (minLen + (maxLen - minLen) * frac) * ell
+    const s: 1 | -1 = k % 2 === 0 ? 1 : -1
+    const y0 = attachY(k)
+    // 主枝從樹幹往外上方彎：同側相鄰主枝的接點差 2 步，爬升不超過 1.15 步，彼此不穿過
+    const rise = Math.min(step * 1.15, len * 0.55)
+    const b: Br = {
+      p0: [cx, y0], p1: [cx + s * len * 0.22, y0 - rise * 0.3], p2: [cx + s * len * 0.58, y0 - rise * 0.75], p3: [cx + s * len, y0 - rise], side: s, tc: 0.06, len,
+    }
+    const need = clear(LEAF_R.reinforce * rs)
+    let t = 0.06
+    while (t < 0.5 && Math.abs(cubicAt(b.p0, b.p1, b.p2, b.p3, t)[0] - cx) < need) t += 0.02
+    b.tc = A1(t * 100) / 100
+    br.push(b)
+  }
+  const pointOn = (k: number, t: number): P => { const b = br[k]!; return cubicAt(b.p0, b.p1, b.p2, b.p3, t) }
+  const upNormal = (k: number, t: number): P => {
+    const b = br[k]!
+    const d = cubicDir(b.p0, b.p1, b.p2, b.p3, t)
+    const l = Math.hypot(d[0], d[1]) || 1
+    let n: P = [d[1] / l, -d[0] / l]
+    if (n[1] > 0) n = [-n[0], -n[1]]
+    return n
+  }
+
+  // ── 主枝上的位置：日期比例與名次各占一半（嚴格遞增、同日也分得開） ──
+  const lo = cids.map((c) => dayNumber(itemsOf.get(c)![0]!.date))
+  const hi = cids.map((c) => dayNumber(itemsOf.get(c)![itemsOf.get(c)!.length - 1]!.date))
+  const tOfIndex = (k: number, i: number, dn: number): number => {
+    const n = itemsOf.get(cids[k]!)!.length
+    const df = hi[k]! > lo[k]! ? (dn - lo[k]!) / (hi[k]! - lo[k]!) : 1
+    const rf = n <= 1 ? 1 : i / (n - 1)
+    const tc = br[k]!.tc
+    return tc + (1 - tc) * (0.3 * df + 0.7 * rf)
+  }
+  const tOfDay = (k: number, dn: number): number => {
+    const its = itemsOf.get(cids[k]!)!
+    let c = 0
+    while (c < its.length && dayNumber(its[c]!.date) < dn) c++
+    const n = its.length
+    const df = hi[k]! > lo[k]! ? clamp((dn - lo[k]!) / (hi[k]! - lo[k]!), 0, 1) : 1
+    const rf = n <= 1 ? 1 : Math.min(c, n - 1) / (n - 1)
+    const tc = br[k]!.tc
+    return tc + (1 - tc) * (0.3 * df + 0.7 * rf)
+  }
+
+  // ── 每片葉的位置（與輸出哪些無關） ──
+  interface Rec { ins: Insight; k: number; bt: number; tw: number; x: number; y: number; r: number; shade: number; thread: string; lane: number }
+  const recById = new Map<string, Rec>()
+  const threadItems = new Map<string, Insight[]>() // thread → items（全部資料，依日期）
+  for (const i of all) {
+    if (!threadItems.has(i.thread)) threadItems.set(i.thread, [])
+    threadItems.get(i.thread)!.push(i)
+  }
+  const ownerCluster = new Map<string, string>()
+  for (const i of all) if (!ownerCluster.has(i.thread)) ownerCluster.set(i.thread, i.cluster)
+  const clusterRank = new Map<string, number>() // 在群內的名次
+  for (let k = 0; k < nc; k++) itemsOf.get(cids[k]!)!.forEach((it, i) => clusterRank.set(it.id, i))
+  // 脈絡細枝：從主枝上「脈絡第一則日期的位置」以 26°～50° 斜斜分出，朝外上方（或外下方）長，長度依則數 log 縮放、短於主枝；葉子沿細枝由舊到新
+  interface Geo { k: number; F: P; end: P; L: number; tf: number; angle: number }
+  const geoOf = new Map<string, Geo>()
+  const tiOf = new Map<string, number>()
+  const ntOf: number[] = cids.map(() => 0)
+  for (let k = 0; k < nc; k++) {
+    const ths = [...threadItems.keys()].filter((t) => ownerCluster.get(t) === cids[k])
+    ths.sort((a, b) => (threadItems.get(a)![0]!.date < threadItems.get(b)![0]!.date ? -1 : threadItems.get(a)![0]!.date > threadItems.get(b)![0]!.date ? 1 : a < b ? -1 : 1))
+    ths.forEach((t, ti) => tiOf.set(t, ti))
+    ntOf[k] = ths.length
+  }
+  const byCluster: Rec[][] = cids.map(() => [])
+  for (const [th, items] of threadItems) {
+    const kk = cidx.get(ownerCluster.get(th)!)!
+    const ti = tiOf.get(th)!
+    const b = br[kk]!
+    // 分出點依「脈絡在本群出現的先後」平均排在主枝 15%～95%（先後順序＝首則日期順序不變），
+    // 避免各脈絡首則都很早時細枝全擠在樹幹邊、主枝外段空著（PM 修正 2026-11-15）
+    const nt = ntOf[kk]!
+    const tc0 = b.tc
+    const tf = nt <= 1 ? tOfIndex(kk, clusterRank.get(items[0]!.id)!, dayNumber(items[0]!.date)) : tc0 + (1 - tc0) * (0.15 + 0.8 * (ti / (nt - 1)))
+    const F = pointOn(kk, tf)
+    const dd = cubicDir(b.p0, b.p1, b.p2, b.p3, tf)
+    const dl = Math.hypot(dd[0], dd[1]) || 1
+    const tau: P = [dd[0] / dl, dd[1] / dl]
+    const un = upNormal(kk, tf)
+    const upSide = ti % 2 === 0
+    const phiDeg = upSide ? 50 - 4 * (ti % 3) : 28 + 3 * (ti % 3)
+    const phi = (phiDeg * Math.PI) / 180
+    const sg = upSide ? 1 : -1
+    const dir: P = [tau[0] * Math.cos(phi) + un[0] * Math.sin(phi) * sg, tau[1] * Math.cos(phi) + un[1] * Math.sin(phi) * sg]
+    const m = items.length
+    const L = Math.min(b.len * 0.6, 1.5 * step, Math.max(22 * rs, (34 + 24 * Math.log2(1 + m)) * rs))
+    const perp: P = [-dir[1], dir[0]]
+    const end: P = [F[0] + dir[0] * L, F[1] + dir[1] * L]
+    const ang = (Math.acos(clamp(tau[0] * dir[0] + tau[1] * dir[1], -1, 1)) * 180) / Math.PI
+    geoOf.set(th, { k: kk, F, end, L, tf, angle: ang })
+    items.forEach((it, j) => {
+      const r = LEAF_R[it.relation] * rs
+      const tw = m === 1 ? 1 : 0.3 + (0.7 * j) / (m - 1)
+      const z = m > 1 ? (j % 2 === 0 ? 1 : -1) * r * 0.8 : 0
+      let x = F[0] + dir[0] * L * tw + perp[0] * z
+      let y = F[1] + dir[1] * L * tw + perp[1] * z
+      const need = clear(r)
+      if (Math.abs(x - cx) < need) x = cx + b.side * need
+      x = clamp(x, PAD + r, W - PAD - r)
+      y = clamp(y, PAD + r, ground - r)
+      const rec: Rec = { ins: it, k: cidx.get(it.cluster) ?? kk, bt: tf, tw, x, y, r, shade: ti % 3, thread: th, lane: 0 }
+      recById.set(it.id, rec)
+      byCluster[rec.k]!.push(rec)
+    })
+  }
+  // 葉子不重疊：同一群內把過近的葉子沿連線推開（高度與日期順序由細枝決定，這裡只做小幅修正），再夾回畫布與離開樹幹
+  for (let k = 0; k < nc; k++) {
+    const arr = byCluster[k]!
+    if (arr.length < 2) continue
+    const need = clear(LEAF_R.reinforce * rs)
+    for (let pass = 0; pass < 80; pass++) {
+      arr.sort((p, q) => p.x - q.x)
+      let moved = false
+      for (let i = 0; i < arr.length; i++) {
+        const a = arr[i]!
+        for (let j = i + 1; j < arr.length; j++) {
+          const c = arr[j]!
+          if (c.x - a.x > (a.r + c.r) * 1.2 + 2) break
+          const dx = c.x - a.x
+          const dy = c.y - a.y
+          const m = (a.r + c.r) * 0.95 + 1.5
+          if (Math.abs(dx) >= m || Math.abs(dy) >= m) continue
+          // 方框重疊：沿重疊較淺的那個軸把兩片推開
+          const ox = m - Math.abs(dx)
+          const oy = m - Math.abs(dy)
+          if (ox <= oy) {
+            const sx = dx === 0 ? (hash01(`${a.ins.id}|${c.ins.id}`) < 0.5 ? -1 : 1) : Math.sign(dx)
+            a.x -= (sx * ox) / 2 + sx * 0.1; c.x += (sx * ox) / 2 + sx * 0.1
           } else {
-            // refine 分岔：從 parent 葉往上、往旁邊長出去
-            const pr = recById.get(b.forkFrom)
-            const rr = LEAF_R[it.relation] * rs
-            y = Math.max(PAD + rr + 2, (pr ? pr.y : yBottom) - (10 + 8 * Math.sqrt(k + 1)) * (compact ? 0.82 : 1))
-            x = (pr ? pr.x : cx) + side * (11 + 9 * Math.sqrt(k + 1)) + 3 * Math.sin(k * 2.3 + phase)
+            const sy = dy === 0 ? (hash01(`${c.ins.id}|${a.ins.id}`) < 0.5 ? -1 : 1) : Math.sign(dy)
+            a.y -= (sy * oy) / 2 + sy * 0.1; c.y += (sy * oy) / 2 + sy * 0.1
           }
-          const rec: LeafRec = { ins: it, branch: b, k, x, y, r: LEAF_R[it.relation] * rs, side, shade, ci }
-          recs.push(rec)
-          recById.set(it.id, rec)
-        })
-        // 枯萎：overturn 的 parent 與它同一枝時，parent 之後到 overturn 的那段枝與中間的葉都枯萎；parent 葉一律枯萎
-        const idxOf = new Map(b.items.map((x, k) => [x.id, k]))
-        for (let k = 0; k < b.items.length; k++) {
-          const it = b.items[k]!
-          if (it.relation !== 'overturn' || it.parent === null) continue
-          witheredLeaf.add(it.parent)
-          const pk = idxOf.get(it.parent)
-          if (pk === undefined || pk >= k) continue
-          for (let j = pk; j < k; j++) witheredLeaf.add(b.items[j]!.id)
-          for (let j = pk + 1; j <= k; j++) deadSeg.add(`t:${b.id}#${j}`)
+          moved = true
         }
       }
+      for (const r of arr) {
+        r.x = clamp(r.x, PAD + r.r, W - PAD - r.r)
+        if (Math.abs(r.x - cx) < need) r.x = cx + br[k]!.side * need
+        r.y = clamp(r.y, PAD + r.r, ground - r.r)
+      }
+      if (!moved) break
+    }
+  }
+  for (const r of recById.values()) { r.x = A1(r.x); r.y = A1(r.y) }
+
+  // ── 可見的部分與取捨（總覽：每群約 24 片葉，其餘聚成葉叢） ──
+  const vis = all.filter(isVisible)
+  const visOfCluster = cids.map((c) => vis.filter((i) => i.cluster === c))
+  const focusK = opts.focus != null && cidx.has(opts.focus) && visOfCluster[cidx.get(opts.focus)!]!.length > 0 ? cidx.get(opts.focus)! : null
+  const activeN = visOfCluster.filter((v) => v.length > 0).length || 1
+  const leafCap = clamp(Math.floor((OVERVIEW_ELEMENT_CAP - 6 - activeN * (3 + TWIG_CAP + CLUMP_CAP)) / activeN), 6, 24)
+  const keep = new Set<string>()
+  const clumpGroups: Array<{ k: number; items: Insight[] }> = []
+  for (let k = 0; k < nc; k++) {
+    const v = visOfCluster[k]!
+    if (v.length === 0) continue
+    if (k === focusK || v.length <= leafCap) { for (const i of v) keep.add(i.id); continue }
+    const byThread = new Map<string, Insight[]>()
+    for (const i of v) { if (!byThread.has(i.thread)) byThread.set(i.thread, []); byThread.get(i.thread)!.push(i) }
+    const recent = (i: Insight): boolean => todayN - dayNumber(i.date) <= RECENT_DAYS
+    const score = (its: Insight[]): number => (its.some(recent) ? 1e6 : 0) + its.filter((x) => x.relation === 'reinforce').length * 1000 + its.length
+    const ths = [...byThread.entries()].sort((a, b) => score(b[1]) - score(a[1]) || (a[0] < b[0] ? -1 : 1)).slice(0, TWIG_CAP)
+    const cand = ths.flatMap(([, its]) => its).sort((a, b) => (recent(a) === recent(b) ? (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : 1) : recent(a) ? -1 : 1))
+    for (const i of cand.slice(0, leafCap)) keep.add(i.id)
+    const rest = v.filter((i) => !keep.has(i.id))
+    if (rest.length > 0) clumpGroups.push({ k, items: rest })
+  }
+  const clumps: InsightClump[] = []
+  for (const g of clumpGroups) {
+    const sorted = [...g.items].sort((a, b) => recById.get(a.id)!.bt - recById.get(b.id)!.bt)
+    const groups = sorted.length >= 6 ? [sorted.slice(0, Math.ceil(sorted.length / 2)), sorted.slice(Math.ceil(sorted.length / 2))] : [sorted]
+    groups.slice(0, CLUMP_CAP).forEach((grp, gi) => {
+      const bt = grp.reduce((s, i) => s + recById.get(i.id)!.bt, 0) / grp.length
+      const pt = pointOn(g.k, bt)
+      const r = (compact ? 10 : 12) + Math.min(5, Math.log2(grp.length))
+      let x = pt[0]
+      if (Math.abs(x - cx) < clear(r)) x = cx + br[g.k]!.side * clear(r)
+      clumps.push({ id: `${cids[g.k]}~clump${gi}`, clusterIndex: g.k, x: A1(x), y: A1(pt[1]), r: A1(r), count: grp.length, bt: A1(bt * 1000) / 1000 })
     })
   }
 
-  /** 葉子離樹幹中心線至少「樹幹半寬＋葉寬」，再夾回畫布 */
-  const keepOffTrunk = (r: LeafRec): number => {
-    const need = trunkClear(r.r)
-    let x = r.x
-    if (Math.abs(x - cx) < need) x = cx + (x - cx === 0 ? r.side : Math.sign(x - cx)) * need
-    return clamp(x, xMin + r.r, xMax - r.r)
-  }
-
-  // ── 排擠：高度（日期）固定，只在水平方向把過近的葉子推開，再夾回畫布 ──
-  const order = recs.map((_, i) => i).sort((a, b) => recs[a]!.y - recs[b]!.y || a - b)
-  for (let pass = 0; pass < 24; pass++) {
-    let moved = false
-    for (let ii = 0; ii < order.length; ii++) {
-      const a = recs[order[ii]!]!
-      for (let jj = ii + 1; jj < order.length; jj++) {
-        const b = recs[order[jj]!]!
-        const dy = b.y - a.y
-        const m = (a.r + b.r) * 1.05 + 2
-        if (dy >= m) break
-        const need = Math.sqrt(Math.max(0, m * m - dy * dy))
-        const dx = b.x - a.x
-        if (Math.abs(dx) >= need) continue
-        const dir = dx === 0 ? (hash01(`${a.ins.id}|${b.ins.id}`) < 0.5 ? -1 : 1) : Math.sign(dx)
-        const push = (need - Math.abs(dx)) / 2 + 0.2
-        a.x -= dir * push
-        b.x += dir * push
-        moved = true
-      }
-    }
-    for (const r of recs) r.x = keepOffTrunk(r)
-    if (!moved) break
-  }
-  for (const r of recs) r.x = A1(keepOffTrunk(r))
-
-  // ── 枝條：樹幹、主枝分段、脈絡分段（皆為由粗到細的填色輪廓）──
-  const limbsAll: InsightLimb[] = []
+  // ── 枝條 ──
+  const limbs: InsightLimb[] = []
   const leafPath = new Map<string, string[]>()
   const leafAngle = new Map<string, number>()
-  const earliestMonth = all.length > 0 ? all[0]!.date.slice(0, 7) : null
-
-  const CH = 5
-  const clusterChunkIds: string[][] = []
-  for (let ci = 0; ci < nc; ci++) {
-    const c = cl[ci]
-    const ids: string[] = []
-    clusterChunkIds.push(ids)
-    if (!c) continue
-    const cid = clusterDefs[ci]!.id
-    const w0 = clamp(5 + 1.5 * Math.sqrt(c.count), 6, 13)
+  const witheredLeaf = new Set<string>()
+  const deadSeg = new Set<string>()
+  const chunkIds: string[][] = cids.map(() => [])
+  const chunkT0: number[][] = cids.map(() => [])
+  const CH = 3
+  for (let k = 0; k < nc; k++) {
+    const v = visOfCluster[k]!
+    if (v.length === 0) continue
+    const b = br[k]!
+    const w0 = clamp(5 + 1.5 * Math.sqrt(itemsOf.get(cids[k]!)!.length), 6, 13)
     const w1 = 2.6
-    for (let k = 0; k < CH; k++) {
-      const t0 = k / CH
-      const t1 = (k + 1) / CH
+    const firstMonthAt = (t: number): string => {
+      const own = v.find((i) => recById.get(i.id)!.bt >= t - 1e-9)
+      return (own ?? v[v.length - 1]!).date.slice(0, 7)
+    }
+    for (let c = 0; c < CH; c++) {
+      const t0 = c / CH
+      const t1 = (c + 1) / CH
       const pts: P[] = []
       const ws: number[] = []
       for (let s = 0; s <= 8; s++) {
         const t = t0 + ((t1 - t0) * s) / 8
-        pts.push(cubicAt(c.p0, c.p1, c.p2, c.p3, t))
+        pts.push(cubicAt(b.p0, b.p1, b.p2, b.p3, t))
         ws.push(w0 + (w1 - w0) * Math.pow(t, 0.85))
       }
-      const yStart = pts[0]![1]
-      const fm = k === 0 ? c.first.date.slice(0, 7) : monthOfDayNumber(dayMin + ((yBottom - yStart) / (yBottom - yTop)) * (dayMax - dayMin))
-      const id = `c:${cid}#${k}`
-      ids.push(id)
-      limbsAll.push({
+      const id = `c:${cids[k]}#${c}`
+      chunkIds[k]!.push(id)
+      chunkT0[k]!.push(t0)
+      const fm = c === 0 ? v[0]!.date.slice(0, 7) : firstMonthAt(t0)
+      limbs.push({
         id, d: ribbon(pts, ws), level: 'cluster', width: A1(ws[0]!), widthStart: A1(ws[0]!), widthEnd: A1(ws[ws.length - 1]!), withered: false,
-        firstMonth: fm < c.first.date.slice(0, 7) ? c.first.date.slice(0, 7) : fm, clusterIndex: ci, from: [A1(pts[0]![0]), A1(pts[0]![1])], to: [A1(pts[pts.length - 1]![0]), A1(pts[pts.length - 1]![1])],
+        firstMonth: fm, clusterIndex: k, from: [A1(pts[0]![0]), A1(pts[0]![1])], to: [A1(pts[pts.length - 1]![0]), A1(pts[pts.length - 1]![1])],
       })
     }
   }
+  const basePathOf = (k: number, bt: number): string[] => ['trunk', ...chunkIds[k]!.filter((_, c) => chunkT0[k]![c]! <= bt + 1e-9)]
 
-  for (const bl of branchList) {
-    const { b, ci } = bl
-    const items = b.items
+  // 脈絡細枝：從主枝上「脈絡第一則的日期位置」分出，沿主枝並行，葉子由舊到新
+  const twigs: InsightTwig[] = []
+  const threadsVis = new Map<string, Insight[]>()
+  for (const i of vis) {
+    if (!keep.has(i.id)) continue
+    if (!threadsVis.has(i.thread)) threadsVis.set(i.thread, [])
+    threadsVis.get(i.thread)!.push(i)
+  }
+  for (const [th, items] of threadsVis) {
+    const k = cidx.get(ownerCluster.get(th)!)!
+    const first = recById.get(items[0]!.id)!
+    const fk = first.k
+    const kk = fk
+    const startPt = geoOf.get(th)!.F
+    const detailed = kk === focusK
+    { const g = geoOf.get(th)!; twigs.push({ id: th, clusterIndex: kk, fx: A1(g.F[0]), fy: A1(g.F[1]), ex: A1(g.end[0]), ey: A1(g.end[1]), angle: A1(g.angle), length: A1(g.L) }) }
+    const shade = (tiOf.get(th) ?? 0) % 3
+    const anchors = new Map<string, P>()
+    const posOf = (i: Insight): P => { const r = recById.get(i.id)!; return [r.x, r.y] }
+    const reinf = items.filter((x) => x.relation === 'reinforce').length
+    const wTh = threadWidth(reinf)
     const n = items.length
-    let startPt: P
-    let basePath: string[]
-    if (bl.startLeaf === null) {
-      startPt = bl.start!
-      basePath = ['trunk', ...clusterChunkIds[ci]!]
-    } else {
-      const pr = recById.get(bl.startLeaf)!
-      startPt = [pr.x, pr.y]
-      basePath = leafPath.get(bl.startLeaf) ?? ['trunk', ...clusterChunkIds[ci]!]
-    }
-    const anchors: P[] = [startPt, ...items.map((it) => { const r = recById.get(it.id)!; return [r.x, r.y] as P })]
-    const wAt = (j: number): number => b.width * (1 - 0.5 * (j / n))
-    const segIds: string[] = []
+    const wAt = (j: number): number => wTh * (1 - 0.5 * (j / n))
+    const base = basePathOf(kk, geoOf.get(th)!.tf)
+    // 每片葉的「出發點」：refine＝parent 葉（同脈絡且在圖上）；其餘＝前一片葉（第一片從主枝出發）
+    const start: P[] = []
+    const startOf: Array<string | null> = []
+    items.forEach((it, j) => {
+      const p = it.parent !== null ? byIdAll.get(it.parent) : undefined
+      const pOk = p && p.thread === th && keep.has(p.id) && items.some((x) => x.id === p.id)
+      if (it.relation === 'refine' && pOk) { start.push(posOf(p)); startOf.push(p.id) }
+      else if (j === 0) { start.push(startPt); startOf.push(null) }
+      else { start.push(posOf(items[j - 1]!)); startOf.push(items[j - 1]!.id) }
+      anchors.set(it.id, posOf(it))
+    })
+    // 枯萎：overturn 的 parent 葉枯萎；parent 之後到 overturn 的那些葉與枝段也枯萎
+    const idx = new Map(items.map((x, j) => [x.id, j]))
     for (let j = 0; j < n; j++) {
-      const p0 = anchors[Math.max(0, j - 1)]!
-      const p1 = anchors[j]!
-      const p2 = anchors[j + 1]!
-      const p3 = anchors[Math.min(n, j + 2)]!
-      // 控制點的高度夾在起終點之間：每一段只往上，不會下垂再上翹
-      const c1y = clamp(p1[1] + (p2[1] - p0[1]) / 6, p2[1], p1[1])
-      const c2y = clamp(p2[1] - (p3[1] - p1[1]) / 6, p2[1], c1y)
-      const c1: P = [p1[0] + (p2[0] - p0[0]) / 6, c1y]
-      const c2: P = [p2[0] - (p3[0] - p1[0]) / 6, c2y]
+      const it = items[j]!
+      if (it.relation !== 'overturn' || it.parent === null) continue
+      witheredLeaf.add(it.parent)
+      const pj = idx.get(it.parent)
+      if (pj === undefined || pj >= j) continue
+      for (let q = pj; q < j; q++) witheredLeaf.add(items[q]!.id)
+      for (let q = pj + 1; q <= j; q++) deadSeg.add(`t:${th}#${q}`)
+    }
+    const segFor = (j: number): P[] => {
+      const a = start[j]!
+      const e = posOf(items[j]!)
+      const prevA = j === 0 ? a : (startOf[j] !== null && idx.get(startOf[j]!) !== undefined && idx.get(startOf[j]!)! > 0 ? start[idx.get(startOf[j]!)!]! : a)
+      const nextA = j + 1 < n ? posOf(items[j + 1]!) : e
+      return segPts(prevA, a, e, nextA)
+    }
+    if (detailed) {
+      for (let j = 0; j < n; j++) {
+        const it = items[j]!
+        const pts = segFor(j)
+        const ws = pts.map((_, s) => wAt(j) + (wAt(j + 1) - wAt(j)) * (s / (pts.length - 1)))
+        const id = `t:${th}#${j}`
+        limbs.push({
+          id, d: ribbon(pts, ws), level: 'thread', width: A1(ws[0]!), widthStart: A1(ws[0]!), widthEnd: A1(ws[ws.length - 1]!), withered: deadSeg.has(id),
+          firstMonth: it.date.slice(0, 7), clusterIndex: k, shade, from: [A1(pts[0]![0]), A1(pts[0]![1])], to: [A1(pts[pts.length - 1]![0]), A1(pts[pts.length - 1]![1])],
+        })
+        const parentPath = startOf[j] === null ? base : leafPath.get(startOf[j]!) ?? base
+        leafPath.set(it.id, [...parentPath, id])
+        const dir: P = [anchors.get(it.id)![0] - start[j]![0], anchors.get(it.id)![1] - start[j]![1]]
+        leafAngle.set(it.id, Math.round(angleOf(dir) + (it.relation === 'overturn' ? 38 * ((tiOf.get(th) ?? 0) % 2 === 0 ? 1 : -1) : 0)))
+      }
+    } else {
+      // 總覽：整條細枝一個輪廓
       const pts: P[] = []
       const ws: number[] = []
-      for (let s = 0; s <= 8; s++) {
-        const t = s / 8
-        pts.push(cubicAt(p1, c1, c2, p2, t))
-        ws.push(wAt(j) + (wAt(j + 1) - wAt(j)) * t)
+      for (let j = 0; j < n; j++) {
+        const sp = segFor(j)
+        for (let s = j === 0 ? 0 : 1; s < sp.length; s++) { pts.push(sp[s]!); ws.push(wAt(j) + (wAt(j + 1) - wAt(j)) * (s / (sp.length - 1))) }
       }
-      const it = items[j]!
-      const id = `t:${b.id}#${j}`
-      segIds.push(id)
-      limbsAll.push({
-        id, d: ribbon(pts, ws), level: 'thread', width: A1(ws[0]!), widthStart: A1(ws[0]!), widthEnd: A1(ws[ws.length - 1]!),
-        withered: deadSeg.has(id), firstMonth: it.date.slice(0, 7), clusterIndex: ci, shade: bl.shade, from: [A1(p1[0]), A1(p1[1])], to: [A1(p2[0]), A1(p2[1])],
+      const id = `t:${th}`
+      limbs.push({
+        id, d: ribbon(pts, ws), level: 'thread', width: A1(ws[0]!), widthStart: A1(ws[0]!), widthEnd: A1(ws[ws.length - 1]!), withered: false,
+        firstMonth: items[0]!.date.slice(0, 7), clusterIndex: k, shade, from: [A1(pts[0]![0]), A1(pts[0]![1])], to: [A1(pts[pts.length - 1]![0]), A1(pts[pts.length - 1]![1])],
       })
-      leafPath.set(it.id, [...basePath, ...segIds])
-      const d = cubicDir(p1, c1, c2, p2, 1)
-      let ang = angleOf(d)
-      if (it.relation === 'overturn') ang += 38 * (bl.dir || 1)
-      leafAngle.set(it.id, Math.round(ang))
+      items.forEach((it, j) => {
+        leafPath.set(it.id, [...base, id])
+        const dir: P = [anchors.get(it.id)![0] - start[j]![0], anchors.get(it.id)![1] - start[j]![1]]
+        leafAngle.set(it.id, Math.round(angleOf(dir) + (it.relation === 'overturn' ? 38 * ((tiOf.get(th) ?? 0) % 2 === 0 ? 1 : -1) : 0)))
+      })
     }
   }
 
-  // ── 可見的部分 ──
-  const visIns = all.filter(isVisible)
-  const visLeaves = visIns.filter((i) => recById.has(i.id))
-  const visCount = clusterDefs.map((c) => visIns.filter((i) => i.cluster === c.id).length)
-  const limbs = limbsAll.filter((l) => l.level !== 'trunk' && (upto === null || (l.firstMonth !== null && l.firstMonth <= upto)))
-  const visClusterStartY = visCount.map((n, ci) => (n > 0 && cl[ci] ? cl[ci]!.y0 : Infinity))
-  const trunkTop = Math.min(ground - 46, ...visClusterStartY.filter((y) => Number.isFinite(y)).map((y) => y - 4))
+  // ── 樹幹（高度固定，與主枝數無關） ──
+  const trunkTop = yTop + 6 // 樹幹高度固定（與主枝數無關）
   const trunkPts: P[] = []
   const trunkWs: number[] = []
   const bend = (hash01('trunk') - 0.5) * 2 * TRUNK_BEND
@@ -755,7 +798,6 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
     trunkPts.push([cx + bend * Math.sin(Math.PI * t), ground + (trunkTop - ground) * t])
     trunkWs.push(trunkW0 * (1 - 0.55 * Math.pow(t, 0.8)))
   }
-  // 樹幹頂端收成圓頭，不留平頂
   const topW = trunkWs[trunkWs.length - 1]!
   for (let c = 1; c <= 3; c++) {
     const f = c / 3
@@ -764,127 +806,102 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
   }
   const trunk: InsightLimb = {
     id: 'trunk', d: ribbon(trunkPts, trunkWs), level: 'trunk', width: A1(trunkWs[0]!), widthStart: A1(trunkWs[0]!), widthEnd: A1(trunkWs[trunkWs.length - 1]!),
-    withered: false, firstMonth: earliestMonth, from: [A1(trunkPts[0]![0]), A1(trunkPts[0]![1])], to: [A1(trunkPts[trunkPts.length - 1]![0]), A1(trunkPts[trunkPts.length - 1]![1])],
+    withered: false, firstMonth: all.length > 0 ? all[0]!.date.slice(0, 7) : null, from: [A1(trunkPts[0]![0]), A1(trunkPts[0]![1])], to: [A1(trunkPts[trunkPts.length - 1]![0]), A1(trunkPts[trunkPts.length - 1]![1])],
   }
 
-  const leaves: InsightLeaf[] = visLeaves.map((i) => {
+  const leaves: InsightLeaf[] = vis.filter((i) => keep.has(i.id)).map((i) => {
     const r = recById.get(i.id)!
+    const days = todayN - dayNumber(i.date)
     return {
-      id: i.id, x: r.x, y: A1(r.y), r: A1(r.r), clusterIndex: r.ci, glow: todayN - dayNumber(i.date) <= GLOW_DAYS, withered: witheredLeaf.has(i.id),
-      relation: i.relation, angle: leafAngle.get(i.id) ?? 0, shade: r.shade, path: leafPath.get(i.id) ?? ['trunk'],
+      id: i.id, x: r.x, y: r.y, r: A1(r.r), clusterIndex: r.k, glow: days <= GLOW_DAYS, withered: witheredLeaf.has(i.id), relation: i.relation,
+      angle: leafAngle.get(i.id) ?? 0, shade: r.shade, age: leafAge(days), bt: A1(r.bt * 1000) / 1000, tw: A1(r.tw * 1000) / 1000, path: leafPath.get(i.id) ?? ['trunk'],
     }
   })
 
-  // ── 群標籤：色點＋群名＋則數的小膠囊，放在主枝末端附近；避開葉子與其他標籤，放不下往外側推並畫引線 ──
+  // ── 主題標籤：預設膠囊，放不下（互壓）就縮成色點 ──
   const fs = compact ? 11 : 12.5
   const nameMax = compact ? 6 : 8
   const textW = (t: string): number => [...t].reduce((w, ch) => w + (/[\u0000-ÿ]/.test(ch) ? fs * 0.58 : fs), 0)
-  const sizeOf = (name: string, count: number, abbr: boolean): { text: string; showCount: boolean; lw: number; lh: number } => {
-    if (abbr) { const t = name.length > 4 ? name.slice(0, 4) : name; return { text: t, showCount: false, lw: 10 + textW(t) + 10, lh: fs + 7 } }
+  const clusters: InsightClusterOut[] = cids.map((id, k) => {
+    const name = nameOf.get(id) ?? id
     const t = name.length > nameMax ? `${name.slice(0, nameMax - 1)}…` : name
     const sc = !compact
-    return { text: t, showCount: sc, lw: 10 + textW(t) + (sc ? textW(String(count)) + 8 : 0) + 12, lh: fs + 9 }
-  }
-  const clusters: InsightClusterOut[] = clusterDefs.map((c, ci) => {
-    const cc = cl[ci]
-    const tip: P = cc ? cc.p3 : [cx, ground - 40]
-    const z = sizeOf(c.name, visCount[ci]!, false)
+    const cnt = visOfCluster[k]!.length
+    const lw = 10 + textW(t) + (sc ? textW(String(cnt)) + 8 : 0) + 12
+    const lh = fs + 9
+    const tip = br[k]!.p3
     return {
-      id: c.id, name: c.name, count: visCount[ci]!, x: A1(tip[0]), y: A1(tip[1]), lx: A1(tip[0]), ly: A1(tip[1]), lw: A1(z.lw), lh: A1(z.lh), labelShown: false, leader: false,
-      text: z.text, showCount: z.showCount, abbr: false, bbox: { x0: tip[0], y0: tip[1], x1: tip[0], y1: tip[1] },
+      id, name, count: cnt, x: A1(tip[0]), y: A1(tip[1]), ax: A1(br[k]!.p0[0]), ay: A1(br[k]!.p0[1]), side: br[k]!.side, len: A1(Math.hypot(br[k]!.p3[0] - br[k]!.p0[0], br[k]!.p3[1] - br[k]!.p0[1])), firstDate: firstOf.get(id)!.date,
+      lx: A1(tip[0]), ly: A1(tip[1]), lw: A1(lw), lh: A1(lh), labelShown: false, text: t, showCount: sc, bbox: { x0: tip[0], y0: tip[1], x1: tip[0], y1: tip[1] }, ticks: [],
     }
   })
   type Rect = { x0: number; y0: number; x1: number; y1: number }
   const placed: Rect[] = []
-  const hitsLeaf = (r: Rect): boolean =>
-    leaves.some((l) => {
-      const nx = clamp(l.x, r.x0, r.x1)
-      const ny = clamp(l.y, r.y0, r.y1)
-      return Math.hypot(l.x - nx, l.y - ny) < l.r * 1.25 + 2
-    })
-  const hitsLabel = (r: Rect): boolean => placed.some((o) => r.x0 < o.x1 + 3 && r.x1 > o.x0 - 3 && r.y0 < o.y1 + 3 && r.y1 > o.y0 - 3)
-  const byCount = clusters.map((_, i) => i).filter((i) => clusters[i]!.count > 0).sort((a, b) => clusters[b]!.count - clusters[a]!.count || a - b)
-  /** 試著把膠囊放在 (x,y)；放得下（不壓葉子、不撞其他標籤）才記下來 */
-  const tryAt = (c: InsightClusterOut, x0: number, y0: number, ignoreLeaves: boolean): boolean => {
-    const hw = c.lw / 2
-    const hh = c.lh / 2
-    const x = clamp(x0, AXIS_W + 4 + hw, W - 4 - hw)
-    const y = clamp(y0, hh + 2, H - hh - 2)
-    const r = { x0: x - hw, y0: y - hh, x1: x + hw, y1: y + hh }
-    if ((!ignoreLeaves && hitsLeaf(r)) || hitsLabel(r)) return false
-    placed.push(r)
-    c.lx = A1(x)
-    c.ly = A1(y)
-    c.labelShown = true
-    c.leader = Math.hypot(x - c.x, y - c.y) > c.lh * 1.2
-    return true
-  }
-  const near = (c: InsightClusterOut, ig: boolean): boolean => {
-    const hw = c.lw / 2
-    const hh = c.lh / 2
-    const cands: P[] = [
-      [0, -hh - 8], [-hw - 4, -hh - 6], [hw + 4, -hh - 6], [0, -3 * hh - 6], [-hw - 6, -3 * hh - 4], [hw + 6, -3 * hh - 4],
-      [-hw - 12, 0], [hw + 12, 0], [0, -5 * hh - 6], [-hw - 10, -5 * hh], [hw + 10, -5 * hh], [-hw - 16, 3 * hh], [hw + 16, 3 * hh],
-    ]
-    return cands.some(([ox, oy]) => tryAt(c, c.x + ox, c.y + oy, ig))
-  }
-  /** 推到樹冠外側的左右兩欄，用細引線連回枝梢；從離枝梢最近的高度往上下找空位 */
-  const outer = (c: InsightClusterOut, ig: boolean): boolean => {
-    const hw = c.lw / 2
-    const hh = c.lh / 2
-    const sides = c.x >= cx ? [1, -1] : [-1, 1]
-    for (let k = 0; k <= Math.ceil(H / (2 * hh + 4)); k++) {
-      for (const sd of sides) {
-        const x = sd < 0 ? AXIS_W + 4 + hw : W - 4 - hw
-        for (const dy of k === 0 ? [0] : [k, -k]) if (tryAt(c, x, c.y + dy * (2 * hh + 4), ig)) return true
-      }
-    }
-    return false
-  }
-  const useAbbr = (c: InsightClusterOut): void => {
-    const z = sizeOf(c.name, c.count, true)
-    c.text = z.text; c.showCount = false; c.abbr = true; c.lw = A1(z.lw); c.lh = A1(z.lh)
-  }
-  for (const i of byCount) {
+  const order = clusters.map((_, i) => i).filter((i) => clusters[i]!.count > 0).sort((a, b) => clusters[b]!.count - clusters[a]!.count || a - b)
+  for (const i of order) {
     const c = clusters[i]!
-    if (near(c, false) || outer(c, false)) continue
-    useAbbr(c)
-    if (near(c, false) || outer(c, false)) continue
-    // 真的擠滿了：縮寫膠囊仍要顯示，退到外側兩欄、允許蓋過葉子（只避開其他標籤）
-    if (outer(c, true)) continue
-    c.lx = c.x; c.ly = c.y; c.labelShown = true; c.leader = false
+    const hw = c.lw / 2
+    const hh = c.lh / 2
+    const cands: P[] = [[0, -hh - 10], [0, hh + 10]]
+    let ok = false
+    cands.forEach(([ox, oy], ci) => {
+      const x = clamp(c.x + ox, PAD + hw, W - PAD - hw)
+      const y = clamp(c.y + oy, hh + 2, H - hh - 2)
+      const r = { x0: x - hw, y0: y - hh, x1: x + hw, y1: y + hh }
+      if (ci === 0) { c.lx = A1(x); c.ly = A1(y) }
+      const onLeaf = leaves.some((l) => Math.hypot(l.x - clamp(l.x, r.x0, r.x1), l.y - clamp(l.y, r.y0, r.y1)) < l.r * 1.1 + 1)
+      if (ok) return
+      if (onLeaf || placed.some((o) => r.x0 < o.x1 + 3 && r.x1 > o.x0 - 3 && r.y0 < o.y1 + 3 && r.y1 > o.y0 - 3)) return
+      placed.push(r)
+      c.lx = A1(x); c.ly = A1(y); c.labelShown = true
+      ok = true
+    })
   }
-  // 外框（聚焦用）
-  clusters.forEach((c, ci) => {
+
+  // ── 外框與（聚焦時）沿主枝的時間標籤 ──
+  const labelOf = (dn: number, byYear: boolean): string => {
+    const d = new Date(dn * 86_400_000)
+    return byYear ? String(d.getUTCFullYear()) : `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+  clusters.forEach((c, k) => {
     if (c.count === 0) return
     const bb = { x0: c.x - 8, y0: c.y - 8, x1: c.x + 8, y1: c.y + 8 }
-    const grow = (x0: number, y0: number, x1: number, y1: number): void => { bb.x0 = Math.min(bb.x0, x0); bb.y0 = Math.min(bb.y0, y0); bb.x1 = Math.max(bb.x1, x1); bb.y1 = Math.max(bb.y1, y1) }
-    for (const l of leaves) if (l.clusterIndex === ci) grow(l.x - l.r * 1.6, l.y - l.r * 1.6, l.x + l.r * 1.6, l.y + l.r * 1.6)
-    if (c.labelShown) grow(c.lx - c.lw / 2, c.ly - c.lh / 2, c.lx + c.lw / 2, c.ly + c.lh / 2)
+    const grow = (x: number, y: number, m: number): void => { bb.x0 = Math.min(bb.x0, x - m); bb.y0 = Math.min(bb.y0, y - m); bb.x1 = Math.max(bb.x1, x + m); bb.y1 = Math.max(bb.y1, y + m) }
+    for (let s = 0; s <= 8; s++) { const p = pointOn(k, s / 8); grow(p[0], p[1], 8) }
+    for (const i of itemsOf.get(c.id)!) { const r = recById.get(i.id)!; grow(r.x, r.y, r.r * 1.6) }
+    bb.x0 = Math.min(bb.x0, c.lx - c.lw / 2); bb.x1 = Math.max(bb.x1, c.lx + c.lw / 2); bb.y0 = Math.min(bb.y0, c.ly - c.lh / 2); bb.y1 = Math.max(bb.y1, c.ly + c.lh / 2)
+    if (k === focusK) {
+      const its = itemsOf.get(c.id)!
+      const d0 = dayNumber(its[0]!.date)
+      const d1 = dayNumber(its[its.length - 1]!.date)
+      const byYear = d1 - d0 >= 365
+      const marks: Array<{ dn: number; label: string }> = [{ dn: d0, label: labelOf(d0, byYear) }]
+      const e = new Date(d0 * 86_400_000)
+      let y = e.getUTCFullYear()
+      let m = byYear ? 0 : e.getUTCMonth() + 1
+      for (let g = 0; g < 400; g++) {
+        if (byYear) { y++; m = 0 } else { m++; if (m > 11) { m = 0; y++ } }
+        const dn = Date.UTC(y, m, 1) / 86_400_000
+        if (dn > d1) break
+        marks.push({ dn, label: labelOf(dn, byYear) })
+      }
+      const dnTick = marks.length > 24 ? marks.filter((_, q) => q % Math.ceil(marks.length / 24) === 0) : marks
+      c.ticks = dnTick.map((mk) => {
+        const t = tOfDay(k, mk.dn)
+        const p = pointOn(k, t)
+        const un = upNormal(k, t)
+        const off = 0 // 年份標在主枝上（白色描邊讓字清楚），不壓到兩側的細枝與葉
+        const x = clamp(p[0] + un[0] * off, PAD + 16, W - PAD - 16)
+        const yy = clamp(p[1] + un[1] * off, PAD + 8, ground - 4)
+        grow(x, yy, 14)
+        return { label: mk.label, t: A1(t * 1000) / 1000, x: A1(x), y: A1(yy) }
+      })
+    }
     c.bbox = { x0: A1(bb.x0), y0: A1(bb.y0), x1: A1(bb.x1), y1: A1(bb.y1) }
   })
 
-  // ── 時間刻度：年與每半年／季／月 ──
-  const ticks: TimeTick[] = []
-  const spanMonths = (dayMax - dayMin) / 30.44
-  const step = spanMonths >= 14 ? 6 : spanMonths >= 8 ? 3 : 1
-  const d0 = new Date(dayMin * 86_400_000)
-  let ty = d0.getUTCFullYear()
-  let tm = d0.getUTCMonth() // 下一步先 +1 ＝從最早那個月的 1 號開始（可能比最早的心得早幾天，y 夾在底部）
-  let lastY = Infinity
-  for (let guard = 0; guard < 400; guard++) {
-    tm++
-    if (tm > 12) { tm = 1; ty++ }
-    const dn = Date.UTC(ty, tm - 1, 1) / 86_400_000
-    if (dn > dayMax) break
-    if ((tm - 1) % step !== 0) continue
-    const y = yOfDn(dn)
-    if (lastY - y < 16) continue
-    lastY = y
-    ticks.push({ y: A1(y), label: tm === 1 ? String(ty) : `${ty}-${String(tm).padStart(2, '0')}`, major: tm === 1 })
-  }
-
-  return { width: W, height: H, compact, trunk, limbs, leaves, clusters, ticks, axis: { ...axis, trunkTop: A1(trunkTop) } }
+  const elementCount = 1 + limbs.length + leaves.length + clumps.length
+  return { width: W, height: H, compact, trunk, limbs, leaves, clumps, twigs, clusters, elementCount, axis: { x: cx, ground, top: yTop, bottom: yBottom, trunkTop: A1(trunkTop), cx } }
 }
 
 /** 群標籤顯示文字（太長截短） */
@@ -892,7 +909,7 @@ export function clusterLabelText(name: string, max = 8): string {
   return name.length > max ? `${name.slice(0, max - 1)}…` : name
 }
 
-/** 聚焦某一群時的 viewBox：包住那一群的枝葉與標籤，維持畫布長寬比，不超出畫布；null＝全樹 */
+/** 聚焦某一群時的 viewBox：包住那一群的主枝、葉子與標籤，維持畫布長寬比，不超出畫布；null＝全樹 */
 export function focusViewBox(layout: Pick<InsightTreeLayout, 'width' | 'height' | 'clusters'>, clusterIndex: number | null): { x: number; y: number; w: number; h: number } {
   const W = layout.width
   const H = layout.height
@@ -902,7 +919,7 @@ export function focusViewBox(layout: Pick<InsightTreeLayout, 'width' | 'height' 
   const bw = c.bbox.x1 - c.bbox.x0 + 2 * m
   const bh = c.bbox.y1 - c.bbox.y0 + 2 * m
   const aspect = W / H
-  let w = Math.max(bw, bh * aspect, W * 0.42)
+  let w = Math.max(bw, bh * aspect, W * 0.5)
   let h = w / aspect
   if (w > W) { w = W; h = H }
   const x = clamp((c.bbox.x0 + c.bbox.x1) / 2 - w / 2, 0, W - w)

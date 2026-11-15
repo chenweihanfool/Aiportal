@@ -121,10 +121,10 @@ try {
     const { ctx, page, errors } = await open({ width: 1440, height: 900 })
     await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
     const N = await page.evaluate(() => document.querySelectorAll('[data-testid="insight-leaf"]').length)
-    check(`${T}：心得樹在 st-home 左側、STATUS 在右側`, await page.evaluate(() => {
+    check(`${T}：心得樹占滿整列寬度（≥ 80% 視窗）、STATUS 在樹的下方`, await page.evaluate(() => {
       const t = document.querySelector('.st-home [data-testid="insight-tree"]'), a = document.querySelector('.st-aside')
       if (!t || !a) return false
-      return t.getBoundingClientRect().right <= a.getBoundingClientRect().left + 1 && t.getBoundingClientRect().width > 400
+      return t.getBoundingClientRect().width >= window.innerWidth * 0.8 && a.getBoundingClientRect().top >= t.getBoundingClientRect().bottom - 1
     }))
     check(`${T}：標題「我的心得樹」與指標列（心得 N 則・本月 +k・脈絡 M 條・最常印證：〈前 20 字〉）`, /我的心得樹/.test(await page.locator('.it-title').innerText()) && /^心得 68 則・本月 \+\d+・脈絡 \d+ 條・最常印證：〈虛構心得 I-01/.test((await page.locator('[data-testid="insight-stats"]').innerText()).trim()), await page.locator('[data-testid="insight-stats"]').innerText())
     check(`${T}：68 片葉（≥60 則）、至少一片發光、至少一片枯萎`, N === 68 && (await page.locator('.it-leaf.it-glow').count()) >= 2 && (await page.locator('.it-leaf.it-dead').count()) >= 1)
@@ -137,12 +137,28 @@ try {
       const rows = [...document.querySelectorAll('[data-testid="insight-row"]')]
       return t.right <= s.left + 1 && s.right <= root.right + 1 && rows.length === 7 && rows.every((r) => r.querySelector('.it-row-dot') && /^\d+$/.test(r.querySelector('.it-row-n').textContent) && /\d/.test(r.querySelector('.it-row-d').textContent) && r.querySelectorAll('.it-bars rect').length === 12)
     }))
-    check(`${T}：時間刻度（年／季）與水平參考線、地平線、圖例小圖示列`, (await page.locator('.it-tick').count()) >= 2 && (await page.locator('.it-tick-major').count()) >= 1 && (await page.locator('.it-ref').count()) >= 2 && (await page.locator('.it-legend li').count()) === 5 && (await page.locator('.it-legend svg').count()) === 4)
-    check(`${T}：群標籤膠囊（色點＋群名＋則數）不壓到任何葉子`, await page.evaluate(() => {
+    check(`${T}：沒有左側時間刻度與水平參考線、圖例小圖示列`, (await page.locator('.it-tick').count()) === 0 && (await page.locator('.it-ref').count()) === 0 && (await page.locator('.it-legend li').count()) === 6 && (await page.locator('.it-legend svg').count()) === 4)
+    check(`${T}：主題膠囊（色點＋群名＋則數）互不重疊、都在畫布內，放不下的縮成色點`, await page.evaluate(() => {
+      const st = document.querySelector('.it-stage').getBoundingClientRect()
       const caps = [...document.querySelectorAll('[data-testid="insight-cap"]')]
-      if (caps.length < 3) return false
-      const leaves = [...document.querySelectorAll('[data-testid="insight-leaf"] .it-shape')].map((e) => e.getBoundingClientRect())
-      return caps.every((c) => { const r = c.querySelector('.it-cap-bg').getBoundingClientRect(); return !!c.querySelector('.it-cap-dot') && !!c.querySelector('.it-cap-t') && leaves.every((l) => { const cx = (l.left + l.right) / 2, cy = (l.top + l.bottom) / 2; return cx < r.left - 1 || cx > r.right + 1 || cy < r.top - 1 || cy > r.bottom + 1 }) })
+      const dots = document.querySelectorAll('[data-testid="insight-dot"]').length
+      if (caps.length + dots !== 7 || caps.length < 3) return false
+      const rs = caps.map((c) => c.querySelector('.it-cap-bg').getBoundingClientRect())
+      return caps.every((c) => !!c.querySelector('.it-cap-dot') && !!c.querySelector('.it-cap-t')) && rs.every((r, i) => r.left >= st.left - 1 && r.right <= st.right + 1 && rs.every((q, j) => j <= i || r.right < q.left || r.left > q.right || r.bottom < q.top || r.top > q.bottom))
+    }))
+    check(`${T}：主枝在樹幹上由下往上依「主題第一次出現」排列（越早越低、等距）`, await page.evaluate(() => {
+      const ys = [0, 1, 2, 3, 4, 5, 6].map((ci) => document.querySelector(`path.it-limb[data-level="cluster"][data-ci="${ci}"]`)?.getBoundingClientRect().bottom ?? NaN)
+      if (ys.some(Number.isNaN)) return false
+      const gaps = ys.slice(1).map((y, i) => ys[i] - y)
+      return gaps.every((g) => g > 0) && Math.max(...gaps) - Math.min(...gaps) < 14
+    }))
+    check(`${T}：同主題的葉由內往外越來越新（最新的葉離樹幹比最舊的遠），不會長回別處`, await page.evaluate(() => {
+      const t = document.querySelector('.it-trunk').getBoundingClientRect(), cx = (t.left + t.right) / 2
+      const leaves = [...document.querySelectorAll('[data-testid="insight-leaf"][data-ci="0"]')].map((e) => ({ d: (e.getAttribute('aria-label') || '').slice(0, 10), x: Math.abs((e.getBoundingClientRect().left + e.getBoundingClientRect().right) / 2 - cx) })).sort((a, b) => (a.d < b.d ? -1 : 1))
+      if (leaves.length < 6) return false
+      const first = leaves.slice(0, 3), last = leaves.slice(-3)
+      const avg = (a) => a.reduce((s, v) => s + v.x, 0) / a.length
+      return avg(last) > avg(first) + 20
     }))
     check(`${T}：枝是由粗到細的填色輪廓（path 以 Z 結尾、不是描邊線）、葉子有四種形狀`, await page.evaluate(() => {
       const limbs = [...document.querySelectorAll('.it-limb')]
@@ -277,7 +293,8 @@ try {
     const { ctx, page } = await open({ width: 360, height: 740 })
     await page.waitForSelector('[data-testid="insight-leaf"]')
     check(`${T}：無橫向捲動`, await noHScroll(page))
-    check(`${T}：群清單在樹的下方（單欄）、群標籤縮小不壓葉`, await page.evaluate(() => { const t = document.querySelector('.it-stage').getBoundingClientRect(), s = document.querySelector('.it-side').getBoundingClientRect(); return s.top >= t.bottom - 1 && document.querySelectorAll('[data-testid="insight-cap"]').length >= 1 }))
+    // 手機上標籤放不下就縮成色點（使用者要的「自動隱藏、點清單才放大」），所以每群要有膠囊或色點其一
+    check(`${T}：群清單在樹的下方（單欄）、每群都有膠囊或色點`, await page.evaluate(() => { const t = document.querySelector('.it-stage').getBoundingClientRect(), s = document.querySelector('.it-side').getBoundingClientRect(); const n = document.querySelectorAll('[data-testid="insight-cap"]').length + document.querySelectorAll('[data-testid="insight-dot"]').length; return s.top >= t.bottom - 1 && n >= 1 }))
     check(`${T}：樹寬度自適應（svg 不超出容器）`, await page.evaluate(() => { const s = document.querySelector('.it-svg').getBoundingClientRect(), r = document.querySelector('.it-root').getBoundingClientRect(); return s.right <= r.right + 1 && s.left >= r.left - 1 }))
     await page.locator('[data-testid="insight-leaf"]').nth(4).focus()
     await page.keyboard.press('Enter')
@@ -304,9 +321,9 @@ try {
       const trunk = document.querySelector('.it-trunk').getBoundingClientRect()
       return { treeH: (bottom - top) / svg.height, trunkH: trunk.height / svg.height, leaves: document.querySelectorAll('[data-testid="insight-leaf"]').length, caps: document.querySelectorAll('[data-testid="insight-cap"]').length }
     })
-    check(`${T}：整棵樹高度 ≥ 繪圖區 70%、樹幹 ≥ 50%（不是貼地的鬍子）`, m.treeH >= 0.7 && m.trunkH >= 0.5, JSON.stringify(m))
+    check(`${T}：樹幹高度 ≥ 繪圖區 50%（固定高度，不因主枝少而縮短）`, m.trunkH >= 0.5, JSON.stringify(m))
     check(`${T}：每一群都有標籤膠囊、有小樹苗提示`, m.caps === (n === 1 ? 1 : n === 2 ? 2 : 3) && (await page.locator('[data-testid="insight-seedling"]').innerText()).includes('小樹苗：HERMES 每晚會從日記補上你的心得'))
-    check(`${T}：時間刻度照常顯示（最少涵蓋 6 個月）`, (await page.locator('.it-tick').count()) >= 3)
+    check(`${T}：沒有時間刻度與參考線`, (await page.locator('.it-tick').count()) === 0)
     check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))
     await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `r1-sparse${n}-dark-desktop.png`) })
     if (n === 2) {
@@ -332,20 +349,32 @@ try {
     const { ctx, page, errors } = await open({ width: w, height: h }, { mode: 'big300' })
     await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
     await page.waitForTimeout(600)
-    check(`${T}：300 片葉、12 群每一群都有標籤（膠囊或縮寫）`, (await page.locator('[data-testid="insight-leaf"]').count()) === 300 && (await page.locator('[data-testid="insight-cap"]').count()) === 12)
+    check(`${T}：300 片葉、總覽自動精簡成葉叢（葉子少於 300）、12 個主題各有膠囊或色點`, (await page.locator('[data-testid="insight-leaf"]').count()) < 300 && (await page.locator('[data-testid="insight-clump"]').count()) >= 1 && (await page.locator('[data-testid="insight-cap"], [data-testid="insight-dot"]').count()) === 12)
     check(`${T}：標籤都在畫布內`, await page.evaluate(() => { const st = document.querySelector('.it-stage').getBoundingClientRect(); return [...document.querySelectorAll('[data-testid="insight-cap"] .it-cap-bg')].every((e) => { const r = e.getBoundingClientRect(); return r.left >= st.left - 1 && r.right <= st.right + 1 && r.top >= st.top - 1 && r.bottom <= st.bottom + 1 }) }))
     if (w === 1440) await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-big300-dark-desktop.png') })
+    if (w === 360) {
+      const nDots = await page.locator('[data-testid="insight-dot"]').count()
+      check(`${T}：主題太多放不下的縮成色點（≥ 1 個）`, nDots >= 1, String(nDots))
+      const box = await page.locator('[data-testid="insight-dot"] .it-cap-hit').first().boundingBox()
+      const capsBefore = await page.locator('[data-testid="insight-cap"]').count()
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.waitForTimeout(250)
+      const capsAfter = await page.locator('[data-testid="insight-cap"]').count(), dotsAfter = await page.locator('[data-testid="insight-dot"]').count()
+      check(`${T}：滑過色點會放大成完整膠囊`, capsAfter === capsBefore + 1 && dotsAfter === nDots - 1, `caps ${capsBefore}→${capsAfter} dots ${nDots}→${dotsAfter} box ${JSON.stringify(box)} under=${await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '.' + (e.getAttribute('class') || '') : 'none' }, [box.x + box.width / 2, box.y + box.height / 2])}`)
+      await page.mouse.move(2, 2); await page.waitForTimeout(250)
+      check(`${T}：移開後縮回色點`, (await page.locator('[data-testid="insight-dot"]').count()) === nDots)
+      await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'mobile-big300-360.png') })
+    }
     for (const idx of [0, 5, 11]) {
       await page.locator('[data-testid="insight-row"]').nth(idx).click()
       await page.waitForTimeout(800)
       const r = await page.evaluate((i) => {
         const st = document.querySelector('.it-stage').getBoundingClientRect()
-        const ticks = [...document.querySelectorAll('.it-tick text')].map((e) => e.getBoundingClientRect())
+        const ticks = [...document.querySelectorAll('[data-testid="insight-btick"] text')].map((e) => e.getBoundingClientRect())
         const caps = [...document.querySelectorAll('[data-testid="insight-cap"]')]
         const cap = caps.find((c) => c.getAttribute('aria-pressed') === 'true')?.querySelector('.it-cap-bg')?.getBoundingClientRect()
         return { ticks: ticks.length, ticksOk: ticks.every((t) => t.left >= st.left - 1 && t.right <= st.right + 1 && t.top >= st.top - 1 && t.bottom <= st.bottom + 1 && t.width > 0), capOk: !!cap && cap.left >= st.left - 1 && cap.right <= st.right + 1 && cap.top >= st.top - 1 && cap.bottom <= st.bottom + 1 }
       }, idx)
-      check(`${T}：聚焦第 ${idx + 1} 群後刻度文字完整（${r.ticks} 個）、該群膠囊完整`, r.ticks >= 1 && r.ticksOk && r.capOk, JSON.stringify(r))
+      check(`${T}：聚焦第 ${idx + 1} 個主題後沿主枝的時間標籤完整（${r.ticks} 個）、該群膠囊完整、該群葉子全畫出（無葉叢）`, r.ticks >= 1 && r.ticksOk && r.capOk, JSON.stringify(r))
       if (w === 1440 && idx === 5) await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-big300-focus.png') })
     }
     check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))

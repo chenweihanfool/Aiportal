@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PALETTE_BG, PALETTE_SIZE, clusterSlots, contrastRatio, paletteColor, paletteHue } from './insightPalette'
+import { PALETTE_BG, PALETTE_SIZE, clusterSlots, contrastRatio, luminance, paletteColor, paletteHue } from './insightPalette'
 
 const hueDist = (a: number, b: number): number => { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d) }
 
@@ -34,5 +34,21 @@ describe('insightPalette', () => {
         }
       }
     }
+  })
+})
+
+describe('新舊葉色（3.0.0）', () => {
+  it('四級新舊在兩種主題下對卡片底色的對比都 >= 3:1（三年以上深但不是灰）', () => {
+    for (const th of ['dark', 'light'] as const) {
+      for (let slot = 0; slot < PALETTE_SIZE; slot++) {
+        for (let age = 0; age < 4; age++) expect(contrastRatio(paletteColor(slot, th, 0, age), PALETTE_BG[th]), `${th} ${slot} age ${age}`).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+  it('1 到 3 年飽和度降低、3 年以上更深；新的與一年內同色', () => {
+    expect(paletteColor(0, 'dark', 0, 0)).toBe(paletteColor(0, 'dark', 0, 1))
+    expect(paletteColor(0, 'dark', 0, 2)).not.toBe(paletteColor(0, 'dark', 0, 1))
+    expect(luminance(paletteColor(3, 'dark', 0, 3))).toBeLessThan(luminance(paletteColor(3, 'dark', 0, 1)))
+    expect(luminance(paletteColor(3, 'light', 0, 3))).toBeLessThan(luminance(paletteColor(3, 'light', 0, 1)))
   })
 })
