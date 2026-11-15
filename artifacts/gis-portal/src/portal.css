@@ -359,6 +359,7 @@ body,
 .bd-idea-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.68rem; color: var(--c-ink-3); }
 .bd-idea-detail { padding: 0 12px 10px calc(5.6em + 22px); font-size: 0.76rem; color: var(--c-ink-2); line-height: 1.6; }
 .bd-idea-detail p { margin: 2px 0; }
+.bd-idea-born-score { color: var(--c-ink); }
 .bd-idea-detail b { color: var(--c-ink); font-weight: 500; }
 .bd-push-table { display: grid; gap: 2px; font-size: 0.8rem; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--c-ink-2); }
 .bd-push-row { display: grid; grid-template-columns: minmax(9em, 1.1fr) 7em 7em 9em minmax(0, 2fr); gap: 10px; align-items: center; padding: 5px 10px; border-radius: 6px; background: var(--c-raised); }
