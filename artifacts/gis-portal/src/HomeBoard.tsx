@@ -10,7 +10,7 @@ import { apiFetchPaidServices, apiFetchBoardPipeline, apiFetchBoardStatus, apiFe
 import { apiFetchFood } from './foodApi'
 import { apiFetchTrips } from './tripsApi'
 import { biggestDrag, buildHhiBreakdown } from './boardView'
-import { topIdeas as pickTopIdeas, statusCounts } from './ideasView'
+import { topIdeas as pickTopIdeas, stageCounts } from './ideasView'
 import { Drawer, FEED_LABEL, IdeasPanel, PusherHealthPanel, pusherSummary } from './DesktopBoard'
 import { dimHash } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
@@ -32,6 +32,7 @@ import { apiFetchGantt } from './taskGantt'
 import { apiFetchTopicNudges } from './topicNudges'
 import { NowSection } from './NowSection'
 import { InsightTree } from './InsightTree'
+import { IdeaBoard } from './IdeaBoard'
 import { nowReady } from './nowCards'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
@@ -178,7 +179,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   // ── 里程碑（八組門檻；資料來源不可得的整組略過）──
   const miles = useMemo(() => milestones({
     events: kb.events, people: kb.people, concepts: kb.concepts, methods: kb.methods,
-    ideasDone: ideasList ? statusCounts(ideasList.ideas).done : null,
+    ideasDone: ideasList ? stageCounts(ideasList.ideas).done : null,
     placesBeen: food.data ? placesBeenCount(places) : null,
     // 還沒出發的計畫中不算「遊記」
     trips: trips.data ? trips.data.trips.filter((t) => t.status !== 'planned').length : null,
@@ -263,6 +264,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         <div className="st-home">
           <div className="st-left">
             <InsightTree pw={pw} now={now} onRequestUnlock={onRequestUnlock} />
+            <IdeaBoard st={ideasSt} data={ideasList} top={ideaTop} nowMs={nowMs} onOpenIdeas={openIdeas} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
             <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
               briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
               onActionsChange={personActions.reload}

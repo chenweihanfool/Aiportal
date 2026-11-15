@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CV, inkMix, themedColor } from './theme'
 import type { HhiBreakdown } from './boardView'
 import type { IdeaItem } from './boardApi'
-import { categoryColor } from './ideasView'
+import { categoryColor, isFocus } from './ideasView'
 import { KIND_ICON, statusLabelFor } from './foodMap'
 import { TRIP_STATUS_LABEL } from './tripsView'
 import { DIMENSION_FALLBACK_COLOR, dimensionOf } from './dimensions'
@@ -462,7 +462,7 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
       <div className="hm-fun-body">
         <div className="hm-sub">💡 想法庫前三名</div>
         <StateFrame status={ideasSt} source="想法庫" onRequestUnlock={onRequestUnlock} onRetry={onRetryIdeas}
-          empty={ideasCount === 0 ? '還沒有想法。' : '目前沒有開放中的想法。'}>
+          empty={ideasCount === 0 ? '還沒有想法。' : '目前沒有候選的想法。'}>
           <ol className="hm-ideas">
             {topIdeas.map((it, i) => {
               const c = categoryColor(it.category)
@@ -470,7 +470,7 @@ export function FunSection({ ideasSt, ideasCount, topIdeas, foodSt, food, tripsS
                 <li key={it.id}>
                   <button type="button" className="hm-idea" onClick={onOpenIdeas} title={it.scoreWhy.join('\n')}>
                     <span className="hm-idea-rank" style={{ color: i === 0 ? CV.amber : CV.steel }}>{i + 1}</span>
-                    <span className="hm-idea-title">{it.status === 'doing' && <span aria-label="進行中">🚀 </span>}{it.title}</span>
+                    <span className="hm-idea-title">{isFocus(it.status) && <span aria-label="聚焦">🎯 </span>}{it.title}</span>
                     <span className="hm-cat" style={{ color: inkMix(c), borderColor: c }}>{it.category ?? '未分類'}</span>
                     <span className="hm-idea-score">{it.score?.toFixed(1) ?? '—'}</span>
                   </button>

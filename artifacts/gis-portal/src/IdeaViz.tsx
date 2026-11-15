@@ -4,7 +4,7 @@ import type { IdeaItem } from './boardApi'
 import { CV, FONT } from './theme'
 import { FOCUS_COLOR, FOCUS_ICON, FOCUS_LABEL, SCATTER_QUADRANTS, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, STATUS_COLOR, STATUS_ICON, STATUS_LABEL, isFocus, stageOf, buildLifeline, buildLineage, buildScatter, lifeStats, quadrantOf, scaleTime, type LineageNode } from './ideasView'
 
-/** 階梯線的高度：候選→聚焦→已完成由低到高，擱置／放棄／併入落回底部 */
+/** 階梯線的高度：候選→聚焦→已完成由低到高，封存落回底部 */
 const LEVEL: Record<string, number> = { new: 0, evaluating: 1, doing: 2, done: 3, shelved: 0, dropped: 0, absorbed: 0 }
 
 export function IdeaLifeline({ idea, nowMs }: { idea: IdeaItem; nowMs: number }) {

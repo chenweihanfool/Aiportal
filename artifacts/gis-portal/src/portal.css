@@ -2668,3 +2668,26 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
   .it-legend { margin-left: 0; flex-basis: 100%; }
   .it-panel { width: 100vw; padding: var(--sp-4); }
 }
+
+/* ─── 想法板（3.1.0）：心得樹下方的一塊，只用全站 --c-* token；ib- 前綴 ─── */
+.ib-root { min-width: 0; padding: var(--sp-4); color: var(--c-ink); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-lg); display: grid; gap: var(--sp-2); overflow-x: clip; }
+.ib-head { display: flex; align-items: center; gap: var(--sp-3); }
+.ib-title { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--c-ink); }
+.ib-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.ib-card { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); }
+.ib-card-t { font-size: 0.88rem; font-weight: 600; color: var(--c-ink); overflow-wrap: anywhere; }
+.ib-card-m { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.68rem; color: var(--c-ink-3); }
+.ib-cat { border: 1px solid var(--c-line); border-radius: 999px; padding: 0 7px; }
+.ib-stale { color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: 999px; padding: 0 7px; }
+.ib-hint { margin: 0; font-size: 0.74rem; color: var(--c-ink-2); line-height: 1.55; }
+.ib-act { font: 12px var(--font-mono); padding: 3px 10px; border: 1px solid var(--c-accent-dim); border-radius: var(--r-pill); color: var(--c-accent-ink); background: var(--c-accent-soft); cursor: pointer; }
+.ib-act:hover { border-color: var(--c-accent); }
+.ib-sent { font-size: 0.72rem; color: var(--c-ok); }
+.ib-sent[data-ok="false"] { color: var(--c-warn); }
+.ib-sent pre { margin: 4px 0 0; padding: 6px 8px; background: var(--c-bg); border: 1px solid var(--c-line); border-radius: 4px; color: var(--c-ink); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; font-size: 0.74rem; }
+.ib-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 0.72rem; color: var(--c-ink-2); padding-top: var(--sp-2); border-top: 1px dashed var(--c-line); }
+.ib-foot b { font-family: var(--font-mono); color: var(--c-ink); }
+.ib-next { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.ib-next i { display: inline-block; width: 4.5rem; height: 4px; border-radius: 2px; background: var(--c-raised); overflow: hidden; }
+.ib-next u { display: block; height: 100%; background: var(--c-ok); text-decoration: none; }
+.ib-open { margin-left: auto; }
