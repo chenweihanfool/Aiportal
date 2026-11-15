@@ -1021,6 +1021,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     const T = 'v3 桌機 1440×900'
     const tops = { om: await top(page, '.om-root'), now: await top(page, '[data-testid="now-section"]'), aside: await top(page, '.st-aside') }
     check(`${T}：搜尋框、現在用得上、STATUS 的上緣都在首屏內`, Object.values(tops).every((t) => t !== null && t < 900), JSON.stringify(tops))
+    check(`${T}：想法板在心得樹之後、現在用得上之前（有聚焦卡）`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-tree"]'); const b = document.querySelector('[data-testid="idea-board"]'); const n = document.querySelector('[data-testid="now-section"]'); return !!t && !!b && !!n && !!(t.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card').length === 1 }))
     check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
     check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
     check(`${T}：兩欄（左現在用得上、右 STATUS）`, await page.evaluate(() => { const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); return n.right <= a.left + 1 && a.width > 250 }))
