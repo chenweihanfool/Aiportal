@@ -100,15 +100,17 @@ const Leaf = memo(function Leaf({ lf, ins, color, lit, dimc, fresh, onOpen, onHo
 })
 
 /** 主題標籤：放得下就是膠囊；放不下縮成色點，滑過／聚焦／點清單時放大成完整膠囊 */
-const Cap = memo(function Cap({ c, ci, color, open, dimc, on, onPick, onEnter }: { c: InsightClusterOut; ci: number; color: string; open: boolean; dimc: boolean; on: boolean; onPick: () => void; onEnter: () => void }) {
+const Cap = memo(function Cap({ c, ci, scale, color, open, dimc, on, onPick, onEnter }: { c: InsightClusterOut; ci: number; scale: number; color: string; open: boolean; dimc: boolean; on: boolean; onPick: () => void; onEnter: () => void }) {
   return (
     <g className={`it-cap${dimc ? ' it-dimc' : ''}${on ? ' it-cap-on' : ''}${open ? '' : ' it-cap-dotmode'}`} style={{ color }} role="button" tabIndex={0} data-ci={ci}
       aria-label={`${c.name} ${c.count} 則，點一下聚焦這個主題`} aria-pressed={on} data-testid={open ? 'insight-cap' : 'insight-dot'}
       onClick={onPick} onFocus={onEnter} onMouseEnter={onEnter} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick() } }}>
+      {open && c.leader && <line className="it-leader" x1={c.x} y1={c.y} x2={c.lx} y2={c.ly} />}
       <circle className="it-tipdot" cx={c.x} cy={c.y} r={open ? 2.6 : 5.5} />
-      {!open && <circle className="it-cap-hit" cx={c.x} cy={c.y} r={11} />}
+      {!open && <circle className="it-cap-hit" cx={c.x} cy={c.y} r={Math.max(11, 16 / scale)} />}
       {open && (
         <>
+          <rect className="it-cap-hit" x={c.lx - Math.max(c.lw, 32 / scale) / 2} y={c.ly - Math.max(c.lh, 32 / scale) / 2} width={Math.max(c.lw, 32 / scale)} height={Math.max(c.lh, 32 / scale)} />
           <rect className="it-cap-bg" x={c.lx - c.lw / 2} y={c.ly - c.lh / 2} width={c.lw} height={c.lh} rx={c.lh / 2} />
           <circle className="it-cap-dot" cx={c.lx - c.lw / 2 + 10} cy={c.ly} r={3.6} />
           <text className="it-cap-t" x={c.lx - c.lw / 2 + 19} y={c.ly + 4}>{c.text}</text>
@@ -333,8 +335,9 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                   })}
                   {focusC && focusC.ticks.map((t, k) => (
                     <g key={`${t.label}${k}`} className="it-btick" data-testid="insight-btick" style={{ color: col(focus!) }}>
-                      <circle cx={t.x} cy={t.y - 9 / scale} r={2 / scale} />
-                      <text x={t.x} y={t.y + 3 / scale} textAnchor="middle" fontSize={11 / scale}>{t.label}</text>
+                      <line x1={t.px} y1={t.py} x2={t.x} y2={t.y - t.h / 2} />
+                      <rect x={t.x - t.w / 2} y={t.y - t.h / 2} width={t.w} height={t.h} rx={t.h / 4} />
+                      <text x={t.x} y={t.y + t.fs * 0.35} textAnchor="middle" fontSize={t.fs}>{t.label}</text>
                     </g>
                   ))}
                   {layout.clumps.map((cl) => (
@@ -354,7 +357,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                       dimc={focus !== null && lf.clusterIndex !== focus} fresh={fresh.has(lf.id)} onOpen={open} onHover={setHover} onKey={onLeafKey} />
                   ))}
                   {layout.clusters.map((c, ci) => c.count > 0 && (
-                    <Cap key={c.id} c={c} ci={ci} color={col(ci)} open={c.labelShown || capHover === ci || focus === ci} dimc={focus !== null && ci !== focus} on={focus === ci}
+                    <Cap key={c.id} c={c} ci={ci} scale={scale} color={col(ci)} open={c.labelShown || capHover === ci || focus === ci} dimc={focus !== null && ci !== focus} on={focus === ci}
                       onPick={() => toggleFocus(ci)} onEnter={() => setCapHover(ci)} />
                   ))}
                   {upto && <text className="it-bigmonth" x={16} y={36}>{upto}</text>}
