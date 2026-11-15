@@ -60,8 +60,16 @@ const CLUSTERS = NAMES.map((name, i) => ({ id: `K0${i + 1}`, name, count: INSIGH
 const SP = [mk('S-1', 0, 'K01', 'TH-s1', 'new'), mk('S-2', 0, 'K02', 'TH-s2', 'new'), mk('S-3', 12, 'K03', 'TH-s3', 'new')]
 const BIG = Array.from({ length: 300 }, (_, i) => { const c = (i * 7) % 12, t = Math.floor(i / 12) % 9, j = i % 4; return mk(`B-${i}`, 540 - Math.floor((i * 538) / 300), `K${String(c + 1).padStart(2, '0')}`, `TH-b${c}-${t}`, j === 0 ? 'new' : j === 3 ? 'refine' : 'reinforce', null) })
 for (const b of BIG) { const prev = BIG.filter((x) => x.thread === b.thread && x.date <= b.date && x.id !== b.id); b.parent = b.relation === 'new' || prev.length === 0 ? null : prev[prev.length - 1].id; if (b.parent === null) b.relation = 'new' }
+// 近似正式站：9 群 13 則；「家庭溝通」只有 3 則、日期集中在 4 個月
+const P13NAMES = ['測量作業', '工作習慣', '人際關係', '健康與運動', '財務觀念', '學習方法', '家庭溝通', '旅行與休息', '職涯規劃']
+const P13 = [
+  mk('P-01', 330, 'K01', 'TH-p1', 'new'), mk('P-02', 300, 'K01', 'TH-p1', 'reinforce', 'P-01'), mk('P-03', 260, 'K02', 'TH-p2', 'new'), mk('P-04', 220, 'K03', 'TH-p3', 'new'),
+  mk('P-05', 180, 'K04', 'TH-p4', 'new'), mk('P-06', 150, 'K05', 'TH-p5', 'new'), mk('P-07', 130, 'K06', 'TH-p6', 'new'),
+  mk('P-08', 190, 'K07', 'TH-p7', 'new'), mk('P-09', 100, 'K07', 'TH-p7', 'reinforce', 'P-08'), mk('P-10', 12, 'K07', 'TH-p8', 'new'),
+  mk('P-11', 90, 'K08', 'TH-p9', 'new'), mk('P-12', 60, 'K09', 'TH-pa', 'new'), mk('P-13', 30, 'K01', 'TH-pb', 'new'),
+].sort((x, y) => (x.date < y.date ? -1 : 1))
 const bodyOf = (list, names) => ({ total: list.length, thisMonth: list.filter((x) => x.date.slice(0, 7) === tpDate(0).slice(0, 7)).length, clusters: names.map(([id, name]) => ({ id, name, count: list.filter((x) => x.cluster === id).length })).filter((c) => c.count > 0), insights: list })
-const modeBody = (mode) => mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
+const modeBody = (mode) => mode === 'prod13' ? bodyOf(P13, P13NAMES.map((n, i) => [`K0${i + 1}`, n])) : mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
   : mode === 'big300' ? bodyOf(BIG, Array.from({ length: 12 }, (_, i) => [`K${String(i + 1).padStart(2, '0')}`, ['測量作業', '工作習慣', '人際關係經營', '健康與運動', '財務觀念', '學習方法', '家庭生活', '旅行與休息', '職涯規劃', '情緒覺察', '專案管理', '創作與興趣'][i]])) : insightsBody
 const insightsBody = { total: INSIGHTS.length, thisMonth: 3, clusters: CLUSTERS, insights: INSIGHTS }
 const detailOf = (id) => {
@@ -305,6 +313,38 @@ try {
     await page.locator('[data-testid="now-corner-btn"]').click()
     await page.waitForSelector('[data-testid="now-section"]')
     check(`${T}：展開現在用得上後仍無橫向捲動`, await noHScroll(page))
+    await ctx.close()
+  }
+
+  // ── 聚焦只有 3 則、日期集中 4 個月的主題（使用者 2026-11-15：日期糊在一起、膠囊不好點）──
+  for (const [w, h, scheme] of [[1440, 900, 'dark'], [1440, 900, 'light'], [360, 800, 'dark']]) {
+    const T = `近似正式站 9 群 13 則聚焦「家庭溝通」${w}×${h} ${scheme}`
+    const { ctx, page, errors } = await open({ width: w, height: h }, { mode: 'prod13', colorScheme: scheme })
+    await page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+    await page.locator('[data-testid="insight-row"]', { hasText: '家庭溝通' }).click()
+    await page.waitForTimeout(1100)
+    await page.locator('[data-testid="insight-cap"][aria-pressed="true"]').first().scrollIntoViewIfNeeded()
+    await page.waitForTimeout(200)
+    const r = await page.evaluate(() => {
+      const caps = [...document.querySelectorAll('[data-testid="insight-cap"]')].filter((c) => c.getAttribute('aria-pressed') === 'true')
+      const bg = caps[0]?.querySelector('.it-cap-bg')?.getBoundingClientRect()
+      let hit = false, over = 0, small = 0
+      if (bg) {
+        const el = document.elementFromPoint((bg.left + bg.right) / 2, (bg.top + bg.bottom) / 2)
+        hit = !!el && !!el.closest('[data-testid="insight-cap"]'); window.__el = el ? el.tagName + '.' + (el.getAttribute('class') || '') + ' in ' + (el.closest('g')?.getAttribute('class') || '') : 'none'
+        for (const l of document.querySelectorAll('[data-testid="insight-leaf"] .it-shape')) { const q = l.getBoundingClientRect(); if (q.left < bg.right && q.right > bg.left && q.top < bg.bottom && q.bottom > bg.top) over++ }
+        const hr = caps[0].querySelector('.it-cap-hit')?.getBoundingClientRect()
+        small = hr && (hr.width < 31.5 || hr.height < 31.5) ? 1 : 0
+      }
+      const ts = [...document.querySelectorAll('[data-testid="insight-btick"]')].map((g) => ({ b: g.querySelector('rect').getBoundingClientRect(), t: g.querySelector('text').getBoundingClientRect(), label: g.querySelector('text').textContent }))
+      let tickOverlap = 0
+      for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) { const a = ts[i].b, b = ts[j].b; if (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top) tickOverlap++ }
+      return { el: window.__el, bg: bg && [Math.round(bg.left), Math.round(bg.top), Math.round(bg.width)], n: ts.length, hit, over, small, tickOverlap, minH: Math.min(...ts.map((x) => x.t.height)), labels: ts.map((x) => x.label) }
+    })
+    check(`${T}：日期標籤 ≥ 2 個（含首尾）、彼此不重疊、字夠大`, r.n >= 2 && r.tickOverlap === 0 && r.minH >= 10, JSON.stringify(r))
+    check(`${T}：膠囊中心點得到（elementFromPoint 落在膠囊）、不壓任何葉子、可點範圍 ≥ 32px`, r.hit && r.over === 0 && r.small === 0, JSON.stringify(r))
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `focus-${scheme}-${w}.png`) })
+    check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))
     await ctx.close()
   }
 

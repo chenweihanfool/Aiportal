@@ -894,27 +894,35 @@ export function layoutInsightTree(data: InsightData, opts: InsightTreeOptions): 
       const hh = c.lh / 2
       for (let pass = 0; pass < 3; pass++) {
         const fsT = 11.5 / scale
-        const mk = (cd: { label: string; t: number }): BranchTick & { r: R4 } => {
+        const mk = (cd: { label: string; t: number }): BranchTick & { r: R4; hitL: boolean } => {
           const w = cd.label.length * fsT * 0.62 + 8 / scale
           const h = fsT + 6 / scale
           const pp = pointOn(k, cd.t)
           const dn = upNormal(k, cd.t)
-          const off = 10 / scale + h / 2
-          const x = clamp(pp[0] - dn[0] * off, PAD + w / 2, W - PAD - w / 2)
-          const y = clamp(pp[1] - dn[1] * off, PAD + h / 2, ground - h / 2)
-          return { label: cd.label, t: A1(cd.t * 1000) / 1000, x: A1(x), y: A1(y), px: A1(pp[0]), py: A1(pp[1]), w: A1(w), h: A1(h), fs: A1(fsT * 100) / 100, r: { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 } }
+          let best: { x: number; y: number; r: R4 } | null = null
+          let hitL = true
+          for (const extra of [0, 16 / scale, 32 / scale]) {
+            const off = 10 / scale + h / 2 + extra
+            const x = clamp(pp[0] - dn[0] * off, PAD + w / 2, W - PAD - w / 2)
+            const y = clamp(pp[1] - dn[1] * off, PAD + h / 2, ground - h / 2)
+            const r = { x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 }
+            if (best === null) best = { x, y, r }
+            if (!leaves.some((l) => Math.hypot(l.x - clamp(l.x, r.x0, r.x1), l.y - clamp(l.y, r.y0, r.y1)) < l.r * 1.1 + 1)) { best = { x, y, r }; hitL = false; break }
+          }
+          const { x, y, r } = best!
+          return { label: cd.label, t: A1(cd.t * 1000) / 1000, x: A1(x), y: A1(y), px: A1(pp[0]), py: A1(pp[1]), w: A1(w), h: A1(h), fs: A1(fsT * 100) / 100, r, hitL }
         }
         const all2 = cand.map(mk)
         const first = all2[0]!
         const lastC = all2.find((t) => t.label === lastLb) ?? all2[all2.length - 1]!
-        const kept: Array<BranchTick & { r: R4 }> = [first]
+        const kept: Array<BranchTick & { r: R4; hitL: boolean }> = [first]
         for (const t of all2) {
-          if (t === first || t === lastC) continue
+          if (t === first || t === lastC || t.hitL) continue
           if (rectsHit(t.r, kept[kept.length - 1]!.r, 4 / scale) || rectsHit(t.r, lastC.r, 4 / scale)) continue
           kept.push(t)
         }
         if (lastC !== first) kept.push(lastC)
-        ticks = kept.map(({ r: _r, ...t }) => t)
+        ticks = kept.map(({ r: _r, hitL: _h, ...t }) => t)
         const tickRects = kept.map((t) => t.r)
         // 膠囊：放在枝梢往外上方，避開所有葉子（含發光光暈）與日期標籤，必要時拉引線
         const sx = br[k]!.side

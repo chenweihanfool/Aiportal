@@ -333,13 +333,6 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                     if (l.level === 'cluster') { const k = Number(l.id.slice(l.id.lastIndexOf('#') + 1)); color = `color-mix(in srgb, ${col(ci)} ${40 + 20 * k}%, var(--it-trunk1))` }
                     return <Limb key={l.id} l={l} color={color} lit={lit.has(l.id)} dimc={focus !== null && ci !== focus} fresh={fresh.has(l.id)} />
                   })}
-                  {focusC && focusC.ticks.map((t, k) => (
-                    <g key={`${t.label}${k}`} className="it-btick" data-testid="insight-btick" style={{ color: col(focus!) }}>
-                      <line x1={t.px} y1={t.py} x2={t.x} y2={t.y - t.h / 2} />
-                      <rect x={t.x - t.w / 2} y={t.y - t.h / 2} width={t.w} height={t.h} rx={t.h / 4} />
-                      <text x={t.x} y={t.y + t.fs * 0.35} textAnchor="middle" fontSize={t.fs}>{t.label}</text>
-                    </g>
-                  ))}
                   {layout.clumps.map((cl) => (
                     <g key={cl.id} className={`it-clump${focus !== null && cl.clusterIndex !== focus ? ' it-dimc' : ''}`} data-testid="insight-clump" data-ci={cl.clusterIndex} role="button" tabIndex={0}
                       aria-label={`${layout.clusters[cl.clusterIndex]?.name ?? ''} 另有 ${cl.count} 則，點一下聚焦這一群看全部`} style={{ color: col(cl.clusterIndex) }}
@@ -355,6 +348,13 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
                   {layout.leaves.map((lf) => (
                     <Leaf key={lf.id} lf={lf} ins={byId.get(lf.id)} color={col(lf.clusterIndex, lf.shade, lf.age)} lit={lit.has(lf.id) && hovered?.id === lf.id}
                       dimc={focus !== null && lf.clusterIndex !== focus} fresh={fresh.has(lf.id)} onOpen={open} onHover={setHover} onKey={onLeafKey} />
+                  ))}
+                  {focusC && focusC.ticks.map((t, k) => (
+                    <g key={`${t.label}${k}`} className="it-btick" data-testid="insight-btick" style={{ color: col(focus!) }}>
+                      <line x1={t.px} y1={t.py} x2={t.x} y2={t.y - t.h / 2} />
+                      <rect x={t.x - t.w / 2} y={t.y - t.h / 2} width={t.w} height={t.h} rx={t.h / 4} />
+                      <text x={t.x} y={t.y + t.fs * 0.35} textAnchor="middle" fontSize={t.fs}>{t.label}</text>
+                    </g>
                   ))}
                   {layout.clusters.map((c, ci) => c.count > 0 && (
                     <Cap key={c.id} c={c} ci={ci} scale={scale} color={col(ci)} open={c.labelShown || capHover === ci || focus === ci} dimc={focus !== null && ci !== focus} on={focus === ci}
