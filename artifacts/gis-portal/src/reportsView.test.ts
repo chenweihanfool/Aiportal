@@ -5,7 +5,7 @@ import type { SeriesRow } from './periodStats'
 
 const mkReport = (over: Partial<PeriodReport> = {}): PeriodReport => ({
   range: ['2026-10-19', '2026-10-25'], partial: false,
-  ideas: { new: 0, done: 0, started: 0, openAtEnd: 0, doneRate: null, funnel: { new: 0, evaluating: 0, doing: 0, done: 0 }, byCategory: {}, top3: [], oldestOpen: null },
+  ideas: { new: 0, done: 0, started: 0, openAtEnd: 0, doneRate: null, funnel: { candidate: 0, focus: 0, done: 0, archived: 0 }, byCategory: {}, top3: [], oldestOpen: null },
   food: { added: 0, visited: 0, wantBacklog: 0, avgRating: null, byCuisine: {}, byArea: {}, pins: [], oldestWant: null },
   travel: { trips: [], tripDays: 0, photos: 0, areas: [] },
   prev: { range: ['2026-10-12', '2026-10-18'], ideas: { new: 0, done: 0 }, food: { added: 0, visited: 0 }, travel: { tripDays: 0, trips: 0 } },
@@ -25,9 +25,10 @@ describe('reportsView（圖表純函式）', () => {
     expect(barPct(5, 0)).toBe(0)
   })
   it('funnelRows 以最大那階為 100%', () => {
-    const rows = funnelRows({ new: 4, evaluating: 2, doing: 0, done: 1 })
+    const rows = funnelRows({ candidate: 4, focus: 2, done: 0, archived: 1 })
+    expect(rows.map((r) => r.key)).toEqual(['candidate', 'focus', 'done', 'archived'])
     expect(rows.map((r) => r.pct)).toEqual([100, 50, 0, 25])
-    expect(rows[0]!.label).toContain('新想法')
+    expect(rows[0]!.label).toContain('候選')
   })
   it('topCounts：由大到小、同數量依名稱、略過 0、最多 n 筆', () => {
     const rows = topCounts({ 咖啡: 1, 牛肉麵: 3, 拉麵: 1, 空: 0 }, 2)
