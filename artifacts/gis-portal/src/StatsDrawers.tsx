@@ -4,6 +4,9 @@ import { KIND_LABEL, pctText } from './statusAside'
 
 // STATUS 右欄兩個小抽屜的內容（2.88.0）：搜尋統計、推送統計，都是近 14 天，打開時才讀。
 
+/** 3.4.0：最弱面向卡的標籤（KIND_LABEL 在 statusAside.ts，這裡只補推送統計用得到的） */
+const EXTRA_KIND_LABEL: Record<string, string> = { boost: '最弱面向' }
+
 function Kv({ k, v, hint }: { k: string; v: string; hint?: string }) {
   return (
     <div className="st-kv" title={hint}>
@@ -59,7 +62,7 @@ export function PushStatsPanel({ pw }: { pw: string }) {
           <thead><tr><th scope="col">種類</th><th scope="col">顯示</th><th scope="col">點開</th><th scope="col">沒用</th></tr></thead>
           <tbody>
             {d.byKind.map((k) => (
-              <tr key={k.kind}><th scope="row">{KIND_LABEL[k.kind] ?? k.kind}</th><td>{k.shown}</td><td>{k.opened}</td><td>{k.useless}</td></tr>
+              <tr key={k.kind}><th scope="row">{KIND_LABEL[k.kind] ?? EXTRA_KIND_LABEL[k.kind] ?? k.kind}</th><td>{k.shown}</td><td>{k.opened}</td><td>{k.useless}</td></tr>
             ))}
           </tbody>
         </table>
