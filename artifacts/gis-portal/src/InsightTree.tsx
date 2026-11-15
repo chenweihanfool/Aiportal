@@ -499,7 +499,7 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null
           {relation && <span className={`it-rel it-rel-${relation}`}>{RELATION_LABEL[relation]}</span>}
           {provenance && <span className="it-prov">{PROVENANCE_LABEL[provenance]}</span>}
         </div>
-        <h4 className="it-lb">那一天</h4>
+        {(d || date) && <h4 className="it-lb">那一天</h4>}
         {headings.length > 0 && (
           <div data-testid="insight-day-headings">
             <p className="it-dim it-day-lead">那天的幾件事</p>
