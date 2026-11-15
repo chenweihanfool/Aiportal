@@ -3,10 +3,10 @@
 import type { IdeaItem, IdeaStatus } from './boardApi'
 
 export const STATUS_LABEL: Record<IdeaStatus, string> = {
-  new: '新想法', evaluating: '評估中', doing: '進行中', done: '已實行', shelved: '擱置', dropped: '放棄', absorbed: '併入',
+  new: '候選', evaluating: '候選', doing: '聚焦', done: '已完成', shelved: '封存', dropped: '封存（放棄）', absorbed: '封存（併入）',
 }
 export const STATUS_ICON: Record<IdeaStatus, string> = {
-  new: '💭', evaluating: '🔍', doing: '🚀', done: '✅', shelved: '🗄️', dropped: '❌', absorbed: '🔀',
+  new: '🌱', evaluating: '🌱', doing: '🎯', done: '✅', shelved: '📦', dropped: '📦', absorbed: '🔀',
 }
 const OPEN: IdeaStatus[] = ['new', 'evaluating', 'doing']
 export const isOpen = (s: IdeaStatus) => OPEN.includes(s)

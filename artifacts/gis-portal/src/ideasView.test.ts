@@ -52,7 +52,7 @@ describe('copy-to-HERMES message', () => {
 
 describe('🔀 absorbed ideas', () => {
   it('have a label and icon, count as closed, and are never a copy-to-HERMES target', () => {
-    expect([STATUS_ICON.absorbed, STATUS_LABEL.absorbed]).toEqual(['🔀', '併入'])
+    expect([STATUS_ICON.absorbed, STATUS_LABEL.absorbed]).toEqual(['🔀', '封存（併入）'])
     const list = [idea('IDEA-0039', { status: 'absorbed', score: null, mergedInto: 'IDEA-0022' }), idea('IDEA-0022'), idea('IDEA-0005', { status: 'dropped', score: null })]
     expect(filterIdeas(list, null, 'closed').map((i) => i.id)).toEqual(['IDEA-0039', 'IDEA-0005'])
     expect(filterIdeas(list, null, 'open').map((i) => i.id)).toEqual(['IDEA-0022'])
@@ -81,7 +81,7 @@ describe('idea provenance (來龍去脈)', () => {
     expect(lf.recalls.map((r) => r.date)).toEqual(['2026-10-01', '2026-10-05', '2026-10-09'])
     expect(lf.steps.map((s) => s.status)).toEqual(['new', 'doing', 'done'])
     expect(lf.daysAlive).toBe(19)
-    expect(lf.summary).toBe('10/1 誕生 → 想起 3 次 → 10/12 進行中 → 10/20 已實行（歷時 19 天）')
+    expect(lf.summary).toBe('10/1 誕生 → 想起 3 次 → 10/12 聚焦 → 10/20 已完成（歷時 19 天）')
   })
   it('runs an open idea up to now, and survives bad data', () => {
     const lf = buildLifeline(idea('B', { history: [{ status: 'nonsense', at: 'x' }] }), NOW)!
