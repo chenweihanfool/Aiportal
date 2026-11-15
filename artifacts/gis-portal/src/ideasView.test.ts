@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { IdeaItem } from './boardApi'
-import { STATUS_ICON, STATUS_LABEL, absorbBadges, categoryColor, categoryCounts, pips, sortForList, topIdeas } from './ideasView'
+import { STATUS_ICON, STATUS_LABEL, absorbBadges, categoryColor, categoryCounts, moodPicks, pips, sortForList, topIdeas } from './ideasView'
 
 const idea = (id: string, over: Partial<IdeaItem> = {}): IdeaItem => ({
   id, title: id, category: '系統', dimension: null, source: 'HERMES', why: null, value: 3, effort: 3, status: 'new',
@@ -294,5 +294,64 @@ describe('archiveReason 與 focusDays', () => {
     expect(focusDays({ status: 'doing', history: hist }, now)).toBe(10)
     expect(focusDays({ status: 'doing', history: [] }, now)).toBeNull()
     expect(focusDays({ status: 'new', history: hist }, now)).toBeNull()
+  })
+})
+
+describe('moodPicks', () => {
+  const ideas = [
+    idea('A', { value: 5, effort: 1, score: 5 }), // 快贏
+    idea('B', { value: 4, effort: 2, score: 10 }), // 快贏
+    idea('C', { value: 5, effort: 2, score: 3 }), // 快贏
+    idea('D', { value: 2, effort: 4, score: 9 }), // 避開
+    idea('H', { value: 5, effort: 4, score: 6 }), // 大案
+    idea('G', { value: 2, effort: 1, score: 8 }), // 雜務
+    idea('E', { status: 'doing', value: 5, effort: 1, score: 20 }),
+    idea('F', { status: 'done', value: 5, effort: 1, score: 30 }),
+    idea('S', { status: 'shelved', value: 5, effort: 1, score: 30 }),
+  ]
+  it('門檻：59.9 快贏、60 正常、79.9 正常、80 大案、null 正常', () => {
+    expect(moodPicks(ideas, ideas, 59.9).mode).toBe('quick')
+    expect(moodPicks(ideas, ideas, 60).mode).toBe('normal')
+    expect(moodPicks(ideas, ideas, 79.9).mode).toBe('normal')
+    expect(moodPicks(ideas, ideas, 80).mode).toBe('big')
+    expect(moodPicks(ideas, ideas, null).mode).toBe('normal')
+    expect(moodPicks(ideas, ideas, 60).picks.map((i) => i.id)).toEqual(['A', 'B', 'C'])
+    expect(moodPicks(ideas, ideas, null).hint).toBeNull()
+  })
+  it('quick 依 score 高到低（null 視為 0、同分依 id），不足時用原本順序補位不重複', () => {
+    const q = moodPicks(ideas, ideas, 50)
+    expect(q.mode).toBe('quick')
+    expect(q.picks.map((i) => i.id)).toEqual(['B', 'A', 'C'])
+    expect(q.hint).toBe('今天幸福指數 50，先挑快贏的（價值高、難度低）')
+    const few = [idea('Q', { value: 5, effort: 1, score: 1 }), idea('X', { value: 2, effort: 4, score: 9 }), idea('Y', { value: 2, effort: 1, score: 8 })]
+    const fill = moodPicks(few, [few[1]!, few[0]!, few[2]!], 40)
+    expect(fill.picks.map((i) => i.id)).toEqual(['Q', 'X', 'Y'])
+    expect(new Set(fill.picks.map((i) => i.id)).size).toBe(3)
+    const tie = [idea('T2', { value: 5, effort: 1, score: null }), idea('T1', { value: 5, effort: 1, score: 4 }), idea('T3', { value: 5, effort: 1, score: 4 })]
+    expect(moodPicks(tie, tie, 0).picks.map((i) => i.id)).toEqual(['T1', 'T3', 'T2'])
+  })
+  it('池中沒有快贏時仍標 quick，但 hint 改成挑一個小的先做', () => {
+    const chores = [idea('X', { value: 2, effort: 4, score: 9 }), idea('Y', { value: 2, effort: 1, score: 8 })]
+    const r = moodPicks(chores, chores, 45)
+    expect(r.mode).toBe('quick')
+    expect(r.hint).toBe('今天幸福指數 45，挑一個小的先做')
+    expect(r.picks.map((i) => i.id)).toEqual(['X', 'Y'])
+  })
+  it('big：有大案先推大案；沒有大案 mode 仍 big、hint null、picks 照原本順序', () => {
+    const b = moodPicks(ideas, ideas, 85)
+    expect(b.mode).toBe('big')
+    expect(b.hint).toBe('今天狀態不錯（85），適合推一個大案')
+    expect(b.picks[0]!.id).toBe('H')
+    const noBig = [idea('A', { value: 5, effort: 1, score: 5 }), idea('D', { value: 2, effort: 4, score: 9 })]
+    const n = moodPicks(noBig, noBig, 90)
+    expect(n).toEqual({ picks: noBig, mode: 'big', hint: null })
+  })
+  it('聚焦與非候選不入池，也不會被補位選進來', () => {
+    const top = [ideas[6]!, ideas[7]!, ideas[8]!, ideas[0]!, ideas[3]!] // E, F, S, A, D
+    const r = moodPicks(ideas, top, 50)
+    expect(r.picks.map((i) => i.id)).toEqual(['B', 'A', 'C'])
+    expect(r.picks.every((i) => !['doing', 'done', 'shelved'].includes(i.status))).toBe(true)
+    const normal = moodPicks(ideas, top, 70)
+    expect(normal.picks.map((i) => i.id)).toEqual(['A', 'D'])
   })
 })

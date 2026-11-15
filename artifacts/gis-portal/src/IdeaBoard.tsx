@@ -7,7 +7,7 @@ import type { BlockStatus } from './homeView'
 import { sendToHermes } from './DesktopBoard'
 import { alpha, inkMix } from './theme'
 import {
-  ACTION_LABEL, ACTION_MARK, FOCUS_ICON, FOCUS_LIMIT, actionMessage, categoryColor, focusDays, ideaDashboard, isFocus, stageOf,
+  ACTION_LABEL, ACTION_MARK, FOCUS_ICON, FOCUS_LIMIT, SCATTER_QUADRANTS, actionMessage, categoryColor, focusDays, ideaDashboard, isFocus, moodPicks, quadrantOf,
 } from './ideasView'
 
 function CatChip({ category }: { category: string | null }) {
@@ -15,12 +15,14 @@ function CatChip({ category }: { category: string | null }) {
   return <span className="ib-cat" style={{ color: inkMix(c), borderColor: c, background: alpha(c, 10) }}>{category ?? '未分類'}</span>
 }
 
-export function IdeaBoard({ st, data, top, nowMs, onOpenIdeas, onRequestUnlock, onRetry }: {
+export function IdeaBoard({ st, data, top, nowMs, hhi = null, onOpenIdeas, onRequestUnlock, onRetry }: {
   st: BlockStatus
   data: IdeasData | null
   /** 候選前三名（API 的 top 順序） */
   top: IdeaItem[]
   nowMs: number
+  /** 今天的幸福指數（0–100）；沒給就照原本 top 順序 */
+  hhi?: number | null
   onOpenIdeas: () => void
   onRequestUnlock: () => void
   onRetry: () => void
@@ -32,7 +34,8 @@ export function IdeaBoard({ st, data, top, nowMs, onOpenIdeas, onRequestUnlock, 
   const shown = focus.slice(0, FOCUS_LIMIT)
   // 久沒動＝最後一次被提到 ≥30 天（與抽屜儀表的 staleFocus 同一份名單，PM 修正）
   const stale = useMemo(() => new Set(dash.staleFocus.map((s) => s.id)), [dash])
-  const picks = top.filter((i) => stageOf(i.status) === 'candidate' && !isFocus(i.status)).slice(0, 3)
+  const mood = moodPicks(ideas, top, hhi ?? null)
+  const picks = mood.picks
   const monthDone = dash.monthly[dash.monthly.length - 1]?.done ?? 0
   return (
     <section className="ib-root" data-testid="idea-board" aria-label="想法板">
@@ -59,12 +62,16 @@ export function IdeaBoard({ st, data, top, nowMs, onOpenIdeas, onRequestUnlock, 
         ) : (
           <>
             <p className="ib-hint" data-testid="idea-board-pick">還沒有聚焦的想法，挑一個聚焦吧。</p>
+            {mood.hint !== null && <p className="ib-hint" data-testid="idea-board-mood">{mood.hint}</p>}
             <ul className="ib-list" data-testid="idea-board-candidates">
               {picks.map((it) => (
                 <li key={it.id} className="ib-card">
                   <span className="ib-card-t">{it.title}</span>
                   <span className="ib-card-m">
                     <CatChip category={it.category} />
+                    {mood.mode !== 'normal' && it.value !== null && it.effort !== null && (
+                      <span className="ib-quad" data-testid="idea-board-quad">{SCATTER_QUADRANTS[quadrantOf(it.value, it.effort)].slice(0, 2)}</span>
+                    )}
                     <button type="button" className="ib-act" onClick={() => { void sendToHermes(actionMessage(it, 'focus')).then(setSent) }}>{ACTION_MARK.focus} {ACTION_LABEL.focus}</button>
                   </span>
                 </li>

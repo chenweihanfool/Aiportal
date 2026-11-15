@@ -423,6 +423,47 @@ export function quadrantOf(value: number, effort: number): keyof typeof SCATTER_
   return effort <= 2.5 ? 'chore' : 'avoid'
 }
 
+// ── 分數影響想法推薦（3.5.0）：沒有聚焦、要列候選時，依今天的幸福指數換順序 ──
+export type MoodMode = 'quick' | 'big' | 'normal'
+export interface MoodPicks {
+  picks: IdeaItem[]
+  mode: MoodMode
+  hint: string | null
+}
+
+/**
+ * 今天的幸福指數決定先推哪種候選：<60 先推快贏、>=80 先推大案，其餘照原本 top 順序。
+ * 補位用原本的 top 順序，不重複；hint 只有 quick／big 才可能非 null。
+ */
+export function moodPicks(ideas: IdeaItem[], top: IdeaItem[], hhi: number | null, n = 3): MoodPicks {
+  const normal = (): IdeaItem[] => top.filter((i) => stageOf(i.status) === 'candidate' && !isFocus(i.status)).slice(0, n)
+  if (hhi === null) return { picks: normal(), mode: 'normal', hint: null }
+  const mode: MoodMode = hhi < 60 ? 'quick' : hhi >= 80 ? 'big' : 'normal'
+  if (mode === 'normal') return { picks: normal(), mode, hint: null }
+  const want = mode === 'quick' ? 'quickWin' : 'bigBet'
+  const pool = ideas.filter((i) => stageOf(i.status) === 'candidate' && !isFocus(i.status))
+  const rated = pool
+    .filter((i) => i.value !== null && i.effort !== null && quadrantOf(i.value, i.effort) === want)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || a.id.localeCompare(b.id))
+  const picks = rated.slice(0, n)
+  const seen = new Set(picks.map((i) => i.id))
+  for (const i of normal()) {
+    if (picks.length >= n) break
+    if (seen.has(i.id)) continue
+    picks.push(i)
+    seen.add(i.id)
+  }
+  const score = Math.round(hhi)
+  const hint = mode === 'quick'
+    ? rated.length === 0
+      ? `今天幸福指數 ${score}，挑一個小的先做`
+      : `今天幸福指數 ${score}，先挑快贏的（價值高、難度低）`
+    : rated.length === 0
+      ? null
+      : `今天狀態不錯（${score}），適合推一個大案`
+  return { picks, mode, hint }
+}
+
 /** 全部想法的生命週期統計：誕生到結束的中位天數、想起多次的比例 */
 export function lifeStats(ideas: IdeaItem[], nowMs: number): { total: number; closed: number; medianDaysToClose: number | null; recurring: number } {
   const days: number[] = []
