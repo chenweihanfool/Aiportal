@@ -142,6 +142,11 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     unlocked: on, loading: ideas.loading, error: ideas.error, hasData: !!ideasList, empty: !!ideasList && (!ideasList.available || ideaTop.length === 0), nowMs,
     expectedEveryMin: dataEveryMinFor(pushers, 'hermes-ideas', EXPECTED_EVERY_MIN.ideas),
   })
+  // 想法板：有任何想法就算有資料（前三名空、只有聚焦或已完成時也要顯示）
+  const ideaBoardSt = blockState({
+    unlocked: on, loading: ideas.loading, error: ideas.error, hasData: !!ideasList, empty: !!ideasList && (!ideasList.available || ideasList.ideas.length === 0), nowMs,
+    expectedEveryMin: dataEveryMinFor(pushers, 'hermes-ideas', EXPECTED_EVERY_MIN.ideas),
+  })
   const places = food.data?.places ?? []
   const wantEat = useMemo(() => oldestWantPlace(places, now, 'eat'), [places, now])
   const wantGo = useMemo(() => oldestWantPlace(places, now, 'go'), [places, now])
@@ -264,7 +269,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         <div className="st-home">
           <div className="st-left">
             <InsightTree pw={pw} now={now} onRequestUnlock={onRequestUnlock} />
-            <IdeaBoard st={ideasSt} data={ideasList} top={ideaTop} nowMs={nowMs} onOpenIdeas={openIdeas} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
+            <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} onOpenIdeas={openIdeas} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
             <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
               briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
               onActionsChange={personActions.reload}
