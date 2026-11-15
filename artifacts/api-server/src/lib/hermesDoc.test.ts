@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildContexts, isDocKind, makeExcerpt, validateDocs, MAX_DOCS_PER_POST } from "./hermesDoc";
+import { buildContexts, isDocKind, makeExcerpt, validateDocs, validateInsightLinks, MAX_DOCS_PER_POST } from "./hermesDoc";
 
 const doc = (over: Record<string, unknown> = {}) => ({
   kind: "event", key: "EV-1", title: "標題", bodyMd: "## 摘要\n內文", truncated: false,
@@ -93,6 +93,80 @@ describe("validateDocs", () => {
     expect(validateDocs({ docs: [doc({ ...base, key: "INS-2026-10-18-XYZ" })] }).ok).toBe(false);
     expect(validateDocs({ docs: [doc({ ...base, key: "EV-1" })] }).ok).toBe(false);
     expect(validateDocs({ docs: [doc({ ...base, title: "字".repeat(81) })] }).ok).toBe(false);
+  });
+
+  const insightDoc = (links: unknown) => doc({
+    kind: "insight", key: "INS-2026-10-18-1a2b3c4d", title: "心得",
+    meta: {
+      date: "2026-10-18", time: "20:28", provenance: "quote",
+      cluster: { id: "K03", name: "時間管理" }, thread: "TH-1a2b3c4d", relation: "new", parent: null,
+      ...(links === undefined ? {} : { links }),
+    },
+  });
+  const goodLinks = () => ({
+    people: [{ id: "wife", name: "老婆", dossier: "老婆", sameSegment: true }],
+    ideas: [{ id: "IDEA-0012", title: "想法標題", mentioned: true }],
+    topics: [{ id: "T20261105-01", name: "主題名" }],
+  });
+
+  it("insight 的 meta.links：缺席合格，合法資料合格", () => {
+    expect(validateDocs({ docs: [insightDoc(undefined)] }).ok).toBe(true);
+    expect(validateDocs({ docs: [insightDoc({ people: [], ideas: [], topics: [] })] }).ok).toBe(true);
+    expect(validateDocs({ docs: [insightDoc(goodLinks())] }).ok).toBe(true);
+    expect(validateInsightLinks(goodLinks())).toBeNull();
+    expect(validateInsightLinks(undefined)).toBe("insight 的 meta.links 必須是物件");
+  });
+
+  it.each([
+    ["不是物件", [1, 2]],
+    ["缺鍵", { people: [], ideas: [] }],
+    ["鍵不是陣列", { people: [], ideas: [], topics: "x" }],
+    ["people 超過 8 筆", {
+      people: Array.from({ length: 9 }, (_, i) => ({ id: `p${i}`, name: "人", dossier: null, sameSegment: false })),
+      ideas: [], topics: [],
+    }],
+    ["ideas 超過 6 筆", {
+      people: [], topics: [],
+      ideas: Array.from({ length: 7 }, (_, i) => ({ id: `IDEA-00${i}0`, title: "想法", mentioned: false })),
+    }],
+    ["topics 超過 5 筆", {
+      people: [], ideas: [],
+      topics: Array.from({ length: 6 }, (_, i) => ({ id: `T${i}`, name: "主題" })),
+    }],
+    ["IDEA 格式錯", { people: [], ideas: [{ id: "IDEA-12", title: "想法", mentioned: false }], topics: [] }],
+    ["dossier 型別錯", { people: [{ id: "wife", name: "老婆", dossier: 5, sameSegment: true }], ideas: [], topics: [] }],
+    ["sameSegment 型別錯", { people: [{ id: "wife", name: "老婆", dossier: null, sameSegment: "true" }], ideas: [], topics: [] }],
+    ["people 重複 id", {
+      people: [
+        { id: "wife", name: "老婆", dossier: null, sameSegment: true },
+        { id: "wife", name: "太太", dossier: null, sameSegment: false },
+      ], ideas: [], topics: [],
+    }],
+    ["ideas 重複 id", {
+      people: [], topics: [],
+      ideas: [
+        { id: "IDEA-0012", title: "甲", mentioned: false },
+        { id: "IDEA-0012", title: "乙", mentioned: true },
+      ],
+    }],
+    ["topics 重複 id", {
+      people: [], ideas: [],
+      topics: [{ id: "T1", name: "甲" }, { id: "T1", name: "乙" }],
+    }],
+    ["name 過長", { people: [{ id: "p", name: "字".repeat(41), dossier: null, sameSegment: false }], ideas: [], topics: [] }],
+  ])("validateInsightLinks 拒絕 %s", (_name, links) => {
+    expect(validateInsightLinks(links)).not.toBeNull();
+  });
+
+  it("validateDocs 拒絕壞掉的 meta.links（含 IDEA 格式、dossier 型別、重複 id）", () => {
+    for (const links of [
+      { people: [], ideas: [{ id: "IDEA-12", title: "想法", mentioned: false }], topics: [] },
+      { people: [{ id: "wife", name: "老婆", dossier: 5, sameSegment: true }], ideas: [], topics: [] },
+      { people: [{ id: "a", name: "甲", dossier: null, sameSegment: false }, { id: "a", name: "乙", dossier: null, sameSegment: false }], ideas: [], topics: [] },
+      { people: [], ideas: [] },
+    ]) {
+      expect(validateDocs({ docs: [insightDoc(links)] }).ok).toBe(false);
+    }
   });
 
   it("diary：key 是日期才收，meta.date 有給必須等於 key", () => {
