@@ -69,7 +69,7 @@ const P13 = [
   mk('P-11', 90, 'K08', 'TH-p9', 'new'), mk('P-12', 60, 'K09', 'TH-pa', 'new'), mk('P-13', 30, 'K01', 'TH-pb', 'new'),
 ].sort((x, y) => (x.date < y.date ? -1 : 1))
 const bodyOf = (list, names) => ({ total: list.length, thisMonth: list.filter((x) => x.date.slice(0, 7) === tpDate(0).slice(0, 7)).length, clusters: names.map(([id, name]) => ({ id, name, count: list.filter((x) => x.cluster === id).length })).filter((c) => c.count > 0), insights: list })
-const modeBody = (mode) => mode === 'dcrowd' ? bodyOf(DC, [['K01', '測量作業']]) : mode === 'prod13' ? bodyOf(P13, P13NAMES.map((n, i) => [`K0${i + 1}`, n])) : mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
+const modeBody = (mode) => mode === 'roots' ? bodyOf(ROOTS, [['K01', '測量作業']]) : mode === 'dcrowd' ? bodyOf(DC, [['K01', '測量作業']]) : mode === 'prod13' ? bodyOf(P13, P13NAMES.map((n, i) => [`K0${i + 1}`, n])) : mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
   : mode === 'big300' ? bodyOf(BIG, Array.from({ length: 12 }, (_, i) => [`K${String(i + 1).padStart(2, '0')}`, ['測量作業', '工作習慣', '人際關係經營', '健康與運動', '財務觀念', '學習方法', '家庭生活', '旅行與休息', '職涯規劃', '情緒覺察', '專案管理', '創作與興趣'][i]])) : insightsBody
 // 卷宗情境（全部虛構）：D-1 → D-2（印證）→ D-3（修正）同一脈絡；D-2 帶滿 8 人、6 想法、3 知識、8 條 headings
 const DC = [mk('D-1', 30, 'K01', 'TH-d1', 'new'), mk('D-2', 20, 'K01', 'TH-d1', 'reinforce', 'D-1'), mk('D-3', 10, 'K01', 'TH-d1', 'refine', 'D-2')]
@@ -79,6 +79,17 @@ const DC_LINKS = {
   topics: [{ id: 'T-001', name: '虛構知識主題一' }, { id: 'T 二/三', name: '虛構知識主題二' }, { id: 'T-003', name: '虛構知識主題三的名稱比較長一點' }],
 }
 const DC_HEADINGS = Array.from({ length: 8 }, (_, i) => `虛構的第 ${i + 1} 件事：和測試甲討論某個虛構的主題`)
+// 根系與反向連結情境（3.3.0；全部虛構）：R-1 有 1 人 1 想法、R-2 沒連結、R-3 擠（8 人 6 想法）、R-4 推翻 R-1 且連同一個想法與人
+const RL = (people, ideas) => ({ people, ideas, topics: [] })
+const R_P = { id: 'p0', name: '測試甲', dossier: '測試甲', sameSegment: true }
+const R_I = { id: 'IDEA-0002', title: DC_LINKS.ideas[1].title, mentioned: true }
+const ROOTS = [
+  { ...mk('R-1', 30, 'K01', 'TH-r1', 'new'), links: RL([R_P], [R_I]) },
+  mk('R-2', 20, 'K01', 'TH-r2', 'new'),
+  { ...mk('R-3', 10, 'K01', 'TH-r3', 'new'), links: RL(DC_LINKS.people, DC_LINKS.ideas) },
+  { ...mk('R-4', 5, 'K01', 'TH-r1', 'overturn', 'R-1'), links: RL([R_P], [R_I]) },
+]
+const ROOT_GRAPH = { available: true, computedAt: new Date().toISOString(), graph: { people: [{ name: '測試甲', eventCount: 1 }], events: [{ id: 'E1', date: '2026-10-01', title: '虛構事件', status: null, tags: [], case: null }], cases: [], objects: [], edges: [{ person: '測試甲', eventId: 'E1', role: 'x' }], caseEdges: [], objectEdges: [], personRelations: [], hubNarratives: [], hubAssessments: [] } }
 const STATUSES = ['doing', 'new', 'done', 'shelved', 'evaluating', 'dropped']
 const IDEAS_BODY = {
   available: true, generatedAt: null, receivedAt: null, weakest: null, top: [], weeks: [], mind: null, mindShadow: [],
@@ -130,6 +141,11 @@ async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorSc
       const it = SP[0]
       return json({ ...it, cluster: { id: 'K01', name: '測量作業' }, evidence: '（虛構日記原文）', source: '', links: { people: [], ideas: [], topics: [] }, day: { headings: [] }, threadItems: [it] })
     }
+    if (m && mode === 'roots') {
+      const it = ROOTS.find((x) => x.id === decodeURIComponent(m[1]))
+      return it ? json({ ...it, cluster: { id: 'K01', name: '測量作業' }, evidence: '（虛構日記原文）', source: '', day: { headings: [] }, threadItems: [it] }) : json({ message: 'none' }, 404)
+    }
+    if (p === '/api/hermes-graph' && mode === 'roots') return json(ROOT_GRAPH)
     if (m) { const d = detailOf(decodeURIComponent(m[1])); return d ? json(d) : json({ message: 'none' }, 404) }
     if (p === '/api/hermes-ideas') return json(IDEAS_BODY)
     if (p === '/api/search') return json(searchBody)
@@ -522,6 +538,79 @@ try {
     await r.page.locator('[data-testid="insight-day-more"]').click()
     check(`${T}：360×740 擠的卷宗 scrollWidth ≤ 360、面板無橫向溢出`, await r.page.evaluate(() => { const p = document.querySelector('[data-testid="insight-panel"]'); return document.documentElement.scrollWidth <= 360 && p.scrollWidth <= p.clientWidth + 1 }))
     await r.page.screenshot({ path: path.join(SHOTS, 'dossier-crowd-360-light.png') })
+    await r.ctx.close()
+  }
+
+  // ── 10. 根系與反向連結（3.3.0）──
+  {
+    const T = '根系'
+    const hov = async (page, id) => { await page.locator(`[data-testid="insight-leaf"][aria-label*="虛構心得 ${id}"]`).first().hover({ force: true }); await page.waitForTimeout(250) }
+    let r = await open({ width: 1440, height: 900 }, { mode: 'roots', colorScheme: 'dark' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    check(`${T}：沒有滑過時沒有根`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 0)
+    await hov(r.page, 'R-1')
+    check(`${T}：滑過有連結的葉子 → insight-roots 出現，有 1 個人物頭像與 1 個想法小卡`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 1 && (await r.page.locator('[data-testid="insight-root-person"]').count()) === 1 && (await r.page.locator('[data-testid="insight-root-idea"]').count()) === 1)
+    check(`${T}：頭像是名字第一個字、想法小卡是 💡＋標題前 6 字`, (await r.page.locator('[data-testid="insight-root-person"]').textContent()).trim() === '測' && (await r.page.locator('[data-testid="insight-root-idea"]').textContent()).startsWith('💡虛構想法乙：'))
+    check(`${T}：根層 pointer-events none、貼在地面線下方且在舞台寬度內`, await r.page.evaluate(() => { const e = document.querySelector('[data-testid="insight-roots"]'); const st = document.querySelector('.it-stage').getBoundingClientRect(), b = e.getBoundingClientRect(); return getComputedStyle(e).pointerEvents === 'none' && b.left >= st.left - 1 && b.right <= st.right + 1 && b.top > st.top && b.top < st.bottom }))
+    await r.page.mouse.move(5, 5)
+    await r.page.evaluate(() => document.querySelector('.it-stage').scrollIntoView({ block: 'start' }))
+    await r.page.waitForTimeout(200)
+    await hov(r.page, 'R-1')
+    await r.page.screenshot({ path: path.join(SHOTS, 'roots-desktop-dark.png') })
+    await r.page.mouse.move(5, 5)
+    await r.page.waitForTimeout(250)
+    check(`${T}：移開後根消失`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 0)
+    await hov(r.page, 'R-2')
+    check(`${T}：滑過沒有連結的葉子 → 不出現 insight-roots`, (await r.page.locator('[data-testid="insight-leaf"][aria-label*="R-2"]').count()) === 1 && (await r.page.locator('[data-testid="insight-roots"]').count()) === 0)
+    await hov(r.page, 'R-3')
+    check(`${T}：擠（8 人 6 想法）→ 人頭像 4 個、想法 3 個、有「+N」小標`, (await r.page.locator('[data-testid="insight-root-person"]').count()) === 4 && (await r.page.locator('[data-testid="insight-root-idea"]').count()) === 3 && (await r.page.locator('[data-testid="insight-root-more"]').count()) === 2 && /^\+4$/.test((await r.page.locator('[data-testid="insight-root-more"]').first().textContent()).trim()))
+    await r.ctx.close()
+    r = await open({ width: 1440, height: 900 }, { mode: 'roots', colorScheme: 'light' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await hov(r.page, 'R-1')
+    check(`${T}：淺色主題也出現根`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 1)
+    await r.page.mouse.move(5, 5)
+    await r.page.evaluate(() => document.querySelector('.it-stage').scrollIntoView({ block: 'start' }))
+    await r.page.waitForTimeout(200)
+    await hov(r.page, 'R-1')
+    await r.page.screenshot({ path: path.join(SHOTS, 'roots-desktop-light.png') })
+    await r.ctx.close()
+
+    // 人物卷宗
+    r = await open({ width: 1440, height: 900 }, { mode: 'roots', colorScheme: 'dark' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await r.page.evaluate(() => { location.hash = '#dossier/person/' + encodeURIComponent('測試甲') })
+    await r.page.waitForSelector('[data-testid="dossier-insights"]', { timeout: 10000 })
+    const rows = r.page.locator('[data-testid="dossier-insights"] a')
+    check(`${T}：人物卷宗有「從他身上學到的心得」3 則（R-4、R-3、R-1）、新到舊、有關係徽章`, (await rows.count()) === 3 && /R-4/.test(await rows.first().innerText()) && /推翻/.test(await rows.first().innerText()), `${await rows.count()} ${(await rows.allInnerTexts()).join('|')}`)
+    await r.page.locator('[data-testid="dossier-insights"]').screenshot({ path: path.join(SHOTS, 'roots-dossier-person.png') })
+    await rows.nth(2).click()
+    await r.page.waitForSelector('[data-testid="insight-panel"]', { timeout: 10000 })
+    check(`${T}：點一則 → 回首頁、心得面板開著且是那一則（R-1）`, (await r.page.locator('.st-home').count()) === 1 && /R-1/.test(await r.page.locator('[data-testid="insight-panel-text"]').innerText()))
+    // 想法庫
+    await r.page.keyboard.press('Escape')
+    await r.page.getByRole('button', { name: /想法庫/ }).first().click()
+    await r.page.waitForSelector('.bd-idea-item', { timeout: 10000 })
+    const card = r.page.locator('.bd-idea-list details.bd-idea-item', { hasText: '虛構想法乙' }).first()
+    await card.locator('summary').click()
+    const gi = card.locator('[data-testid="idea-insights"]')
+    await gi.waitFor({ state: 'visible', timeout: 10000 })
+    check(`${T}：想法卡有「驗證或推翻了哪些心得」，驗證 2 則（R-3、R-1）、推翻 1 則（R-4）`, /驗證或推翻了哪些心得/.test(await gi.innerText()) && (await gi.locator('[data-group="confirm"] a').count()) === 2 && (await gi.locator('[data-group="overturn"] a').count()) === 1 && /R-1/.test(await gi.locator('[data-group="confirm"] a').nth(1).innerText()))
+    await gi.screenshot({ path: path.join(SHOTS, 'roots-idea-card.png') })
+    await gi.locator('[data-group="overturn"] a').click()
+    await r.page.waitForSelector('[data-testid="insight-panel"]', { timeout: 10000 })
+    check(`${T}：點推翻那則 → 想法庫抽屜關閉、心得面板開著（R-4）`, (await r.page.locator('.bd-drawer').count()) === 0 && /R-4/.test(await r.page.locator('[data-testid="insight-panel-text"]').innerText()))
+    check(`${T}：沒有頁面例外`, r.errors.length === 0, r.errors.join(' | '))
+    await r.ctx.close()
+    // 360 寬
+    r = await open({ width: 360, height: 740 }, { mode: 'roots', colorScheme: 'dark' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await r.page.evaluate(() => { location.hash = '#dossier/person/' + encodeURIComponent('測試甲') })
+    await r.page.waitForSelector('[data-testid="dossier-insights"]', { timeout: 10000 })
+    check(`${T}：360×740 人物卷宗無橫向捲動`, await r.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
+    await r.page.goBack()
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    check(`${T}：360×740 首頁無橫向捲動`, await noHScroll(r.page))
     await r.ctx.close()
   }
 
