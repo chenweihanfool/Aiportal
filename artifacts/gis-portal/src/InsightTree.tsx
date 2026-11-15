@@ -17,6 +17,7 @@ import { dossierHref } from './dossier'
 import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } from './ideasView'
 import type { IdeaItem } from './boardApi'
 import { rootPaths, rootTargets } from './insightLinks'
+import { HIGH, LOW, bornBand, insightsByBand } from './hhiBorn'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
 // 總覽時主題多會自動精簡（葉叢、標籤縮成色點），滑過／聚焦才放大；聚焦一個主題會畫出全部脈絡與沿枝的時間。
@@ -191,8 +192,9 @@ function MiniBars({ months, max, color }: { months: number[]; max: number; color
 
 const dateShort = (d: string | null, year: string): string => (d === null ? '—' : d.slice(0, 4) === year ? d.slice(5).replace('-', '/') : d.replace(/-/g, '/'))
 
-export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
+export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiScores = null }: {
   pw: string | null; now: Date; onRequestUnlock: () => void; ideas?: IdeaItem[] | null; onOpenIdea?: (id: string) => void
+  hhiScores?: Map<string, number> | null
 }) {
   const ins = useAsync(pw, apiFetchInsights)
   const data: InsightData | null = ins.data
@@ -204,6 +206,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
   const theme = useTheme()
 
   const [selected, setSelected] = useState<string | null>(() => (typeof window === 'undefined' ? null : insightIdFromHash(window.location.hash)))
+  const [bornPick, setBornPick] = useState<'high' | 'low' | null>(null)
   const [hover, setHover] = useState<string | null>(null)
   const [upto, setUpto] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -235,6 +238,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
   const stats = useMemo(() => (data ? insightStats(data, now) : null), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const summaries = useMemo(() => (data ? clusterSummaries(data, now) : []), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((data?.insights ?? []).map((i) => [i.id, i])), [data])
+  const bands = useMemo(() => (data && hhiScores ? insightsByBand(data.insights, hhiScores) : null), [data, hhiScores])
   const slots = useMemo(() => clusterSlots((data?.insights ?? []).length === 0 ? [] : [...new Set([...(data?.clusters ?? []).map((c) => c.id), ...(data?.insights ?? []).map((i) => i.cluster)])]), [data]) // eslint-disable-line react-hooks/exhaustive-deps
   const slotOf = (cid: string): number => slots.get(cid) ?? 0
   const clusterIdx = useMemo(() => new Map((layout?.clusters ?? []).map((c, i) => [c.id, i])), [layout])
@@ -335,6 +339,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
   const year = day.slice(0, 4)
   const focusC = focus !== null && layout ? layout.clusters[focus] ?? null : null
   const maxBar = Math.max(1, ...summaries.flatMap((s) => s.months))
+  const bornList = bands && bornPick ? (bornPick === 'high' ? bands.high : bands.low).slice(0, 8) : []
 
   return (
     <section className="it-root" aria-labelledby="it-h" data-testid="insight-tree" data-theme-mode={theme}>
@@ -440,6 +445,29 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
               <p className="it-stats" data-testid="insight-stats">
                 心得 {stats.total} 則・本月 +{stats.thisMonth}・脈絡 {stats.threads} 條{stats.topReinforced ? `・最常印證：〈${stats.topReinforced.text}〉` : ''}
               </p>
+              {bands && bands.known > 0 && (
+                <p className="it-born-bands" data-testid="insight-born-bands">
+                  高分日子（≥{HIGH}）長出{' '}
+                  <button type="button" className={`it-born-n${bornPick === 'high' ? ' it-born-on' : ''}`} aria-pressed={bornPick === 'high'} aria-label={`篩選高分日子長出的 ${bands.high.length} 則心得`}
+                    onClick={() => setBornPick((v) => (v === 'high' ? null : 'high'))}>{bands.high.length}</button>
+                  {' '}則・低分日子（&lt;{LOW}）{' '}
+                  <button type="button" className={`it-born-n${bornPick === 'low' ? ' it-born-on' : ''}`} aria-pressed={bornPick === 'low'} aria-label={`篩選低分日子長出的 ${bands.low.length} 則心得`}
+                    onClick={() => setBornPick((v) => (v === 'low' ? null : 'low'))}>{bands.low.length}</button>
+                  {' '}則
+                </p>
+              )}
+              {bornList.length > 0 && (
+                <ul className="it-born-list" data-testid="insight-born-list" aria-label={bornPick === 'high' ? '高分日子長出的心得' : '低分日子長出的心得'}>
+                  {bornList.map((it) => (
+                    <li key={it.id}>
+                      <button type="button" className="it-born-item" onClick={() => open(it.id)}>
+                        <span className="it-born-item-d">{it.date}</span>
+                        <span className="it-born-item-x">{it.text}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <ul className="it-rows" data-testid="insight-rows">
                 <li>
                   <button type="button" className={`it-row it-row-all${focus === null ? ' it-row-on' : ''}`} data-testid="insight-all" aria-pressed={focus === null} onClick={() => setFocusId(null)}>
@@ -468,7 +496,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
           </div>
         )}
       </StateFrame>
-      {selected && <InsightPanel pw={pw} id={selected} fallback={byId.get(selected) ?? null} onClose={closePanel} onSelect={open} ideas={ideas ?? null} onOpenIdea={onOpenIdea ? (iid) => { closePanel(); onOpenIdea(iid) } : undefined} />}
+      {selected && <InsightPanel pw={pw} id={selected} fallback={byId.get(selected) ?? null} onClose={closePanel} onSelect={open} ideas={ideas ?? null} onOpenIdea={onOpenIdea ? (iid) => { closePanel(); onOpenIdea(iid) } : undefined} hhiScores={hhiScores} />}
     </section>
   )
 }
@@ -481,9 +509,9 @@ type DetailState = { id: string; state: 'loading' | 'ok' | 'missing' | 'error'; 
 
 const DAY_HEADINGS_SHOWN = 4
 
-export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null, onOpenIdea }: {
+export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null, onOpenIdea, hhiScores = null }: {
   pw: string | null; id: string; fallback: Insight | null; onClose: () => void; onSelect: (id: string) => void
-  ideas?: IdeaItem[] | null; onOpenIdea?: (id: string) => void
+  ideas?: IdeaItem[] | null; onOpenIdea?: (id: string) => void; hhiScores?: Map<string, number> | null
 }) {
   const [det, setDet] = useState<DetailState | null>(null)
   const [showDay, setShowDay] = useState(false)
@@ -513,6 +541,8 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null
   const d = cur?.state === 'ok' ? cur.data : null
   const text = d?.text ?? fallback?.text ?? ''
   const date = d?.date ?? fallback?.date ?? ''
+  const bornScore = date ? hhiScores?.get(date.slice(0, 10)) : undefined
+  const born = bornScore === undefined ? null : bornBand(bornScore)
   const relation = d?.relation ?? fallback?.relation ?? null
   const provenance = d?.provenance ?? fallback?.provenance ?? null
   const items = d && d.threadItems.length > 0 ? d.threadItems : fallback ? [fallback] : []
@@ -541,6 +571,11 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null
             </button>
           )}
           {relation && <span className={`it-rel it-rel-${relation}`}>{RELATION_LABEL[relation]}</span>}
+          {bornScore !== undefined && (
+            <span className={`it-born it-born-${born}`} data-testid="insight-born-score">
+              那天幸福指數 {bornScore}{born === 'high' ? ' 高' : born === 'low' ? ' 低' : ''}
+            </span>
+          )}
           {provenance && <span className="it-prov">{PROVENANCE_LABEL[provenance]}</span>}
         </div>
         {(d || date) && <h4 className="it-lb">那一天</h4>}

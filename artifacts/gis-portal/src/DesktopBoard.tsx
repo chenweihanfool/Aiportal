@@ -12,6 +12,7 @@ import { IdeaLifeSummary, IdeaLifeline, IdeaLineage, IdeaScatter } from './IdeaV
 import { IdeaDashboard } from './IdeaDashboard'
 import { apiFetchInsights } from './insightApi'
 import { insightsForIdea } from './insightLinks'
+import { taipeiDateOf } from './companion'
 import { RELATION_LABEL, type Insight, type InsightData } from './insightTree'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
@@ -535,7 +536,7 @@ function IdeaInsights({ insights, ideaId, onClose }: { insights: InsightData | n
   )
 }
 
-export function IdeasPanel({ pw, focusIdeaId = null, onClose }: { pw: string; focusIdeaId?: string | null; onClose?: () => void }) {
+export function IdeasPanel({ pw, focusIdeaId = null, onClose, hhiScores = null }: { pw: string; focusIdeaId?: string | null; onClose?: () => void; hhiScores?: Map<string, number> | null }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
   const { data: insightData } = useLoad<InsightData>(pw, apiFetchInsights)
   const [cat, setCat] = useState<string | null>(null)
@@ -549,6 +550,7 @@ export function IdeasPanel({ pw, focusIdeaId = null, onClose }: { pw: string; fo
   }, [data, cat, st, q])
   const mergedCount = useMemo(() => (data?.ideas ?? []).filter(hasMerge).length, [data])
   const topSet = new Set(data?.top ?? [])
+  const bornScoreOf = (it: IdeaItem): number | undefined => (hhiScores ? hhiScores.get(taipeiDateOf(it.bornAt)) : undefined)
   const nowMs = useMemo(() => Date.now(), [data])
   const counts = useMemo(() => stageCounts(data?.ideas ?? []), [data])
   if (error) return <Muted>暫時無法取得想法庫</Muted>
@@ -618,6 +620,7 @@ export function IdeasPanel({ pw, focusIdeaId = null, onClose }: { pw: string; fo
                 <IdeaLifeline idea={it} nowMs={nowMs} />
                 <IdeaLineage ideas={data.ideas} id={it.id} />
                 <p><b>出現在日記：</b>{it.days.join('、') || '—'}</p>
+                {bornScoreOf(it) !== undefined && <p className="bd-idea-born-score" data-testid="idea-born-score">誕生那天幸福指數：{bornScoreOf(it)}</p>}
                 <p><b>狀態歷程：</b>{it.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${STATUS_LABEL[h.status as keyof typeof STATUS_LABEL] ?? h.status}`).join(' → ')}</p>
                 <IdeaInsights insights={insightData ?? null} ideaId={it.id} onClose={onClose} />
                 <CopyToHermes idea={it} />

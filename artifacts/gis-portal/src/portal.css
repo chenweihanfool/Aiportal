@@ -359,6 +359,7 @@ body,
 .bd-idea-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.68rem; color: var(--c-ink-3); }
 .bd-idea-detail { padding: 0 12px 10px calc(5.6em + 22px); font-size: 0.76rem; color: var(--c-ink-2); line-height: 1.6; }
 .bd-idea-detail p { margin: 2px 0; }
+.bd-idea-born-score { color: var(--c-ink); }
 .bd-idea-detail b { color: var(--c-ink); font-weight: 500; }
 .bd-push-table { display: grid; gap: 2px; font-size: 0.8rem; font-family: "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--c-ink-2); }
 .bd-push-row { display: grid; grid-template-columns: minmax(9em, 1.1fr) 7em 7em 9em minmax(0, 2fr); gap: 10px; align-items: center; padding: 5px 10px; border-radius: 6px; background: var(--c-raised); }
@@ -2594,6 +2595,19 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 /* 結構化側欄：統計一行＋群清單（色點、群名、則數、最近長葉日期、近 12 個月迷你長條） */
 .it-side { min-width: 0; display: grid; gap: var(--sp-2); align-content: start; }
 .it-stats { margin: 0; padding: var(--sp-2) var(--sp-3); font-size: 0.8rem; line-height: 1.55; color: var(--c-ink-2); background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); overflow-wrap: anywhere; }
+/* 3.7.0 誕生那天的幸福指數：側欄一行（兩個數字是篩選按鈕）＋篩選出的心得清單 */
+.it-born-bands { margin: 0; padding: var(--sp-2) var(--sp-3); font-size: 0.8rem; line-height: 1.55; color: var(--c-ink-2); background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); overflow-wrap: anywhere; }
+.it-born-n { font: 600 0.82rem var(--font-mono); color: var(--c-accent-ink); background: transparent; border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; }
+.it-born-n:hover { border-color: var(--c-accent); background: var(--c-accent-soft); }
+.it-born-on { border-color: var(--c-accent); background: var(--c-accent-soft); }
+.it-born-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.it-born-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 6px 9px; border-radius: var(--r-md); border: 1px solid var(--c-line); background: var(--c-raised); color: var(--c-ink); font-size: 0.8rem; cursor: pointer; }
+.it-born-item:hover { border-color: var(--c-accent); background: var(--c-accent-soft); }
+.it-born-item-d { font: 11px var(--font-mono); color: var(--c-ink-3); }
+.it-born-item-x { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.it-born { display: inline-block; font: 11px var(--font-mono); border-radius: var(--r-pill); padding: 0 8px; border: 1px solid currentColor; color: var(--c-ink-3); }
+.it-born-high { color: var(--c-ok); }
+.it-born-low { color: var(--c-crit); }
 .it-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
 .it-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; grid-template-areas: "dot name n d" "bars bars bars bars"; align-items: center; gap: 2px 8px; width: 100%; text-align: left; padding: 6px 9px; border-radius: var(--r-md); border: 1px solid transparent; background: var(--c-raised); }
 .it-row:hover:not(:disabled) { border-color: var(--c-line-strong); }
