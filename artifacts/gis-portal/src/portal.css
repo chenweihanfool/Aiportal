@@ -2693,6 +2693,7 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .ib-card-t { font-size: 0.88rem; font-weight: 600; color: var(--c-ink); overflow-wrap: anywhere; }
 .ib-card-m { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.68rem; color: var(--c-ink-3); }
 .ib-cat { border: 1px solid var(--c-line); border-radius: 999px; padding: 0 7px; }
+.ib-quad { color: var(--c-ink-2); border: 1px dashed var(--c-line); border-radius: 999px; padding: 0 7px; }
 .ib-stale { color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: 999px; padding: 0 7px; }
 .ib-hint { margin: 0; font-size: 0.74rem; color: var(--c-ink-2); line-height: 1.55; }
 .ib-act { font: 12px var(--font-mono); padding: 3px 10px; border: 1px solid var(--c-accent-dim); border-radius: var(--r-pill); color: var(--c-accent-ink); background: var(--c-accent-soft); cursor: pointer; }
