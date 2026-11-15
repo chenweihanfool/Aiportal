@@ -69,8 +69,21 @@ const P13 = [
   mk('P-11', 90, 'K08', 'TH-p9', 'new'), mk('P-12', 60, 'K09', 'TH-pa', 'new'), mk('P-13', 30, 'K01', 'TH-pb', 'new'),
 ].sort((x, y) => (x.date < y.date ? -1 : 1))
 const bodyOf = (list, names) => ({ total: list.length, thisMonth: list.filter((x) => x.date.slice(0, 7) === tpDate(0).slice(0, 7)).length, clusters: names.map(([id, name]) => ({ id, name, count: list.filter((x) => x.cluster === id).length })).filter((c) => c.count > 0), insights: list })
-const modeBody = (mode) => mode === 'prod13' ? bodyOf(P13, P13NAMES.map((n, i) => [`K0${i + 1}`, n])) : mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
+const modeBody = (mode) => mode === 'dcrowd' ? bodyOf(DC, [['K01', '測量作業']]) : mode === 'prod13' ? bodyOf(P13, P13NAMES.map((n, i) => [`K0${i + 1}`, n])) : mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
   : mode === 'big300' ? bodyOf(BIG, Array.from({ length: 12 }, (_, i) => [`K${String(i + 1).padStart(2, '0')}`, ['測量作業', '工作習慣', '人際關係經營', '健康與運動', '財務觀念', '學習方法', '家庭生活', '旅行與休息', '職涯規劃', '情緒覺察', '專案管理', '創作與興趣'][i]])) : insightsBody
+// 卷宗情境（全部虛構）：D-1 → D-2（印證）→ D-3（修正）同一脈絡；D-2 帶滿 8 人、6 想法、3 知識、8 條 headings
+const DC = [mk('D-1', 30, 'K01', 'TH-d1', 'new'), mk('D-2', 20, 'K01', 'TH-d1', 'reinforce', 'D-1'), mk('D-3', 10, 'K01', 'TH-d1', 'refine', 'D-2')]
+const DC_LINKS = {
+  people: Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, name: `測試${'甲乙丙丁戊己庚辛'[i]}`, dossier: i % 2 === 0 ? `測試${'甲乙丙丁戊己庚辛'[i]}` : null, sameSegment: i === 5 })),
+  ideas: Array.from({ length: 6 }, (_, i) => ({ id: `IDEA-000${i + 1}`, title: `虛構想法${'甲乙丙丁戊己'[i]}：把事情先講清楚再動手做一件比較長的事`, mentioned: i % 2 === 0 })),
+  topics: [{ id: 'T-001', name: '虛構知識主題一' }, { id: 'T 二/三', name: '虛構知識主題二' }, { id: 'T-003', name: '虛構知識主題三的名稱比較長一點' }],
+}
+const DC_HEADINGS = Array.from({ length: 8 }, (_, i) => `虛構的第 ${i + 1} 件事：和測試甲討論某個虛構的主題`)
+const STATUSES = ['doing', 'new', 'done', 'shelved', 'evaluating', 'dropped']
+const IDEAS_BODY = {
+  available: true, generatedAt: null, receivedAt: null, weakest: null, top: [], weeks: [], mind: null, mindShadow: [],
+  ideas: DC_LINKS.ideas.map((x, i) => ({ id: x.id, title: x.title, category: null, dimension: null, source: null, why: null, value: 3, effort: 2, status: STATUSES[i], bornAt: '2026-10-01T00:00:00Z', lastMentioned: '2026-10-02', mentions: 1, backfill: false, days: ['2026-10-02'], history: [], score: 1, scoreWhy: [], weakBoost: false })),
+}
 const insightsBody = { total: INSIGHTS.length, thisMonth: 3, clusters: CLUSTERS, insights: INSIGHTS }
 const detailOf = (id) => {
   const it = INSIGHTS.find((x) => x.id === id)
@@ -108,7 +121,17 @@ async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorSc
       return json(modeBody(mode))
     }
     const m = /^\/api\/insights\/(.+)$/.exec(p)
+    if (m && mode === 'dcrowd') {
+      const id = decodeURIComponent(m[1]); const it = DC.find((x) => x.id === id)
+      if (!it) return json({ message: 'none' }, 404)
+      return json({ ...it, cluster: { id: 'K01', name: '測量作業' }, evidence: '（虛構日記原文）', source: `日記/${it.date}.md`, links: id === 'D-2' ? DC_LINKS : { people: [], ideas: [], topics: [] }, day: { headings: id === 'D-2' ? DC_HEADINGS : [] }, threadItems: DC })
+    }
+    if (m && mode === 'sparse1') {
+      const it = SP[0]
+      return json({ ...it, cluster: { id: 'K01', name: '測量作業' }, evidence: '（虛構日記原文）', source: '', links: { people: [], ideas: [], topics: [] }, day: { headings: [] }, threadItems: [it] })
+    }
     if (m) { const d = detailOf(decodeURIComponent(m[1])); return d ? json(d) : json({ message: 'none' }, 404) }
+    if (p === '/api/hermes-ideas') return json(IDEAS_BODY)
     if (p === '/api/search') return json(searchBody)
     if (p === '/api/timeline/day' || p.startsWith('/api/hermes-timeline')) return json({}, 404)
     return json({}, 404)
@@ -439,6 +462,67 @@ try {
     check(`${T}：用淺色色盤（data-theme-mode=light）`, (await page.locator('.it-root').getAttribute('data-theme-mode')) === 'light')
     await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'light-desktop.png') })
     await ctx.close()
+  }
+
+  // ── 9. 心得卷宗（3.2.0）：擠的、稀疏的、點人／知識／想法、上一頁、360 寬 ──
+  {
+    const T = '卷宗'
+    // 擠：8 人、6 想法、3 知識、8 條 headings
+    let r = await open({ width: 1440, height: 900 }, { mode: 'dcrowd', colorScheme: 'dark' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await r.page.locator('[data-testid="insight-leaf"][aria-label*="虛構心得 D-2"]').first().focus()
+    await r.page.keyboard.press('Enter')
+    await r.page.waitForSelector('[data-testid="insight-day-headings"]', { timeout: 10000 })
+    const hs = r.page.locator('[data-testid="insight-day-headings"] li')
+    const n4 = await hs.count()
+    const moreTxt = await r.page.locator('[data-testid="insight-day-more"]').innerText()
+    await r.page.locator('[data-testid="insight-day-more"]').click()
+    check(`${T}：那天的幾件事先顯示 4 條，按「還有 4 件」展開成 8 條`, n4 === 4 && /還有 4 件/.test(moreTxt) && (await hs.count()) === 8)
+    const chips = (id) => r.page.locator(`[data-testid="${id}"] .it-chip`)
+    check(`${T}：見了誰 8 個、同一段排前並有標記；在做的想法 6 個；相關知識 3 個`, (await chips('insight-people').count()) === 8 && /同一段/.test(await chips('insight-people').first().innerText()) && (await chips('insight-ideas').count()) === 6 && (await chips('insight-topics').count()) === 3)
+    check(`${T}：沒有卷宗的人是不可點 chip（title=還沒有人物卷宗）、想法 chip 顯示階段與「有提到」`, (await r.page.locator('[data-testid="insight-people"] .it-chip-off[title="還沒有人物卷宗"]').count()) >= 1 && /聚焦|候選|已完成|封存/.test(await chips('insight-ideas').first().innerText()) && (await r.page.locator('[data-testid="insight-ideas"]').innerText()).includes('有提到'))
+    check(`${T}：沒有「這則還沒連上」淡字`, (await r.page.locator('[data-testid="insight-nolinks"]').count()) === 0)
+    check(`${T}：後來怎麼變有 3 則、目前這則醒目、沒有「還沒有後續」`, (await r.page.locator('[data-testid="insight-thread"] li').count()) === 3 && (await r.page.locator('[data-testid="insight-thread"] li.it-cur').count()) === 1 && (await r.page.locator('[data-testid="insight-alone"]').count()) === 0)
+    await r.page.locator('[data-testid="insight-panel"]').screenshot({ path: path.join(SHOTS, 'dossier-crowd-desktop-dark.png') })
+    // 點知識 → #knowledge/
+    await r.page.locator('[data-testid="insight-topics"] a').first().click()
+    await r.page.waitForTimeout(400)
+    check(`${T}：點知識 → location.hash 以 #knowledge/ 開頭`, (await r.page.evaluate(() => location.hash)).startsWith('#knowledge/'), await r.page.evaluate(() => location.hash))
+    await r.page.goBack()
+    await r.page.waitForSelector('[data-testid="insight-panel"]', { timeout: 10000 })
+    // 點人 → #dossier/person/，再按上一頁回到首頁且心得面板重開
+    await r.page.waitForSelector('[data-testid="insight-people"] a')
+    await r.page.locator('[data-testid="insight-people"] a').first().click()
+    await r.page.waitForTimeout(400)
+    check(`${T}：點人 → location.hash 以 #dossier/person/ 開頭`, (await r.page.evaluate(() => location.hash)).startsWith('#dossier/person/'), await r.page.evaluate(() => location.hash))
+    await r.page.goBack()
+    await r.page.waitForSelector('[data-testid="insight-panel"]', { timeout: 10000 })
+    check(`${T}：從人物卷宗按上一頁 → 回首頁且心得面板重新開著`, /D-2/.test(await r.page.locator('[data-testid="insight-panel-text"]').innerText()) && (await r.page.locator('.st-home').count()) === 1)
+    // 點想法 → 想法庫抽屜含該想法標題、心得面板關閉
+    await r.page.waitForSelector('[data-testid="insight-ideas"] button')
+    await r.page.locator('[data-testid="insight-ideas"] button').first().click()
+    await r.page.waitForSelector('[data-testid="idea-search"]', { timeout: 10000 })
+    check(`${T}：點想法 → 心得面板關閉、想法庫抽屜出現且清單含該想法標題`, (await r.page.locator('[data-testid="insight-panel"]').count()) === 0 && (await r.page.locator('.bd-idea-list').innerText()).includes('虛構想法甲') && (await r.page.locator('[data-testid="idea-search"]').inputValue()) === 'IDEA-0001')
+    await r.ctx.close()
+    // 稀疏：1 則、無任何連結
+    r = await open({ width: 1280, height: 800 }, { mode: 'sparse1' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await r.page.locator('[data-testid="insight-leaf"]').first().focus()
+    await r.page.keyboard.press('Enter')
+    await r.page.waitForSelector('[data-testid="insight-nolinks"]', { timeout: 10000 })
+    check(`${T}：稀疏只看到一行淡字「這則還沒連上人、想法或知識」，沒有人／想法／知識區塊`, /這則還沒連上人、想法或知識/.test(await r.page.locator('[data-testid="insight-nolinks"]').innerText()) && (await r.page.locator('[data-testid="insight-people"], [data-testid="insight-ideas"], [data-testid="insight-topics"], [data-testid="insight-day-headings"]').count()) === 0 && /還沒有後續的印證或修正/.test(await r.page.locator('[data-testid="insight-alone"]').innerText()))
+    await r.page.locator('[data-testid="insight-panel"]').screenshot({ path: path.join(SHOTS, 'dossier-sparse.png') })
+    await r.ctx.close()
+    // 360 寬、淺色、擠
+    r = await open({ width: 360, height: 740 }, { mode: 'dcrowd', colorScheme: 'light' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await r.page.locator('[data-testid="insight-leaf"][aria-label*="虛構心得 D-2"]').first().focus()
+    await r.page.keyboard.press('Enter')
+    await r.page.waitForSelector('[data-testid="insight-people"]', { timeout: 10000 })
+    await r.page.locator('[data-testid="insight-day-more"]').click()
+    check(`${T}：360×740 擠的卷宗 scrollWidth ≤ 360、面板無橫向溢出`, await r.page.evaluate(() => { const p = document.querySelector('[data-testid="insight-panel"]'); return document.documentElement.scrollWidth <= 360 && p.scrollWidth <= p.clientWidth + 1 }))
+    await r.page.screenshot({ path: path.join(SHOTS, 'dossier-crowd-360-light.png') })
+    await r.ctx.close()
   }
 
   // ── 8. 狀態：未解鎖／空／失敗 ──

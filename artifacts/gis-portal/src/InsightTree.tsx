@@ -13,6 +13,9 @@ import { pinTargetFor } from './pushTriggers'
 import { createPortal } from 'react-dom'
 import { DayReportDialog } from './DayReportDialog'
 import { buildTimelineDayLink } from './timelineLink'
+import { dossierHref } from './dossier'
+import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } from './ideasView'
+import type { IdeaItem } from './boardApi'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
 // 總覽時主題多會自動精簡（葉叢、標籤縮成色點），滑過／聚焦才放大；聚焦一個主題會畫出全部脈絡與沿枝的時間。
@@ -145,7 +148,9 @@ function MiniBars({ months, max, color }: { months: number[]; max: number; color
 
 const dateShort = (d: string | null, year: string): string => (d === null ? '—' : d.slice(0, 4) === year ? d.slice(5).replace('-', '/') : d.replace(/-/g, '/'))
 
-export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; now: Date; onRequestUnlock: () => void }) {
+export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea }: {
+  pw: string | null; now: Date; onRequestUnlock: () => void; ideas?: IdeaItem[] | null; onOpenIdea?: (id: string) => void
+}) {
   const ins = useAsync(pw, apiFetchInsights)
   const data: InsightData | null = ins.data
   const hasTree = !!data && data.insights.length > 0
@@ -419,7 +424,7 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
           </div>
         )}
       </StateFrame>
-      {selected && <InsightPanel pw={pw} id={selected} fallback={byId.get(selected) ?? null} onClose={closePanel} onSelect={open} />}
+      {selected && <InsightPanel pw={pw} id={selected} fallback={byId.get(selected) ?? null} onClose={closePanel} onSelect={open} ideas={ideas ?? null} onOpenIdea={onOpenIdea ? (iid) => { closePanel(); onOpenIdea(iid) } : undefined} />}
     </section>
   )
 }
@@ -430,11 +435,15 @@ export function InsightTree({ pw, now, onRequestUnlock }: { pw: string | null; n
 
 type DetailState = { id: string; state: 'loading' | 'ok' | 'missing' | 'error'; data: InsightDetail | null }
 
-export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
+const DAY_HEADINGS_SHOWN = 4
+
+export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null, onOpenIdea }: {
   pw: string | null; id: string; fallback: Insight | null; onClose: () => void; onSelect: (id: string) => void
+  ideas?: IdeaItem[] | null; onOpenIdea?: (id: string) => void
 }) {
   const [det, setDet] = useState<DetailState | null>(null)
   const [showDay, setShowDay] = useState(false)
+  const [moreDay, setMoreDay] = useState(false)
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => { closeRef.current?.focus() }, [])
   useEffect(() => {
@@ -445,7 +454,7 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
   }, [onClose, showDay])
   const dateBtnRef = useRef<HTMLButtonElement>(null)
   const closeDay = useCallback(() => { setShowDay(false); setTimeout(() => dateBtnRef.current?.focus(), 0) }, [])
-  useEffect(() => { setShowDay(false) }, [id])
+  useEffect(() => { setShowDay(false); setMoreDay(false) }, [id])
   useEffect(() => {
     if (!pw) { setDet(null); return }
     const ctl = new AbortController()
@@ -463,6 +472,13 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
   const relation = d?.relation ?? fallback?.relation ?? null
   const provenance = d?.provenance ?? fallback?.provenance ?? null
   const items = d && d.threadItems.length > 0 ? d.threadItems : fallback ? [fallback] : []
+  const links = d?.links ?? fallback?.links ?? null
+  const people = [...(links?.people ?? [])].sort((a, b) => Number(b.sameSegment) - Number(a.sameSegment))
+  const ideaLinks = links?.ideas ?? []
+  const topics = links?.topics ?? []
+  const noLinks = !!d && people.length === 0 && ideaLinks.length === 0 && topics.length === 0
+  const headings = d?.day.headings ?? []
+  const ideaById = new Map((ideas ?? []).map((i) => [i.id, i] as const))
   const pinTarget = text ? pinTargetFor({ kind: 'insight', id, title: text.length > 60 ? `${text.slice(0, 59)}…` : text }) : null
 
   return (
@@ -483,6 +499,59 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
           {relation && <span className={`it-rel it-rel-${relation}`}>{RELATION_LABEL[relation]}</span>}
           {provenance && <span className="it-prov">{PROVENANCE_LABEL[provenance]}</span>}
         </div>
+        {(d || date) && <h4 className="it-lb">那一天</h4>}
+        {headings.length > 0 && (
+          <div data-testid="insight-day-headings">
+            <p className="it-dim it-day-lead">那天的幾件事</p>
+            <ul className="it-day-list">
+              {(moreDay ? headings : headings.slice(0, DAY_HEADINGS_SHOWN)).map((h) => <li key={h}>{h}</li>)}
+            </ul>
+            {headings.length > DAY_HEADINGS_SHOWN && !moreDay && (
+              <button type="button" className="it-more" data-testid="insight-day-more" onClick={() => setMoreDay(true)}>還有 {headings.length - DAY_HEADINGS_SHOWN} 件</button>
+            )}
+          </div>
+        )}
+        {people.length > 0 && (
+          <div className="it-grp" data-testid="insight-people">
+            <p className="it-dim it-day-lead">見了誰</p>
+            <ul className="it-chips">
+              {people.map((p) => (
+                <li key={p.id}>
+                  {p.dossier !== null
+                    ? <a className="it-chip" href={dossierHref('person', p.dossier)} aria-label={`開啟人物卷宗：${p.name}`}>{p.name}{p.sameSegment && <span className="it-chip-tag">同一段</span>}</a>
+                    : <span className="it-chip it-chip-off" title="還沒有人物卷宗" aria-label={`${p.name}（還沒有人物卷宗）`}>{p.name}{p.sameSegment && <span className="it-chip-tag">同一段</span>}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {ideaLinks.length > 0 && (
+          <div className="it-grp" data-testid="insight-ideas">
+            <p className="it-dim it-day-lead">在做的想法</p>
+            <ul className="it-chips">
+              {ideaLinks.map((it) => {
+                const found = ideaById.get(it.id)
+                const stage = found ? stageOf(found.status) : null
+                const inner = (
+                  <>
+                    {stage && <i className="it-chip-dot" style={{ background: STAGE_COLOR[stage] }} aria-hidden />}
+                    <span className="it-chip-x">{it.title}</span>
+                    {found && stage && <span className="it-chip-tag">{STAGE_ICON[stage]} {STAGE_LABEL[stage]}{isFocus(found.status) ? ` ${FOCUS_ICON}` : ''}</span>}
+                    {it.mentioned && <span className="it-chip-tag">有提到</span>}
+                  </>
+                )
+                return (
+                  <li key={it.id}>
+                    {onOpenIdea
+                      ? <button type="button" className="it-chip" aria-label={`在想法庫開啟：${it.title}`} onClick={() => onOpenIdea(it.id)}>{inner}</button>
+                      : <span className="it-chip it-chip-off" aria-label={it.title}>{inner}</span>}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
+        {noLinks && <p className="it-dim it-nolinks" data-testid="insight-nolinks">這則還沒連上人、想法或知識</p>}
         <h4 className="it-lb">日記原文</h4>
         {!cur || cur.state === 'loading' ? <p className="it-dim">載入中…</p>
           : cur.state === 'error' ? <p className="it-dim" role="status">原文暫時讀不到，稍後再試。</p>
@@ -491,8 +560,9 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
             <blockquote className="it-evidence" data-testid="insight-evidence">{d.evidence || '（沒有原文）'}</blockquote>
             {d.source && <div className="it-src">出處：{d.source}</div>}
           </>}
-        <h4 className="it-lb">整條脈絡</h4>
-        <ol className="it-thread" data-testid="insight-thread" aria-label="整條脈絡的時間線">
+        <h4 className="it-lb">後來怎麼變</h4>
+        {items.length <= 1 && <p className="it-dim" data-testid="insight-alone">還沒有後續的印證或修正</p>}
+        <ol className="it-thread" data-testid="insight-thread" aria-label="後來怎麼變的時間線">
           {items.map((t) => (
             <li key={t.id} className={t.id === id ? 'it-cur' : undefined} aria-current={t.id === id ? 'true' : undefined}>
               <button type="button" onClick={() => { if (t.id !== id) onSelect(t.id) }}>
@@ -503,6 +573,16 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect }: {
             </li>
           ))}
         </ol>
+        {topics.length > 0 && (
+          <>
+            <h4 className="it-lb">相關知識</h4>
+            <ul className="it-chips" data-testid="insight-topics">
+              {topics.map((t) => (
+                <li key={t.id}><a className="it-chip" href={`#knowledge/${encodeURIComponent(t.id)}`} aria-label={`開啟知識頁：${t.name}`}>{t.name}</a></li>
+              ))}
+            </ul>
+          </>
+        )}
         <div className="it-act"><PinButton pw={pw} target={pinTarget} /></div>
       </aside>
       {showDay && date && pw && createPortal(

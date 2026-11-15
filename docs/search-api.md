@@ -52,7 +52,8 @@ body：`{ q(1～50), kind|null, total(整數>=0), clickedKind|null, clickedId|nu
 ## 心得 `GET /api/insights`、`GET /api/insights/:id`（2.98.0）
 資料全在 `hermes_doc` kind=`insight`（key `INS-YYYY-MM-DD-xxxxxxxx`，推送端 kb-pipeline `docs/insights.md`）；兩支都要 `x-admin-password`（否則 403），DB 失敗 500。meta 欄位型別不對的那一筆略過。
 - 列表：`{ total, thisMonth, clusters:[{id,name,count}], insights:[{id,date,time,text,provenance,cluster,thread,relation,parent,links}] }`。insights 依 date、time（null 視為 00:00）、id 由舊到新；clusters 的 name 取該群最新一則，依 count 多到少、同數依 id；thisMonth＝台北時間本月的則數。
-- 單筆：`{ id,date,time,text,evidence,provenance,cluster:{id,name},thread,relation,parent,source,links,threadItems:[列表項，同 thread 含自己，由舊到新] }`；id 格式不對 400、找不到 404。
+- 單筆：`{ id,date,time,text,evidence,provenance,cluster:{id,name},thread,relation,parent,source,links,day,threadItems:[列表項，同 thread 含自己，由舊到新] }`；id 格式不對 400、找不到 404。
+- `day`（3.2.0 起，只在單筆回應）：`{ headings: string[] }`，當天日記（hermes_doc kind=`diary`、docKey＝心得 date）的 `### ` 標題，去掉開頭 `HH:MM`；排除標題含角色點評、多維度、精煉洞察、早安報告、明日報告、今日評分、快掃、圖譜、心智指標、週報、月報、派單、🤖 Claude Code、部署、修復、commit、cron、排程，或 `L1`～`L5`、`PR` 的；每條截 30 字、去重、最多 8 條；查不到日記回 `[]`。
 - `links`（3.1.1 起，選填；推送端有帶就必須合法）：相關的人、想法、知識主題。
   `{"people":[{"id","name","dossier":string|null,"sameSegment":boolean}],"ideas":[{"id":"IDEA-數字","title","mentioned":boolean}],"topics":[{"id","name"}]}`
   三個鍵都必須存在且為陣列；上限 people 8、ideas 6、topics 5；同陣列內 id 不可重複。舊資料或沒有 links 回三個空陣列；壞掉的 links 只略過不合格的那一筆（或整個鍵），不影響心得本身。
