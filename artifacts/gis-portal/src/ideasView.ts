@@ -436,7 +436,8 @@ export interface MoodPicks {
  * 補位用原本的 top 順序，不重複；hint 只有 quick／big 才可能非 null。
  */
 export function moodPicks(ideas: IdeaItem[], top: IdeaItem[], hhi: number | null, n = 3): MoodPicks {
-  const normal = (): IdeaItem[] => top.filter((i) => stageOf(i.status) === 'candidate' && !isFocus(i.status)).slice(0, n)
+  const ordered = (): IdeaItem[] => top.filter((i) => stageOf(i.status) === 'candidate' && !isFocus(i.status))
+  const normal = (): IdeaItem[] => ordered().slice(0, n)
   if (hhi === null) return { picks: normal(), mode: 'normal', hint: null }
   const mode: MoodMode = hhi < 60 ? 'quick' : hhi >= 80 ? 'big' : 'normal'
   if (mode === 'normal') return { picks: normal(), mode, hint: null }
@@ -447,7 +448,7 @@ export function moodPicks(ideas: IdeaItem[], top: IdeaItem[], hhi: number | null
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || a.id.localeCompare(b.id))
   const picks = rated.slice(0, n)
   const seen = new Set(picks.map((i) => i.id))
-  for (const i of normal()) {
+  for (const i of ordered()) {
     if (picks.length >= n) break
     if (seen.has(i.id)) continue
     picks.push(i)
