@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  clusterSummaries, focusViewBox, leafAge, insightIdFromHash, insightStats, layoutInsightTree, leafShape, monthSeries, OVERVIEW_ELEMENT_CAP, suggestTreeHeight, parseInsightDetail, parseInsights, taipeiDay, threadDots, threadWidth,
+  clusterSummaries, focusViewBox, leafAge, insightIdFromHash, insightStats, layoutInsightTree, leafShape, monthSeries, OVERVIEW_ELEMENT_CAP, suggestTreeHeight, parseInsightDetail, parseInsightLinks, parseInsights, taipeiDay, threadDots, threadWidth,
   type InsightData, type InsightRelation,
 } from './insightTree'
 
@@ -437,5 +437,37 @@ describe('聚焦時日期標籤與膠囊（3.0.1）', () => {
         expect(r.x0).toBeGreaterThanOrEqual(0); expect(r.x1).toBeLessThanOrEqual(W)
       }
     }
+  })
+})
+
+describe('心得 links 與 day（卷宗）', () => {
+  it('parseInsightLinks：缺鍵、非物件回空陣列，壞的單筆略過', () => {
+    const empty = { people: [], ideas: [], topics: [] }
+    expect(parseInsightLinks(undefined)).toEqual(empty)
+    expect(parseInsightLinks('x')).toEqual(empty)
+    expect(parseInsightLinks({})).toEqual(empty)
+    const l = parseInsightLinks({
+      people: [{ id: 'p1', name: '測試甲', dossier: '測試甲', sameSegment: true }, { id: '', name: '壞' }, 5, { id: 'p2', name: '測試乙', dossier: null, sameSegment: false }],
+      ideas: [{ id: 'IDEA-0001', title: '虛構想法', mentioned: true }, { id: 'IDEA-0002' }],
+      topics: [{ id: 'T1', name: '虛構主題' }, null],
+    })
+    expect(l.people.map((p) => [p.id, p.dossier, p.sameSegment])).toEqual([['p1', '測試甲', true], ['p2', null, false]])
+    expect(l.ideas).toEqual([{ id: 'IDEA-0001', title: '虛構想法', mentioned: true }])
+    expect(l.topics).toEqual([{ id: 'T1', name: '虛構主題' }])
+  })
+
+  it('舊回應沒有 links／day：解析成空', () => {
+    const it = mk('a1', '2026-01-05', 'K01', 'TH-a', 'new')
+    const d = parseInsightDetail({ ...it, cluster: { id: 'K01', name: '測量作業' }, evidence: '', source: '', threadItems: [it] })!
+    expect(d.links).toEqual({ people: [], ideas: [], topics: [] })
+    expect(d.day).toEqual({ headings: [] })
+    expect(d.threadItems[0]!.links).toEqual({ people: [], ideas: [], topics: [] })
+  })
+
+  it('day.headings 只收非空字串', () => {
+    const it = mk('a1', '2026-01-05', 'K01', 'TH-a', 'new')
+    const d = parseInsightDetail({ ...it, cluster: { id: 'K01', name: '測量作業' }, day: { headings: ['甲', 3, '', '乙'] }, links: { people: [{ id: 'p', name: '測試甲', dossier: null, sameSegment: false }] }, threadItems: [] })!
+    expect(d.day.headings).toEqual(['甲', '乙'])
+    expect(d.links.people).toHaveLength(1)
   })
 })

@@ -18,7 +18,13 @@ export interface Insight {
   thread: string
   relation: InsightRelation
   parent: string | null
+  links: InsightLinks
 }
+export interface InsightPersonLink { id: string; name: string; dossier: string | null; sameSegment: boolean }
+export interface InsightIdeaLink { id: string; title: string; mentioned: boolean }
+export interface InsightTopicLink { id: string; name: string }
+/** 心得相關的人、想法、知識主題（3.1.1 起後端提供；舊回應沒有就是三個空陣列） */
+export interface InsightLinks { people: InsightPersonLink[]; ideas: InsightIdeaLink[]; topics: InsightTopicLink[] }
 export interface InsightCluster { id: string; name: string; count: number }
 export interface InsightData { total: number; thisMonth: number; clusters: InsightCluster[]; insights: Insight[] }
 export interface InsightDetail {
@@ -33,6 +39,8 @@ export interface InsightDetail {
   relation: InsightRelation
   parent: string | null
   source: string
+  links: InsightLinks
+  day: { headings: string[] }
   threadItems: Insight[]
 }
 
@@ -52,6 +60,40 @@ const PROVENANCES: readonly string[] = ['quote', 'relay', 'tag']
 const isRelation = (v: unknown): v is InsightRelation => typeof v === 'string' && RELATIONS.includes(v)
 const isProvenance = (v: unknown): v is InsightProvenance => typeof v === 'string' && PROVENANCES.includes(v)
 
+/** 寬容解析 links：不是物件或缺鍵 → 空陣列，壞的單筆略過 */
+export function parseInsightLinks(raw: unknown): InsightLinks {
+  const out: InsightLinks = { people: [], ideas: [], topics: [] }
+  if (!isRec(raw)) return out
+  if (Array.isArray(raw.people)) {
+    for (const p of raw.people) {
+      if (!isRec(p)) continue
+      const id = nonEmpty(p.id)
+      const name = nonEmpty(p.name)
+      if (id === null || name === null || out.people.some((x) => x.id === id)) continue
+      out.people.push({ id, name, dossier: nonEmpty(p.dossier), sameSegment: p.sameSegment === true })
+    }
+  }
+  if (Array.isArray(raw.ideas)) {
+    for (const it of raw.ideas) {
+      if (!isRec(it)) continue
+      const id = nonEmpty(it.id)
+      const title = nonEmpty(it.title)
+      if (id === null || title === null || out.ideas.some((x) => x.id === id)) continue
+      out.ideas.push({ id, title, mentioned: it.mentioned === true })
+    }
+  }
+  if (Array.isArray(raw.topics)) {
+    for (const t of raw.topics) {
+      if (!isRec(t)) continue
+      const id = nonEmpty(t.id)
+      const name = nonEmpty(t.name)
+      if (id === null || name === null || out.topics.some((x) => x.id === id)) continue
+      out.topics.push({ id, name })
+    }
+  }
+  return out
+}
+
 /** 一則心得（列表項格式）；欄位不對回 null */
 export function parseInsightItem(raw: unknown): Insight | null {
   if (!isRec(raw)) return null
@@ -68,6 +110,7 @@ export function parseInsightItem(raw: unknown): Insight | null {
   return {
     id, date, time: time !== null && TIME_RE.test(time) ? time : null, text, provenance: raw.provenance, cluster, thread, relation: raw.relation,
     parent: typeof parentRaw === 'string' && parentRaw !== '' ? parentRaw : null,
+    links: parseInsightLinks(raw.links),
   }
 }
 
@@ -102,6 +145,11 @@ export function parseInsights(raw: unknown): InsightData | null {
   return { total, thisMonth, clusters, insights }
 }
 
+function parseDayHeadings(raw: unknown): string[] {
+  if (!isRec(raw) || !Array.isArray(raw.headings)) return []
+  return raw.headings.filter((h): h is string => typeof h === 'string' && h.trim() !== '').slice(0, 8)
+}
+
 /** GET /api/insights/:id 的寬容解析；缺必要欄位回 null。threadItems 裡壞掉的項略過。 */
 export function parseInsightDetail(raw: unknown): InsightDetail | null {
   if (!isRec(raw)) return null
@@ -119,8 +167,8 @@ export function parseInsightDetail(raw: unknown): InsightDetail | null {
   items.sort(cmpInsight)
   return {
     id: base.id, date: base.date, time: base.time, text: base.text, evidence: str(raw.evidence) ?? '', provenance: base.provenance,
-    cluster: { id: cid, name: str(raw.cluster.name) ?? cid }, thread: base.thread, relation: base.relation, parent: base.parent,
-    source: str(raw.source) ?? '', threadItems: items,
+    cluster: { id: cid, name: str(raw.cluster.name) ?? cid }, thread: base.thread, relation: base.relation, parent: base.parent, links: base.links,
+    source: str(raw.source) ?? '', day: { headings: parseDayHeadings(raw.day) }, threadItems: items,
   }
 }
 
