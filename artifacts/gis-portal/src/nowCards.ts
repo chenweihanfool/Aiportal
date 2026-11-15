@@ -4,7 +4,7 @@ import type { CompanionData, PersonAction, QuietPerson } from './companion'
 import { rotateQuiet, visibleQuietPeople } from './companion'
 import type { NudgeMatch, NudgeRecall, TopicNudges } from './topicNudges'
 
-export type CardKind = 'topic' | 'resume' | 'recall' | 'quiet' | 'brief' | 'onthisday' | 'pinned' | 'nearby' | 'meeting'
+export type CardKind = 'topic' | 'resume' | 'recall' | 'quiet' | 'brief' | 'onthisday' | 'pinned' | 'nearby' | 'meeting' | 'boost'
 export type NowDay = 'today' | 'tomorrow'
 
 export interface NowCard {
@@ -57,7 +57,8 @@ export function cardKeyOf(c: { kind: 'topic'; topicId: string; matchedBy?: strin
   | { kind: 'onthisday'; date: string; title: string }
   | { kind: 'pinned'; id: number }
   | { kind: 'nearby'; placeId: string; date: string }
-  | { kind: 'meeting'; date: string; start: string }): string {
+  | { kind: 'meeting'; date: string; start: string }
+  | { kind: 'boost'; dim: string; date: string }): string {
   switch (c.kind) {
     case 'topic': return `topic:${c.topicId}:${c.matchedBy || 'terms'}:${c.caseName || hash(c.firstTrigger)}`
     case 'resume': return `resume:${c.caseName}`
@@ -68,6 +69,7 @@ export function cardKeyOf(c: { kind: 'topic'; topicId: string; matchedBy?: strin
     case 'pinned': return `pinned:${c.id}`
     case 'nearby': return `nearby:${c.placeId}:${c.date}`
     case 'meeting': return `meeting:${c.date}:${c.start}`
+    case 'boost': return `boost:${c.dim}:${c.date}`
   }
 }
 
@@ -101,7 +103,7 @@ export function railPos(at: string | number | null | undefined): number | null {
   return Math.round(((c - RAIL_START) / (RAIL_END - RAIL_START)) * 1000) / 10
 }
 
-const RANK = { topicCase: 0, resume: 1, topicTerms: 2, recall: 3, quiet: 4, onthisday: 5, brief: 6 } as const
+export const RANK = { topicCase: 0, resume: 1, topicTerms: 2, recall: 3, quiet: 4, onthisday: 5, brief: 6, boost: 0.5 } as const
 
 function topicCard(m: NudgeMatch): NowCard {
   const first = m.triggers[0]?.title ?? ''
