@@ -5,10 +5,11 @@ import {
   apiFetchBoardDiskHistory, apiFetchBoardPipeline, apiFetchBoardStatus, apiFetchHhiHistory, apiFetchIdeas, apiFetchUsage, apiPostBalance,
   type BoardDiskPoint, type HhiHistoryPoint, type BoardPipeline, type BoardStatus, type PusherHealth, type IdeaItem, type IdeasData, type IdeasMind, type MindCombined, type UsageData,
 } from './boardApi'
-import { STATUS_ACTION, STATUS_ICON, STATUS_LABEL, STATUS_MARK, absorbBadges, categoryColor, categoryCounts, filterIdeas, hasMerge, nextStatuses, pips, sortForList, sortMergedGroups, statusCounts, statusMessage, topIdeas, type StatusFilter } from './ideasView'
+import { ACTION_LABEL, ACTION_MARK, FOCUS_COLOR, FOCUS_ICON, FOCUS_LABEL, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, STATUS_LABEL, absorbBadges, actionMessage, archiveReason, categoryColor, categoryCounts, filterByStage, hasMerge, isFocus, nextActions, pips, sortForList, sortMergedGroups, stageCounts, stageOf, topIdeas, type IdeaAction, type StageFilter } from './ideasView'
 import { prefillHermesChat } from './chatView'
 import { UsedChart } from './HermesDiskPanel'
 import { IdeaLifeSummary, IdeaLifeline, IdeaLineage, IdeaScatter } from './IdeaViz'
+import { IdeaDashboard } from './IdeaDashboard'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
 
@@ -348,7 +349,7 @@ function OllamaMiniCard({ pw, refreshKey }: { pw: string; refreshKey: number }) 
 }
 
 // ── 💡 想法庫（2026-10-09）─────────────────────────────
-// 日記管線萃取、HERMES 推上來，入口網只顯示。前三名由 kb-pipeline 的公式算（價值×可行×新鮮度×被想起×進行中），
+// 日記管線萃取、HERMES 推上來，入口網只顯示。前三名由 kb-pipeline 的公式算（價值×可行×新鮮度×被想起×聚焦），
 // api-server 再乘「補短板」；系統／工作改善類也一起排，只用徽章標出類別（使用者 2026-10-09 裁定）。
 const CatBadge = ({ category }: { category: string | null }) => {
   const c = categoryColor(category)
@@ -358,14 +359,14 @@ const CatBadge = ({ category }: { category: string | null }) => {
 function IdeasCard({ pw }: { pw: string }) {
   const open = useContext(DrawerCtx)
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
-  const counts = data ? statusCounts(data.ideas) : null
+  const counts = data ? stageCounts(data.ideas) : null
   const top = data ? topIdeas(data.ideas, data.top) : []
   const weeks = data?.weeks ?? []
   const thisWeek = weeks[weeks.length - 1]
   const maxW = Math.max(1, ...weeks.map(w => Math.max(w.born, w.done)))
   return (
     <Card title="想法庫：最值得先做的前三名" area="bd-idea"
-      tag={counts ? <Chip color={CV.amber}>{counts.open} 個開放中</Chip> : undefined}
+      tag={counts ? <Chip color={CV.amber}>{counts.candidate} 個候選</Chip> : undefined}
       action={<MoreBtn onClick={() => open('ideas')}>全部想法</MoreBtn>}>
       {error ? <Muted>暫時無法取得想法庫</Muted> : data === null ? <Muted>載入中…</Muted> : !data.available || data.ideas.length === 0 ? (
         <div style={{ fontSize: '0.78rem', color: CV.steel, lineHeight: 1.6 }}>
@@ -374,12 +375,12 @@ function IdeasCard({ pw }: { pw: string }) {
       ) : (
         <div className="bd-idea-body">
           <ol className="bd-idea-top">
-            {top.length === 0 && <Muted>目前沒有開放中的想法</Muted>}
+            {top.length === 0 && <Muted>目前沒有候選的想法</Muted>}
             {top.map((it, i) => (
               <li key={it.id} className="bd-idea-row" title={it.scoreWhy.join('\n')}>
                 <span className="bd-idea-rank" style={{ color: i === 0 ? CV.amber : CV.steel }}>{i + 1}</span>
                 <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <div className="bd-idea-title">{it.status === 'doing' && <span aria-label="進行中">🚀 </span>}{it.title}</div>
+                  <div className="bd-idea-title">{isFocus(it.status) && <span aria-label="聚焦">{FOCUS_ICON} </span>}{it.title}</div>
                   <div className="bd-idea-meta">
                     <CatBadge category={it.category} />
                     <span title="價值">價值 <b>{pips(it.value)}</b></span>
@@ -394,17 +395,17 @@ function IdeasCard({ pw }: { pw: string }) {
             ))}
           </ol>
           <div className="bd-idea-foot">
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 34, flex: '0 0 46%' }} role="img" aria-label="近 8 週新想法與實行數">
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 34, flex: '0 0 46%' }} role="img" aria-label="近 8 週新想法與完成數">
               {weeks.map(w => (
-                <div key={w.weekStart} title={`${w.weekStart} 起一週：新想法 ${w.born}、實行 ${w.done}`} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+                <div key={w.weekStart} title={`${w.weekStart} 起一週：新想法 ${w.born}、完成 ${w.done}`} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', gap: 1 }}>
                   <i style={{ flex: 1, height: `${Math.max(4, (w.born / maxW) * 100)}%`, background: CV.amber, opacity: w.born ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
                   <i style={{ flex: 1, height: `${Math.max(4, (w.done / maxW) * 100)}%`, background: CV.ok, opacity: w.done ? 0.9 : 0.25, borderRadius: '2px 2px 0 0' }} />
                 </div>
               ))}
             </div>
             <div style={{ fontSize: '0.68rem', color: CV.steelDim, lineHeight: 1.5 }}>
-              本週 新想法 <b style={{ color: CV.amber, fontFamily: FONT.mono }}>{thisWeek?.born ?? 0}</b> · 實行 <b style={{ color: CV.ok, fontFamily: FONT.mono }}>{thisWeek?.done ?? 0}</b>
-              <br />共 {counts!.total} 個 · 進行中 {counts!.doing} · 已實行 {counts!.done}
+              本週 新想法 <b style={{ color: CV.amber, fontFamily: FONT.mono }}>{thisWeek?.born ?? 0}</b> · 完成 <b style={{ color: CV.ok, fontFamily: FONT.mono }}>{thisWeek?.done ?? 0}</b>
+              <br />共 {counts!.total} 個 · 聚焦 {counts!.focus} · 已完成 {counts!.done}
               {data.mindCombined?.score != null && <><br /><span data-testid="ideas-card-mind" title="心智分數＝想法分數 × 80% ＋ 最新日報分數 × 20%（計入幸福指數）">心智 <b style={{ color: CV.ink, fontFamily: FONT.mono }}>{data.mindCombined.score.toFixed(1)}</b></span></>}
             </div>
           </div>
@@ -415,7 +416,7 @@ function IdeasCard({ pw }: { pw: string }) {
 }
 
 /** 複製到剪貼簿；舊瀏覽器或非安全來源沒有 navigator.clipboard 時改用隱藏 textarea */
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true }
   } catch { /* 改用下面的備援 */ }
@@ -433,22 +434,24 @@ async function copyText(text: string): Promise<boolean> {
   } catch { return false }
 }
 
+/** 把一句話帶到 HERMES 對話框；沒有對話框（舊版首頁）時複製到剪貼簿 */
+export async function sendToHermes(text: string): Promise<{ text: string; ok: boolean; chat: boolean }> {
+  if (prefillHermesChat(text)) return { text, ok: true, chat: true }
+  return { text, ok: await copyText(text), chat: false }
+}
+
 /** 「給 HERMES」：入口網不改狀態，把那句話帶進對話框（舊版首頁沒有對話框時複製），HERMES 再寫進日記 */
 function CopyToHermes({ idea }: { idea: IdeaItem }) {
   const [note, setNote] = useState('')
   const [copied, setCopied] = useState<{ text: string; ok: boolean; chat: boolean } | null>(null)
-  const copy = async (s: Parameters<typeof statusMessage>[1]) => {
-    const text = statusMessage(idea, s, note)
-    if (prefillHermesChat(text)) setCopied({ text, ok: true, chat: true })
-    else setCopied({ text, ok: await copyText(text), chat: false })
-  }
+  const copy = async (a: IdeaAction) => setCopied(await sendToHermes(actionMessage(idea, a, note)))
   return (
     <div className="bd-idea-copy">
       <div style={{ color: CV.ink, fontWeight: 500 }}>要更新進度？按一下帶到 HERMES 對話框：</div>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder="（選填）想補充的話，例如：花了三個晚上，效果不錯" style={{ ...inp, maxWidth: 520 }} aria-label="補充說明" />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {nextStatuses(idea.status).map(s => (
-          <button key={s} type="button" style={btn} onClick={() => void copy(s)}>{STATUS_MARK[s]} {STATUS_ACTION[s]}</button>
+        {nextActions(idea.status).map(a => (
+          <button key={a} type="button" style={btn} onClick={() => void copy(a)}>{ACTION_MARK[a]} {ACTION_LABEL[a]}</button>
         ))}
       </div>
       {copied && (
@@ -504,16 +507,18 @@ function IdeasMindSection({ mind, combined, shadow }: { mind: IdeasMind; combine
 export function IdeasPanel({ pw }: { pw: string }) {
   const { data, error } = useLoad<IdeasData>(pw, apiFetchIdeas)
   const [cat, setCat] = useState<string | null>(null)
-  const [st, setSt] = useState<StatusFilter>('open')
+  const [st, setSt] = useState<StageFilter>('candidate')
+  const [dashCopied, setDashCopied] = useState<{ text: string; ok: boolean; chat: boolean } | null>(null)
   const [q, setQ] = useState('')
   const cats = useMemo(() => categoryCounts(data?.ideas ?? []), [data])
   const list = useMemo(() => {
-    const f = filterIdeas(data?.ideas ?? [], cat, st, q)
+    const f = filterByStage(data?.ideas ?? [], cat, st, q)
     return st === 'merged' ? sortMergedGroups(f) : sortForList(f)
   }, [data, cat, st, q])
   const mergedCount = useMemo(() => (data?.ideas ?? []).filter(hasMerge).length, [data])
   const topSet = new Set(data?.top ?? [])
   const nowMs = useMemo(() => Date.now(), [data])
+  const counts = useMemo(() => stageCounts(data?.ideas ?? []), [data])
   if (error) return <Muted>暫時無法取得想法庫</Muted>
   if (data === null) return <Muted>載入中…</Muted>
   const pill = (active: boolean, color: string = CV.amber): CSSProperties => ({
@@ -523,14 +528,14 @@ export function IdeasPanel({ pw }: { pw: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {data.mind && <IdeasMindSection mind={data.mind} combined={data.mindCombined ?? null} shadow={data.mindShadow ?? []} />}
       <div style={{ fontSize: '0.78rem', color: CV.steel, lineHeight: 1.6 }}>
-        優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 進行中 1.1。
-        入口網只顯示；要更新進度，展開任一筆按「✅ 已實行」等按鈕，把一句話帶到 HERMES 對話框送出，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
+        優先分＝價值 ×（6−難度）× 新鮮度（45 天減半，最低 0.4）× 被想起加成 × 補短板{data.weakest ? `（目前最弱：${data.weakest} ×1.3）` : ''} × 聚焦 1.1。
+        入口網只顯示；要更新進度，展開任一筆按「✅ 已完成」等按鈕，把一句話帶到 HERMES 對話框送出，由 HERMES 寫進日記（下一班 L1 後卡片更新）。
         {data.receivedAt && <> · 最後更新 {minutesAgo(Date.parse(data.receivedAt))}</>}
       </div>
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋想法：標題、編號、原因、類別（空白分隔多個詞）" aria-label="搜尋想法" data-testid="idea-search"
         style={{ width: '100%', boxSizing: 'border-box', background: CV.panelDeep, border: `1px solid ${CV.line}`, borderRadius: 6, color: CV.ink, padding: '8px 10px', fontFamily: FONT.body, fontSize: '0.84rem' }} />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {([['open', '開放中'], ['done', '已實行'], ['closed', '擱置／放棄'], ['merged', `🔀 有合併過 ${mergedCount}`], ['all', '全部']] as Array<[StatusFilter, string]>).map(([k, l]) => (
+        {([['candidate', `${STAGE_ICON.candidate} ${STAGE_LABEL.candidate} ${counts.candidate}`], ['focus', `${FOCUS_ICON} ${FOCUS_LABEL} ${counts.focus}`], ['done', `${STAGE_ICON.done} ${STAGE_LABEL.done} ${counts.done}`], ['archived', `${STAGE_ICON.archived} ${STAGE_LABEL.archived} ${counts.archived}`], ['merged', `🔀 有合併過 ${mergedCount}`], ['all', '全部']] as Array<[StageFilter, string]>).map(([k, l]) => (
           <button key={k} type="button" style={pill(st === k)} onClick={() => setSt(k)}>{l}</button>
         ))}
       </div>
@@ -540,12 +545,19 @@ export function IdeasPanel({ pw }: { pw: string }) {
           <button key={c} type="button" style={pill(cat === c, categoryColor(c === '未分類' ? null : c))} onClick={() => setCat(cat === c ? null : c)}>{c} {n}</button>
         ))}
       </div>
+      <IdeaDashboard ideas={data.ideas} nowMs={nowMs} onAction={(t, a) => { void sendToHermes(actionMessage(t, a)).then(setDashCopied) }} />
+      {dashCopied && (
+        <div role="status" style={{ fontSize: '0.72rem', color: dashCopied.ok ? CV.ok : CV.warn }}>
+          {dashCopied.chat ? '已帶到對話框，按送出即可：' : dashCopied.ok ? '已複製，貼給 HERMES 即可：' : '瀏覽器不允許自動複製，請手動選取下面這段：'}
+          <pre className="bd-idea-copytext">{dashCopied.text}</pre>
+        </div>
+      )}
       <IdeaLifeSummary ideas={data.ideas} nowMs={nowMs} />
       <details className="bd-idea-item" data-testid="idea-scatter-box">
         <summary style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}><span style={{ color: CV.ink, fontWeight: 600 }}>價值 × 難度：該先做哪個（目前篩選的 {list.length} 個）</span></summary>
         <div className="bd-idea-detail" style={{ paddingLeft: 12 }}><IdeaScatter ideas={list} /></div>
       </details>
-      {list.length === 0 ? <Muted>{q.trim() ? `沒有符合「${q.trim()}」的想法（目前篩選：${st === 'all' ? '全部' : st}）` : '沒有符合的想法'}</Muted> : (
+      {list.length === 0 ? <Muted>{q.trim() ? `沒有符合「${q.trim()}」的想法（目前篩選：${st === 'all' ? '全部' : st === 'candidate' ? STAGE_LABEL.candidate : st === 'focus' ? FOCUS_LABEL : st === 'done' ? STAGE_LABEL.done : st === 'archived' ? STAGE_LABEL.archived : '有合併過'}）` : '沒有符合的想法'}</Muted> : (
         <div className="bd-idea-list">
           {list.map((it: IdeaItem) => (
             <details key={it.id} className="bd-idea-item">
@@ -557,7 +569,7 @@ export function IdeasPanel({ pw }: { pw: string }) {
                     <CatBadge category={it.category} />
                     {it.mergedInto
                       ? <span data-testid="idea-merged-into">{absorbBadges(it).mergedInto}</span>
-                      : <span>{STATUS_ICON[it.status]} {STATUS_LABEL[it.status]}</span>}
+                      : <StageBadge status={it.status} />}
                     {absorbBadges(it).absorbed && <span data-testid="idea-absorbed">{absorbBadges(it).absorbed}</span>}
                     <span>價值 <b>{pips(it.value)}</b></span>
                     <span>難度 <b>{pips(it.effort)}</b></span>
@@ -582,6 +594,20 @@ export function IdeasPanel({ pw }: { pw: string }) {
         </div>
       )}
     </div>
+  )
+}
+
+/** 想法卡的階段徽章：聚焦者顯示 🎯 聚焦，封存者後面小字附原因（放棄／併入） */
+function StageBadge({ status }: { status: IdeaItem['status'] }) {
+  const focus = isFocus(status)
+  const stage = stageOf(status)
+  const color = focus ? FOCUS_COLOR : STAGE_COLOR[stage]
+  const reason = archiveReason(status)
+  return (
+    <span data-testid="idea-stage" style={{ color: inkMix(color), border: `1px solid ${color}`, background: alpha(color, 10), borderRadius: 999, padding: '0 7px' }}>
+      {focus ? `${FOCUS_ICON} ${FOCUS_LABEL}` : `${STAGE_ICON[stage]} ${STAGE_LABEL[stage]}`}
+      {reason && <small style={{ marginLeft: 4, opacity: 0.8 }}>{reason}</small>}
+    </span>
   )
 }
 
@@ -717,7 +743,7 @@ function NetworkCard({ pw }: { pw: string }) {
   const { data, error } = useLoad<HermesGraphData>(pw, apiFetchHermesGraph)
   const m = data?.metrics
   const tiles: Array<[string, string, string?]> = m ? [
-    ['人物', String(m.peopleCount)], ['事件', String(m.eventsCount)], ['案件', String(m.casesCount), `${m.activeCasesCount} 進行中`],
+    ['人物', String(m.peopleCount)], ['事件', String(m.eventsCount)], ['案件', String(m.casesCount), `${m.activeCasesCount} 個在辦`],
     ['物件', String(m.objectsCount)], ['平均關聯人數', m.avgParticipantsPerEvent.toFixed(1), '每事件'], ['真孤兒事件率', `${m.trueOrphanEventRatioPct}%`, '無人物且無案件'],
   ] : []
   return (
