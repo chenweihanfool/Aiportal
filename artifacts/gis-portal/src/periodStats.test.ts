@@ -64,7 +64,7 @@ describe('buildPeriodReport', () => {
   it('想法：新增、實行、開始做、期末開著、實行率、漏斗、類別', () => {
     expect([r.ideas.new, r.ideas.done, r.ideas.started, r.ideas.openAtEnd]).toEqual([2, 1, 1, 2])
     expect(r.ideas.doneRate).toBe(0.33)
-    expect(r.ideas.funnel).toEqual({ new: 1, evaluating: 0, doing: 0, done: 1 })
+    expect(r.ideas.funnel).toEqual({ candidate: 1, focus: 0, done: 1, archived: 0 })
     expect(r.ideas.byCategory).toEqual({ 創作: 1, 旅遊: 1 })
     expect(r.ideas.oldestOpen).toMatchObject({ id: 'IDEA-0003', days: 13 })
   })
