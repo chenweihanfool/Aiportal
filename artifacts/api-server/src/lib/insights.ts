@@ -132,6 +132,7 @@ export interface InsightDetail {
   relation: string;
   parent: string | null;
   source: string | null;
+  links: InsightLinks;
   threadItems: InsightItem[];
 }
 
