@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInsightDetail, buildInsightList, parseInsightRow } from "./insights";
+import { buildInsightDetail, buildInsightList, parseInsightLinks, parseInsightRow } from "./insights";
 
 const row = (over: Record<string, unknown> = {}, metaOver: Record<string, unknown> = {}) => ({
   docKey: "INS-2026-10-18-1a2b3c4d",
@@ -92,6 +92,66 @@ describe("buildInsightList", () => {
     expect(a).toMatchObject({ id: "INS-2026-10-18-1a2b3c4d", time: null, cluster: "K03", parent: null, evidence: "日記逐字原文", source: "日記/2026-10-18.md" });
     const b = parseInsightRow(row({}, { relation: "refine", parent: "INS-2026-09-01-deadbeef" }));
     expect(b).toMatchObject({ relation: "refine", parent: "INS-2026-09-01-deadbeef" });
+  });
+});
+
+describe("meta.links", () => {
+  const links = {
+    people: [{ id: "wife", name: "老婆", dossier: "老婆", sameSegment: true }],
+    ideas: [{ id: "IDEA-0012", title: "想法標題", mentioned: true }],
+    topics: [{ id: "T20261105-01", name: "主題名" }],
+  };
+
+  it("列表與單筆都帶 links（單筆的 threadItems 也有）", () => {
+    const rows = [row({}, { links })];
+    const list = buildInsightList(rows, NOW);
+    expect(list.insights[0]!.links).toEqual(links);
+    const d = buildInsightDetail(rows, "INS-2026-10-18-1a2b3c4d")!;
+    expect(d.links).toEqual(links);
+    expect(d.threadItems[0]!.links).toEqual(links);
+  });
+
+  it("沒有 links 的舊資料回空陣列", () => {
+    const list = buildInsightList([row()], NOW);
+    expect(list.insights[0]!.links).toEqual({ people: [], ideas: [], topics: [] });
+    expect(buildInsightDetail([row()], "INS-2026-10-18-1a2b3c4d")!.links).toEqual({ people: [], ideas: [], topics: [] });
+  });
+
+  it("壞掉的 links 寬容（整則心得仍在）", () => {
+    const bads: unknown[] = [
+      "壞掉",
+      [],
+      { people: [], ideas: [] },
+      { people: "x", ideas: [], topics: [] },
+      { people: [{ id: "", name: "老婆", dossier: null, sameSegment: true }], ideas: [], topics: [] },
+      { people: [], ideas: [{ id: "IDEA-12", title: "想法", mentioned: false }], topics: [] },
+    ];
+    for (const bad of bads) {
+      const r = buildInsightList([row({}, { links: bad })], NOW);
+      expect(r.total).toBe(1);
+      expect(r.insights[0]!.links).toEqual({ people: [], ideas: [], topics: [] });
+    }
+  });
+
+  it("parseInsightLinks 略過單筆壞資料、重複 id 留第一筆、超過上限截斷", () => {
+    const parsed = parseInsightLinks({
+      people: [
+        { id: "a", name: "甲", dossier: null, sameSegment: true },
+        { id: "a", name: "重複", dossier: null, sameSegment: false },
+        { id: "b", name: "乙", dossier: 5, sameSegment: true },
+        { id: "c", name: "丙", dossier: null, sameSegment: false },
+      ],
+      ideas: [
+        { id: "IDEA-0012", title: "想法", mentioned: false },
+        { id: "IDEA-12", title: "格式錯", mentioned: false },
+      ],
+      topics: Array.from({ length: 7 }, (_, i) => ({ id: `T${i}`, name: `主題${i}` })),
+    });
+    expect(parsed.people.map((p) => p.id)).toEqual(["a", "c"]);
+    expect(parsed.ideas.map((i) => i.id)).toEqual(["IDEA-0012"]);
+    expect(parsed.topics).toHaveLength(5);
+    expect(parseInsightLinks(undefined)).toEqual({ people: [], ideas: [], topics: [] });
+    expect(parseInsightLinks({ people: [], ideas: [], topics: "x" })).toEqual({ people: [], ideas: [], topics: [] });
   });
 });
 

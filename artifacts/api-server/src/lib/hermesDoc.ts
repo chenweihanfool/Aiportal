@@ -26,6 +26,64 @@ const INSIGHT_THREAD_RE = /^TH-[0-9a-f]{8}$/;
 const INSIGHT_TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const INSIGHT_PROVENANCES = new Set(["quote", "relay", "tag"]);
 const INSIGHT_RELATIONS = new Set(["new", "reinforce", "refine", "overturn"]);
+const IDEA_KEY_RE = /^IDEA-\d{4,}$/;
+const MAX_LINK_PEOPLE = 8;
+const MAX_LINK_IDEAS = 6;
+const MAX_LINK_TOPICS = 5;
+
+const isPlainObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** 字串長度檢查；非字串或超出範圍回 false。 */
+const inLen = (v: unknown, min: number, max: number): boolean => typeof v === "string" && v.length >= min && v.length <= max;
+
+/**
+ * insight 的 meta.links（相關的人、想法、知識主題）檢查；合格回 null，不合格回錯誤訊息。
+ * 缺席（undefined）視為舊推送端，合格；存在就必須完整符合契約。
+ */
+export function validateInsightLinks(links: unknown): string | null {
+  if (!isPlainObj(links)) return "insight 的 meta.links 必須是物件";
+  for (const key of ["people", "ideas", "topics"]) {
+    if (!Array.isArray(links[key])) return `insight 的 meta.links.${key} 必須是陣列`;
+  }
+  const people = links["people"] as unknown[];
+  if (people.length > MAX_LINK_PEOPLE) return `insight 的 meta.links.people 最多 ${MAX_LINK_PEOPLE} 筆`;
+  const seenPeople = new Set<string>();
+  for (let i = 0; i < people.length; i++) {
+    const p = people[i];
+    if (!isPlainObj(p)) return `insight 的 meta.links.people[${i}] 必須是物件`;
+    if (!inLen(p["id"], 1, 64)) return `insight 的 meta.links.people[${i}].id 必須是 1～64 字`;
+    if (seenPeople.has(p["id"] as string)) return "insight 的 meta.links.people 的 id 不可重複";
+    seenPeople.add(p["id"] as string);
+    if (!inLen(p["name"], 1, 40)) return `insight 的 meta.links.people[${i}].name 必須是 1～40 字`;
+    const dossier = p["dossier"];
+    if (dossier !== null && !inLen(dossier, 1, 80)) return `insight 的 meta.links.people[${i}].dossier 必須是 null 或 1～80 字`;
+    if (typeof p["sameSegment"] !== "boolean") return `insight 的 meta.links.people[${i}].sameSegment 必須是布林`;
+  }
+  const ideas = links["ideas"] as unknown[];
+  if (ideas.length > MAX_LINK_IDEAS) return `insight 的 meta.links.ideas 最多 ${MAX_LINK_IDEAS} 筆`;
+  const seenIdeas = new Set<string>();
+  for (let i = 0; i < ideas.length; i++) {
+    const it = ideas[i];
+    if (!isPlainObj(it)) return `insight 的 meta.links.ideas[${i}] 必須是物件`;
+    if (typeof it["id"] !== "string" || !IDEA_KEY_RE.test(it["id"])) return `insight 的 meta.links.ideas[${i}].id 必須符合 IDEA-數字`;
+    if (seenIdeas.has(it["id"])) return "insight 的 meta.links.ideas 的 id 不可重複";
+    seenIdeas.add(it["id"]);
+    if (!inLen(it["title"], 1, 120)) return `insight 的 meta.links.ideas[${i}].title 必須是 1～120 字`;
+    if (typeof it["mentioned"] !== "boolean") return `insight 的 meta.links.ideas[${i}].mentioned 必須是布林`;
+  }
+  const topics = links["topics"] as unknown[];
+  if (topics.length > MAX_LINK_TOPICS) return `insight 的 meta.links.topics 最多 ${MAX_LINK_TOPICS} 筆`;
+  const seenTopics = new Set<string>();
+  for (let i = 0; i < topics.length; i++) {
+    const t = topics[i];
+    if (!isPlainObj(t)) return `insight 的 meta.links.topics[${i}] 必須是物件`;
+    if (!inLen(t["id"], 1, 40)) return `insight 的 meta.links.topics[${i}].id 必須是 1～40 字`;
+    if (seenTopics.has(t["id"] as string)) return "insight 的 meta.links.topics 的 id 不可重複";
+    seenTopics.add(t["id"] as string);
+    if (!inLen(t["name"], 1, 60)) return `insight 的 meta.links.topics[${i}].name 必須是 1～60 字`;
+  }
+  return null;
+}
 
 /** insight 的 meta 檢查；合格回 null，不合格回「哪一條」的錯誤訊息。 */
 function validateInsightMeta(key: string, meta: Record<string, unknown>): string | null {
@@ -58,6 +116,11 @@ function validateInsightMeta(key: string, meta: Record<string, unknown>): string
     if (parent !== undefined && parent !== null) return "insight 的 relation 為 new 時 parent 必須為 null";
   } else if (typeof parent !== "string" || !INSIGHT_KEY_RE.test(parent)) {
     return "insight 的 parent 必須是 INS-YYYY-MM-DD-xxxxxxxx 字串";
+  }
+  const links = meta["links"];
+  if (links !== undefined) {
+    const why = validateInsightLinks(links);
+    if (why) return why;
   }
   return null;
 }

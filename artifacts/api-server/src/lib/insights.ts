@@ -7,6 +7,92 @@ const INSIGHT_KEY_RE = /^INS-\d{4}-\d{2}-\d{2}-[0-9a-f]{8}$/;
 const INSIGHT_TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const INSIGHT_PROVENANCES = new Set(["quote", "relay", "tag"]);
 const INSIGHT_RELATIONS = new Set(["new", "reinforce", "refine", "overturn"]);
+const IDEA_KEY_RE = /^IDEA-\d{4,}$/;
+const MAX_LINK_PEOPLE = 8;
+const MAX_LINK_IDEAS = 6;
+const MAX_LINK_TOPICS = 5;
+
+export interface InsightPersonLink {
+  id: string;
+  name: string;
+  dossier: string | null;
+  sameSegment: boolean;
+}
+export interface InsightIdeaLink {
+  id: string;
+  title: string;
+  mentioned: boolean;
+}
+export interface InsightTopicLink {
+  id: string;
+  name: string;
+}
+/** 心得相關的人、想法、知識主題（meta.links）。 */
+export interface InsightLinks {
+  people: InsightPersonLink[];
+  ideas: InsightIdeaLink[];
+  topics: InsightTopicLink[];
+}
+
+const inLen = (v: unknown, min: number, max: number): boolean => typeof v === "string" && v.length >= min && v.length <= max;
+
+/** 寬容解析 meta.links：壞資料一律略過那一筆（或整個鍵），絕不讓整則心得被略過。 */
+export function parseInsightLinks(raw: unknown): InsightLinks {
+  const empty: InsightLinks = { people: [], ideas: [], topics: [] };
+  if (!isObj(raw)) return empty;
+  const out = empty;
+
+  const people = raw["people"];
+  if (Array.isArray(people)) {
+    const seen = new Set<string>();
+    for (const p of people) {
+      if (out.people.length >= MAX_LINK_PEOPLE) break;
+      if (!isObj(p)) continue;
+      const id = p["id"];
+      if (!inLen(id, 1, 64) || seen.has(id as string)) continue;
+      if (!inLen(p["name"], 1, 40)) continue;
+      const dossier = p["dossier"];
+      if (dossier !== null && !inLen(dossier, 1, 80)) continue;
+      if (typeof p["sameSegment"] !== "boolean") continue;
+      seen.add(id as string);
+      out.people.push({
+        id: id as string, name: p["name"] as string,
+        dossier: dossier as string | null, sameSegment: p["sameSegment"] as boolean,
+      });
+    }
+  }
+
+  const ideas = raw["ideas"];
+  if (Array.isArray(ideas)) {
+    const seen = new Set<string>();
+    for (const it of ideas) {
+      if (out.ideas.length >= MAX_LINK_IDEAS) break;
+      if (!isObj(it)) continue;
+      const id = it["id"];
+      if (typeof id !== "string" || !IDEA_KEY_RE.test(id) || seen.has(id)) continue;
+      if (!inLen(it["title"], 1, 120)) continue;
+      if (typeof it["mentioned"] !== "boolean") continue;
+      seen.add(id);
+      out.ideas.push({ id, title: it["title"] as string, mentioned: it["mentioned"] as boolean });
+    }
+  }
+
+  const topics = raw["topics"];
+  if (Array.isArray(topics)) {
+    const seen = new Set<string>();
+    for (const t of topics) {
+      if (out.topics.length >= MAX_LINK_TOPICS) break;
+      if (!isObj(t)) continue;
+      const id = t["id"];
+      if (!inLen(id, 1, 40) || seen.has(id as string)) continue;
+      if (!inLen(t["name"], 1, 60)) continue;
+      seen.add(id as string);
+      out.topics.push({ id: id as string, name: t["name"] as string });
+    }
+  }
+
+  return out;
+}
 
 export interface InsightItem {
   id: string;
@@ -18,6 +104,7 @@ export interface InsightItem {
   thread: string;
   relation: string;
   parent: string | null;
+  links: InsightLinks;
 }
 
 export interface InsightCluster {
@@ -45,6 +132,7 @@ export interface InsightDetail {
   relation: string;
   parent: string | null;
   source: string | null;
+  links: InsightLinks;
   threadItems: InsightItem[];
 }
 
@@ -108,6 +196,7 @@ export function parseInsightRow(row: InsightRowInput): ParsedInsight | null {
 
   return {
     id, date, time, text: title, provenance, cluster: clusterId, thread, relation, parent,
+    links: parseInsightLinks(meta["links"]),
     clusterName,
     evidence: typeof row.bodyMd === "string" ? row.bodyMd : "",
     source: str(meta["source"]),
@@ -116,7 +205,7 @@ export function parseInsightRow(row: InsightRowInput): ParsedInsight | null {
 
 const toItem = (p: ParsedInsight): InsightItem => ({
   id: p.id, date: p.date, time: p.time, text: p.text, provenance: p.provenance,
-  cluster: p.cluster, thread: p.thread, relation: p.relation, parent: p.parent,
+  cluster: p.cluster, thread: p.thread, relation: p.relation, parent: p.parent, links: p.links,
 });
 
 /** 由舊到新：date、time（null 視為 00:00）、id。 */
