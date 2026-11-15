@@ -30,6 +30,8 @@ import { apiFetchDailyLife } from './milestones'
 import { apiFetchReports, crowdOf, parseBrief, pickBrief } from './briefView'
 import { apiFetchGantt } from './taskGantt'
 import { apiFetchTopicNudges } from './topicNudges'
+import { apiFetchInsights } from './insightApi'
+import { boostCard } from './hhiBoost'
 import { NowSection } from './NowSection'
 import { InsightTree } from './InsightTree'
 import { IdeaBoard } from './IdeaBoard'
@@ -97,6 +99,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const gantt = useAsync(pw, apiFetchGantt)
   // 主題知識推播（給「現在用得上」區塊；失敗或沒資料時就沒有卡片，不併進既有區塊的狀態）
   const nudges = useAsync(pw, apiFetchTopicNudges)
+  // 最弱面向推播卡（3.4.0）：心得讀不到就當沒有（不影響首頁其他卡片）
+  const insightsForBoost = useAsync(pw, apiFetchInsights)
   // STATUS 右欄（v3）才用的讀取：舊版首頁不發這些請求
   const pwV3 = v3 ? pw : null
   const topicsFeed = useAsync(pwV3, apiFetchTopicsData)
@@ -108,6 +112,11 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
   const histData = history.data ?? []
   const trend = useMemo(() => hhiTrend(histData, todayIso, breakdown?.displayed ?? null), [histData, todayIso, breakdown])
+  // 今天最弱的一面做成推播卡；資料還沒到齊時先沒有（下一次渲染就補上）
+  const boost = useMemo(() => boostCard({
+    rows: breakdown?.rows ?? [], history: histData, insights: insightsForBoost.data?.insights ?? null,
+    companion: companion.data, personActions: personActions.data, today: todayIso,
+  }), [breakdown, histData, insightsForBoost.data, companion.data, personActions.data, todayIso])
 
   // ── 每面向 30 天迷你線：失敗、沒有 components、有效點不到 2 個，都靜靜地維持數值條（沒有錯誤提示）──
   const sparkSeries = useMemo(() => {
@@ -275,7 +284,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} onOpenIdeas={openIdeas} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
             <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
               briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
-              onActionsChange={personActions.reload}
+              boost={boost} onActionsChange={personActions.reload}
               todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
           </div>
           <StatusAside
@@ -315,7 +324,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       onRequestUnlock={onRequestUnlock} />
     <NowSection pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
       briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
-      onActionsChange={personActions.reload} />
+      boost={boost} onActionsChange={personActions.reload} />
     <div className="hm-layout">
     <HomeNav onOpenIdeas={() => { if (on) setDrawer('ideas'); else onRequestUnlock() }} />
     <div className="hm-root" data-sys={alert ? 'alert' : 'ok'}>
