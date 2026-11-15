@@ -1,9 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { db, hermesDocTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { isAuthorized } from "../lib/adminSession";
 import { logger } from "../lib/logger";
-import { buildInsightDetail, buildInsightList } from "../lib/insights";
+import { buildInsightDetail, buildInsightList, dayHeadings } from "../lib/insights";
 
 // 心得（insight）：全部存在 hermes_doc（kind='insight'），不另開表。
 // GET /api/insights 一次拿全部畫成樹；GET /api/insights/:id 單筆＋同脈絡時間線。契約見 docs/search-api.md。
@@ -37,7 +37,20 @@ router.get("/insights/:id", async (req: Request, res: Response) => {
       .where(eq(hermesDocTable.kind, "insight"));
     const detail = buildInsightDetail(rows, id);
     if (!detail) return res.status(404).json({ message: "找不到" });
-    return res.json(detail);
+    // 那一天的日記標題（查不到或查詢失敗都當沒有，不影響心得本身）
+    let headings: string[] = [];
+    try {
+      const diary = await db
+        .select({ bodyMd: hermesDocTable.bodyMd })
+        .from(hermesDocTable)
+        .where(and(eq(hermesDocTable.kind, "diary"), eq(hermesDocTable.docKey, detail.date)))
+        .limit(1);
+      const body = diary[0]?.bodyMd;
+      if (typeof body === "string") headings = dayHeadings(body);
+    } catch (err) {
+      logger.warn({ err }, "insight day headings query failed");
+    }
+    return res.json({ ...detail, day: { headings } });
   } catch (err) {
     logger.error({ err }, "insight detail query failed");
     return res.status(500).json({ message: "讀取心得失敗" });

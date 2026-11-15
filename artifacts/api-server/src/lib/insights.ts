@@ -133,6 +133,7 @@ export interface InsightDetail {
   parent: string | null;
   source: string | null;
   links: InsightLinks;
+  day: { headings: string[] };
   threadItems: InsightItem[];
 }
 
@@ -240,7 +241,7 @@ export function buildInsightList(rows: InsightRowInput[], now: Date): InsightLis
 }
 
 /** 單筆回應：同 thread 的全部心得（含自己）由舊到新；找不到（或那一筆 meta 壞掉）回 null。 */
-export function buildInsightDetail(rows: InsightRowInput[], id: string): InsightDetail | null {
+export function buildInsightDetail(rows: InsightRowInput[], id: string, dayHeadingList: string[] = []): InsightDetail | null {
   const parsed = rows.map(parseInsightRow).filter((r): r is ParsedInsight => r !== null).sort(cmpInsight);
   const self = parsed.find((p) => p.id === id);
   if (!self) return null;
@@ -250,6 +251,35 @@ export function buildInsightDetail(rows: InsightRowInput[], id: string): Insight
     evidence: self.evidence,
     cluster: { id: cluster, name: self.clusterName },
     source: self.source,
+    day: { headings: dayHeadingList },
     threadItems: parsed.filter((p) => p.thread === self.thread).map(toItem),
   };
+}
+
+const HEADING_SKIP_WORDS = [
+  "角色點評", "多維度", "精煉洞察", "早安報告", "明日報告", "今日評分", "快掃", "圖譜", "心智指標", "週報", "月報",
+  "派單", "🤖 Claude Code", "部署", "修復", "commit", "cron", "排程",
+];
+const HEADING_SKIP_RES = [/L[1-5](?![0-9])/, /PR(?![A-Za-z])/];
+const MAX_DAY_HEADINGS = 8;
+const MAX_HEADING_LEN = 30;
+
+/** 從當天日記抽出「那天的幾件事」：### 標題去掉開頭時間、排除系統／點評類標題，截 30 字、去重、最多 8 條。 */
+export function dayHeadings(bodyMd: string): string[] {
+  if (typeof bodyMd !== "string") return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const line of bodyMd.split(/\r?\n/)) {
+    if (out.length >= MAX_DAY_HEADINGS) break;
+    if (!line.startsWith("### ")) continue;
+    const title = line.slice(4).replace(/^\s*\d{1,2}[:：]\d{2}\s*/, "").trim();
+    if (!title) continue;
+    if (HEADING_SKIP_WORDS.some((w) => title.includes(w)) || HEADING_SKIP_RES.some((re) => re.test(title))) continue;
+    const chars = [...title];
+    const cut = chars.length > MAX_HEADING_LEN ? `${chars.slice(0, MAX_HEADING_LEN).join("")}…` : title;
+    if (seen.has(cut)) continue;
+    seen.add(cut);
+    out.push(cut);
+  }
+  return out;
 }

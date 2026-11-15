@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInsightDetail, buildInsightList, parseInsightLinks, parseInsightRow } from "./insights";
+import { buildInsightDetail, buildInsightList, dayHeadings, parseInsightLinks, parseInsightRow } from "./insights";
 
 const row = (over: Record<string, unknown> = {}, metaOver: Record<string, unknown> = {}) => ({
   docKey: "INS-2026-10-18-1a2b3c4d",
@@ -182,5 +182,38 @@ describe("buildInsightDetail", () => {
   it("找不到或 meta 壞掉回 null", () => {
     expect(buildInsightDetail(rows, "INS-2026-10-18-99999999")).toBeNull();
     expect(buildInsightDetail([row({}, { thread: "壞" })], "INS-2026-10-18-1a2b3c4d")).toBeNull();
+  });
+});
+
+describe("dayHeadings", () => {
+  it("抽 ### 標題、去掉時間（含全形冒號）、排除系統類、去重、截 30 字", () => {
+    const body = [
+      "# 2026-10-18",
+      "## 區段",
+      "### 09:15 和測試甲吃早餐",
+      "### 10：30 整理書桌",
+      "### 11:00 角色點評",
+      "### 12:00 L2 管線跑完",
+      "### 12:10 PR 已合併",
+      "### 12:20 Project 計畫",
+      "### 13:00 🤖 Claude Code：部署",
+      "### 14:00 和測試甲吃早餐",
+      "#### 14:30 四個井字不算",
+      "### 15:00 " + "字".repeat(35),
+    ].join("\n");
+    expect(dayHeadings(body)).toEqual(["和測試甲吃早餐", "整理書桌", "Project 計畫", "字".repeat(30) + "…"]);
+  });
+
+  it("最多 8 條、沒有標題或空字串回 []", () => {
+    const body = Array.from({ length: 12 }, (_, i) => `### 事情${i}`).join("\n");
+    expect(dayHeadings(body)).toHaveLength(8);
+    expect(dayHeadings("")).toEqual([]);
+    expect(dayHeadings("沒有標題的日記")).toEqual([]);
+  });
+
+  it("buildInsightDetail 帶入 headings，預設為空", () => {
+    const r = [row({ docKey: "INS-2026-10-18-aaaaaaaa" }, {})];
+    expect(buildInsightDetail(r, "INS-2026-10-18-aaaaaaaa")!.day).toEqual({ headings: [] });
+    expect(buildInsightDetail(r, "INS-2026-10-18-aaaaaaaa", ["甲"])!.day).toEqual({ headings: ["甲"] });
   });
 });
