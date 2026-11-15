@@ -42,16 +42,19 @@ export function rootTargets(ins: Insight, maxPeople = 4, maxIdeas = 3): RootTarg
 export interface RootPath { x: number; y: number; d: string }
 
 const r1 = (n: number): number => Math.round(n * 10) / 10
+const ROOT_GAP = 110
 
 /** n 條根：從 (originX, 0) 出發的三次貝茲曲線，末端在 0..width 內均勻分布、y 錯落在 depth*0.55～0.9 */
 export function rootPaths(originX: number, width: number, n: number, depth = 56): RootPath[] {
   if (n <= 0) return []
+  // 末端圍在樹幹附近（每個約 110px，想法小卡寬 100），不攤滿整個舞台；靠邊時整排平移回舞台內
   const margin = Math.min(18, width / 2)
-  const span = Math.max(0, width - margin * 2)
   const ox = Math.min(Math.max(originX, 0), width)
+  const span = Math.min(Math.max(0, width - margin * 2), (n - 1) * ROOT_GAP)
+  const start = Math.min(Math.max(ox - span / 2, margin), Math.max(margin, width - margin - span))
   const out: RootPath[] = []
   for (let k = 0; k < n; k++) {
-    const x = n === 1 ? width / 2 : margin + (span * k) / (n - 1)
+    const x = n === 1 ? Math.min(Math.max(ox + 40, margin), Math.max(margin, width - margin)) : start + (span * k) / (n - 1)
     const y = depth * (k % 2 === 0 ? 0.62 : 0.86)
     const c1x = ox + (x - ox) * 0.15
     const c2x = x - (x - ox) * 0.2

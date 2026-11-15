@@ -76,4 +76,10 @@ describe('rootPaths', () => {
     for (const p of r) { expect(p.x).toBeGreaterThanOrEqual(0); expect(p.x).toBeLessThanOrEqual(20) }
     expect(rootPaths(10, 200, 4)).toEqual(rootPaths(10, 200, 4))
   })
+  it('寬舞台時末端圍在樹幹附近，不攤滿整個寬度', () => {
+    const r = rootPaths(560, 1100, 3)
+    for (const p of r) expect(Math.abs(p.x - 560)).toBeLessThanOrEqual(110)
+    const edge = rootPaths(1090, 1100, 3)
+    for (const p of edge) expect(p.x).toBeLessThanOrEqual(1100 - 18)
+  })
 })
