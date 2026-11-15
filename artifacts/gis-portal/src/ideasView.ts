@@ -323,7 +323,7 @@ export function ideaDashboard(ideas: IdeaItem[], nowMs: number): IdeaDashboard {
     doneRate,
     byCategory,
     badges,
-    next: target === null ? null : { target, remaining: target - doneCount, ratio: doneCount / target },
+    next: ideas.length === 0 || target === null ? null : { target, remaining: target - doneCount, ratio: doneCount / target },
   }
 }
 

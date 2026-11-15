@@ -220,7 +220,7 @@ describe('ideaDashboard', () => {
     expect(d.doneRate).toBeNull()
     expect(d.byCategory).toEqual([])
     expect(d.badges).toEqual([])
-    expect(d.next).toEqual({ target: 1, remaining: 1, ratio: 0 })
+    expect(d.next).toBeNull()
   })
   it('一筆想法也能算', () => {
     const d = ideaDashboard([idea('ONE', { status: 'doing', lastMentioned: '2026-11-10T12:00:00+08:00' })], NOW)
