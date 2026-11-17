@@ -11,7 +11,8 @@ import type { TopicsData } from './knowledgeView'
 import { Skeleton, StateFrame } from './StateFrame'
 import type { Maybe } from './statsApi'
 import {
-  deltaText, dimCell, knowledgeWeek, knowledgeWeekText, pctText, userCorrections, type PushStats, type SearchStats, type ServiceSummary,
+  deltaText, dimCell, knowledgeWeek, knowledgeWeekText, pctText, reportDateText, reportFileHref, userCorrections,
+  type PushStats, type ReportCatalog, type SearchStats, type ServiceSummary,
 } from './statusAside'
 import type { FoodPlace } from './foodMap'
 
@@ -20,8 +21,10 @@ import type { FoodPlace } from './foodMap'
 
 type WantLine = { name: string; kind: FoodPlace['kind']; area: string | null; days: number } | null
 
+const BASE_URL = import.meta.env.BASE_URL ?? '/'
+
 // ── 一列「名稱｜數字」：可點（連結或 button），依資料狀態顯示原因；錯誤只影響這一列 ──
-function StRow({ id, label, st, value, emptyText = '—', errorText = '暫時無法取得', href, onClick, onRequestUnlock, dot, warn = false, title }: {
+function StRow({ id, label, st, value, emptyText = '—', errorText = '暫時無法取得', href, onClick, onRequestUnlock, dot, warn = false, muted = false, newTab = false, title }: {
   id: string
   label: string
   st: BlockStatus
@@ -33,20 +36,24 @@ function StRow({ id, label, st, value, emptyText = '—', errorText = '暫時無
   onRequestUnlock: () => void
   dot?: 'ok' | 'warn' | 'crit' | 'unknown'
   warn?: boolean
+  /** 資料本身是「不可用」時也灰掉（例如報告庫還沒建立） */
+  muted?: boolean
+  /** 連結在新分頁開 */
+  newTab?: boolean
   title?: string
 }) {
   let text = value
-  let muted = false
+  let mutedText = muted
   let usable = true
   switch (st.state) {
-    case 'locked': text = '🔒 解鎖後顯示'; muted = true; usable = false; break
-    case 'loading': text = '載入中…'; muted = true; usable = false; break
-    case 'error': if (!st.keepLastValue) { text = errorText; muted = true; usable = false } break
-    case 'dead': text = `已 ${formatDuration(st.ageMin ?? 0)}沒有更新`; muted = true; break
-    case 'empty': case 'pending': text = emptyText; muted = true; break
+    case 'locked': text = '🔒 解鎖後顯示'; mutedText = true; usable = false; break
+    case 'loading': text = '載入中…'; mutedText = true; usable = false; break
+    case 'error': if (!st.keepLastValue) { text = errorText; mutedText = true; usable = false } break
+    case 'dead': text = `已 ${formatDuration(st.ageMin ?? 0)}沒有更新`; mutedText = true; break
+    case 'empty': case 'pending': text = emptyText; mutedText = true; break
     default: break
   }
-  const cls = `st-row${warn ? ' st-warn' : ''}${muted ? ' st-muted' : ''}`
+  const cls = `st-row${warn ? ' st-warn' : ''}${mutedText ? ' st-muted' : ''}`
   const inner = (
     <>
       <span className="st-row-k">{dot && <i className="st-lamp" data-level={dot} aria-hidden />}{label}</span>
@@ -56,7 +63,7 @@ function StRow({ id, label, st, value, emptyText = '—', errorText = '暫時無
   const stale = st.state === 'stale' ? `（資料 ${formatDuration(st.ageMin ?? 0)}前）` : st.state === 'error' && st.keepLastValue ? '（更新失敗，顯示上次的值）' : ''
   const tip = `${title ?? label}${stale}`
   if (st.state === 'locked') return <button type="button" className={cls} data-testid={id} title="解鎖後顯示" onClick={onRequestUnlock}>{inner}</button>
-  if (usable && href) return <a className={cls} data-testid={id} href={href} title={tip}>{inner}</a>
+  if (usable && href) return <a className={cls} data-testid={id} href={href} title={tip} target={newTab ? '_blank' : undefined} rel={newTab ? 'noopener' : undefined}>{inner}</a>
   if (usable && onClick) return <button type="button" className={cls} data-testid={id} title={tip} aria-haspopup="dialog" onClick={onClick}>{inner}</button>
   return <div className={cls} data-testid={id} title={tip}>{inner}</div>
 }
@@ -78,6 +85,8 @@ export interface StatusAsideProps {
   topics: AsyncState<Maybe<TopicsData>>
   searchStats: AsyncState<Maybe<SearchStats>>
   pushStats: AsyncState<Maybe<PushStats>>
+  // 報告庫
+  reportLib: AsyncState<Maybe<ReportCatalog>>
   onOpenSearchStats: () => void
   onOpenPushStats: () => void
   sysSt: BlockStatus
@@ -127,6 +136,17 @@ export function StatusAside(p: StatusAsideProps) {
   const searchSt = statSt(p.searchStats)
   const pushSt = statSt(p.pushStats)
   const sysOk = on && p.sysSt.state === 'fresh'
+
+  // 報告庫（3.8.0）：後端還沒部署（value null）整個方塊不顯示；available:false 顯示 reason。
+  const rc = p.reportLib.data?.value ?? null
+  const reportHidden = p.reportLib.data !== null && p.reportLib.data.value === null
+  const reportSt: BlockStatus = !on
+    ? { state: 'locked', ageMin: null, keepLastValue: false }
+    : p.reportLib.error
+      ? { state: 'error', ageMin: null, keepLastValue: p.reportLib.data !== null }
+      : p.reportLib.data === null
+        ? { state: 'loading', ageMin: null, keepLastValue: false }
+        : rc ? { state: 'fresh', ageMin: null, keepLastValue: false } : { state: 'empty', ageMin: null, keepLastValue: false }
 
   const dimsGhost = <div className="st-dimgrid">{Array.from({ length: 6 }, (_, i) => <div key={i} className="st-dim st-dim--ghost"><Skeleton lines={2} /></div>)}</div>
 
@@ -181,6 +201,21 @@ export function StatusAside(p: StatusAsideProps) {
         <StRow id="st-svc" label="付費服務" st={p.svcSt} value={p.svc.text} warn={p.svc.abnormal} onClick={p.onOpenSvc} onRequestUnlock={onRequestUnlock}
           dot={p.svcSt.state === 'fresh' ? (p.svc.abnormal ? 'warn' : 'ok') : undefined} title="付費服務：用量與連結" />
       </section>
+
+      {!reportHidden && (
+        <section className="st-box st-rows" data-testid="st-reports" aria-label="報告庫">
+          <StRow id="st-reports-all" label="📑 報告庫" st={reportSt} newTab
+            value={rc && rc.available ? `${rc.count} 份` : rc ? rc.reason : '—'}
+            emptyText="還沒有報告" muted={!!rc && !rc.available}
+            href={rc && rc.available ? reportFileHref(BASE_URL, 'index.html') : undefined}
+            onRequestUnlock={onRequestUnlock} title="報告庫：全部報告（新分頁）" />
+          {rc && rc.available && rc.latest.slice(0, 3).map((r) => (
+            <StRow key={r.path} id="st-report-item" label={r.title} st={reportSt} value={reportDateText(r.date)} newTab
+              href={reportFileHref(BASE_URL, r.path)} onRequestUnlock={onRequestUnlock}
+              title={`${r.title}（${r.date}${r.project ? `・${r.project}` : ''}）`} />
+          ))}
+        </section>
+      )}
 
       {on && p.recent.length > 0 && (
         <section className="st-box st-recentbox" data-testid="st-recent" aria-label="最近搜尋">

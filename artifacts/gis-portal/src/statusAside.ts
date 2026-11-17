@@ -155,3 +155,46 @@ export function todayLine(sentence: string, move: string | null): string | null 
   const parts = [sentence.trim(), move ? `👉 ${move.trim()}` : ''].filter((x) => x !== '')
   return parts.length > 0 ? parts.join('　') : null
 }
+
+// ── 報告庫（GET /api/reports/catalog）──
+export interface ReportCatalogItem {
+  path: string; title: string; date: string; project: string; tags: string[]; status: string; summary: string
+}
+export type ReportCatalog =
+  | { available: true; count: number; generatedAt: string; latest: ReportCatalogItem[] }
+  | { available: false; reason: string }
+
+/** 寬容解析：不是物件或缺 available 回 null（呼叫端當「後端沒回應」）；壞的單筆略過，不丟例外。 */
+export function parseReportCatalog(raw: unknown): ReportCatalog | null {
+  const r = raw as Record<string, unknown> | null
+  if (!r || typeof r !== 'object' || Array.isArray(r) || typeof r.available !== 'boolean') return null
+  if (!r.available) {
+    return { available: false, reason: typeof r.reason === 'string' && r.reason.trim() !== '' ? r.reason : '報告庫尚未建立' }
+  }
+  const latest: ReportCatalogItem[] = []
+  if (Array.isArray(r.latest)) {
+    for (const x of r.latest) {
+      if (!x || typeof x !== 'object' || Array.isArray(x)) continue
+      const o = x as Record<string, unknown>
+      if (typeof o.path !== 'string' || typeof o.title !== 'string') continue
+      const tags = Array.isArray(o.tags) ? o.tags.filter((t): t is string => typeof t === 'string') : []
+      latest.push({
+        path: o.path, title: o.title, date: typeof o.date === 'string' ? o.date : '',
+        project: typeof o.project === 'string' ? o.project : '', tags,
+        status: typeof o.status === 'string' ? o.status : '',
+        summary: typeof o.summary === 'string' ? o.summary : '',
+      })
+    }
+  }
+  return { available: true, count: isNum(r.count) ? r.count : latest.length, generatedAt: typeof r.generatedAt === 'string' ? r.generatedAt : '', latest }
+}
+
+/** 報告日期只顯示 MM-DD；不是 YYYY-MM-DD 就原樣回 */
+export function reportDateText(date: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(5) : date
+}
+
+/** 報告檔的連結：各段 encodeURIComponent 後以 `/` 接起（index.html 也可用） */
+export function reportFileHref(base: string, filePath: string): string {
+  return `${base}api/reports/file/${filePath.split('/').map(encodeURIComponent).join('/')}`
+}
