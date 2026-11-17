@@ -140,6 +140,12 @@ describe("報告庫 API", () => {
 
     writeFileSync(path.join(badDir, "reports.json"), JSON.stringify({ reports: "nope" }));
     expect(await (await get("/catalog")).json()).toEqual({ available: false, reason: "報告庫目錄格式不正確" });
+
+    // 帶 BOM 的 UTF-8 也要讀得懂（PM 修正）
+    writeFileSync(path.join(badDir, "reports.json"), "﻿" + JSON.stringify({ generatedAt: "g", reports: [{ path: "a.html", title: "t" }] }));
+    const bom = await (await get("/catalog")).json() as { available: boolean; count: number };
+    expect(bom.available).toBe(true);
+    expect(bom.count).toBe(1);
   });
 
   it("serves a report as sandboxed HTML without allow-same-origin", async () => {
@@ -177,7 +183,9 @@ describe("報告庫 API", () => {
     expect((await get("/file/index.html")).status).toBe(404);
   });
 
-  it.skipIf(!symlinkOk)("does not follow a symlink that escapes the root", async () => {
+  // skipIf 在收集測試時就決定（那時 beforeAll 還沒建 symlink），所以改在執行時判斷（PM 修正）
+  it("does not follow a symlink that escapes the root", async (ctx) => {
+    if (!symlinkOk) return ctx.skip();
     const r = await get("/file/2026/link.html");
     expect(r.status).toBe(400);
     expect(await r.text()).not.toContain("不該被讀到");

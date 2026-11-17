@@ -137,7 +137,7 @@ router.get("/reports/catalog", async (req: Request, res: Response) => {
 
   let json: unknown;
   try {
-    json = JSON.parse(text);
+    json = JSON.parse(text.replace(/^﻿/, "")); // Windows 工具常寫出帶 BOM 的 UTF-8
   } catch {
     return res.json({ available: false, reason: BAD_CATALOG_MESSAGE });
   }
