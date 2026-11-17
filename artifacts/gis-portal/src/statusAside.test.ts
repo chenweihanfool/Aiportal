@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  deltaText, dimCell, dimDelta, dimRecentValues, knowledgeWeek, knowledgeWeekText, parsePushStats, parseRecent, parseSearchStats, pctText,
-  serviceSummary, sparkPoints, todayLine, userCorrections,
+  deltaText, dimCell, dimDelta, dimRecentValues, knowledgeWeek, knowledgeWeekText, parsePushStats, parseRecent, parseReportCatalog,
+  parseSearchStats, pctText, reportDateText, reportFileHref, serviceSummary, sparkPoints, todayLine, userCorrections,
 } from './statusAside'
 import type { Topic, TopicClaim } from './knowledgeView'
 import type { UsageData } from './boardApi'
@@ -176,4 +176,38 @@ describe('todayLine', () => {
   it('一句話＋建議合成一行', () => expect(todayLine('今天比昨天好。', '去走路')).toBe('今天比昨天好。　👉 去走路'))
   it('只有一句話', () => expect(todayLine('今天比昨天好。', null)).toBe('今天比昨天好。'))
   it('都沒有回 null', () => expect(todayLine('', null)).toBeNull())
+})
+
+describe('parseReportCatalog', () => {
+  const item = { path: '2026/2026-11-17_測試_報告A.html', title: '報告A', date: '2026-11-17', project: '測試', tags: ['x'], status: '定稿', summary: '一句話' }
+  it('available:true 保留目錄欄位（path/title/date/project/tags/status/summary）', () => {
+    expect(parseReportCatalog({ available: true, count: 2, generatedAt: '2026-11-17T21:00:00+08:00', latest: [item] })).toEqual({
+      available: true, count: 2, generatedAt: '2026-11-17T21:00:00+08:00', latest: [item],
+    })
+  })
+  it('壞的單筆略過，不丟例外；沒有 count 就用筆數', () => {
+    const r = parseReportCatalog({ available: true, latest: [item, { title: 1 }, null, 'x'] })
+    expect(r).toEqual({ available: true, count: 1, generatedAt: '', latest: [item] })
+  })
+  it('available:false 帶 reason；沒有 reason 給預設', () => {
+    expect(parseReportCatalog({ available: false, reason: '報告庫尚未建立' })).toEqual({ available: false, reason: '報告庫尚未建立' })
+    expect(parseReportCatalog({ available: false })).toEqual({ available: false, reason: '報告庫尚未建立' })
+  })
+  it('不是物件、缺 available、字串、陣列都回 null', () => {
+    expect(parseReportCatalog(null)).toBeNull()
+    expect(parseReportCatalog('ok')).toBeNull()
+    expect(parseReportCatalog([])).toBeNull()
+    expect(parseReportCatalog({ count: 3 })).toBeNull()
+  })
+})
+
+describe('報告庫顯示小工具', () => {
+  it('日期只留 MM-DD，格式不同就原樣', () => {
+    expect(reportDateText('2026-11-17')).toBe('11-17')
+    expect(reportDateText('11/17')).toBe('11/17')
+  })
+  it('檔案連結逐段編碼，index.html 也能用', () => {
+    expect(reportFileHref('/', 'index.html')).toBe('/api/reports/file/index.html')
+    expect(reportFileHref('/base/', '2026/2026-11-17_測試_報告A.html')).toBe(`/base/api/reports/file/2026/${encodeURIComponent('2026-11-17_測試_報告A.html')}`)
+  })
 })

@@ -2373,6 +2373,9 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .st-row-v { min-width: 0; font: 12.5px var(--font-mono); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-muted .st-row-v { color: var(--c-ink-3); }
 .st-warn .st-row-v { color: var(--c-warn); }
+/* 報告庫（3.8.0）：標題過長以省略號截斷，日期固定靠右 */
+[data-testid="st-report-item"] .st-row-k { min-width: 0; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-testid="st-report-item"] .st-row-v { flex: 0 0 auto; }
 .st-lamp { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--c-ink-3); }
 .st-lamp[data-level="ok"] { background: var(--c-ok); }
 .st-lamp[data-level="warn"] { background: var(--c-warn); }

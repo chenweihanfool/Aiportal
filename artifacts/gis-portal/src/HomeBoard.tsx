@@ -22,7 +22,7 @@ import { BriefSection, CompanionSection, DimensionsSection, FunSection, GrowthSe
 import { StateFrame } from './StateFrame'
 import { StatusAside } from './StatusAside'
 import { PushStatsPanel, SearchStatsPanel } from './StatsDrawers'
-import { apiFetchTopicsData, fetchPushStats14, fetchRecentSearches, fetchSearchStats7 } from './statsApi'
+import { apiFetchTopicsData, fetchPushStats14, fetchRecentSearches, fetchReportCatalog, fetchSearchStats7 } from './statsApi'
 import { serviceSummary, todayLine } from './statusAside'
 import type { HomeLayout } from './homeLayout'
 import { activityInsight, apiFetchCompanion, apiFetchPersonActions, bestMove, monthlyRecipe, prevMonth, recipeLine } from './companion'
@@ -109,6 +109,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const searchStats = useAsync(pwV3, fetchSearchStats7)
   const pushStats = useAsync(pwV3, fetchPushStats14)
   const recent = useAsync(pwV3, fetchRecentSearches)
+  const reportLib = useAsync(pwV3, fetchReportCatalog)
 
   const dimLinks = useMemo(() => dimensionSiteLinks(sites), [sites])
   const breakdown = useMemo(() => buildHhiBreakdown(hhiData), [hhiData])
@@ -307,7 +308,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
           <StatusAside
             on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
             hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
-            topics={topicsFeed} searchStats={searchStats} pushStats={pushStats}
+            topics={topicsFeed} searchStats={searchStats} pushStats={pushStats} reportLib={reportLib}
             onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')}
             sysSt={sysSt} light={light} onOpenOps={() => setDrawer('ops')}
             svcSt={svcSt} svc={svc} onOpenSvc={() => setDrawer('svc')}
