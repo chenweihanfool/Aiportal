@@ -16,7 +16,7 @@ import { buildTimelineDayLink } from './timelineLink'
 import { dossierHref } from './dossier'
 import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } from './ideasView'
 import type { IdeaItem } from './boardApi'
-import { rootPaths, rootTargets } from './insightLinks'
+import { rootAction, rootPaths, rootSlots, type RootAction } from './insightLinks'
 import { HIGH, LOW, bornBand, insightsByBand } from './hhiBorn'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
@@ -128,42 +128,44 @@ const Cap = memo(function Cap({ c, ci, scale, color, open, dimc, on, onPick, onE
 
 /** 圖例用的小葉形 */
 const ROOT_DEPTH = 56
+const ROOT_SWITCH_MS = 350
 const idea6 = (t: string): string => { const a = Array.from(t); return a.length > 6 ? `${a.slice(0, 6).join('')}…` : t }
 
-/** 滑過葉子時，地面下浮出的根：連到這則心得相關的人物頭像與想法小卡（只有連結才畫；不擋滑鼠） */
-function Roots({ ins, cx, top, width }: { ins: Insight; cx: number; top: number; width: number }) {
-  const t = rootTargets(ins)
-  type Slot = { kind: 'person'; name: string } | { kind: 'idea'; title: string } | { kind: 'more'; n: number; of: 'person' | 'idea' }
-  const slots: Slot[] = [
-    ...t.people.map((p): Slot => ({ kind: 'person', name: p.name })),
-    ...(t.morePeople > 0 ? [{ kind: 'more', n: t.morePeople, of: 'person' } as Slot] : []),
-    ...t.ideas.map((i): Slot => ({ kind: 'idea', title: i.title })),
-    ...(t.moreIdeas > 0 ? [{ kind: 'more', n: t.moreIdeas, of: 'idea' } as Slot] : []),
-  ]
-  if (t.people.length + t.ideas.length === 0) return null
+/** 地面下的根：滑過葉子後留著，連到這則心得相關的人物頭像與想法小卡；點人開卷宗、點想法開想法庫、點 +N 開心得面板 */
+function Roots({ ins, cx, top, width, canIdea, onPick, onEnter }: {
+  ins: Insight; cx: number; top: number; width: number; canIdea: boolean; onPick: (a: RootAction) => void; onEnter: () => void
+}) {
+  const slots = rootSlots(ins)
+  if (slots.length === 0) return null
   const paths = rootPaths(cx, width, slots.length, ROOT_DEPTH)
   return (
-    <svg className="it-roots" data-testid="insight-roots" width={width} height={ROOT_DEPTH + 14} style={{ top }} aria-hidden>
-      {paths.map((p, k) => <path key={`p${k}`} className="it-root-p" d={p.d} />)}
+    <svg className="it-roots" data-testid="insight-roots" width={width} height={ROOT_DEPTH + 14} style={{ top }} role="group" aria-label="這則心得連到的人與想法">
       {paths.map((p, k) => {
         const sl = slots[k]!
-        if (sl.kind === 'person') {
-          return (
-            <g key={`n${k}`} className="it-root-n" data-testid="insight-root-person">
-              <circle cx={p.x} cy={p.y} r={9} /><text x={p.x} y={p.y + 3.5} textAnchor="middle">{Array.from(sl.name)[0] ?? ''}</text>
-            </g>
-          )
-        }
-        if (sl.kind === 'idea') {
-          const w = 100
-          const x = Math.min(Math.max(p.x, w / 2 + 2), Math.max(w / 2 + 2, width - w / 2 - 2))
-          return (
-            <g key={`n${k}`} className="it-root-i" data-testid="insight-root-idea">
-              <rect x={x - w / 2} y={p.y - 9} width={w} height={18} rx={6} /><text x={x} y={p.y + 3.5} textAnchor="middle">{`💡${idea6(sl.title)}`}</text>
-            </g>
-          )
-        }
-        return <text key={`n${k}`} className="it-root-more" data-testid="insight-root-more" x={p.x} y={p.y + 3.5} textAnchor="middle">+{sl.n}</text>
+        const act = sl.kind === 'idea' && !canIdea ? null : rootAction(sl)
+        const label = sl.kind === 'person' ? `開啟人物卷宗：${sl.name}` : sl.kind === 'idea' ? `在想法庫開啟：${sl.title}` : '看這則心得的全部連結'
+        const node = sl.kind === 'person' ? (
+          <g className="it-root-n" data-testid="insight-root-person">
+            <circle cx={p.x} cy={p.y} r={9} /><text x={p.x} y={p.y + 3.5} textAnchor="middle">{Array.from(sl.name)[0] ?? ''}</text>
+          </g>
+        ) : sl.kind === 'idea' ? (
+          <g className="it-root-i" data-testid="insight-root-idea">
+            <rect x={Math.min(Math.max(p.x, 52), Math.max(52, width - 52)) - 50} y={p.y - 9} width={100} height={18} rx={6} />
+            <text x={Math.min(Math.max(p.x, 52), Math.max(52, width - 52))} y={p.y + 3.5} textAnchor="middle">{`💡${idea6(sl.title)}`}</text>
+          </g>
+        ) : (
+          <text className="it-root-more" data-testid="insight-root-more" x={p.x} y={p.y + 3.5} textAnchor="middle">+{sl.n}</text>
+        )
+        return (
+          <g key={`n${k}`} className={`it-root-go${act ? '' : ' it-root-off'}`} data-testid="insight-root-go" onMouseEnter={onEnter}
+            {...(act
+              ? { role: act.kind === 'dossier' ? 'link' : 'button', 'aria-label': label, tabIndex: -1, onClick: () => onPick(act) }
+              : { title: sl.kind === 'person' ? '還沒有人物卷宗' : undefined })}>
+            <path className="it-root-hit" d={p.d} />
+            <path className="it-root-p" d={p.d} />
+            {node}
+          </g>
+        )
       })}
     </svg>
   )
@@ -208,6 +210,13 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
   const [selected, setSelected] = useState<string | null>(() => (typeof window === 'undefined' ? null : insightIdFromHash(window.location.hash)))
   const [bornPick, setBornPick] = useState<'high' | 'low' | null>(null)
   const [hover, setHover] = useState<string | null>(null)
+  // 根系「黏住」：滑過／聚焦葉子時記下那片，離開葉子不清（否則根一移過去就消失、點不到）
+  const [rootsFor, setRootsFor] = useState<string | null>(null)
+  const rootsRef = useRef<string | null>(null)
+  rootsRef.current = rootsFor
+  const rootTimer = useRef<number | null>(null)
+  const clearRootTimer = () => { if (rootTimer.current !== null) { window.clearTimeout(rootTimer.current); rootTimer.current = null } }
+  useEffect(() => clearRootTimer, [])
   const [upto, setUpto] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -238,6 +247,8 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
   const stats = useMemo(() => (data ? insightStats(data, now) : null), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const summaries = useMemo(() => (data ? clusterSummaries(data, now) : []), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((data?.insights ?? []).map((i) => [i.id, i])), [data])
+  const byIdRef = useRef(byId)
+  byIdRef.current = byId
   const bands = useMemo(() => (data && hhiScores ? insightsByBand(data.insights, hhiScores) : null), [data, hhiScores])
   const slots = useMemo(() => clusterSlots((data?.insights ?? []).length === 0 ? [] : [...new Set([...(data?.clusters ?? []).map((c) => c.id), ...(data?.insights ?? []).map((i) => i.cluster)])]), [data]) // eslint-disable-line react-hooks/exhaustive-deps
   const slotOf = (cid: string): number => slots.get(cid) ?? 0
@@ -324,14 +335,40 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
   }, [])
   // 開面板時寫入 #insight/<id>（一般 hash 導航會留歷史），從時間軸按瀏覽器上一頁才回得到這則心得
   const open = useCallback((id: string) => {
-    setHover(null); setSelected(id)
+    clearRootTimer(); setHover(null); setRootsFor(null); setSelected(id)
     if (insightIdFromHash(window.location.hash) !== id) window.location.hash = `insight/${encodeURIComponent(id)}`
   }, [])
   const onLeafKey = useCallback((e: ReactKeyboardEvent, id: string) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(id) } }, [open])
+  // 滑過／聚焦葉子：提示跟 hover，根系換成那片；離開葉子只收提示，根留著讓人移過去點
+  // 根已經出現時，滑鼠往下移向根的途中會掠過別的葉子：要在那片葉子停 ROOT_SWITCH_MS 才換根（hover intent），只是路過就不換
+  const onLeafHover = useCallback((id: string | null) => {
+    setHover(id)
+    clearRootTimer()
+    if (id === null) return
+    const ins = byIdRef.current.get(id)
+    const next = ins && rootSlots(ins).length > 0 ? id : null // 沒連結的葉子不佔根
+    const cur = rootsRef.current
+    if (cur === null || cur === next) { setRootsFor(next); return }
+    rootTimer.current = window.setTimeout(() => { rootTimer.current = null; setRootsFor(next) }, ROOT_SWITCH_MS)
+  }, [])
+  // 根有一半畫在舞台下緣外：離開舞台也給一段寬限，移進根（onEnterRoots）或回到舞台就取消
+  const leaveStage = useCallback(() => {
+    clearRootTimer()
+    rootTimer.current = window.setTimeout(() => { rootTimer.current = null; setRootsFor(null) }, ROOT_SWITCH_MS)
+  }, [])
+  const onRootPick = useCallback((a: RootAction) => {
+    const id = rootsFor
+    clearRootTimer(); setHover(null); setRootsFor(null)
+    if (a.kind === 'dossier') window.location.hash = a.href
+    else if (a.kind === 'idea') onOpenIdea?.(a.id)
+    else if (id !== null) open(id)
+  }, [rootsFor, onOpenIdea, open])
 
   // ── 滑過／聚焦一片葉子：從樹幹到它的整條路徑亮起 ──
   const hovered = hover && layout ? layout.leaves.find((l) => l.id === hover) ?? null : null
   const hoveredIns = hovered ? byId.get(hovered.id) : undefined
+  const rootsLeaf = rootsFor && layout ? layout.leaves.find((l) => l.id === rootsFor) ?? null : null
+  const rootsIns = rootsLeaf ? byId.get(rootsLeaf.id) : undefined
   const lit = useMemo<ReadonlySet<string>>(() => (hovered ? new Set(hovered.path) : EMPTY_SET), [hovered])
   const view = vb ?? { x: 0, y: 0, w: layout?.width ?? width, h: layout?.height ?? height }
   const scale = layout ? layout.width / view.w : 1
@@ -360,7 +397,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
         {layout && stats && (
           <div className="it-body">
             <div className="it-main">
-              <div className="it-stage" ref={stageRef} style={{ height: layout.height }}>
+              <div className="it-stage" ref={stageRef} style={{ height: layout.height }} onMouseLeave={leaveStage} onMouseEnter={clearRootTimer}>
                 <svg
                   className={`it-svg${hovered ? ' it-hl' : ''}${focus !== null ? ' it-fx' : ''}`} viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
                   width={layout.width} height={layout.height} role="group" aria-label="我的心得樹：一棵樹是我的人生，每條主枝是一個主題，越外越新" data-focus={focus ?? undefined}
@@ -400,7 +437,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
                   ))}
                   {layout.leaves.map((lf) => (
                     <Leaf key={lf.id} lf={lf} ins={byId.get(lf.id)} color={col(lf.clusterIndex, lf.shade, lf.age)} lit={lit.has(lf.id) && hovered?.id === lf.id}
-                      dimc={focus !== null && lf.clusterIndex !== focus} fresh={fresh.has(lf.id)} onOpen={open} onHover={setHover} onKey={onLeafKey} />
+                      dimc={focus !== null && lf.clusterIndex !== focus} fresh={fresh.has(lf.id)} onOpen={open} onHover={onLeafHover} onKey={onLeafKey} />
                   ))}
                   {focusC && focusC.ticks.map((t, k) => (
                     <g key={`${t.label}${k}`} className="it-btick" data-testid="insight-btick" style={{ color: col(focus!) }}>
@@ -415,7 +452,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
                   ))}
                   {upto && <text className="it-bigmonth" x={16} y={36}>{upto}</text>}
                 </svg>
-                {hovered && hoveredIns && <Roots ins={hoveredIns} cx={(layout.axis.cx - view.x) * scale} top={(layout.axis.ground - view.y) * scale} width={layout.width} />}
+                {rootsLeaf && rootsIns && <Roots ins={rootsIns} cx={(layout.axis.cx - view.x) * scale} top={(layout.axis.ground - view.y) * scale} width={layout.width} canIdea={!!onOpenIdea} onPick={onRootPick} onEnter={clearRootTimer} />}
                 {hovered && hoveredIns && (
                   <div className="it-tip" role="tooltip" data-testid="insight-tip"
                     style={{ left: Math.min(Math.max((hovered.x - view.x) * scale, 120), Math.max(120, layout.width - 120)), top: (hovered.y - view.y - hovered.r * 1.5) * scale - 6 }}>

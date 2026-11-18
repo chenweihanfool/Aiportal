@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { insightsForIdea, insightsForPerson, rootPaths, rootTargets } from './insightLinks'
+import { insightsForIdea, insightsForPerson, rootAction, rootPaths, rootSlots, rootTargets } from './insightLinks'
 import type { Insight, InsightData, InsightIdeaLink, InsightPersonLink, InsightRelation } from './insightTree'
 
 function mk(id: string, date: string, o: { time?: string | null; relation?: InsightRelation; people?: InsightPersonLink[]; ideas?: InsightIdeaLink[] } = {}): Insight {
@@ -53,6 +53,28 @@ describe('rootTargets', () => {
   })
   it('沒有連結全空', () => {
     expect(rootTargets(mk('a', '2026-01-01'))).toEqual({ people: [], ideas: [], morePeople: 0, moreIdeas: 0 })
+  })
+})
+
+describe('rootSlots / rootAction', () => {
+  it('slot 順序＝人、+人、想法、+想法（8 人有 +4、4 想法有 +1）', () => {
+    const people = Array.from({ length: 8 }, (_, k) => P(String(k + 1)))
+    const ideas = Array.from({ length: 4 }, (_, k) => I(`i${k + 1}`))
+    const slots = rootSlots(mk('a', '2026-01-01', { people, ideas }))
+    expect(slots.map((s) => s.kind)).toEqual(['person', 'person', 'person', 'person', 'more', 'idea', 'idea', 'idea', 'more'])
+    expect(slots[4]).toEqual({ kind: 'more', n: 4, of: 'person' })
+    expect(slots[8]).toEqual({ kind: 'more', n: 1, of: 'idea' })
+    expect(slots[5]).toEqual({ kind: 'idea', id: 'i1', title: '想法i1' })
+    expect(slots[0]).toEqual({ kind: 'person', name: '1', dossier: '1' })
+  })
+  it('有卷宗的人 → dossier href；沒卷宗 → null；想法 → idea id；+N → panel', () => {
+    expect(rootAction({ kind: 'person', name: '甲', dossier: '甲' })).toEqual({ kind: 'dossier', href: `#dossier/person/${encodeURIComponent('甲')}` })
+    expect(rootAction({ kind: 'person', name: '乙', dossier: null })).toBeNull()
+    expect(rootAction({ kind: 'idea', id: 'IDEA-0002', title: 't' })).toEqual({ kind: 'idea', id: 'IDEA-0002' })
+    expect(rootAction({ kind: 'more', n: 4, of: 'person' })).toEqual({ kind: 'panel' })
+  })
+  it('沒連結全空', () => {
+    expect(rootSlots(mk('a', '2026-01-01'))).toEqual([])
   })
 })
 

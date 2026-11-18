@@ -2708,6 +2708,9 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .ib-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
 .ib-card { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); }
 .ib-card-t { font-size: 0.88rem; font-weight: 600; color: var(--c-ink); overflow-wrap: anywhere; }
+.ib-card-open { appearance: none; background: none; border: 0; margin: 0; padding: 0; text-align: left; font-family: inherit; cursor: pointer; }
+.ib-card-open:hover, .ib-card-open:focus-visible { color: var(--c-accent); text-decoration: underline; }
+.ib-card:has(.ib-card-open:hover) { border-color: var(--c-accent-dim); }
 .ib-card-m { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.68rem; color: var(--c-ink-3); }
 .ib-cat { border: 1px solid var(--c-line); border-radius: 999px; padding: 0 7px; }
 .ib-quad { color: var(--c-ink-2); border: 1px dashed var(--c-line); border-radius: 999px; padding: 0 7px; }
@@ -2727,12 +2730,18 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 
 /* 心得樹根系（滑過葉子才出現，貼在地面線下，不佔版面） */
 .it-roots { position: absolute; left: 0; z-index: 2; overflow: visible; pointer-events: none; }
-.it-root-p { fill: none; stroke: var(--c-accent-dim); stroke-width: 1.2; stroke-linecap: round; opacity: 0.55; }
+.it-root-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; }
+.it-root-p { fill: none; stroke: var(--c-accent-dim); stroke-width: 1.2; stroke-linecap: round; opacity: 0.55; pointer-events: none; }
 .it-root-n circle { fill: var(--c-surface); stroke: var(--c-accent); stroke-width: 1.2; }
 .it-root-n text { font-size: 10px; fill: var(--c-ink); }
 .it-root-i rect { fill: var(--c-surface); stroke: var(--c-accent-dim); stroke-width: 1; }
 .it-root-i text { font-size: 10px; fill: var(--c-ink-2); }
 .it-root-more { font: 11px var(--font-mono); fill: var(--c-ink-3); }
+.it-root-n circle, .it-root-n text, .it-root-i rect, .it-root-i text, .it-root-more { pointer-events: all; }
+.it-root-go:not(.it-root-off) { cursor: pointer; }
+.it-root-go.it-root-off { cursor: default; }
+.it-root-go:not(.it-root-off):hover .it-root-p { stroke: var(--c-accent); opacity: 1; stroke-width: 2; }
+.it-root-go:not(.it-root-off):hover circle, .it-root-go:not(.it-root-off):hover rect { stroke: var(--c-accent); stroke-width: 2; }
 @media (prefers-reduced-motion: no-preference) {
   .it-roots { animation: it-roots-in 0.15s ease-out; }
   @keyframes it-roots-in { from { opacity: 0; } to { opacity: 1; } }

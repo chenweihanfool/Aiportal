@@ -1,4 +1,5 @@
 // 心得 ↔ 人物／想法的反向連結與根系排版（純函式：不碰 DOM、不用亂數）。
+import { dossierHref } from './dossier'
 import type { Insight, InsightData, InsightIdeaLink, InsightPersonLink } from './insightTree'
 
 /** 新到舊：date、time、id 都由大到小 */
@@ -37,6 +38,36 @@ export function rootTargets(ins: Insight, maxPeople = 4, maxIdeas = 3): RootTarg
     people: people.slice(0, maxPeople), ideas: ideas.slice(0, maxIdeas),
     morePeople: Math.max(0, people.length - maxPeople), moreIdeas: Math.max(0, ideas.length - maxIdeas),
   }
+}
+
+/** 根系的一條根：對應的人物、想法，或「+N」（面板裡有完整清單） */
+export type RootSlot =
+  | { kind: 'person'; name: string; dossier: string | null }
+  | { kind: 'idea'; id: string; title: string }
+  | { kind: 'more'; n: number; of: 'person' | 'idea' }
+
+/** 按「根」要打開什麼：人物卷宗、想法庫那一張，或這則心得的面板（+N） */
+export type RootAction =
+  | { kind: 'dossier'; href: string }
+  | { kind: 'idea'; id: string }
+  | { kind: 'panel' }
+
+/** 根系依序排：人、+人、想法、+想法（與 rootTargets 的排序一致） */
+export function rootSlots(ins: Insight, maxPeople = 4, maxIdeas = 3): RootSlot[] {
+  const t = rootTargets(ins, maxPeople, maxIdeas)
+  return [
+    ...t.people.map((p): RootSlot => ({ kind: 'person', name: p.name, dossier: p.dossier ?? null })),
+    ...(t.morePeople > 0 ? [{ kind: 'more', n: t.morePeople, of: 'person' } as RootSlot] : []),
+    ...t.ideas.map((i): RootSlot => ({ kind: 'idea', id: i.id, title: i.title })),
+    ...(t.moreIdeas > 0 ? [{ kind: 'more', n: t.moreIdeas, of: 'idea' } as RootSlot] : []),
+  ]
+}
+
+/** 這條根點下去要做什麼：沒卷宗的人回 null（不可點） */
+export function rootAction(slot: RootSlot): RootAction | null {
+  if (slot.kind === 'person') return slot.dossier === null ? null : { kind: 'dossier', href: dossierHref('person', slot.dossier) }
+  if (slot.kind === 'idea') return { kind: 'idea', id: slot.id }
+  return { kind: 'panel' }
 }
 
 export interface RootPath { x: number; y: number; d: string }
