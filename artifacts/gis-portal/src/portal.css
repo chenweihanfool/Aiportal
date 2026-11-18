@@ -2536,6 +2536,24 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-ground-s1 { stop-color: var(--c-accent); stop-opacity: 0; }
 .it-hline-s0 { stop-color: var(--c-accent); stop-opacity: 0.55; }
 .it-hline-s1 { stop-color: var(--c-accent); stop-opacity: 0; }
+/* 質感層（3.10.0）：漸層與半透明疊層，不用 filter／drop-shadow */
+.it-side-s0 { stop-color: white; stop-opacity: 0; }
+.it-side-s1 { stop-color: white; stop-opacity: 0.22; }
+.it-side-s2 { stop-color: var(--c-bg); stop-opacity: 0.28; }
+.it-gloss-s0 { stop-color: white; stop-opacity: 0.38; }
+.it-gloss-s1 { stop-color: white; stop-opacity: 0; }
+.it-band-s0 { stop-color: color-mix(in srgb, var(--c-warn) 40%, var(--c-ink-3)); stop-opacity: 0.22; }
+.it-band-s1 { stop-color: color-mix(in srgb, var(--c-warn) 40%, var(--c-ink-3)); stop-opacity: 0; }
+.it-soil-s0 { stop-color: color-mix(in srgb, var(--c-warn) 14%, var(--c-surface)); }
+.it-soil-s1 { stop-color: color-mix(in srgb, var(--c-accent) 8%, var(--c-surface)); }
+.it-trunk-gloss, .it-flare, .it-soil-band, .it-gloss, .it-limb-hl, .it-soil-plate, .it-root-p0 { pointer-events: none; }
+.it-flare { stroke: var(--it-trunk1); stroke-width: 0.6; stroke-linejoin: round; }
+.it-gloss { stroke: none; }
+.it-limb-hl { fill: none; stroke: color-mix(in srgb, currentColor 55%, white); stroke-width: 0.9; stroke-linejoin: round; opacity: 0.4; transition: opacity 0.12s; }
+.it-hl .it-limb-hl:not(.it-lit) { opacity: 0.08; }
+.it-fx .it-limb-hl.it-dimc { opacity: 0.1; }
+.it-soil-plate { stroke: color-mix(in srgb, var(--c-accent) 22%, transparent); stroke-width: 1; }
+.it-root-p0 { fill: none; stroke: var(--c-accent-dim); stroke-width: 3.4; stroke-linecap: round; opacity: 0.22; }
 .it-bigmonth { font: 700 26px var(--font-mono); fill: var(--c-accent-ink); opacity: 0.45; pointer-events: none; }
 
 /* 枝：填色輪廓（由粗到細），細描邊遮住分段接縫 */
@@ -2544,6 +2562,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-limb.it-dead { fill: var(--c-ink-3); stroke: var(--c-ink-3); opacity: 0.4; }
 .it-hl .it-limb:not(.it-lit), .it-hl .it-leaf:not(.it-lit) { opacity: 0.2; }
 .it-hl .it-trunk { opacity: 0.45; }
+.it-hl .it-trunk-gloss, .it-hl .it-flare { opacity: 0.45; }
 .it-hl .it-limb.it-lit { opacity: 1; stroke-width: 1.4; } /* 不用 drop-shadow：第一次滑過時濾鏡要整片重繪，會有遲滯 */
 .it-fx .it-dimc { opacity: 0.25; }
 .it-fx .it-cap.it-dimc, .it-fx .it-clump.it-dimc { opacity: 0.35; }
@@ -2555,7 +2574,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-leaf.it-dead .it-shape { fill: var(--c-ink-3); opacity: 0.65; }
 .it-vein { fill: none; stroke: var(--c-surface); stroke-width: 1; opacity: 0.6; stroke-linecap: round; }
 .it-leaf:hover .it-shape, .it-leaf:focus-visible .it-shape, .it-leaf.it-lit .it-shape { stroke: var(--c-ink); stroke-width: 0.2; }
-.it-halo { pointer-events: none; opacity: 0.3; transform-box: fill-box; transform-origin: center; }
+.it-halo { pointer-events: none; opacity: 0.4; transform-box: fill-box; transform-origin: center; }
 .it-lg-bud, .it-lg-leaf, .it-lg-fork { fill: var(--c-accent); stroke: none; }
 .it-lg-dead { fill: var(--c-ink-3); stroke: none; opacity: 0.7; }
 
@@ -2633,11 +2652,19 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
   .it-halo { animation: it-breath 2.6s ease-in-out infinite; }
   .it-fresh { stroke-dasharray: 1; stroke-dashoffset: 1; stroke-width: 1.6; fill-opacity: 0; animation: it-draw 0.7s ease-out forwards; }
   .it-pop { transform-origin: 0 0; animation: it-pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+  /* 入場：樹幹由下往上描邊、主枝與細枝依序、葉子最後彈出，合計約 0.85 秒；只在 svg 帶 it-intro 時（掛載後第一次） */
+  .it-intro .it-trunk, .it-intro .it-limb { stroke-dasharray: 1; stroke-dashoffset: 1; animation: it-draw 0.4s ease-out both; }
+  .it-intro .it-limb[data-level="cluster"] { animation-delay: 0.15s; }
+  .it-intro .it-limb[data-level="thread"] { animation-delay: 0.3s; animation-duration: 0.35s; }
+  .it-intro .it-limb-hl, .it-intro .it-trunk-gloss, .it-intro .it-flare { animation: it-fade-in 0.5s ease-out 0.2s both; }
+  .it-intro .it-leaf > g > g { transform-origin: 0 0; animation: it-pop 0.4s cubic-bezier(0.3, 1.7, 0.5, 1) 0.45s both; }
+  .it-intro .it-clump, .it-intro .it-cap { animation: it-fade-in 0.4s ease-out 0.5s both; }
 }
+@keyframes it-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes it-breath { 0%, 100% { opacity: 0.12; transform: scale(0.8); } 50% { opacity: 0.4; transform: scale(1.15); } }
 @keyframes it-draw { 0% { stroke-dashoffset: 1; fill-opacity: 0; } 55% { stroke-dashoffset: 0; fill-opacity: 0.1; } 100% { stroke-dashoffset: 0; fill-opacity: 1; stroke-width: 0.6; } }
 @keyframes it-pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .it-halo, .it-skel, .it-fresh, .it-pop { animation: none !important; } .it-limb, .it-leaf, .it-cap { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .it-halo, .it-skel, .it-fresh, .it-pop, .it-intro * { animation: none !important; } .it-limb, .it-leaf, .it-cap { transition: none; } }
 
 /* 側邊面板（點葉子）：與搜尋閱讀面板同一套樣式 */
 .it-back-drop { position: fixed; inset: 0; z-index: 240; background: color-mix(in srgb, var(--c-bg) 55%, transparent); }
