@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "templates feed v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "computedAt",
+    "total",
+    "problems",
+    "templates"
+  ],
+  "properties": {
+    "computedAt": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 40
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "problems": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "templates": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "family",
+          "category",
+          "docType",
+          "subject",
+          "version",
+          "latest",
+          "aliases",
+          "root",
+          "rel",
+          "ext",
+          "size",
+          "copies"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^tpl_[0-9a-f]{10}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "family": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "docType": {
+            "enum": [
+              "函",
+              "簽",
+              "書函",
+              "公告",
+              "便簽",
+              "其他公文",
+              "圖表",
+              "表單",
+              "其他"
+            ]
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "latest": {
+            "type": "boolean"
+          },
+          "aliases": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20
+            }
+          },
+          "root": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,19}$"
+          },
+          "rel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 260
+          },
+          "ext": {
+            "enum": [
+              "json",
+              "docx",
+              "doc",
+              "odt",
+              "pdf",
+              "xlsx"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "copies": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

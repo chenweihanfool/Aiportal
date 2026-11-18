@@ -733,6 +733,50 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 公文範本索引（3.9.0）：檔案本身在家中 NAS 的唯讀掛載（root＋rel），這裡只送索引。
+  // 推送端 kb-pipeline 掃描範本資料夾後推送；下載走 GET /api/templates/:id/file（TEMPLATE_ROOTS 對照根目錄代號）。
+  templates: {
+    version: 1,
+    description: "公文範本索引：檔名、家族、類別、文件類型、版本、別名與檔案位置（root＋rel），供搜尋與下載",
+    maxBytes: 1024 * 1024,
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "templates feed v1",
+      type: "object",
+      additionalProperties: false,
+      required: ["computedAt", "total", "problems", "templates"],
+      properties: {
+        computedAt: { type: "string", minLength: 10, maxLength: 40 },
+        total: { type: "integer", minimum: 0 },
+        problems: { type: "integer", minimum: 0 },
+        templates: {
+          type: "array",
+          maxItems: 1000,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "name", "family", "category", "docType", "subject", "version", "latest", "aliases", "root", "rel", "ext", "size", "copies"],
+            properties: {
+              id: { type: "string", pattern: "^tpl_[0-9a-f]{10}$" },
+              name: { type: "string", minLength: 1, maxLength: 120 },
+              family: { type: "string", minLength: 1, maxLength: 60 },
+              category: { type: "string", minLength: 1, maxLength: 20 },
+              docType: { enum: ["函", "簽", "書函", "公告", "便簽", "其他公文", "圖表", "表單", "其他"] },
+              subject: { type: ["string", "null"], maxLength: 200 },
+              version: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+              latest: { type: "boolean" },
+              aliases: { type: "array", maxItems: 20, items: { type: "string", minLength: 1, maxLength: 20 } },
+              root: { type: "string", pattern: "^[a-z][a-z0-9-]{0,19}$" },
+              rel: { type: "string", minLength: 1, maxLength: 260 },
+              ext: { enum: ["json", "docx", "doc", "odt", "pdf", "xlsx"] },
+              size: { type: "integer", minimum: 0 },
+              copies: { type: "integer", minimum: 1 },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,

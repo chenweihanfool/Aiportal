@@ -1,10 +1,11 @@
 // 入口網「一個框搜全部」（GET /api/search）的純邏輯：參數驗證、切詞、比對、排序級別、snippet、
 // 各 kind 把原始資料轉成候選項、stats 計算、30 秒快取。不碰 DB；routes/search.ts 只負責取資料與套 SQL。
 // 所有 jsonb／payload 內容都當不可信資料：欄位型別不對就略過那一筆。
+import type { TemplateHit, TemplateSearchResult } from "./templateSearch";
 
-/** groups 的固定順序（也是 best 同級時的優先順序）；心得排第一。 */
+/** groups 的固定順序（也是 best 同級時的優先順序）；範本排第一，其後心得。 */
 export const SEARCH_KINDS = [
-  "insight", "case", "topic", "person", "object", "event", "concept", "method", "source", "diary", "idea", "place", "trip", "repo", "tool",
+  "template", "insight", "case", "topic", "person", "object", "event", "concept", "method", "source", "diary", "idea", "place", "trip", "repo", "tool",
 ] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -73,7 +74,7 @@ export function splitTerms(q: string): string[] {
   return out;
 }
 
-/** q：去頭尾空白後 1～50 字；kind：選填且須在 14 種之內；limit：整數 1～20，預設 5；month／before：選填 YYYY-MM，不可同時給。 */
+/** q：去頭尾空白後 1～50 字；kind：選填且須在 SEARCH_KINDS 之內；limit：整數 1～20，預設 5；month／before：選填 YYYY-MM，不可同時給。 */
 export function validateSearchParams(
   qRaw: unknown, kindRaw: unknown, limitRaw: unknown, monthRaw?: unknown, beforeRaw?: unknown,
 ): SearchParams {
@@ -125,7 +126,17 @@ export interface InsightMeta {
   relation: string | null;
 }
 
-export type CandidateMeta = RepoMeta | InsightMeta;
+/** 範本命中的補充資訊（前端畫範本卡、下載用）。 */
+export interface TemplateMeta {
+  templateId: string;
+  family: string;
+  category: string;
+  docType: string;
+  olderVersions: number;
+  score: number;
+}
+
+export type CandidateMeta = RepoMeta | InsightMeta | TemplateMeta;
 
 /** 各 kind 轉出來的統一形狀。text 是搜尋與 snippet 用的內文；snippet 有值時直接當 snippet（case／person／object）。 */
 export interface Candidate {
@@ -286,6 +297,32 @@ export function runSearch(
     }
   }
   return { groups, total, best };
+}
+
+/** 範本命中 → SearchItem 組（只有範本這一組；沒有命中回 null）。 */
+export function templateHitsToGroup(hits: TemplateHit[]): SearchGroup | null {
+  if (hits.length === 0) return null;
+  const items: SearchItem[] = hits.map((h) => {
+    const snippet = [h.category, h.docType, h.subject ?? ""].filter((x) => x.length > 0).join("｜");
+    return {
+      kind: "template", id: h.id, title: h.name, snippet, date: h.version,
+      meta: { templateId: h.id, family: h.family, category: h.category, docType: h.docType, olderVersions: h.olderVersions, score: h.score },
+    };
+  });
+  return { kind: "template", count: items.length, items };
+}
+
+/**
+ * 把範本組放到 groups 最前面、total 加上命中數。
+ * 第 1 筆分數 ≥0.6 且 clearWinner 時當 best，其他情況維持原本的 best。
+ */
+export function withTemplateGroup(result: SearchResult, tr: TemplateSearchResult): SearchResult {
+  const group = templateHitsToGroup(tr.items);
+  if (!group) return result;
+  const first = group.items[0]!;
+  const meta = first.meta as TemplateMeta;
+  const best = tr.clearWinner && meta.score >= 0.6 ? first : result.best;
+  return { groups: [group, ...result.groups], total: result.total + group.count, best };
 }
 
 // ── 各 kind 轉候選項 ───────────────────────────────────────────────────────

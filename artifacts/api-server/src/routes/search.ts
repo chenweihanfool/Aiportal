@@ -12,8 +12,9 @@ import { githubReposCache } from "../lib/githubReposCache";
 import {
   DOC_KINDS, buildStats, createTtlCache, docRowToCandidate, graphToCandidates, ideasToCandidates, isDocKind, matchesMonth,
   monthFacets, parseRecentLimit, parseSearchLogBody, parseStatsDays, placesToCandidates, reposToCandidates, runSearch,
-  sitesToCandidates, topicsToCandidates, tripsToCandidates, validateSearchParams, type Candidate, type SearchKind,
+  sitesToCandidates, topicsToCandidates, tripsToCandidates, validateSearchParams, withTemplateGroup, type Candidate, type SearchKind,
 } from "../lib/search";
+import { searchTemplates } from "../lib/templateSearch";
 import {
   previewDoc, previewGraphEntity, previewIdea, previewPlace, previewRepo, previewTool, previewTopic, previewTrip,
   validatePreviewParams, type Preview,
@@ -65,6 +66,11 @@ const loadTrips = () => loadSource("trips", async () => {
 });
 const loadSites = () => loadSource("sites", async () =>
   db.select({ id: portalSitesTable.id, name: portalSitesTable.name, subtitle: portalSitesTable.subtitle }).from(portalSitesTable));
+// 範本索引（templates feed）：範本用的是模糊比對，不進 runSearch 的「每個詞都要命中」。
+const loadTemplates = () => loadSource("templates", async () => {
+  const [row] = await db.select({ payload: feedSnapshotTable.payload }).from(feedSnapshotTable).where(eq(feedSnapshotTable.name, "templates")).limit(1);
+  return row?.payload ?? null;
+});
 
 // GitHub 倉庫快取（與 /api/github/repos 共用同一份，它自己就有 30 分鐘快取，不再包 30 秒 createTtlCache）。
 // 最多等 2 秒：逾時回 null（該 kind 0 筆），背景抓取照跑，下一次搜尋就有。失敗或沒有資料也回 null，不讓搜尋 500。
@@ -164,7 +170,9 @@ router.get("/search", async (req: Request, res: Response) => {
   })();
 
   const needGraph = want("case") || want("person") || want("object");
-  const [docs, docCounts, docMonths, graph, topics, ideas, places, trips, repos, sites] = await Promise.all([
+  // 有 month／before 篩選時範本組不出現（範本日期是版本日期，與搜尋的月份篩選語意不同）。
+  const needTemplates = want("template") && v.month === null && v.before === null;
+  const [docs, docCounts, docMonths, graph, topics, ideas, places, trips, repos, sites, templates] = await Promise.all([
     docsPromise,
     docCountsPromise,
     docMonthsPromise,
@@ -175,6 +183,7 @@ router.get("/search", async (req: Request, res: Response) => {
     want("trip") ? loadTrips() : null,
     want("repo") ? loadRepos() : null,
     want("tool") ? loadSites() : null,
+    needTemplates ? loadTemplates() : null,
   ]);
 
   for (const c of graphToCandidates(graph ?? {})) (candidates[c.kind] ??= []).push(c);
@@ -203,7 +212,8 @@ router.get("/search", async (req: Request, res: Response) => {
     }
   }
 
-  const r = runSearch(candidates, v.terms, v.limit, docCounts);
+  let r = runSearch(candidates, v.terms, v.limit, docCounts);
+  if (needTemplates && templates !== null) r = withTemplateGroup(r, searchTemplates(templates, v.q, v.limit));
   return res.json({ q: v.q, total: r.total, tookMs: Date.now() - started, groups: r.groups, best: r.best, facets: { months } });
 });
 

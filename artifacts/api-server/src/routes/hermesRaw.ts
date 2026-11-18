@@ -1,17 +1,23 @@
 import { Router, type Request, type Response } from "express";
-import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isAuthorized } from "../lib/adminSession";
 import { nameCandidates } from "../lib/attachmentFile";
 import {
   checkRawPath,
-  createNasGuard,
+  fsErrorCode,
   isInsideRoot,
   MAX_RAW_BYTES,
-  rawContentDisposition,
+  NAS_OFFLINE_MESSAGE,
+  NasTimeoutError,
+  nasGuard,
+  rawNasTimeoutMs,
+  sendRaw,
   stripPullPrefix,
+  withTimeout,
 } from "../lib/rawFile";
+
+export { nasGuard };
 
 const router = Router();
 
@@ -25,47 +31,6 @@ function rawRoot(): string {
 
 function rawNasRoot(): string {
   return process.env["HERMES_RAW_NAS_ROOT"] || "/data/raw-nas";
-}
-
-// VPN 斷線時 NAS 的 realpath／stat 可能卡住好幾秒，整段包一層逾時，避免請求一直掛著。
-function rawNasTimeoutMs(): number {
-  return positiveNumber(process.env["RAW_NAS_TIMEOUT_MS"], 8000);
-}
-
-function positiveNumber(raw: string | undefined, fallback: number): number {
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
-const NAS_OFFLINE_MESSAGE = "家中 NAS 暫時連不到（VPN 可能斷線）";
-
-// 斷路器：NAS 一旦逾時或回連線類錯誤，冷卻期內直接回 504、不碰 NAS（見 createNasGuard）。
-export const nasGuard = createNasGuard({
-  cooldownMs: () => positiveNumber(process.env["RAW_NAS_COOLDOWN_MS"], 60_000),
-  maxInflight: () => positiveNumber(process.env["RAW_NAS_MAX_INFLIGHT"], 2),
-});
-
-class NasTimeoutError extends Error {}
-
-async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    // 一定要 await，讓 finally 在 race 有結果之後才執行，否則 timer 會馬上被清掉。
-    return await Promise.race([
-      p,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new NasTimeoutError("nas timeout")), ms);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
-function fsErrorCode(err: unknown): string | undefined {
-  if (typeof err !== "object" || err === null) return undefined;
-  const code = (err as { code?: unknown }).code;
-  return typeof code === "string" ? code : undefined;
 }
 
 type NasLookup =
@@ -94,18 +59,6 @@ async function lookupNas(rel: string): Promise<NasLookup> {
     return { ok: true, abs, size: st.size, name: path.basename(cand) };
   }
   return { ok: false, kind: "missing" };
-}
-
-function sendRaw(res: Response, abs: string, size: number, name: string, contentType: string, disposition: "inline" | "attachment") {
-  res.setHeader("Content-Type", contentType);
-  res.setHeader("Content-Length", String(size));
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Cache-Control", "private, max-age=300");
-  res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
-  res.setHeader("Content-Disposition", rawContentDisposition(name, disposition));
-  const stream = createReadStream(abs);
-  stream.on("error", () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
-  return stream.pipe(res);
 }
 
 router.get("/hermes-raw", async (req: Request, res: Response) => {
