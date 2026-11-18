@@ -136,7 +136,9 @@ export function scoreTemplate(nq: string, t: TemplateRecord): number {
   for (const raw of fields) {
     const f = raw.trim().toLowerCase();
     if (!f) continue;
-    const s = f.includes(q) || (f.length >= 2 && q.includes(f)) ? 1 : bigramDice(q, f);
+    // 欄位含整句查詢＝1.0；查詢只含欄位（例如類別「退費」）只算部分命中＝欄位長／查詢長，
+    // 免得同類別每一份範本都拿滿分、蓋過別名真正對上的那份。
+    const s = f.includes(q) ? 1 : f.length >= 2 && q.includes(f) ? Math.max(f.length / q.length, bigramDice(q, f)) : bigramDice(q, f);
     if (s > best) best = s;
   }
   return best;
