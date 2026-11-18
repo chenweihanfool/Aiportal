@@ -1020,11 +1020,30 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await page.waitForSelector('[data-testid="st-dim"]'); await settle(page)
     const T = 'v3 桌機 1440×900'
     const tops = { om: await top(page, '.om-root'), now: await top(page, '[data-testid="now-section"]'), aside: await top(page, '.st-aside') }
-    check(`${T}：搜尋框、現在用得上、STATUS 的上緣都在首屏內`, Object.values(tops).every((t) => t !== null && t < 900), JSON.stringify(tops))
+    check(`${T}：搜尋列、現在用得上、STATUS 的上緣都在首屏內`, Object.values(tops).every((t) => t !== null && t < 900), JSON.stringify(tops))
+    // 3.10.0：大搜尋框改成頂欄的一行搜尋列；結果是往下展開的浮層
+    check(`${T}：搜尋列在頂欄插槽內、頁面不再有大標題 om-title`, await page.evaluate(() => { const s = document.querySelector('[data-testid="tb-search-slot"]'), o = document.querySelector('.om-root'); return !!s && !!o && s.contains(o) && Math.round(o.getBoundingClientRect().top) < 80 && !document.querySelector('.om-title') }))
+    const popH = () => page.evaluate(() => Math.round(document.querySelector('[data-testid="om-pop"]')?.getBoundingClientRect().height ?? 0))
+    check(`${T}：浮層預設不可見`, (await popH()) === 0)
+    await page.locator('[data-testid="tb-search-slot"] input').click(); await page.waitForTimeout(200)
+    check(`${T}：聚焦搜尋列後浮層展開（有模式鈕與最近找過）`, (await popH()) > 0 && (await page.locator('[data-testid="om-pop"] .om-modes').count()) === 1)
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
+    check(`${T}：沒有字時按 Escape 收起浮層`, (await popH()) === 0)
+    await page.keyboard.press('/'); await page.waitForTimeout(200)
+    check(`${T}：按 / 聚焦搜尋列並展開浮層`, await page.evaluate(() => document.activeElement === document.querySelector('[data-testid="tb-search-slot"] input') && (document.querySelector('[data-testid="om-pop"]')?.getBoundingClientRect().height ?? 0) > 0))
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     check(`${T}：想法板在心得樹之後、現在用得上之前（有聚焦卡）`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-tree"]'); const b = document.querySelector('[data-testid="idea-board"]'); const n = document.querySelector('[data-testid="now-section"]'); return !!t && !!b && !!n && !!(t.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card').length === 1 }))
     check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
     check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
-    check(`${T}：兩欄（左現在用得上、右 STATUS）`, await page.evaluate(() => { const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); return n.right <= a.left + 1 && a.width > 250 }))
+    // 3.10.0：首頁順序改為心得樹 → STATUS → 想法板 → 現在用得上（STATUS 佔滿整列，不再是右欄）
+    check(`${T}：心得樹 → STATUS → 想法板 → 現在用得上、STATUS 佔滿整列`, await page.evaluate(() => {
+      const h = document.querySelector('.st-home').getBoundingClientRect()
+      const t = document.querySelector('[data-testid="insight-tree"]').getBoundingClientRect()
+      const a = document.querySelector('.st-aside').getBoundingClientRect()
+      const b = document.querySelector('[data-testid="idea-board"]').getBoundingClientRect()
+      const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect()
+      return a.top >= t.bottom - 1 && b.top >= a.bottom - 1 && n.top >= b.bottom - 1 && a.width >= h.width * 0.9
+    }))
     check(`${T}：st-dims 有 6 格、盒頭有 STATUS 與整體分數 71`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && /STATUS/.test(await page.locator('[data-testid="st-dims"]').innerText()) && (await page.locator('[data-testid="st-hhi"]').innerText()) === '71')
     const spark = await page.locator('[data-testid="st-spark"]').count()
     check(`${T}：6 個面向都有 7 天迷你線（假資料有 30 天 components；travel 只有 1 天所以不畫）`, spark >= 4 && spark <= 5, String(spark))
@@ -1063,7 +1082,9 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     // 最近盒：點一個籤 → 搜尋框的值等於該詞
     const chips = await page.locator('[data-testid="st-recent-chip"]').allInnerTexts()
     await page.locator('[data-testid="st-recent-chip"]').nth(1).click(); await page.waitForTimeout(300)
-    check(`${T}：最近盒有 3 個籤；點第二個後搜尋框的值等於該詞`, chips.length === 3 && (await page.locator('.om-root input[type="text"]').inputValue()) === chips[1], JSON.stringify(chips))
+    check(`${T}：最近盒有 3 個籤；點第二個後搜尋框的值等於該詞、浮層打開`, chips.length === 3 && (await page.locator('.om-root input[type="text"]').inputValue()) === chips[1] && (await page.evaluate(() => (document.querySelector('[data-testid="om-pop"]')?.getBoundingClientRect().height ?? 0) > 0)), JSON.stringify(chips))
+    // 收掉浮層，免得蓋住後面要點的卡片（第一次 Escape 清字、第二次收起）
+    await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await page.waitForTimeout(200)
     // 歷年今天：3 筆 onThisDay → 今天分頁最多 1 張 onthisday 卡，why 寫「N 年前的今天」
     const otd = await page.locator('[data-testid="now-card"][data-kind="onthisday"]').count()
     check(`${T}：companion 有 3 筆歷年今天 → 今天分頁最多 1 張 onthisday 卡`, otd === 1, String(otd))
@@ -1120,11 +1141,11 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await ctx.close()
   }
 
-  // ── 系統燈黃／紅：搜尋框上方出警示帶 ──
+  // ── 系統燈黃／紅：首頁最上方出警示帶（3.10.0 起搜尋列在頂欄，警示帶改成在內容最上方） ──
   {
     const { ctx, page } = await open({ width: 1440, height: 900 }, 'v3-alert', { layout: 'v3' })
     await page.waitForSelector('[data-testid="st-alert"]', { timeout: 10000 }); await settle(page)
-    check('v3 警示：系統燈異常時，搜尋框上方出現警示帶、根元素 data-sys=alert', await page.evaluate(() => { const a = document.querySelector('[data-testid="st-alert"]'); const o = document.querySelector('.om-root'); const r = document.querySelector('[data-testid="st-root"]'); return !!a && !!o && a.getBoundingClientRect().bottom <= o.getBoundingClientRect().top + 1 && r.getAttribute('data-sys') === 'alert' }))
+    check('v3 警示：系統燈異常時，內容最上方出現警示帶、根元素 data-sys=alert', await page.evaluate(() => { const a = document.querySelector('[data-testid="st-alert"]'); const h = document.querySelector('.st-home'); const o = document.querySelector('[data-testid="tb-search-slot"] .om-root'); const r = document.querySelector('[data-testid="st-root"]'); return !!a && !!h && !!o && a.getBoundingClientRect().bottom <= h.getBoundingClientRect().top + 1 && r.getAttribute('data-sys') === 'alert' }))
     await page.locator('[data-testid="st-alert"]').click(); await page.waitForSelector('.bd-drawer')
     check('v3 警示：點警示帶開戰情室', /戰情室/.test(await page.locator('.bd-drawer-title').innerText()))
     await ctx.close()
@@ -1150,13 +1171,15 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
       const omTop = await top(page, '.om-root')
       const dimsTop = await top(page, '[data-testid="st-dims"]')
       const shownCards = await page.locator('[data-testid="now-card"]').count()
-      check(`${T}：搜尋框與「現在用得上」標題在首屏內（om ${omTop}、now ${nowTop} < ${h}）`, omTop !== null && omTop < h && nowTop !== null && nowTop < h)
+      // 3.10.0：搜尋列在頂欄（手機擠到第二行），不再佔首頁內容的一整塊
+      const inSlot = await page.evaluate(() => { const s = document.querySelector('[data-testid="tb-search-slot"]'), o = document.querySelector('.om-root'); return !!s && !!o && s.contains(o) })
+      check(`${T}：搜尋列在頂欄插槽內、搜尋列與「現在用得上」標題在首屏內（om ${omTop}、now ${nowTop} < ${h}）`, inSlot && omTop !== null && omTop < h && nowTop !== null && nowTop < h)
       // 2.99.0：左側多了一塊心得樹（首頁左側大塊），1.5 屏的上限扣掉它的高度再比
       const treeH = await page.evaluate(() => Math.round(document.querySelector('[data-testid="insight-tree"]')?.getBoundingClientRect().height ?? 0) + 12)
       check(`${T}：st-dims 的上緣 ${dimsTop}（扣掉心得樹 ${treeH}）≤ ${limit}（1.5 屏）`, dimsTop !== null && dimsTop - treeH <= limit, String(dimsTop))
       check(`${T}：st-dims 有 6 格、3 欄 2 列`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && (await page.evaluate(() => new Set([...document.querySelectorAll('[data-testid="st-dim"]')].map((e) => Math.round(e.getBoundingClientRect().left))).size)) === 3)
       check(`${T}：不橫向捲動、沒有頁面錯誤`, (await noHScroll(page)) && errors.length === 0, errors.join(' | ').slice(0, 300))
-      check(`${T}：STATUS 在「現在用得上」下面（單欄）`, await page.evaluate(() => document.querySelector('[data-testid="now-section"]').getBoundingClientRect().bottom <= document.querySelector('.st-aside').getBoundingClientRect().top + 1))
+      check(`${T}：單欄順序 心得樹 → STATUS → 現在用得上`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-tree"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); return a.top >= t.bottom - 1 && n.top >= a.bottom - 1 }))
       if (cards === 5) {
         check(`${T}：5 張推送卡時先顯示 2 張，其餘收在「再看 3 則」（畫面上 ${shownCards} 張）`, shownCards === 2 && /再看 3 則/.test(await page.locator('[data-testid="now-more"]').innerText()), String(shownCards))
         await page.locator('[data-testid="now-more"]').click(); await page.waitForTimeout(500)
