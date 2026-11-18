@@ -128,11 +128,12 @@ const Cap = memo(function Cap({ c, ci, scale, color, open, dimc, on, onPick, onE
 
 /** 圖例用的小葉形 */
 const ROOT_DEPTH = 56
+const ROOT_SWITCH_MS = 350
 const idea6 = (t: string): string => { const a = Array.from(t); return a.length > 6 ? `${a.slice(0, 6).join('')}…` : t }
 
 /** 地面下的根：滑過葉子後留著，連到這則心得相關的人物頭像與想法小卡；點人開卷宗、點想法開想法庫、點 +N 開心得面板 */
-function Roots({ ins, cx, top, width, canIdea, onPick }: {
-  ins: Insight; cx: number; top: number; width: number; canIdea: boolean; onPick: (a: RootAction) => void
+function Roots({ ins, cx, top, width, canIdea, onPick, onEnter }: {
+  ins: Insight; cx: number; top: number; width: number; canIdea: boolean; onPick: (a: RootAction) => void; onEnter: () => void
 }) {
   const slots = rootSlots(ins)
   if (slots.length === 0) return null
@@ -156,7 +157,7 @@ function Roots({ ins, cx, top, width, canIdea, onPick }: {
           <text className="it-root-more" data-testid="insight-root-more" x={p.x} y={p.y + 3.5} textAnchor="middle">+{sl.n}</text>
         )
         return (
-          <g key={`n${k}`} className={`it-root-go${act ? '' : ' it-root-off'}`} data-testid="insight-root-go"
+          <g key={`n${k}`} className={`it-root-go${act ? '' : ' it-root-off'}`} data-testid="insight-root-go" onMouseEnter={onEnter}
             {...(act
               ? { role: act.kind === 'dossier' ? 'link' : 'button', 'aria-label': label, tabIndex: -1, onClick: () => onPick(act) }
               : { title: sl.kind === 'person' ? '還沒有人物卷宗' : undefined })}>
@@ -211,6 +212,11 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
   const [hover, setHover] = useState<string | null>(null)
   // 根系「黏住」：滑過／聚焦葉子時記下那片，離開葉子不清（否則根一移過去就消失、點不到）
   const [rootsFor, setRootsFor] = useState<string | null>(null)
+  const rootsRef = useRef<string | null>(null)
+  rootsRef.current = rootsFor
+  const rootTimer = useRef<number | null>(null)
+  const clearRootTimer = () => { if (rootTimer.current !== null) { window.clearTimeout(rootTimer.current); rootTimer.current = null } }
+  useEffect(() => clearRootTimer, [])
   const [upto, setUpto] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -241,6 +247,8 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
   const stats = useMemo(() => (data ? insightStats(data, now) : null), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const summaries = useMemo(() => (data ? clusterSummaries(data, now) : []), [data, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map((data?.insights ?? []).map((i) => [i.id, i])), [data])
+  const byIdRef = useRef(byId)
+  byIdRef.current = byId
   const bands = useMemo(() => (data && hhiScores ? insightsByBand(data.insights, hhiScores) : null), [data, hhiScores])
   const slots = useMemo(() => clusterSlots((data?.insights ?? []).length === 0 ? [] : [...new Set([...(data?.clusters ?? []).map((c) => c.id), ...(data?.insights ?? []).map((i) => i.cluster)])]), [data]) // eslint-disable-line react-hooks/exhaustive-deps
   const slotOf = (cid: string): number => slots.get(cid) ?? 0
@@ -327,15 +335,30 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
   }, [])
   // 開面板時寫入 #insight/<id>（一般 hash 導航會留歷史），從時間軸按瀏覽器上一頁才回得到這則心得
   const open = useCallback((id: string) => {
-    setHover(null); setRootsFor(null); setSelected(id)
+    clearRootTimer(); setHover(null); setRootsFor(null); setSelected(id)
     if (insightIdFromHash(window.location.hash) !== id) window.location.hash = `insight/${encodeURIComponent(id)}`
   }, [])
   const onLeafKey = useCallback((e: ReactKeyboardEvent, id: string) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(id) } }, [open])
   // 滑過／聚焦葉子：提示跟 hover，根系換成那片；離開葉子只收提示，根留著讓人移過去點
-  const onLeafHover = useCallback((id: string | null) => { setHover(id); if (id !== null) setRootsFor(id) }, [])
+  // 根已經出現時，滑鼠往下移向根的途中會掠過別的葉子：要在那片葉子停 ROOT_SWITCH_MS 才換根（hover intent），只是路過就不換
+  const onLeafHover = useCallback((id: string | null) => {
+    setHover(id)
+    clearRootTimer()
+    if (id === null) return
+    const ins = byIdRef.current.get(id)
+    const next = ins && rootSlots(ins).length > 0 ? id : null // 沒連結的葉子不佔根
+    const cur = rootsRef.current
+    if (cur === null || cur === next) { setRootsFor(next); return }
+    rootTimer.current = window.setTimeout(() => { rootTimer.current = null; setRootsFor(next) }, ROOT_SWITCH_MS)
+  }, [])
+  // 根有一半畫在舞台下緣外：離開舞台也給一段寬限，移進根（onEnterRoots）或回到舞台就取消
+  const leaveStage = useCallback(() => {
+    clearRootTimer()
+    rootTimer.current = window.setTimeout(() => { rootTimer.current = null; setRootsFor(null) }, ROOT_SWITCH_MS)
+  }, [])
   const onRootPick = useCallback((a: RootAction) => {
     const id = rootsFor
-    setHover(null); setRootsFor(null)
+    clearRootTimer(); setHover(null); setRootsFor(null)
     if (a.kind === 'dossier') window.location.hash = a.href
     else if (a.kind === 'idea') onOpenIdea?.(a.id)
     else if (id !== null) open(id)
@@ -374,7 +397,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
         {layout && stats && (
           <div className="it-body">
             <div className="it-main">
-              <div className="it-stage" ref={stageRef} style={{ height: layout.height }} onMouseLeave={() => setRootsFor(null)}>
+              <div className="it-stage" ref={stageRef} style={{ height: layout.height }} onMouseLeave={leaveStage} onMouseEnter={clearRootTimer}>
                 <svg
                   className={`it-svg${hovered ? ' it-hl' : ''}${focus !== null ? ' it-fx' : ''}`} viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
                   width={layout.width} height={layout.height} role="group" aria-label="我的心得樹：一棵樹是我的人生，每條主枝是一個主題，越外越新" data-focus={focus ?? undefined}
@@ -429,7 +452,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
                   ))}
                   {upto && <text className="it-bigmonth" x={16} y={36}>{upto}</text>}
                 </svg>
-                {rootsLeaf && rootsIns && <Roots ins={rootsIns} cx={(layout.axis.cx - view.x) * scale} top={(layout.axis.ground - view.y) * scale} width={layout.width} canIdea={!!onOpenIdea} onPick={onRootPick} />}
+                {rootsLeaf && rootsIns && <Roots ins={rootsIns} cx={(layout.axis.cx - view.x) * scale} top={(layout.axis.ground - view.y) * scale} width={layout.width} canIdea={!!onOpenIdea} onPick={onRootPick} onEnter={clearRootTimer} />}
                 {hovered && hoveredIns && (
                   <div className="it-tip" role="tooltip" data-testid="insight-tip"
                     style={{ left: Math.min(Math.max((hovered.x - view.x) * scale, 120), Math.max(120, layout.width - 120)), top: (hovered.y - view.y - hovered.r * 1.5) * scale - 6 }}>
