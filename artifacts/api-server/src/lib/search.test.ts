@@ -20,10 +20,11 @@ describe("validateSearchParams", () => {
     const ok = validateSearchParams("  " + "a".repeat(50) + " ", undefined, undefined);
     expect(ok.ok).toBe(true);
   });
-  it("kind 只接受 15 種（insight 第一、diary 在 source 之後、repo 在 tool 之前）；limit 1～20 整數、預設 5", () => {
+  it("kind 只接受 16 種（template 第一、insight 第二、diary 在 source 之後、repo 在 tool 之前）；limit 1～20 整數、預設 5", () => {
     expect(validateSearchParams("x", "nope", undefined).ok).toBe(false);
     for (const k of SEARCH_KINDS) expect(validateSearchParams("x", k, undefined).ok).toBe(true);
-    expect(SEARCH_KINDS[0]).toBe("insight");
+    expect(SEARCH_KINDS[0]).toBe("template"); // 3.9.0：範本組放最前面
+    expect(SEARCH_KINDS[1]).toBe("insight");
     expect(SEARCH_KINDS).toContain("diary");
     expect(SEARCH_KINDS.indexOf("diary")).toBe(SEARCH_KINDS.indexOf("source") + 1);
     expect(SEARCH_KINDS.indexOf("repo")).toBe(SEARCH_KINDS.indexOf("tool") - 1);

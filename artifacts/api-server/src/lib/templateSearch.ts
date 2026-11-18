@@ -171,7 +171,9 @@ export function searchTemplates(payload: unknown, q: string, limit: number): Tem
     const score = scoreTemplate(nq, t);
     if (score >= TEMPLATE_MIN_SCORE) hits.push({ t, score });
   }
-  hits.sort((a, b) => b.score - a.score || cmpVersion(a.t.version, b.t.version) || (a.t.name < b.t.name ? -1 : a.t.name > b.t.name ? 1 : 0));
+  // 同分時先比家族名與查詢的雙字詞相近度（別名讓一群範本都拿 1.0 時，名字最像的排前面），再比版本新舊、名稱。
+  const famSim = (t: TemplateRecord): number => bigramDice(nq, t.family);
+  hits.sort((a, b) => b.score - a.score || famSim(b.t) - famSim(a.t) || cmpVersion(a.t.version, b.t.version) || (a.t.name < b.t.name ? -1 : a.t.name > b.t.name ? 1 : 0));
   const items = hits.slice(0, limit).map(({ t, score }) => toHit(t, score, olderByFamily.get(t.family) ?? 0));
   const clearWinner = hits.length > 0 && (hits.length === 1 || hits[0]!.score >= hits[1]!.score * 1.5);
   return { items, clearWinner };
