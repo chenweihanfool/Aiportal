@@ -3,13 +3,13 @@
 import type { RepoItem } from './repoApi'
 import type { InsightRelation } from './insightTree'
 
-export type SearchKind = 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'repo' | 'tool' | 'diary' | 'insight'
+export type SearchKind = 'template' | 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'repo' | 'tool' | 'diary' | 'insight'
 
-/** 結果分組的固定順序（與後端 groups 順序一致） */
-export const KIND_ORDER: readonly SearchKind[] = ['insight', 'case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'diary', 'idea', 'place', 'trip', 'repo', 'tool']
+/** 結果分組的固定順序（與後端 groups 順序一致）；範本最前面 */
+export const KIND_ORDER: readonly SearchKind[] = ['template', 'insight', 'case', 'topic', 'person', 'object', 'event', 'concept', 'method', 'source', 'diary', 'idea', 'place', 'trip', 'repo', 'tool']
 
 const KIND_LABEL: Record<SearchKind, string> = {
-  case: '案件', topic: '知識', person: '人', object: '物', event: '事件', concept: '概念',
+  template: '範本', case: '案件', topic: '知識', person: '人', object: '物', event: '事件', concept: '概念',
   method: '方法', source: '原文', idea: '想法', place: '地點', trip: '遊記', repo: '倉庫', tool: '工具', diary: '日記', insight: '心得',
 }
 
@@ -25,7 +25,10 @@ export interface RepoMeta { language: string | null; private: boolean; archived:
 /** 心得命中的補充資訊（只有 kind 為 insight 的命中才有）：脈絡迷你時間線用 */
 export interface InsightMeta { date: string; cluster: string; thread: string; relation: InsightRelation }
 
-export interface SearchHit { kind: SearchKind; id: string; title: string; snippet: string; date: string | null; meta?: RepoMeta | InsightMeta }
+/** 範本命中的補充資訊（只有 kind 為 template 的命中才有）：範本卡與下載用 */
+export interface TemplateMeta { templateId: string; family: string; category: string; docType: string; olderVersions: number; score: number }
+
+export interface SearchHit { kind: SearchKind; id: string; title: string; snippet: string; date: string | null; meta?: RepoMeta | InsightMeta | TemplateMeta }
 export interface SearchGroup { kind: SearchKind; count: number; items: SearchHit[] }
 export interface SearchFacets { months: Array<{ ym: string; n: number }> }
 export interface SearchResponse { q: string; total: number; tookMs: number; groups: SearchGroup[]; best: SearchHit | null; facets: SearchFacets }
@@ -81,6 +84,7 @@ export type OpenAction =
   | { type: 'dossier'; kind: 'case' | 'person' | 'object'; name: string }
   | { type: 'repo'; id: string }
   | { type: 'repoList' }
+  | { type: 'templateDownload'; id: string }
 
 export interface OmniCommand { id: string; label: string; hint: string; keywords: string[]; action: OpenAction }
 
@@ -134,6 +138,7 @@ export function keepKnownTools(resp: SearchResponse, siteIds: ReadonlySet<string
 /** 各 kind 的「開啟」去處（F8） */
 export function openAction(kind: SearchKind, id: string): OpenAction {
   switch (kind) {
+    case 'template': return { type: 'templateDownload', id }
     case 'topic': return { type: 'hash', hash: `knowledge/${encodeURIComponent(id)}` }
     case 'idea': return { type: 'ideas' }
     case 'place': return { type: 'hash', hash: 'food' }
@@ -211,6 +216,20 @@ function parseInsightMeta(raw: unknown): InsightMeta | undefined {
   return { date, cluster, thread, relation: relation as InsightRelation }
 }
 
+/** 範本命中的補充欄位：templateId 格式對、其餘字串與數字合法才帶 */
+function parseTemplateMeta(raw: unknown): TemplateMeta | undefined {
+  if (!isRec(raw)) return undefined
+  const templateId = str(raw.templateId)
+  const family = str(raw.family)
+  const category = str(raw.category)
+  const docType = str(raw.docType)
+  const olderVersions = num(raw.olderVersions)
+  const score = num(raw.score)
+  if (templateId === null || !/^tpl_[0-9a-f]{10}$/.test(templateId) || !family || !category || !docType) return undefined
+  if (olderVersions === null || olderVersions < 0 || score === null) return undefined
+  return { templateId, family, category, docType, olderVersions, score }
+}
+
 function parseHit(raw: unknown): SearchHit | null {
   if (!isRec(raw)) return null
   const id = str(raw.id)
@@ -222,6 +241,9 @@ function parseHit(raw: unknown): SearchHit | null {
     if (meta) base.meta = meta
   } else if (raw.kind === 'insight') {
     const meta = parseInsightMeta(raw.meta)
+    if (meta) base.meta = meta
+  } else if (raw.kind === 'template') {
+    const meta = parseTemplateMeta(raw.meta)
     if (meta) base.meta = meta
   }
   return base

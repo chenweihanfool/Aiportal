@@ -1,6 +1,9 @@
-// 原檔下載（GET /api/hermes-raw）的路徑驗證與型別對照——純函式，不碰檔案系統（檔案系統那段在 routes/hermesRaw.ts）。
-// 威脅模型：呼叫端（已通過 admin 閘）可以送任意字串當路徑；只准讀根目錄（HERMES_RAW_ROOT，預設 /data/raw）
-// 裡、白名單副檔名的檔案。型別分兩種：inline（瀏覽器內預覽）與 attachment（強制下載，Office 等不在瀏覽器執行的格式）。
+// 原檔下載（GET /api/hermes-raw、GET /api/templates/:id/file）的共用保護：
+// 路徑驗證與型別對照是純函式；NAS 逾時、斷路器與送出檔案是兩條路由共用的實作。
+// 威脅模型：呼叫端（已通過 admin 閘）可以送任意字串當路徑；只准讀指定根目錄裡、白名單副檔名的檔案。
+// 型別分兩種：inline（瀏覽器內預覽）與 attachment（強制下載，Office 等不在瀏覽器執行的格式）。
+import { createReadStream } from "node:fs";
+import type { Response } from "express";
 
 export const RAW_PREFIX = "人類/";
 export const MAX_RAW_BYTES = 50 * 1024 * 1024;
@@ -107,6 +110,66 @@ export interface NasGuardOptions {
   now?: () => number;
   cooldownMs?: () => number;
   maxInflight?: () => number;
+}
+
+export const NAS_OFFLINE_MESSAGE = "家中 NAS 暫時連不到（VPN 可能斷線）";
+
+export function positiveNumber(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** NAS 的 realpath／stat 逾時（RAW_NAS_TIMEOUT_MS，預設 8000 毫秒）。 */
+export function rawNasTimeoutMs(): number {
+  return positiveNumber(process.env["RAW_NAS_TIMEOUT_MS"], 8000);
+}
+
+export class NasTimeoutError extends Error {}
+
+/** 整段包一層逾時，避免 VPN 斷線時請求一直掛著。 */
+export async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // 一定要 await，讓 finally 在 race 有結果之後才執行，否則 timer 會馬上被清掉。
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new NasTimeoutError("nas timeout")), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+export function fsErrorCode(err: unknown): string | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+/**
+ * 家中 NAS 的斷路器單例（hermes-raw 與範本下載共用同一個 NAS）：
+ * 一旦逾時或回連線類錯誤，冷卻期內直接回 504、不碰 NAS。
+ */
+export const nasGuard = createNasGuard({
+  cooldownMs: () => positiveNumber(process.env["RAW_NAS_COOLDOWN_MS"], 60_000),
+  maxInflight: () => positiveNumber(process.env["RAW_NAS_MAX_INFLIGHT"], 2),
+});
+
+/** 送出檔案（stream）：最常見的 header 組合，原檔與範本下載共用。 */
+export function sendRaw(
+  res: Response, abs: string, size: number, name: string, contentType: string, disposition: RawDisposition,
+): Response {
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Length", String(size));
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+  res.setHeader("Content-Disposition", rawContentDisposition(name, disposition));
+  const stream = createReadStream(abs);
+  stream.on("error", () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
+  return stream.pipe(res);
 }
 
 export function createNasGuard(opts: NasGuardOptions = {}): NasGuard {

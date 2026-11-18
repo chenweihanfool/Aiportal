@@ -172,8 +172,9 @@ describe('開啟去處', () => {
 })
 
 describe('心得（insight）', () => {
-  it('排第一、標籤「心得」、開啟去 #insight/<id>', () => {
-    expect(KIND_ORDER[0]).toBe('insight')
+  it('排在範本之後的第一位、標籤「心得」、開啟去 #insight/<id>', () => {
+    expect(KIND_ORDER[0]).toBe('template') // 3.9.0：範本組放最前面（規格 tpl-portal §6）
+    expect(KIND_ORDER[1]).toBe('insight')
     expect(kindLabel('insight')).toBe('心得')
     expect(openAction('insight', 'I 1/2')).toEqual({ type: 'hash', hash: `insight/${encodeURIComponent('I 1/2')}` })
   })
