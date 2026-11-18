@@ -2172,6 +2172,22 @@ button.ms-col { cursor: pointer; }
 .om-in input { flex: 1; min-width: 0; font: inherit; font-size: 17px; padding: 15px 0; border: 0; background: none; color: var(--c-ink); outline: none; }
 .om-in input::placeholder { color: var(--c-ink-3); }
 .om-in kbd { font: 11.5px var(--font-mono); color: var(--c-ink-3); border: 1px solid var(--c-line-strong); border-radius: 5px; padding: 1px 6px; }
+/* 3.10.0：頂欄的一行搜尋列（首頁 v3 的 compact）——不畫大標題與外框，模式／最近／即答／結果收進往下展開的浮層 */
+.om-root.om-compact { overflow: visible; margin: 0; padding: 0; background: none; border: 0; border-radius: 0; }
+.om-root.om-compact::before { display: none; }
+.om-root.om-compact .om-ask { max-width: none; margin: 0; border-radius: 9px; }
+.om-root.om-compact .om-ask.om-focus { box-shadow: 0 0 18px var(--c-accent-soft); }
+.om-root.om-compact .om-in { border-radius: 8px; padding: 0 10px; gap: 8px; }
+.om-root.om-compact .om-in input { font-size: 14px; padding: 0; height: 34px; }
+.om-root.om-compact .om-in kbd { white-space: nowrap; }
+.om-pop {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 120;
+  width: max(100%, min(720px, calc(100vw - 32px))); max-height: min(70vh, 640px); overflow: auto;
+  padding: var(--sp-3); background: var(--c-surface); border: 1px solid var(--c-line);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+}
+.om-pop[hidden] { display: none; }
+@media (max-width: 640px) { .om-pop { width: calc(100vw - 24px); } }
 .om-modes, .om-recent { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 12px auto 0; max-width: 760px; }
 .om-root .om-mode { font: 12.5px var(--font-mono); color: var(--c-ink-2); border: 1px solid var(--c-line); border-radius: 6px; padding: 3px 9px; }
 .om-mode b { color: var(--c-accent); font-weight: 500; margin-right: 5px; }

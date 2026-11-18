@@ -16,6 +16,7 @@ import { apiFetchRepos, type RepoItem } from './repoApi'
 import { apiFetchTemplateFile, saveBlob } from './templateApi'
 import { dossierHref } from './dossier'
 import { InsightHit, Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
+import { shouldFocusSearch } from './searchHotkey'
 import type { SiteData } from './portalApi'
 
 // 首頁最上方「一個框搜全部」（2.86.0，取代原本的指令面板）。純邏輯在 omniSearch.ts、網路在 omniSearchApi.ts、閱讀面板在 OmniSearchReader.tsx。
@@ -49,7 +50,7 @@ function glow(e: ReactMouseEvent<HTMLElement>) {
   e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`)
 }
 
-export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, onRequestUnlock, seed }: {
+export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, onRequestUnlock, seed, compact }: {
   /** 管理密碼；null＝未解鎖 */
   pw: string | null
   sites: SiteData[]
@@ -60,9 +61,13 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   onRequestUnlock: () => void
   /** 外部帶入搜尋詞（STATUS 的「最近」小籤）：n 每次加 1 就把 q 放進搜尋框並執行搜尋 */
   seed?: { q: string; n: number }
+  /** 3.10.0：頂欄的一行搜尋列——不畫大標題／脈動，模式、最近、即答、結果都收進浮層，聚焦或有字才展開 */
+  compact?: boolean
 }) {
   const [raw, setRaw] = useState('')
   const [focused, setFocused] = useState(false)
+  // compact：點到搜尋列與浮層以外的地方就收起（有字時光 blur 不夠，浮層會因「正在搜尋」繼續開著）
+  const [dismissed, setDismissed] = useState(false)
   const [status, setStatus] = useState<Status>('idle')
   const [rawResp, setRawResp] = useState<SearchResponse | null>(null)
   const [sel, setSel] = useState(0)
@@ -86,6 +91,10 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const lastLogKey = useRef<string | null>(null)
   const interacted = useRef(false)
   const lastQKey = useRef('')
+  // compact 的鍵盤：Escape 要知道目前輸入內容與浮層是否開著（事件監聽只註冊一次，靠 ref 讀最新值）
+  const rawRef = useRef(raw)
+  rawRef.current = raw
+  const openRef = useRef(false)
   const ctxStarted = useRef(false)
   const repoStarted = useRef(false)
   const mounted = useRef(true)
@@ -99,6 +108,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   useEffect(() => {
     if (!seed || seed.n <= 0) return
     setRaw(seed.q)
+    setDismissed(false)
     inputRef.current?.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed?.n])
@@ -248,19 +258,46 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
 
   useEffect(() => { document.getElementById(`om-opt-${sel}`)?.scrollIntoView({ block: 'nearest' }) }, [sel])
 
-  // ── Ctrl/⌘+K（F6、F13）──
+  // ── Ctrl/⌘+K（F6、F13）；compact 的 `/`（3.10.0）與 Escape 收起 ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        rootRef.current?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
+        // compact 時搜尋列在固定頂欄，不必捲進視野
+        if (!compact) rootRef.current?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
         inputRef.current?.focus()
         inputRef.current?.select()
+        return
+      }
+      if (!compact) return
+      if (shouldFocusSearch(e)) {
+        e.preventDefault()
+        setDismissed(false)
+        inputRef.current?.focus()
+        return
+      }
+      // Escape：先清空輸入（若有字），再按一次收起並 blur
+      if (e.key === 'Escape' && openRef.current) {
+        if (rawRef.current !== '') { setRaw(''); setDismissed(false); inputRef.current?.focus() }
+        else { setDismissed(true); setFocused(false); inputRef.current?.blur() }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [compact])
+
+  // compact：點搜尋列與浮層以外的地方就收起
+  useEffect(() => {
+    if (!compact) return
+    const onDown = (e: PointerEvent) => {
+      if (rootRef.current?.contains(e.target as Node)) return
+      setDismissed(true)
+      setFocused(false)
+      inputRef.current?.blur()
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [compact])
 
   useEffect(() => {
     if (!notice) return
@@ -346,7 +383,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       if (repoMode) { if (cur) { e.preventDefault(); openRepo(cur) } }
       else if (parsed.mode === 'command') { const c = cmds[sel >= 0 ? sel : 0]; if (c) { e.preventDefault(); runCommand(c) } }
       else if (cur) { e.preventDefault(); openItem(cur) }
-    } else if (e.key === 'Escape') {
+    } else if (e.key === 'Escape' && !compact) {
+      // compact 的 Escape 交給視窗層監聽（要分「清空」與「收起」兩段）
       setRaw('')
     }
   }
@@ -389,59 +427,62 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const locked = !pw && parsed.mode !== 'command'
   const showLockNote = locked && (focused || searching)
   const showPanel = searching && (parsed.mode === 'command' || !!pw)
+  // compact：浮層在「輸入框聚焦」或「有字（正在搜尋）」時開；點外面收起後即使有字也不再冒出
+  const popOpen = !!compact && !dismissed && (focused || searching)
+  openRef.current = popOpen
+
+  const ask = (
+    <div className={`om-ask${focused ? ' om-focus' : ''}`}>
+      <div className="om-in">
+        <span className="om-pfx" aria-hidden="true">{parsed.prefix ?? '⌕'}</span>
+        <input
+          ref={inputRef} type="text" value={raw} autoComplete="off" spellCheck={false}
+          aria-label="搜尋全部：人、案件、知識、原文、想法、地點、倉庫、工具"
+          role="combobox" aria-expanded={showPanel && hitsLen > 0} aria-controls="om-listbox" aria-autocomplete="list"
+          aria-activedescendant={showPanel && hitsLen > 0 && sel >= 0 ? `om-opt-${sel}` : undefined}
+          placeholder={compact ? '給我 XX 範本／搜尋…' : '找人、案件、知識、原文、想法、地點、倉庫、工具…'}
+          onChange={(e) => { setDismissed(false); setRaw(e.target.value) }} onKeyDown={onKeyDown}
+          onFocus={() => { setFocused(true); setDismissed(false) }} onBlur={() => setFocused(false)}
+        />
+        <kbd aria-hidden="true">{compact ? '/' : 'Ctrl K'}</kbd>
+      </div>
+    </div>
+  )
+
+  const lockNote = showLockNote && (
+    <p className="om-lock" role="status">
+      🔒 解鎖後可搜尋知識庫（<b>&gt;</b> 指令不用解鎖）
+      <button type="button" className="om-gh" onClick={onRequestUnlock}>解鎖</button>
+    </p>
+  )
+
+  const browse = !searching && (
+    <>
+      <div className="om-modes">
+        {PREFIX_HINTS.map((m) => (
+          <button key={m.prefix} type="button" className="om-mode" onClick={() => startWith(m.prefix)}><b>{m.prefix}</b>{m.label}</button>
+        ))}
+      </div>
+      {recent.length > 0 && (
+        <div className="om-recent" aria-label="最近找過">
+          <span className="om-lb">最近找過</span>
+          {recent.map((r) => <button key={r} type="button" className="om-chip" onClick={() => startWith(r)}>{r}</button>)}
+        </div>
+      )}
+    </>
+  )
+
+  const guess = (
+    <div className="om-guess" aria-live="polite" hidden={!searching || answer === ''}>
+      <span className="om-lb">即答</span>
+      <span className="om-ans">{shown}</span>
+      <span className="om-caret" aria-hidden="true" />
+    </div>
+  )
+  const toast = notice && <div className="om-toast" role="status">{notice}</div>
 
   let idx = -1
-  return (
-    <section ref={rootRef} className="om-root" data-searching={searching ? 'true' : 'false'} aria-label="全站搜尋">
-      {pulse > 0 && <span key={pulse} className="om-pulse" aria-hidden="true" />}
-      {!searching && <h2 className="om-title">一個框<em>・</em>搜全部</h2>}
-      <div className={`om-ask${focused ? ' om-focus' : ''}`}>
-        <div className="om-in">
-          <span className="om-pfx" aria-hidden="true">{parsed.prefix ?? '⌕'}</span>
-          <input
-            ref={inputRef} type="text" value={raw} autoComplete="off" spellCheck={false}
-            aria-label="搜尋全部：人、案件、知識、原文、想法、地點、倉庫、工具"
-            role="combobox" aria-expanded={showPanel && hitsLen > 0} aria-controls="om-listbox" aria-autocomplete="list"
-            aria-activedescendant={showPanel && hitsLen > 0 && sel >= 0 ? `om-opt-${sel}` : undefined}
-            placeholder="找人、案件、知識、原文、想法、地點、倉庫、工具…"
-            onChange={(e) => setRaw(e.target.value)} onKeyDown={onKeyDown}
-            onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          />
-          <kbd aria-hidden="true">Ctrl K</kbd>
-        </div>
-      </div>
-
-      {showLockNote && (
-        <p className="om-lock" role="status">
-          🔒 解鎖後可搜尋知識庫（<b>&gt;</b> 指令不用解鎖）
-          <button type="button" className="om-gh" onClick={onRequestUnlock}>解鎖</button>
-        </p>
-      )}
-
-      {!searching && (
-        <>
-          <div className="om-modes">
-            {PREFIX_HINTS.map((m) => (
-              <button key={m.prefix} type="button" className="om-mode" onClick={() => startWith(m.prefix)}><b>{m.prefix}</b>{m.label}</button>
-            ))}
-          </div>
-          {recent.length > 0 && (
-            <div className="om-recent" aria-label="最近找過">
-              <span className="om-lb">最近找過</span>
-              {recent.map((r) => <button key={r} type="button" className="om-chip" onClick={() => startWith(r)}>{r}</button>)}
-            </div>
-          )}
-        </>
-      )}
-
-      <div className="om-guess" aria-live="polite" hidden={!searching || answer === ''}>
-        <span className="om-lb">即答</span>
-        <span className="om-ans">{shown}</span>
-        <span className="om-caret" aria-hidden="true" />
-      </div>
-      {notice && <div className="om-toast" role="status">{notice}</div>}
-
-      {showPanel && (
+  const results = showPanel && (
         <div className={`om-results${parsed.mode === 'command' && !repoMode ? ' om-results-cmd' : ''}`}>
           <div className={`om-panel om-rs${busy ? ' om-busy' : ''}`} onMouseMove={glow}>
             {showOverview && resp && (
@@ -514,6 +555,19 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
             </div>
           )}
         </div>
+      )
+
+  const popBody = <>{lockNote}{browse}{guess}{toast}{results}</>
+
+  return (
+    <section ref={rootRef} className={`om-root${compact ? ' om-compact' : ''}`} data-searching={searching ? 'true' : 'false'} aria-label="全站搜尋">
+      {!compact && pulse > 0 && <span key={pulse} className="om-pulse" aria-hidden="true" />}
+      {!compact && !searching && <h2 className="om-title">一個框<em>・</em>搜全部</h2>}
+      {ask}
+      {compact ? (
+        <div className="om-pop" data-testid="om-pop" hidden={!popOpen}>{popBody}</div>
+      ) : (
+        popBody
       )}
     </section>
   )

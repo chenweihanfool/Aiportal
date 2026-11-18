@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { apiFetchHermesGraph } from './hermesGraphApi'
 import { apiFetchRepos } from './repoApi'
 import { HomeNav } from './HomeNav'
@@ -48,6 +49,19 @@ import {
 // 資料全部來自既有 API 與既有型別／函式，沒有任何示範值：拿不到就依 StateFrame 的狀態機顯示（未解鎖／載入中／空／過期／失敗）。
 
 type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc' | 'searchStats' | 'pushStats' | 'brief'
+
+// 3.10.0：把搜尋列放進頂欄的插槽（TopBar 的 #tb-search-slot）。插槽不在（測試、舊版）就退回原位渲染。
+function TopBarSearch({ children }: { children: ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    const find = () => document.getElementById('tb-search-slot')
+    setSlot(find())
+    // 第一次 render 時 TopBar 可能還沒掛上：下一輪再找一次
+    const t = window.setTimeout(() => setSlot(find()), 0)
+    return () => window.clearTimeout(t)
+  }, [])
+  return slot ? createPortal(children, slot) : <>{children}</>
+}
 
 const fetchHistory365 = (pw: string) => fetchHhiHistoryStrict(pw, 365)
 // 面向小卡的 30 天迷你線：另外要 days=30（後端的 components 欄位只保證在這個呼叫裡；接口還沒部署時沒有該欄位，就不畫線）
@@ -291,20 +305,15 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             <span aria-hidden>⚠</span><span className="st-alert-t">{light.headline}</span><span className="st-alert-go">戰情室 →</span>
           </button>
         )}
-        <OmniSearch
-          pw={pw} sites={sites} onSelectSite={openSite} seed={seed}
-          onOpenIdeas={openIdeas}
-          onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
-          onRequestUnlock={onRequestUnlock} />
+        <TopBarSearch>
+          <OmniSearch compact
+            pw={pw} sites={sites} onSelectSite={openSite} seed={seed}
+            onOpenIdeas={openIdeas}
+            onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
+            onRequestUnlock={onRequestUnlock} />
+        </TopBarSearch>
         <div className="st-home">
-          <div className="st-left">
-            <InsightTree pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
-            <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} hhi={breakdown?.displayed ?? null} onOpenIdeas={openIdeas} onOpenIdea={(id) => { if (on) openIdeaFromInsight(id); else onRequestUnlock() }} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
-            <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
-              briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
-              boost={boost} recipe={recipe} onActionsChange={personActions.reload}
-              todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
-          </div>
+          <InsightTree pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
           <StatusAside
             on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
             hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
@@ -315,6 +324,13 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             recent={recent.data ?? []} onPickRecent={(q) => setSeed((x) => ({ q, n: x.n + 1 }))}
             ideasSt={ideasSt} topIdea={ideaTop[0] ?? null} foodSt={foodSt} wantEat={wantLine(wantEat)} wantGo={wantLine(wantGo)}
             tripsSt={tripsSt} trip={trip} onOpenIdeas={openIdeas} />
+          <div className="st-left">
+            <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} hhi={breakdown?.displayed ?? null} onOpenIdeas={openIdeas} onOpenIdea={(id) => { if (on) openIdeaFromInsight(id); else onRequestUnlock() }} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
+            <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
+              briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
+              boost={boost} recipe={recipe} onActionsChange={personActions.reload}
+              todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
+          </div>
         </div>
         {drawer === 'hhi' && <Drawer title="幸福指數詳情：活動洞察・雷達・30 天洞察・趨勢・六維度子系統・成長軌跡" onClose={closeDrawer}>{insightBlock}{hhiDetail}{growthBlock}</Drawer>}
         {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} focusIdeaId={focusIdea} onClose={closeDrawer} hhiScores={hhiScores} /></Drawer>}
