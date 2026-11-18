@@ -1076,6 +1076,21 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await ctx.close()
   }
 
+  // ── 想法板：聚焦／候選想法的標題可點，直接開想法庫並定位那一張（3.9.1）──
+  for (const [w, h] of [[1440, 900], [375, 812]]) {
+    const T = `v3 想法板卡片 ${w}×${h}`
+    const { ctx, page, errors } = await open({ width: w, height: h }, 'v3-otd3', { layout: 'v3' })
+    await page.waitForSelector('[data-testid="idea-board-open"]', { timeout: 15000 })
+    const cardTitle = (await page.locator('[data-testid="idea-board-open"]').first().innerText()).trim().replace(/^🎯\s*/, '')
+    await page.locator('[data-testid="idea-board-open"]').first().click()
+    await page.waitForSelector('.bd-drawer details.bd-idea-item[open]', { timeout: 10000 })
+    const openTxt = (await page.locator('.bd-drawer details.bd-idea-item[open]').first().innerText()).trim()
+    check(`${T}：點聚焦卡標題 → 想法庫抽屜出現且展開被點的那張`, cardTitle !== '' && openTxt.includes(cardTitle), openTxt.replace(/\s+/g, ' ').slice(0, 120))
+    await page.keyboard.press('Escape'); await page.waitForTimeout(200)
+    check(`${T}：關掉抽屜、沒有頁面錯誤、沒有橫向捲動`, (await page.locator('.bd-drawer').count()) === 0 && errors.length === 0 && (await noHScroll(page)), errors.join(' | ').slice(0, 200))
+    await ctx.close()
+  }
+
   // ── 明日報告：明天分頁的「看全文」開抽屜 ──
   {
     const { ctx, page } = await open({ width: 1440, height: 900 }, 'v3-cards5', { layout: 'v3' })

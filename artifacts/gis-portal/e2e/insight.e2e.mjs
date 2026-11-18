@@ -556,7 +556,13 @@ try {
     await hov(r.page, 'R-1')
     check(`${T}：滑過有連結的葉子 → insight-roots 出現，有 1 個人物頭像與 1 個想法小卡`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 1 && (await r.page.locator('[data-testid="insight-root-person"]').count()) === 1 && (await r.page.locator('[data-testid="insight-root-idea"]').count()) === 1)
     check(`${T}：頭像是名字第一個字、想法小卡是 💡＋標題前 6 字`, (await r.page.locator('[data-testid="insight-root-person"]').textContent()).trim() === '測' && (await r.page.locator('[data-testid="insight-root-idea"]').textContent()).startsWith('💡虛構想法乙：'))
-    check(`${T}：根層 pointer-events none、貼在地面線下方且在舞台寬度內`, await r.page.evaluate(() => { const e = document.querySelector('[data-testid="insight-roots"]'); const st = document.querySelector('.it-stage').getBoundingClientRect(), b = e.getBoundingClientRect(); return getComputedStyle(e).pointerEvents === 'none' && b.left >= st.left - 1 && b.right <= st.right + 1 && b.top > st.top && b.top < st.bottom }))
+    check(`${T}：根層 svg pointer-events none，但熱區與節點不是 none；貼在地面線下方且在舞台寬度內`, await r.page.evaluate(() => {
+      const e = document.querySelector('[data-testid="insight-roots"]')
+      const st = document.querySelector('.it-stage').getBoundingClientRect(), b = e.getBoundingClientRect()
+      const hit = e.querySelector('.it-root-hit'), node = e.querySelector('[data-testid="insight-root-person"]')
+      return getComputedStyle(e).pointerEvents === 'none' && !!hit && getComputedStyle(hit).pointerEvents !== 'none' && !!node && getComputedStyle(node).pointerEvents !== 'none'
+        && b.left >= st.left - 1 && b.right <= st.right + 1 && b.top > st.top && b.top < st.bottom
+    }))
     await r.page.mouse.move(5, 5)
     await r.page.evaluate(() => document.querySelector('.it-stage').scrollIntoView({ block: 'start' }))
     await r.page.waitForTimeout(200)
@@ -569,6 +575,71 @@ try {
     check(`${T}：滑過沒有連結的葉子 → 不出現 insight-roots`, (await r.page.locator('[data-testid="insight-leaf"][aria-label*="R-2"]').count()) === 1 && (await r.page.locator('[data-testid="insight-roots"]').count()) === 0)
     await hov(r.page, 'R-3')
     check(`${T}：擠（8 人 6 想法）→ 人頭像 4 個、想法 3 個、有「+N」小標`, (await r.page.locator('[data-testid="insight-root-person"]').count()) === 4 && (await r.page.locator('[data-testid="insight-root-idea"]').count()) === 3 && (await r.page.locator('[data-testid="insight-root-more"]').count()) === 2 && /^\+4$/.test((await r.page.locator('[data-testid="insight-root-more"]').first().textContent()).trim()))
+
+    // ── 3.9.1：根系黏住、熱區與節點都點得到 ──
+    await hov(r.page, 'R-1')
+    const ideaBox = await r.page.locator('[data-testid="insight-root-idea"]').first().boundingBox()
+    await r.page.mouse.move(ideaBox.x + ideaBox.width / 2, ideaBox.y + ideaBox.height / 2, { steps: 15 })
+    await r.page.waitForTimeout(200)
+    check(`${T}：移到想法小卡上根還在、根群 :hover、根線變粗（2px）`, await r.page.evaluate(() => {
+      const g = document.querySelector('[data-testid="insight-root-idea"]')?.closest('.it-root-go')
+      const p = g?.querySelector('.it-root-p')
+      return document.querySelectorAll('[data-testid="insight-roots"]').length === 1 && !!g && g.matches(':hover') && !!p && getComputedStyle(p).strokeWidth === '2px'
+    }))
+    await r.page.screenshot({ path: path.join(SHOTS, 'roots-hover-idea.png') })
+    await r.page.locator('[data-testid="insight-root-idea"]').first().click()
+    await r.page.waitForSelector('.bd-drawer details.bd-idea-item[open]', { timeout: 10000 })
+    check(`${T}：點想法小卡 → 想法庫抽屜開啟並定位到「虛構想法乙」`, /虛構想法乙/.test(await r.page.locator('.bd-drawer details.bd-idea-item[open]').first().innerText()))
+    await r.page.keyboard.press('Escape'); await r.page.waitForTimeout(300)
+    // 熱區：點根線中段（不是小卡本身）
+    await hov(r.page, 'R-1')
+    const mid = await r.page.evaluate(() => {
+      const hit = document.querySelector('[data-testid="insight-root-idea"]')?.closest('.it-root-go')?.querySelector('.it-root-hit')
+      if (!hit) return null
+      const pt = hit.getPointAtLength(hit.getTotalLength() * 0.5)
+      const m = hit.getScreenCTM()
+      return { x: pt.x * m.a + pt.y * m.c + m.e, y: pt.x * m.b + pt.y * m.d + m.f }
+    })
+    if (mid) {
+      await r.page.mouse.move(mid.x, mid.y, { steps: 15 })
+      await r.page.mouse.click(mid.x, mid.y)
+      await r.page.waitForSelector('.bd-drawer details.bd-idea-item[open]', { timeout: 10000 })
+      check(`${T}：點根線中段（透明熱區）也開得了想法庫`, /虛構想法乙/.test(await r.page.locator('.bd-drawer details.bd-idea-item[open]').first().innerText()))
+      await r.page.keyboard.press('Escape'); await r.page.waitForTimeout(300)
+    } else check(`${T}：點根線中段（透明熱區）也開得了想法庫`, false, '找不到 .it-root-hit')
+    // +N：開心得面板（R-3）
+    await hov(r.page, 'R-3')
+    await r.page.locator('[data-testid="insight-root-more"]').first().click()
+    await r.page.waitForSelector('[data-testid="insight-panel"]', { timeout: 10000 })
+    check(`${T}：點「+4」→ 心得面板打開且是 R-3`, /R-3/.test(await r.page.locator('[data-testid="insight-panel-text"]').innerText()))
+    await r.page.keyboard.press('Escape'); await r.page.waitForTimeout(300)
+    await r.ctx.close()
+    // 重新開頁：點人物頭像 → 人物卷宗
+    r = await open({ width: 1440, height: 900 }, { mode: 'roots', colorScheme: 'dark' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await hov(r.page, 'R-1')
+    const personBox = await r.page.locator('[data-testid="insight-root-person"]').first().boundingBox()
+    await r.page.mouse.move(personBox.x + personBox.width / 2, personBox.y + personBox.height / 2, { steps: 15 })
+    await r.page.waitForTimeout(150)
+    await r.page.mouse.click(personBox.x + personBox.width / 2, personBox.y + personBox.height / 2)
+    await r.page.waitForSelector('[data-testid="dossier-insights"]', { timeout: 10000 })
+    check(`${T}：點人物頭像 → 網址是 #dossier/person/、出現人物卷宗的心得`, (await r.page.evaluate(() => location.hash)).startsWith('#dossier/person/') && (await r.page.locator('[data-testid="dossier-insights"]').count()) === 1, await r.page.evaluate(() => location.hash))
+    check(`${T}：根系互動後沒有頁面例外`, r.errors.length === 0, r.errors.join(' | '))
+    await r.ctx.close()
+    // 375×812（非觸控的一般 context）：滑過 → 移到想法小卡 → 點擊 → 抽屜開啟
+    r = await open({ width: 375, height: 812 }, { mode: 'roots', colorScheme: 'dark' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await hov(r.page, 'R-1')
+    const mobIdea = await r.page.locator('[data-testid="insight-root-idea"]').first().boundingBox()
+    await r.page.mouse.move(mobIdea.x + mobIdea.width / 2, mobIdea.y + mobIdea.height / 2, { steps: 15 })
+    await r.page.waitForTimeout(150)
+    check(`${T}：375×812 移到想法小卡上根還在`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 1)
+    await r.page.screenshot({ path: path.join(SHOTS, 'roots-375.png') })
+    await r.page.mouse.click(mobIdea.x + mobIdea.width / 2, mobIdea.y + mobIdea.height / 2)
+    await r.page.waitForSelector('.bd-drawer details.bd-idea-item[open]', { timeout: 10000 })
+    check(`${T}：375×812 點想法小卡 → 想法庫抽屜開啟並定位到「虛構想法乙」`, /虛構想法乙/.test(await r.page.locator('.bd-drawer details.bd-idea-item[open]').first().innerText()))
+    check(`${T}：375×812 沒有橫向捲動`, await noHScroll(r.page))
+    check(`${T}：375×812 沒有頁面例外`, r.errors.length === 0, r.errors.join(' | '))
     await r.ctx.close()
     r = await open({ width: 1440, height: 900 }, { mode: 'roots', colorScheme: 'light' })
     await r.page.waitForSelector('[data-testid="insight-leaf"]')
