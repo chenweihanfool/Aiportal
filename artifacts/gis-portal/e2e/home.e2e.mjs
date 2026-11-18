@@ -1083,9 +1083,10 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await page.waitForSelector('[data-testid="idea-board-open"]', { timeout: 15000 })
     const cardTitle = (await page.locator('[data-testid="idea-board-open"]').first().innerText()).trim().replace(/^🎯\s*/, '')
     await page.locator('[data-testid="idea-board-open"]').first().click()
-    await page.waitForSelector('.bd-drawer details.bd-idea-item[open]', { timeout: 10000 })
-    const openTxt = (await page.locator('.bd-drawer details.bd-idea-item[open]').first().innerText()).trim()
-    check(`${T}：點聚焦卡標題 → 想法庫抽屜出現且展開被點的那張`, cardTitle !== '' && openTxt.includes(cardTitle), openTxt.replace(/\s+/g, ' ').slice(0, 120))
+    await page.waitForSelector('.bd-drawer details.bd-idea-item[open]', { timeout: 10000 }); await page.waitForTimeout(300)
+    // 抽屜最上面的「📊 想法儀表」也是展開的 bd-idea-item，要用標題篩
+    const hit = await page.locator('.bd-drawer details.bd-idea-item[open]', { hasText: cardTitle }).count()
+    check(`${T}：點聚焦卡標題 → 想法庫抽屜出現且展開被點的那張`, cardTitle !== '' && hit >= 1, cardTitle)
     await page.keyboard.press('Escape'); await page.waitForTimeout(200)
     check(`${T}：關掉抽屜、沒有頁面錯誤、沒有橫向捲動`, (await page.locator('.bd-drawer').count()) === 0 && errors.length === 0 && (await noHScroll(page)), errors.join(' | ').slice(0, 200))
     await ctx.close()
