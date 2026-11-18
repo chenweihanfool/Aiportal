@@ -115,8 +115,8 @@ const searchBody = {
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, channel: process.env.CHROMIUM_PATH ? undefined : 'chrome', args: ['--no-sandbox'] })
-async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorScheme = 'dark' } = {}) {
-  const ctx = await browser.newContext({ viewport, colorScheme })
+async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorScheme = 'dark', reducedMotion = 'no-preference' } = {}) {
+  const ctx = await browser.newContext({ viewport, colorScheme, reducedMotion })
   if (unlocked) await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
   await ctx.addInitScript(() => { try { localStorage.setItem('hm-layout', 'v3') } catch { /* 略過 */ } })
   const page = await ctx.newPage()
@@ -180,6 +180,10 @@ try {
     }))
     check(`${T}：標題「我的心得樹」與指標列（心得 N 則・本月 +k・脈絡 M 條・最常印證：〈前 20 字〉）`, /我的心得樹/.test(await page.locator('.it-title').innerText()) && /^心得 68 則・本月 \+\d+・脈絡 \d+ 條・最常印證：〈虛構心得 I-01/.test((await page.locator('[data-testid="insight-stats"]').innerText()).trim()), await page.locator('[data-testid="insight-stats"]').innerText())
     check(`${T}：68 片葉（≥60 則）、至少一片發光、至少一片枯萎`, N === 68 && (await page.locator('.it-leaf.it-glow').count()) >= 2 && (await page.locator('.it-leaf.it-dead').count()) >= 1)
+    check(`${T}：葉子有光澤層（it-gloss）且 pointer-events none；點葉子仍由葉子本身接收`, await page.evaluate(() => {
+      const g = document.querySelector('[data-testid="insight-leaf"] .it-gloss')
+      return !!g && getComputedStyle(g).pointerEvents === 'none' && g.getAttribute('fill') === 'url(#it-leaf-gloss)' && !!document.getElementById('it-leaf-gloss')
+    }))
     check(`${T}：葉子有 role=button、aria-label（日期＋一句話）、可 Tab`, await page.evaluate(() => {
       const l = document.querySelector('[data-testid="insight-leaf"]')
       return l.getAttribute('role') === 'button' && /^\d{4}-\d{2}-\d{2} 虛構心得/.test(l.getAttribute('aria-label') ?? '') && l.getAttribute('tabindex') === '0'
@@ -546,6 +550,19 @@ try {
     await r.ctx.close()
   }
 
+  // ── 9b. 入場動畫（3.10.0）：減少動態時直接顯示結果 ──
+  {
+    const T = '入場動畫（減少動態）'
+    const r = await open({ width: 1440, height: 900 }, { reducedMotion: 'reduce' })
+    await r.page.waitForSelector('[data-testid="insight-leaf"]')
+    await r.page.waitForTimeout(100)
+    check(`${T}：載入後 100ms 內樹幹與枝的 stroke-dashoffset 為 0、沒有動畫`, await r.page.evaluate(() => {
+      const els = [...document.querySelectorAll('.it-trunk, .it-limb')]
+      return els.length > 0 && els.every((e) => { const c = getComputedStyle(e); return parseFloat(c.strokeDashoffset) === 0 && c.animationName === 'none' })
+    }))
+    await r.ctx.close()
+  }
+
   // ── 10. 根系與反向連結（3.3.0）──
   {
     const T = '根系'
@@ -562,6 +579,11 @@ try {
       const hit = e.querySelector('.it-root-hit'), node = e.querySelector('[data-testid="insight-root-person"] circle')
       return getComputedStyle(e).pointerEvents === 'none' && !!hit && getComputedStyle(hit).pointerEvents !== 'none' && !!node && getComputedStyle(node).pointerEvents !== 'none'
         && b.left >= st.left - 1 && b.right <= st.right + 1 && b.top > st.top && b.top < st.bottom
+    }))
+    check(`${T}：土壤底板存在、pointer-events none、在根線與節點之前（DOM 順序）`, await r.page.evaluate(() => {
+      const e = document.querySelector('[data-testid="insight-roots"]'), soil = e.querySelector('[data-testid="insight-roots-soil"]')
+      const later = [...e.querySelectorAll('.it-root-p, .it-root-hit, [data-testid="insight-root-person"]')]
+      return !!soil && getComputedStyle(soil).pointerEvents === 'none' && later.length > 0 && later.every((n) => !!(soil.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING))
     }))
     await r.page.mouse.move(5, 5)
     await r.page.evaluate(() => document.querySelector('.it-stage').scrollIntoView({ block: 'start' }))
