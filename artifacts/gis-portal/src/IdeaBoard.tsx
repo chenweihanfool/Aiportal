@@ -15,7 +15,7 @@ function CatChip({ category }: { category: string | null }) {
   return <span className="ib-cat" style={{ color: inkMix(c), borderColor: c, background: alpha(c, 10) }}>{category ?? '未分類'}</span>
 }
 
-export function IdeaBoard({ st, data, top, nowMs, hhi = null, onOpenIdeas, onRequestUnlock, onRetry }: {
+export function IdeaBoard({ st, data, top, nowMs, hhi = null, onOpenIdeas, onOpenIdea, onRequestUnlock, onRetry }: {
   st: BlockStatus
   data: IdeasData | null
   /** 候選前三名（API 的 top 順序） */
@@ -24,6 +24,8 @@ export function IdeaBoard({ st, data, top, nowMs, hhi = null, onOpenIdeas, onReq
   /** 今天的幸福指數（0–100）；沒給就照原本 top 順序 */
   hhi?: number | null
   onOpenIdeas: () => void
+  /** 點標題直接在想法庫開啟並定位那一張；沒給就只顯示文字 */
+  onOpenIdea?: (id: string) => void
   onRequestUnlock: () => void
   onRetry: () => void
 }) {
@@ -49,7 +51,9 @@ export function IdeaBoard({ st, data, top, nowMs, hhi = null, onOpenIdeas, onReq
               const days = focusDays(it, nowMs)
               return (
                 <li key={it.id} className="ib-card">
-                  <span className="ib-card-t">{FOCUS_ICON} {it.title}</span>
+                  {onOpenIdea
+                    ? <button type="button" className="ib-card-t ib-card-open" data-testid="idea-board-open" aria-label={`在想法庫開啟：${it.title}`} onClick={() => onOpenIdea(it.id)}>{FOCUS_ICON} {it.title}</button>
+                    : <span className="ib-card-t">{FOCUS_ICON} {it.title}</span>}
                   <span className="ib-card-m">
                     <CatChip category={it.category} />
                     {days !== null && <span>聚焦 {days} 天</span>}
@@ -66,7 +70,9 @@ export function IdeaBoard({ st, data, top, nowMs, hhi = null, onOpenIdeas, onReq
             <ul className="ib-list" data-testid="idea-board-candidates">
               {picks.map((it) => (
                 <li key={it.id} className="ib-card">
-                  <span className="ib-card-t">{it.title}</span>
+                  {onOpenIdea
+                    ? <button type="button" className="ib-card-t ib-card-open" data-testid="idea-board-open" aria-label={`在想法庫開啟：${it.title}`} onClick={() => onOpenIdea(it.id)}>{it.title}</button>
+                    : <span className="ib-card-t">{it.title}</span>}
                   <span className="ib-card-m">
                     <CatChip category={it.category} />
                     {mood.mode !== 'normal' && it.value !== null && it.effort !== null && (

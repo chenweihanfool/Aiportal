@@ -2708,6 +2708,9 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .ib-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
 .ib-card { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); }
 .ib-card-t { font-size: 0.88rem; font-weight: 600; color: var(--c-ink); overflow-wrap: anywhere; }
+.ib-card-open { appearance: none; background: none; border: 0; margin: 0; padding: 0; text-align: left; font-family: inherit; cursor: pointer; }
+.ib-card-open:hover, .ib-card-open:focus-visible { color: var(--c-accent); text-decoration: underline; }
+.ib-card:has(.ib-card-open:hover) { border-color: var(--c-accent-dim); }
 .ib-card-m { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.68rem; color: var(--c-ink-3); }
 .ib-cat { border: 1px solid var(--c-line); border-radius: 999px; padding: 0 7px; }
 .ib-quad { color: var(--c-ink-2); border: 1px dashed var(--c-line); border-radius: 999px; padding: 0 7px; }

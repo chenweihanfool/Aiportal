@@ -299,7 +299,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         <div className="st-home">
           <div className="st-left">
             <InsightTree pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
-            <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} hhi={breakdown?.displayed ?? null} onOpenIdeas={openIdeas} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
+            <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} hhi={breakdown?.displayed ?? null} onOpenIdeas={openIdeas} onOpenIdea={(id) => { if (on) openIdeaFromInsight(id); else onRequestUnlock() }} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
             <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
               briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
               boost={boost} recipe={recipe} onActionsChange={personActions.reload}
