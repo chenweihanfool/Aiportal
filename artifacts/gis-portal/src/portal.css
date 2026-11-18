@@ -1206,6 +1206,10 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 .tb-title { margin: 0; font-size: 1.05rem; font-weight: 800; line-height: 1.2; letter-spacing: 0.04em; color: var(--c-ink); white-space: nowrap; }
 .tb-tag { font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; font-size: var(--fs-2xs); letter-spacing: 0.2em; text-transform: uppercase; color: var(--c-accent); padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--c-accent) 30%, transparent); border-radius: var(--r-pill); white-space: nowrap; }
 .tb-right { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2) var(--sp-3); min-width: 0; }
+/* 3.10.0：首頁搜尋列插槽（在識別與右側之間；沒有 portal 內容時不佔位，浮層要壓過首頁內容） */
+.tb-search { position: relative; z-index: 100; flex: 1 1 240px; min-width: 0; max-width: min(480px, 40vw); display: flex; align-items: center; }
+.tb-search:empty { display: none; }
+@media (max-width: 640px) { .tb-search { flex-basis: 100%; order: 3; width: 100%; max-width: none; } }
 .tb-portals { font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: 0.08em; color: var(--c-ink-3); white-space: nowrap; }
 .tb-icon { flex: 0 0 auto; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; font-size: 0.9rem; line-height: 1; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-sm); cursor: pointer; }
 .tb-icon:hover, .tb-ver:hover { border-color: var(--c-accent) !important; color: var(--c-accent); }
