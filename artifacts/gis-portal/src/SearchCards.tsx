@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Marked } from './OmniSearchReader'
 import { kindLabel, type SearchHit } from './omniSearch'
 import { pushedLabel } from './repoView'
 import { languageColor, tickPosition, type CardModel } from './searchViz'
+import { apiFetchTemplateFile, apiFetchTemplateVersions, saveBlob, type TemplateVersionItem } from './templateApi'
 
 // 搜尋結果的視覺卡（2.92.0）：依類別畫不同的卡；資料不足（model 為 null 或 fallback）就退回原本的文字列。
 
@@ -101,24 +103,92 @@ function Body({ hit, model, q, onSearch }: { hit: SearchHit; model: Exclude<Card
   }
 }
 
+/** 範本卡（3.9.0）：檔名、類別／文件類型／主旨、版本日期與 ⬇；有舊版時可展開各版下載。 */
+function TemplateBody({ hit, q, pw, onNotice }: {
+  hit: SearchHit; q: string; pw: string | null; onNotice: (msg: string) => void
+}) {
+  const meta = hit.meta && 'templateId' in hit.meta ? hit.meta : null
+  const [open, setOpen] = useState(false)
+  const [versions, setVersions] = useState<TemplateVersionItem[] | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const download = async (id: string, fallbackName: string) => {
+    if (!pw) { onNotice('解鎖後才能下載範本'); return }
+    const r = await apiFetchTemplateFile(pw, id)
+    if (r.ok) saveBlob(r.blob, r.filename ?? fallbackName)
+    else onNotice(r.message)
+  }
+
+  const toggleVersions = async () => {
+    if (open) { setOpen(false); return }
+    setOpen(true)
+    if (versions !== null || !meta) return
+    if (!pw) { onNotice('解鎖後才能看其他版本'); return }
+    setBusy(true)
+    try {
+      setVersions((await apiFetchTemplateVersions(pw, meta.templateId)) ?? [])
+    } catch {
+      onNotice('其他版本暫時讀不到')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="os-card-main">
+      <div className="os-card-head">
+        <span className="om-t os-card-title"><Marked text={hit.title} q={q} /></span>
+        <span className="os-card-badge">{hit.date ? `版本 ${hit.date}` : '版本不明'}</span>
+        {meta && (
+          <button type="button" className="os-card-chip" aria-label="下載範本"
+            onClick={(e) => { e.stopPropagation(); void download(meta.templateId, hit.title) }}>⬇</button>
+        )}
+      </div>
+      {hit.snippet && <div className="om-s os-card-clamp"><Marked text={hit.snippet} q={q} /></div>}
+      {meta && meta.olderVersions > 0 && (
+        <button type="button" className="os-card-chip" aria-expanded={open}
+          onClick={(e) => { e.stopPropagation(); void toggleVersions() }}>
+          其他版本（{meta.olderVersions}）
+        </button>
+      )}
+      {open && (
+        <div className="os-card-rel">
+          {busy && <span className="os-card-dates om-s">載入版本中…</span>}
+          {versions !== null && versions.length === 0 && <span className="os-card-dates om-s">沒有其他版本</span>}
+          {versions?.map((v) => (
+            <div key={v.id} className="os-card-line">
+              <span className="om-s">{v.name}{v.version ? `（${v.version}）` : ''}</span>
+              <button type="button" className="os-card-chip" aria-label={`下載 ${v.name}`}
+                onClick={(e) => { e.stopPropagation(); void download(v.id, v.name) }}>⬇</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** 一筆結果（role=option）。model 為 null＝資料還沒到，與 fallback 一樣畫原本的文字列。 */
-export function HitCard({ hit, i, on, q, model, onPick, onSearch }: {
+export function HitCard({ hit, i, on, q, model, onPick, onSearch, pw = null, onNotice }: {
   hit: SearchHit; i: number; on: boolean; q: string; model: CardModel | null
   onPick: (i: number) => void; onSearch: (name: string) => void
+  pw?: string | null; onNotice?: (msg: string) => void
 }) {
   const plain = model === null || 'fallback' in model
+  const notice = onNotice ?? (() => {})
   return (
     <div id={`om-opt-${i}`} role="option" aria-selected={on} className={`om-hit os-card${plain ? ' os-card-plain' : ''}${on ? ' om-on' : ''}`}
       style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }} onClick={() => onPick(i)}>
-      {plain ? (
-        <>
-          <span className="om-kd">{kindLabel(hit.kind)}</span>
-          <span>
-            <div className="om-t"><Marked text={hit.title} q={q} /></div>
-            {hit.snippet && <div className="om-s"><Marked text={hit.snippet} q={q} /></div>}
-          </span>
-        </>
-      ) : <Body hit={hit} model={model} q={q} onSearch={onSearch} />}
+      {hit.kind === 'template' ? <TemplateBody hit={hit} q={q} pw={pw} onNotice={notice} />
+        : plain ? (
+          <>
+            <span className="om-kd">{kindLabel(hit.kind)}</span>
+            <span>
+              <div className="om-t"><Marked text={hit.title} q={q} /></div>
+              {hit.snippet && <div className="om-s"><Marked text={hit.snippet} q={q} /></div>}
+            </span>
+          </>
+        ) : <Body hit={hit} model={model} q={q} onSearch={onSearch} />}
     </div>
   )
 }

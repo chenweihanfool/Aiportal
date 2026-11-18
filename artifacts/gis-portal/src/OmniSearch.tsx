@@ -13,6 +13,7 @@ import {
   keepKnownTools, openAction, parseQuery, quickAnswer, recentRepoHits, saveRecent, shouldLog, type OmniCommand, type OpenAction, type PreviewRelated, type SearchKind, type SearchResponse,
 } from './omniSearch'
 import { apiFetchRepos, type RepoItem } from './repoApi'
+import { apiFetchTemplateFile, saveBlob } from './templateApi'
 import { dossierHref } from './dossier'
 import { InsightHit, Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
 import type { SiteData } from './portalApi'
@@ -235,7 +236,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   const curId = cur?.id
   useEffect(() => { setExpanded(false) }, [curKind, curId])
   useEffect(() => {
-    if (!curKind || !curId || !pw) { setPrev(null); return }
+    // 範本沒有預覽端點，右側閱讀面板不顯示；下載走卡片上的 ⬇。
+    if (!curKind || !curId || !pw || curKind === 'template') { setPrev(null); return }
     const ctl = new AbortController()
     setPrev({ kind: curKind, id: curId, state: 'loading', data: null })
     apiSearchPreview(pw, curKind, curId, ctl.signal)
@@ -297,6 +299,14 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
         break
       }
       case 'repoList': setRaw('>倉庫'); break
+      case 'templateDownload': {
+        if (!pw) { setNotice('解鎖後才能下載範本'); break }
+        void apiFetchTemplateFile(pw, a.id).then((r) => {
+          if (r.ok) saveBlob(r.blob, r.filename ?? '範本')
+          else setNotice(r.message)
+        })
+        break
+      }
     }
   }
   const openItem = (h: ReaderItem) => {
@@ -485,7 +495,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
                         return <InsightHit key={`${h.kind}:${h.id}`} hit={h} i={i} on={on} q={searchQ} onPick={pick} dots={h.meta && 'thread' in h.meta ? threadDots(h.id, h.meta.thread, insightHits) : []} />
                       }
                       return (
-                        <HitCard key={`${h.kind}:${h.id}`} hit={h} i={i} on={on} q={searchQ} model={models.get(`${h.kind}:${h.id}`) ?? null} onPick={pick} onSearch={startWith} />
+                        <HitCard key={`${h.kind}:${h.id}`} hit={h} i={i} on={on} q={searchQ} model={models.get(`${h.kind}:${h.id}`) ?? null} onPick={pick} onSearch={startWith} pw={pw} onNotice={setNotice} />
                       )
                     })}
                   </div>

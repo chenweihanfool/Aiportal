@@ -43,6 +43,7 @@
 | `topics` | 1 | 知識頁（#knowledge）：知識庫長出來的主題、頁面內容、成長紀錄與相關題目（kb-pipeline 每週推送）。2.75.0 起含知識樹 |
 | `topic-nudges` | 1 | 首頁主動推播主題知識：「今天」卡、明日報告區塊、陪伴區塊的「一年前的這時候」（kb-pipeline `vikunja-gantt-pusher.py`，每 10 分鐘） |
 | `calendar-today` | 1 | 今天的行程：只有標題、開始／結束時間、地點文字；不含與會者、描述、會議連結（台北日期，私領域） |
+| `templates` | 1 | 公文範本索引：檔名、家族、類別、文件類型、版本、別名與檔案位置（`root`＋`rel`）；下載走 `GET /api/templates/:id/file`（3.9.0） |
 
 ## topics 的 sources 選填欄位（v1 只加選填，舊 payload 照常通過）
 `sources[]` 每筆除了 `id`、`title`、`month`，還可帶：
@@ -56,6 +57,19 @@
 - `claimStats`：`{active, retired, disputed, user}` 四個非負整數，必填。
 - `appliedCorrections`：已套用的更正 id 陣列，最多 200 筆，每筆為 ≥ 1 的整數。
 同時把每題 `sources` 上限由 40 放寬到 120；`maxBytes` 維持 4 MiB。更正的來源是 `knowledge_corrections` 表（管線用 `GET /api/knowledge/corrections` 讀，見 `docs/knowledge-corrections-api.md`）。
+
+## templates（公文範本索引，3.9.0）
+- payload：`{computedAt, total, problems, templates[]}`，schema 見 `schemas/feeds/templates.v1.schema.json`。每筆必填 `id`（`tpl_` 加 10 位小寫十六進位）、`name`、`family`、`category`、`docType`、`subject`、`version`（`YYYY-MM-DD` 或 null）、`latest`、`aliases`、`root`、`rel`、`ext`、`size`、`copies`。
+- 檔案不進資料庫：`root` 是根目錄代號、`rel` 是該根目錄之下的相對路徑。api-server 用環境變數 `TEMPLATE_ROOTS` 對照，格式 `official=/a;office-pc=/b;vault-attach=/c`；**沒設定時**用實機預設值：
+  - `official=/data/raw-nas/home-nas/cwh/SynologyDrive/通霄資料/參考資料/公文範本整合`
+  - `office-pc=/data/raw-nas/home-nas/cwh/SynologyDrive/OneDrive/OfficePC/公文範本`
+  - `vault-attach=/data/attachments`
+  `official`、`office-pc` 在家中 NAS（經 VPN，可能斷線）；`vault-attach` 在 VPS 本機。
+- 端點（都要 `x-admin-password`）：
+  - `GET /api/templates/search?q=&limit=`：q 去頭尾空白後 1～50 字、limit 1～20（預設 5）。先去掉口語字樣（給我、幫我、範本、公文…）再用雙字詞相似度比對 family／檔名／別名／主旨／類別；只回 `latest=true`、分數 ≥0.3 的筆。回 `{items, clearWinner, ready}`；沒有快照時 `ready:false`。
+  - `GET /api/templates/:id/versions`：同 family 的所有版本（新到舊）。
+  - `GET /api/templates/:id/file`：下載檔案。id 格式錯 400；feed 沒有該 id 或檔案不存在 404；代號不在 `TEMPLATE_ROOTS`／根目錄不存在 503「範本資料夾尚未掛載」；`rel` 含 `..`、絕對路徑或 realpath 出了根目錄 400；副檔名只限 json、docx、doc、odt、pdf、xlsx。NAS 逾時與斷路器行為同 `/api/hermes-raw`（504，忙碌 429）。
+- `/api/search` 最前面會多一組 `kind:"template"`（有 month／before 篩選時不出現）；`kind=template` 也可單獨查。
 
 ## hermes-doc 的新 kind（內容層，`POST /api/admin/hermes-doc`，標頭 `x-admin-password`）
 - `source`：一個主題來源一筆。`key` 是來源 id（可能含 `/`，例如 `AI/工作/x`），`bodyMd` 是原文全文（UTF-8 截到 64 KiB），`sourcePath` 是 vault 相對路徑。`meta`＝`{type, case, date, originName, rawPath, textFrom, evidence, topics}`，`textFrom` 為 `original|diary|note|event|none`。
