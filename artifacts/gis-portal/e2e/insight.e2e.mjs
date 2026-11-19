@@ -617,11 +617,14 @@ try {
       const later = [...e.querySelectorAll('.it-root-p, .it-root-hit, [data-testid="insight-root-person"]')]
       return !!soil && getComputedStyle(soil).pointerEvents === 'none' && later.length > 0 && later.every((n) => !!(soil.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING))
     }))
-    check(`${T}：土壤底板只包住根的範圍（寬度小於根系 svg 寬）`, await r.page.evaluate(() => {
+    const plateW = await r.page.evaluate(() => {
       const e = document.querySelector('[data-testid="insight-roots"]'), soil = e.querySelector('[data-testid="insight-roots-soil"]')
-      const sw = soil.getBBox().width, full = Number(e.getAttribute('width'))
-      return sw > 0 && sw < full
-    }))
+      const nodes = [...e.querySelectorAll('[data-testid="insight-root-go"] > g, [data-testid="insight-root-more"]')].map((n) => n.getBBox())
+      const sb = soil.getBBox()
+      return { sw: sb.width, full: Number(e.getAttribute('width')), covers: nodes.every((b) => b.x >= sb.x - 1 && b.x + b.width <= sb.x + sb.width + 1) }
+    })
+    // 3.11.0：底板只包住根節點（左右各 14 padding），明顯窄於舞台（3.10.0 是 width-1，這項會 FAIL）
+    check(`${T}：土壤底板只包住根的範圍（寬度小於舞台寬、仍蓋住全部根節點）`, plateW.sw > 0 && plateW.sw < plateW.full - 40 && plateW.covers, JSON.stringify(plateW))
     await r.page.mouse.move(5, 5)
     await r.page.evaluate(() => document.querySelector('.it-stage').scrollIntoView({ block: 'start' }))
     await r.page.waitForTimeout(200)
