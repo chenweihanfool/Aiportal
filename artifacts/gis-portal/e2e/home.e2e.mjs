@@ -1027,6 +1027,10 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     check(`${T}：浮層預設不可見`, (await popH()) === 0)
     await page.locator('[data-testid="tb-search-slot"] input').click(); await page.waitForTimeout(200)
     check(`${T}：聚焦搜尋列後浮層展開（有模式鈕與最近找過）`, (await popH()) > 0 && (await page.locator('[data-testid="om-pop"] .om-modes').count()) === 1)
+    // 3.14.1：按下浮層裡的按鈕不能讓輸入框失焦（失焦浮層會先收起，click 送不到按鈕）
+    await page.locator('[data-testid="om-pop"] .om-mode').first().click(); await page.waitForTimeout(150)
+    check(`${T}：點前綴鈕會把前綴帶進搜尋列、輸入框保持聚焦`, await page.evaluate(() => { const i = document.querySelector('[data-testid="tb-search-slot"] input'); return document.activeElement === i && i.value === '@' }))
+    await page.locator('[data-testid="tb-search-slot"] input').fill(''); await page.waitForTimeout(150)
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     check(`${T}：沒有字時按 Escape 收起浮層`, (await popH()) === 0)
     await page.keyboard.press('/'); await page.waitForTimeout(200)

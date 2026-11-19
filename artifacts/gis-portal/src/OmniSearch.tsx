@@ -398,6 +398,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   }
 
   const startWith = (text: string) => { setRaw(text); inputRef.current?.focus() }
+  // 精簡版浮層只在輸入框聚焦時顯示：按下時若讓輸入框失焦，浮層會先收起、click 送不到按鈕
+  const keepFocus = (e: ReactMouseEvent) => e.preventDefault()
 
   // 點總覽條算互動：不要被當成「沒點開」記放棄
   const touch = () => { interacted.current = true; if (session.current) session.current.clicked = true }
@@ -468,13 +470,13 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     <>
       <div className="om-modes">
         {PREFIX_HINTS.map((m) => (
-          <button key={m.prefix} type="button" className="om-mode" onClick={() => startWith(m.prefix)}><b>{m.prefix}</b>{m.label}</button>
+          <button key={m.prefix} type="button" className="om-mode" onMouseDown={keepFocus} onClick={() => startWith(m.prefix)}><b>{m.prefix}</b>{m.label}</button>
         ))}
       </div>
       {recent.length > 0 && (
         <div className="om-recent" aria-label="最近找過">
           <span className="om-lb">最近找過</span>
-          {recent.map((r) => <button key={r} type="button" className="om-chip" onClick={() => startWith(r)}>{r}</button>)}
+          {recent.map((r) => <button key={r} type="button" className="om-chip" onMouseDown={keepFocus} onClick={() => startWith(r)}>{r}</button>)}
         </div>
       )}
     </>
