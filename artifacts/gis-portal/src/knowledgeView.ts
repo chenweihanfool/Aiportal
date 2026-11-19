@@ -2,6 +2,8 @@
 // 資料由 kb-pipeline 每週推送（契約見 docs/feed-api.md 與 api-server 的 feeds/registry.ts）；這裡不碰網路。
 // 元件在 KnowledgeView.tsx，樣式在 portal.css 的 kn-*。
 
+import { parseSteps, type TopicStep } from './knowledgeSteps'
+
 export type TopicKind = 'concept' | 'method'
 
 export interface TopicGrowth { date: string; text: string }
@@ -46,6 +48,10 @@ export interface Topic {
   claimStats?: ClaimStats
   /** 知識庫已套用的更正 id */
   appliedCorrections?: number[]
+  /** 這頁對到的業務類別（3.13.0）；null＝沒有任何範本，不顯示 📄 列 */
+  business?: string | null
+  /** 方法頁步驟卡（3.13.0）；沒有或空陣列＝舊頁照舊顯示 */
+  steps?: TopicStep[]
 }
 
 export interface TopicClaim {
@@ -346,6 +352,10 @@ function parseTopic(raw: unknown): Topic | null {
   const claimStats = parseClaimStats(t.claimStats)
   if (claimStats) out.claimStats = claimStats
   if (Array.isArray(t.appliedCorrections)) out.appliedCorrections = t.appliedCorrections.filter((n): n is number => isInt(n))
+  if (t.business === null) out.business = null
+  else if (isStr(t.business) && t.business) out.business = t.business
+  const steps = parseSteps(t.steps)
+  if (steps.length > 0) out.steps = steps
   return out
 }
 

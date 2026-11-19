@@ -32,7 +32,9 @@ router.post("/knowledge/corrections", async (req: Request, res: Response) => {
   if (!isAuthorized(req.headers["x-admin-password"])) return res.status(401).json({ message: "需要管理員權限" });
   const parsed = parseCorrectionBody(req.body);
   if (typeof parsed === "string") return res.status(400).json({ message: parsed });
-  const [row] = await db.insert(knowledgeCorrectionsTable).values(parsed).returning();
+  // lib/db 的 kind 型別只列四種（不可動 lib/db）；資料表欄位是 text，unlink 可直接存，這裡只放寬型別
+  const values = { ...parsed, kind: parsed.kind as typeof knowledgeCorrectionsTable.$inferInsert["kind"] };
+  const [row] = await db.insert(knowledgeCorrectionsTable).values(values).returning();
   return res.status(201).json(toJson(row!));
 });
 

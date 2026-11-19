@@ -4,7 +4,7 @@ import { displayOf, isFresh, type BulletDisplay, type Topic, type TopicClaim } f
 
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 
-export type CorrectionKind = 'wrong' | 'fix' | 'add' | 'undo'
+export type CorrectionKind = 'wrong' | 'fix' | 'add' | 'undo' | 'unlink'
 export const MAX_CORRECTION_CHARS = 500
 /** 送出超過這麼久（分鐘）還沒生效就算卡住 */
 export const STUCK_MIN = 60
@@ -44,7 +44,7 @@ export interface PendingItem {
 
 export interface PendingStore { getItem(key: string): string | null; setItem(key: string, value: string): void }
 
-const KINDS: readonly string[] = ['wrong', 'fix', 'add', 'undo']
+const KINDS: readonly string[] = ['wrong', 'fix', 'add', 'undo', 'unlink']
 
 function isPendingItem(v: unknown): v is PendingItem {
   if (!v || typeof v !== 'object') return false
@@ -106,7 +106,7 @@ export function overlay(claims: readonly Pick<TopicClaim, 'id'>[], pendingOfTopi
       const arr = adds.get(key)
       if (arr) arr.push(p)
       else adds.set(key, [p])
-    } else if (p.claimId && known.has(p.claimId)) {
+    } else if (p.kind !== 'unlink' && p.claimId && known.has(p.claimId)) {
       byClaim.set(p.claimId, { kind: p.kind, text: p.kind === 'fix' ? p.text : null, item: p })
     }
   }

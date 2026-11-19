@@ -586,6 +586,124 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
                 },
               },
               appliedCorrections: { type: "array", maxItems: 200, items: { type: "integer", minimum: 1 } },
+              // 選填：方法頁步驟卡（2026-11-19 起）；空頁不帶也合法。
+              business: {
+                oneOf: [
+                  { type: "null" },
+                  { type: "string", minLength: 1, maxLength: 20 },
+                ],
+              },
+              steps: {
+                type: "array",
+                maxItems: 30,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["id", "title", "claim", "node", "docs", "why", "cases"],
+                  properties: {
+                    id: { type: "string", pattern: "^s[0-9]{1,2}$" },
+                    title: { type: "string", minLength: 1, maxLength: 30 },
+                    claim: { type: "string", pattern: "^c[0-9]{3,5}$" },
+                    node: {
+                      oneOf: [
+                        { type: "null" },
+                        { type: "string", pattern: "^[a-z0-9]{1,8}$" },
+                      ],
+                    },
+                    docs: {
+                      type: "array",
+                      maxItems: 6,
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["templateId", "family", "docType", "role", "score", "others", "evidence"],
+                        properties: {
+                          templateId: { type: "string", pattern: "^tpl_[0-9a-f]{10}$" },
+                          family: { type: "string", minLength: 1, maxLength: 60 },
+                          docType: { enum: ["函", "簽", "書函", "公告", "便簽", "其他公文", "圖表", "表單", "其他"] },
+                          role: { enum: ["公文", "圖表", "表單"] },
+                          score: { type: "number", minimum: 0, maximum: 1 },
+                          others: { type: "integer", minimum: 0, maximum: 99 },
+                          evidence: { type: "array", maxItems: 3, items: { type: "string", minLength: 1, maxLength: 60 } },
+                        },
+                      },
+                    },
+                    why: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["rules", "insights", "pitfalls"],
+                      properties: {
+                        rules: {
+                          type: "array",
+                          maxItems: 3,
+                          items: {
+                            type: "object",
+                            additionalProperties: false,
+                            required: ["text", "article", "claim", "src"],
+                            properties: {
+                              text: { type: "string", minLength: 1, maxLength: 120 },
+                              article: { type: "string", pattern: "^第[0-9]{1,4}條(之[0-9]{1,2})?$" },
+                              claim: { type: "string", pattern: "^c[0-9]{3,5}$" },
+                              src: { type: "integer", minimum: 1, maximum: 80 },
+                            },
+                          },
+                        },
+                        insights: {
+                          type: "array",
+                          maxItems: 2,
+                          items: {
+                            type: "object",
+                            additionalProperties: false,
+                            required: ["insightId", "quote", "date"],
+                            properties: {
+                              insightId: { type: "string", pattern: "^INS-\\d{4}-\\d{2}-\\d{2}-[0-9a-f]{8}$" },
+                              quote: { type: "string", minLength: 1, maxLength: 80 },
+                              date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+                            },
+                          },
+                        },
+                        pitfalls: {
+                          type: "array",
+                          maxItems: 3,
+                          items: {
+                            type: "object",
+                            additionalProperties: false,
+                            required: ["text", "claim", "case"],
+                            properties: {
+                              text: { type: "string", minLength: 1, maxLength: 120 },
+                              claim: { type: "string", pattern: "^c[0-9]{3,5}$" },
+                              case: {
+                                oneOf: [
+                                  { type: "null" },
+                                  { type: "string", minLength: 1, maxLength: 60 },
+                                ],
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    cases: {
+                      type: "array",
+                      maxItems: 8,
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["case", "date"],
+                        properties: {
+                          case: { type: "string", minLength: 1, maxLength: 60 },
+                          date: {
+                            oneOf: [
+                              { type: "null" },
+                              { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },

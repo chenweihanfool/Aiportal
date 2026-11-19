@@ -1,6 +1,6 @@
 # 知識頁更正 API
 
-使用者對知識頁某一條的更正：不對（`wrong`）、改寫（`fix`）、補一句（`add`）、撤回（`undo`）。
+使用者對知識頁某一條的更正：不對（`wrong`）、改寫（`fix`）、補一句（`add`）、撤回（`undo`）、步驟卡連結不相關（`unlink`）。
 入口網只收下與保存，不主動寫回知識庫；知識庫管線帶管理密碼來 GET，自己套用後再推送更新後的 `topics` feed。
 
 ## 為什麼只新增、不修改、不刪除
@@ -22,10 +22,12 @@
 | 欄位 | 規則 |
 |---|---|
 | `topicId` | 必填，符合 `^T[0-9]{8}-[0-9]{2,4}$` |
-| `kind` | 必填，`wrong`／`fix`／`add`／`undo` |
-| `claimId` | `wrong`／`fix`／`undo` 必填，`add` 可省略或 null；有值要符合 `^c[0-9]{3,5}$` |
-| `text` | `fix`／`add` 必填，去頭尾空白後 1–500 字、不得含換行；`wrong`／`undo` 不得帶非空 `text` |
+| `kind` | 必填，`wrong`／`fix`／`add`／`undo`／`unlink` |
+| `claimId` | `wrong`／`fix`／`undo`／`unlink` 必填，`add` 可省略或 null；有值要符合 `^c[0-9]{3,5}$` |
+| `text` | `fix`／`add` 必填，去頭尾空白後 1–500 字、不得含換行；`unlink` 必填，`doc:`／`insight:`／`rule:`／`pitfall:`／`case:` 開頭、1–200 字、不得含換行；`wrong`／`undo` 不得帶非空 `text` |
 | `section` | 只有 `add` 可帶，去頭尾空白後 1–40 字；其他 kind 帶了回 400 |
+
+| `unlink` | 步驟卡上某條連結不相關。入口網只保存，由 kb-pipeline 的 step_docs 套用（永久排除該配對）；`text` 指出是哪種連結：`doc:<templateId>`、`insight:<insightId>`、`rule:<claim>`、`pitfall:<claim>`、`case:<案件名>` |
 
 - 驗證不過回 **400** `{"message":…}`（繁體中文）。
 - 成功回 **201** 與新增的那一筆，形狀同 GET 的單筆。

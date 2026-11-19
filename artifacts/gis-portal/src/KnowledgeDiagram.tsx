@@ -29,6 +29,10 @@ interface Props {
   onOpenSource: (n: number, q: string) => void
   /** 可注入的「現在」（測試用）；預設 new Date() */
   now?: Date
+  /** 點節點時先問步驟卡：回 true＝有對應步驟卡（已處理，不開原文），false＝照舊開原文 */
+  onNodeStep?: (nodeId: string) => boolean
+  /** 要高亮的節點 id（步驟卡「在流程圖上看」用） */
+  highlightNode?: string | null
 }
 
 const onKey = (act: () => void) => (e: KeyboardEvent) => {
@@ -60,7 +64,7 @@ function NodeText({ label, sub, w, h }: { label: string; sub?: string; w: number
 
 /* ───────── flow ───────── */
 
-function FlowSvg({ d, sel, onPick }: { d: FlowDiagram; sel: string | null; onPick: (s: Selected) => void }) {
+function FlowSvg({ d, sel, onPick, hl }: { d: FlowDiagram; sel: string | null; onPick: (s: Selected) => void; hl: string | null }) {
   const uid = useId().replace(/:/g, '')
   const lay = useMemo(() => layoutFlow(d), [d])
   const meta = new Map(d.nodes.map((n) => [n.id, n]))
@@ -98,7 +102,7 @@ function FlowSvg({ d, sel, onPick }: { d: FlowDiagram; sel: string | null; onPic
           const pick = () => onPick({ key: n.id, heading: `${d.lanes[n.lane]}・${n.label}`, sub: n.sub, note: n.note, strength: st, unknown: !!n.unknown, src: n.src })
           const r = b.rect
           return (
-            <g key={n.id} className="kn-dg-node" data-ev={st} data-sel={sel === n.id} data-shape={n.shape} role="button" tabIndex={0}
+            <g key={n.id} className="kn-dg-node" data-ev={st} data-sel={sel === n.id} data-hl={hl === n.id} data-shape={n.shape} role="button" tabIndex={0}
               aria-label={ariaOf(n.label, st, !!n.unknown)} aria-pressed={sel === n.id} onClick={pick} onKeyDown={onKey(pick)}>
               {n.shape === 'decision'
                 ? <polygon className="kn-dg-shape" points={`${b.cx},${r.y} ${r.x + r.w},${b.cy} ${b.cx},${r.y + r.h} ${r.x},${b.cy}`} />
@@ -119,7 +123,7 @@ function FlowSvg({ d, sel, onPick }: { d: FlowDiagram; sel: string | null; onPic
 
 /* ───────── timeline ───────── */
 
-function TimelineSvg({ d, now, sel, onPick }: { d: TimelineDiagram; now: Date; sel: string | null; onPick: (s: Selected) => void }) {
+function TimelineSvg({ d, now, sel, onPick, hl }: { d: TimelineDiagram; now: Date; sel: string | null; onPick: (s: Selected) => void; hl: string | null }) {
   const lay = useMemo(() => layoutTimeline(d, now), [d, now])
   return (
     <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: Math.round(lay.width * 1.25), minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="多軌時間軸">
@@ -166,7 +170,7 @@ function TimelineSvg({ d, now, sel, onPick }: { d: TimelineDiagram; now: Date; s
         const track = d.tracks[mk.trackIndex]!
         const pick = () => onPick({ key: mk.key, heading: `${track.label}・${it.label}`, sub: [it.date + (it.end ? `～${it.end}` : ''), it.sub].filter(Boolean).join('　'), note: it.note, strength: mk.strength, unknown: mk.unknown, src: it.src })
         return (
-          <g key={mk.key} className="kn-dg-node" data-ev={mk.strength} data-sel={sel === mk.key} role="button" tabIndex={0}
+          <g key={mk.key} className="kn-dg-node" data-ev={mk.strength} data-sel={sel === mk.key} data-hl={hl === mk.key} role="button" tabIndex={0}
             aria-label={ariaOf(`${it.label} ${it.date}`, mk.strength, mk.unknown)} aria-pressed={sel === mk.key} onClick={pick} onKeyDown={onKey(pick)}>
             {it.end
               ? <rect className="kn-dg-shape" x={mk.x - 6} y={mk.markerY - 6} width={Math.max(12, mk.xEnd - mk.x + 12)} height={12} rx={6} />
@@ -201,7 +205,7 @@ function ForecastCard({ d, now }: { d: TimelineDiagram; now: Date }) {
 
 /* ───────── map ───────── */
 
-function MapSvg({ d, sel, onPick }: { d: MapDiagram; sel: string | null; onPick: (s: Selected) => void }) {
+function MapSvg({ d, sel, onPick, hl }: { d: MapDiagram; sel: string | null; onPick: (s: Selected) => void; hl: string | null }) {
   const uid = useId().replace(/:/g, '')
   const lay = useMemo(() => layoutMap(d), [d])
   const all = new Map([...d.observations, ...d.frameworks, ...d.judgments].map((n) => [n.id, n]))
@@ -226,7 +230,7 @@ function MapSvg({ d, sel, onPick }: { d: MapDiagram; sel: string | null; onPick:
         const pick = () => onPick({ key: n.id, heading: `${colName[b.col]}・${n.label}`, sub: n.sub, note: n.note, strength: b.strength, unknown: !!n.unknown, src: n.src })
         const r = b.rect
         return (
-          <g key={n.id} className="kn-dg-node" data-ev={b.strength} data-sel={sel === n.id} data-col={b.col} role="button" tabIndex={0}
+          <g key={n.id} className="kn-dg-node" data-ev={b.strength} data-sel={sel === n.id} data-hl={hl === n.id} data-col={b.col} role="button" tabIndex={0}
             aria-label={ariaOf(n.label, b.strength, !!n.unknown)} aria-pressed={sel === n.id} onClick={pick} onKeyDown={onKey(pick)}>
             <rect className="kn-dg-shape" x={r.x} y={r.y} width={r.w} height={r.h} rx={b.col === 'f' ? 12 : 8} />
             <g transform={`translate(${r.x} ${r.y})`}><NodeText label={n.label} sub={n.sub} w={r.w} h={r.h} /></g>
@@ -273,7 +277,7 @@ function Detail({ sel, topic, quotes, onOpenSource, detailRef }: {
   )
 }
 
-export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now }: Props) {
+export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, onNodeStep, highlightNode = null }: Props) {
   const [sel, setSel] = useState<Selected | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
   const clock = useMemo(() => now ?? new Date(), [now])
@@ -283,10 +287,12 @@ export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now }: 
     const el = detailRef.current
     if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [sel])
+  // 有對應步驟卡就交給卡片（捲過去高亮），不開原文；沒有才照舊選取
+  const pick = (s: Selected) => { if (onNodeStep && onNodeStep(s.key)) return; setSel(s) }
   let svg: ReactNode
-  if (diagram.type === 'flow') svg = <FlowSvg d={diagram} sel={sel?.key ?? null} onPick={setSel} />
-  else if (diagram.type === 'timeline') svg = <TimelineSvg d={diagram} now={clock} sel={sel?.key ?? null} onPick={setSel} />
-  else svg = <MapSvg d={diagram} sel={sel?.key ?? null} onPick={setSel} />
+  if (diagram.type === 'flow') svg = <FlowSvg d={diagram} sel={sel?.key ?? null} onPick={pick} hl={highlightNode} />
+  else if (diagram.type === 'timeline') svg = <TimelineSvg d={diagram} now={clock} sel={sel?.key ?? null} onPick={pick} hl={highlightNode} />
+  else svg = <MapSvg d={diagram} sel={sel?.key ?? null} onPick={pick} hl={highlightNode} />
   return (
     <section className="kn-dg" aria-label="圖解" data-type={diagram.type}>
       {diagram.type === 'timeline' && <ForecastCard d={diagram} now={clock} />}

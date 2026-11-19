@@ -1813,9 +1813,6 @@ button.ms-col { cursor: pointer; }
   .kn-reading { grid-template-columns: minmax(0, 860px) minmax(280px, 1fr); }
   .kn-sources-col { position: sticky; top: var(--sp-4); max-height: calc(100vh - 2 * var(--sp-4)); overflow-y: auto; margin-bottom: 0; padding-left: var(--sp-4); border-left: 1px solid var(--c-line); }
 }
-.kn-page[data-live="true"] .kn-reading-main { max-width: none; }
-.kn-page[data-live="true"] .kn-reading { grid-template-columns: minmax(0, 1fr); }
-.kn-page[data-live="true"] .kn-sources-col { position: static; max-height: none; padding-left: 0; border-left: 0; }
 .kn-crumb { margin: 0 0 var(--sp-1); font-size: 13px; color: var(--c-ink-3); }
 .kn-title { margin: 0 0 var(--sp-2); font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .kn-page .kn-why { display: block; max-width: 860px; font-size: 15px; line-height: 1.7; color: var(--c-ink-2); margin: 0 0 var(--sp-2); overflow-wrap: anywhere; }
@@ -1938,11 +1935,10 @@ button.ms-col { cursor: pointer; }
 .hm-soc-down { color: var(--c-concern); }
 .hm-soc-suggest { margin: 0.6rem 0 0; font-size: 0.76rem; color: var(--c-ink); }
 
-/* ── 知識頁概念／方法分版（2.80.0）：翻牌誤解、勾選清單、現場模式、判斷點分岔、關係區 ── */
+/* ── 知識頁概念／方法分版（2.80.0）：翻牌誤解、判斷點分岔、關係區 ── */
 .kn-legacy-note { max-width: 860px; margin: calc(var(--sp-2) * -1) 0 var(--sp-3); font-size: 12px; color: var(--c-ink-3); }
-.kn-live-btn { margin: 0 0 var(--sp-3); }
 .kn-myth-count { margin: 0 0 var(--sp-2); }
-.kn-myths, .kn-forks, .kn-checklist { list-style: none; margin: 0; padding: 0; }
+.kn-myths, .kn-forks { list-style: none; margin: 0; padding: 0; }
 .kn-myths { display: flex; flex-direction: column; gap: var(--sp-2); }
 .kn-myth { background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); overflow: hidden; }
 .kn-myth--plain { padding: var(--sp-3); }
@@ -1959,19 +1955,6 @@ button.ms-col { cursor: pointer; }
 .kn-myth[data-cited="true"] { box-shadow: 0 0 0 3px var(--c-accent-dim); }
 @keyframes kn-flip { from { opacity: 0; transform: rotateX(-80deg); } to { opacity: 1; transform: rotateX(0); } }
 .kn-rel h4 { margin: var(--sp-2) 0 var(--sp-1); font-size: 14px; color: var(--c-ink-2); }
-.kn-progress { margin-bottom: var(--sp-4); }
-.kn-progress-row { display: flex; align-items: center; gap: var(--sp-3); }
-.kn-bar { flex: 1; height: 10px; background: var(--c-raised); border-radius: var(--r-pill); overflow: hidden; }
-.kn-bar-fill { height: 100%; background: var(--c-ok); border-radius: var(--r-pill); transition: width 0.25s ease; }
-.kn-progress-n { font-family: var(--font-mono); font-size: 14px; color: var(--c-ink-2); }
-.kn-done { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin: var(--sp-3) 0 0; font-size: 16px; font-weight: 700; color: var(--c-ok); }
-.kn-checklist { display: flex; flex-direction: column; gap: var(--sp-2); }
-.kn-ck { display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); }
-.kn-ck[data-checked="true"] { border-color: var(--c-ok); }
-.kn-ck[data-checked="true"] .kn-ck-body { color: var(--c-ink-3); text-decoration: line-through; }
-.kn-ck-box { flex: 0 0 auto; width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--c-ok); cursor: pointer; }
-.kn-ck-body { min-width: 0; flex: 1; }
-.kn-ck .kn-stepno { flex: 0 0 28px; }
 .kn-forks { display: flex; flex-direction: column; gap: var(--sp-3); }
 .kn-fork { background: var(--c-surface); border: 1px solid var(--c-line); border-left: 4px solid var(--c-accent); border-radius: var(--r-md); padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
 .kn-fork-if, .kn-fork-then { display: flex; gap: var(--sp-2); align-items: baseline; overflow-wrap: anywhere; }
@@ -1981,11 +1964,6 @@ button.ms-col { cursor: pointer; }
 .kn-fork-tag--then { color: var(--c-ok); border-color: var(--c-ok); }
 .kn-trap { display: block; margin-bottom: 2px; }
 .kn-avoid { color: var(--c-ink-2); }
-.kn-page[data-live="true"] { max-width: none; }
-.kn-page[data-live="true"] .kn-section, .kn-page[data-live="true"] .kn-ck-body { font-size: 20px; line-height: 1.7; }
-.kn-page[data-live="true"] .kn-ck { padding: var(--sp-4); gap: var(--sp-4); }
-.kn-page[data-live="true"] .kn-ck-box { width: 36px; height: 36px; }
-.kn-page[data-live="true"] .kn-stepno { flex-basis: 36px; height: 36px; font-size: 18px; }
 @media (prefers-reduced-motion: reduce) {
   .kn-myth-truth { animation: none; }
   .kn-bar-fill { transition: none; }
@@ -2010,6 +1988,7 @@ button.ms-col { cursor: pointer; }
 .kn-dg-shape { fill: var(--c-raised); stroke: var(--ev, var(--c-line-strong)); stroke-width: var(--evw, 1.4px); stroke-dasharray: var(--evd, none); }
 .kn-dg-node { cursor: pointer; outline: none; }
 .kn-dg-node:hover .kn-dg-shape, .kn-dg-node:focus-visible .kn-dg-shape { stroke: var(--c-accent); stroke-width: 3px; }
+.kn-dg-node[data-hl="true"] .kn-dg-shape { stroke: var(--c-accent); stroke-width: 4px; animation: kn-hl-pulse 1s ease-in-out 2; }
 .kn-dg-node[data-sel="true"] .kn-dg-shape { fill: var(--c-hover); stroke: var(--c-accent); stroke-width: 3px; }
 .kn-dg-nbox { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 4px 8px; box-sizing: border-box; color: var(--c-ink); font-size: 13px; line-height: 1.3; overflow: hidden; }
 .kn-dg-nbox b { font-weight: 700; font-size: 13.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -2082,7 +2061,6 @@ button.ms-col { cursor: pointer; }
 .kn-ca-row[data-mine="true"] { box-shadow: 0 0 0 1px var(--c-mint), 0 0 14px rgba(94, 234, 212, 0.3); padding: 2px var(--sp-2); }
 .kn-ca-main { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .kn-fork .kn-ca-main { display: flex; flex-direction: column; gap: var(--sp-2); }
-.kn-ck-line { display: flex; align-items: flex-start; gap: var(--sp-3); min-width: 0; flex: 1; }
 .kn-pit-body { min-width: 0; flex: 1; }
 .kn-myth[data-ca="true"] { overflow: visible; }
 .kn-myth[data-ca="true"] .kn-myth-front { border-radius: var(--r-md) var(--r-md) 0 0; }
@@ -2141,7 +2119,60 @@ button.ms-col { cursor: pointer; }
   .kn-ca-pop { right: 0; max-width: calc(100vw - 32px); }
   .kn-ca-pop .kn-ca-item { white-space: normal; }
 }
-.kn-page[data-live="true"] .kn-ck-line { gap: var(--sp-4); }
+
+/* ── 方法頁步驟卡（3.13.0）：每步的公文範本 chip、為什麼、用過的案件；375 寬單欄、chip 自動換行 ── */
+.kn-stepcards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.kn-stepcard { min-width: 0; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-3); scroll-margin-top: var(--sp-4); }
+.kn-stepcard[data-hl="true"] { border-color: var(--c-accent); box-shadow: 0 0 0 3px var(--c-accent-dim); animation: kn-hl-pulse 1s ease-in-out 2; }
+.kn-sc-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.kn-sc-no { flex: 0 0 28px; height: 28px; border-radius: 50%; background: var(--c-accent); color: var(--c-bg); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.kn-sc-title { flex: 1 1 8em; min-width: 0; margin: 0; font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+.kn-sc-godiag { font: inherit; font-size: 12px; color: var(--c-accent); background: none; border: 1px solid var(--c-accent); border-radius: var(--r-pill); padding: 2px var(--sp-2); cursor: pointer; }
+.kn-sc-godiag:hover { background: var(--c-accent-dim); }
+.kn-sc-sec { margin-top: var(--sp-3); }
+.kn-sc-sec h5 { margin: 0 0 var(--sp-1); font-size: 13px; color: var(--c-ink-2); }
+.kn-sc-why { margin-top: var(--sp-2); }
+.kn-sc-why h6 { margin: 0 0 2px; font-size: 12px; font-weight: 700; color: var(--c-ink-3); }
+.kn-sc-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.kn-sc-docwrap, .kn-sc-casewrap { display: flex; flex-direction: column; min-width: 0; max-width: 100%; }
+.kn-sc-doc, .kn-sc-casewrap { align-items: center; }
+.kn-sc-doc { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); min-width: 0; }
+.kn-sc-casewrap { flex-direction: row; flex-wrap: wrap; gap: var(--sp-1); }
+.kn-sc-docbtn, .kn-sc-case { font: inherit; font-size: 14px; color: var(--c-ink); background: var(--c-bg); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 2px var(--sp-3); cursor: pointer; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.kn-sc-docbtn { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1); }
+.kn-sc-docbtn:hover:not(:disabled), .kn-sc-case:hover:not(:disabled) { border-color: var(--c-accent); background: var(--c-hover); }
+.kn-sc-docbtn:focus-visible, .kn-sc-case:focus-visible, .kn-sc-src:focus-visible, .kn-sc-x:focus-visible, .kn-sc-godiag:focus-visible, .kn-sc-inslink:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.kn-sc-doc-fam { font-weight: 700; }
+.kn-sc-doc-type { font-size: 12px; color: var(--c-ink-3); }
+.kn-sc-doc-dl { color: var(--c-accent); }
+.kn-sc-others { font-size: 12px; color: var(--c-ink-3); }
+.kn-sc-case:disabled { cursor: default; color: var(--c-ink-3); border-style: dashed; }
+.kn-sc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.kn-sc-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); min-width: 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.kn-sc-article { color: var(--c-ink); }
+.kn-sc-src { font: inherit; font-size: 12px; color: var(--c-accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.kn-sc-src:disabled { color: var(--c-ink-3); cursor: default; }
+.kn-sc-insight { display: flex; }
+.kn-sc-inslink { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1); min-width: 0; max-width: 100%; color: var(--c-ink); text-decoration: none; padding: 2px var(--sp-2); border-radius: var(--r-sm); background: color-mix(in srgb, var(--c-ok) 14%, transparent); border-left: 3px solid var(--c-ok); overflow-wrap: anywhere; }
+.kn-sc-inslink:hover { background: color-mix(in srgb, var(--c-ok) 24%, transparent); }
+.kn-sc-leaf { font-size: 13px; }
+.kn-sc-date { font-size: 12px; color: var(--c-ink-3); }
+.kn-sc-case-inline { margin-left: var(--sp-2); font-size: 12px; color: var(--c-ink-3); }
+.kn-sc-x { font: inherit; font-size: 12px; line-height: 1; min-width: 24px; min-height: 24px; color: var(--c-ink-3); background: none; border: 1px solid transparent; border-radius: var(--r-sm); cursor: pointer; }
+.kn-sc-x:hover:not(:disabled) { color: var(--c-warn); border-color: var(--c-warn); }
+.kn-sc-x:disabled { opacity: 0.5; cursor: default; }
+.kn-sc-ok { font-size: 12px; color: var(--c-ok); }
+.kn-sc-err { font-size: 12px; color: var(--c-warn); }
+.kn-stepcard [data-unlinked="true"] { opacity: 0.55; }
+.kn-stepcard [data-unlinked="true"] [data-unlinked="true"] { opacity: 1; }
+.kn-stepcard [data-unlinked="true"] .kn-sc-docbtn, .kn-stepcard [data-unlinked="true"] .kn-sc-case, .kn-stepcard [data-unlinked="true"] .kn-sc-inslink, .kn-stepcard .kn-sc-link[data-unlinked="true"] > span:first-child { text-decoration: line-through; }
+.kn-sc-link[data-unlinked="true"] .kn-sc-ok, .kn-sc-docwrap[data-unlinked="true"] .kn-sc-ok, .kn-sc-casewrap[data-unlinked="true"] .kn-sc-ok { opacity: 1; }
+@keyframes kn-hl-pulse { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px var(--c-accent-dim); } }
+@media (prefers-reduced-motion: reduce) { .kn-stepcard[data-hl="true"], .kn-dg-node[data-hl="true"] .kn-dg-shape { animation: none; } }
+@media (max-width: 479px) { .kn-stepcard { padding: var(--sp-2); } }
+.it-usage { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.it-usage-link { color: var(--c-accent); font-size: 0.88rem; overflow-wrap: anywhere; text-decoration: none; }
+.it-usage-link:hover { text-decoration: underline; }
 
 /* ─── 全站搜尋（OmniSearch，2.86.0）：一個框搜全部。class 一律 om- 開頭，顏色直接用全站 --c-* token（2.89.0 起深淺兩套）。 ─── */
 .om-root {
