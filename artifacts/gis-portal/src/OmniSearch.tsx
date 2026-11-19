@@ -271,6 +271,10 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       }
       if (!compact) return
       if (shouldFocusSearch(e)) {
+        // 搜尋列被全螢幕頁（面向頁、年度回顧的覆蓋層）蓋住時不攔，免得字打進看不見的輸入框
+        const r = inputRef.current?.getBoundingClientRect()
+        const top = r ? document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) : null
+        if (!top || !rootRef.current?.contains(top)) return
         e.preventDefault()
         setDismissed(false)
         inputRef.current?.focus()

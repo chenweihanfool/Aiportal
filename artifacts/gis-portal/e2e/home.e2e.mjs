@@ -1030,6 +1030,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     check(`${T}：沒有字時按 Escape 收起浮層`, (await popH()) === 0)
     await page.keyboard.press('/'); await page.waitForTimeout(200)
+    check(`${T}：浮層左緣對齊搜尋列、右緣不出視窗`, await page.evaluate(() => { const s = document.querySelector('[data-testid="tb-search-slot"]').getBoundingClientRect(), p = document.querySelector('[data-testid="om-pop"]').getBoundingClientRect(); return Math.abs(p.left - s.left) <= 1 && p.right <= window.innerWidth && p.width >= s.width - 1 }))
     check(`${T}：按 / 聚焦搜尋列並展開浮層`, await page.evaluate(() => document.activeElement === document.querySelector('[data-testid="tb-search-slot"] input') && (document.querySelector('[data-testid="om-pop"]')?.getBoundingClientRect().height ?? 0) > 0))
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     check(`${T}：想法板在心得樹之後、現在用得上之前（有聚焦卡）`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-tree"]'); const b = document.querySelector('[data-testid="idea-board"]'); const n = document.querySelector('[data-testid="now-section"]'); return !!t && !!b && !!n && !!(t.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card').length === 1 }))
@@ -1173,6 +1174,10 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
       const shownCards = await page.locator('[data-testid="now-card"]').count()
       // 3.10.0：搜尋列在頂欄（手機擠到第二行），不再佔首頁內容的一整塊
       const inSlot = await page.evaluate(() => { const s = document.querySelector('[data-testid="tb-search-slot"]'), o = document.querySelector('.om-root'); return !!s && !!o && s.contains(o) })
+      await page.evaluate(() => window.scrollTo(0, 0)); await page.locator('[data-testid="tb-search-slot"] input').click(); await page.waitForTimeout(200)
+      const popBox = await page.evaluate(() => { const p = document.querySelector('[data-testid="om-pop"]').getBoundingClientRect(); return { l: Math.round(p.left), r: Math.round(p.right), h: Math.round(p.height), vw: window.innerWidth } })
+      check(`${T}：點搜尋列後浮層展開且完全在視窗內（左右都不切到）`, popBox.h > 0 && popBox.l >= 0 && popBox.r <= popBox.vw, JSON.stringify(popBox))
+      await page.keyboard.press('Escape'); await page.waitForTimeout(150)
       check(`${T}：搜尋列在頂欄插槽內、搜尋列與「現在用得上」標題在首屏內（om ${omTop}、now ${nowTop} < ${h}）`, inSlot && omTop !== null && omTop < h && nowTop !== null && nowTop < h)
       // 2.99.0：左側多了一塊心得樹（首頁左側大塊），1.5 屏的上限扣掉它的高度再比
       const treeH = await page.evaluate(() => Math.round(document.querySelector('[data-testid="insight-tree"]')?.getBoundingClientRect().height ?? 0) + 12)
