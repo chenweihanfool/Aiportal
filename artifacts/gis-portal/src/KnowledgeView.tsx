@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
 import { SourceSearchResults } from './KnowledgeSearch'
 import { SourceList, TraceProvider, useTopicQuotes, type TraceCtx } from './KnowledgeTrace'
@@ -300,15 +300,38 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, pw, now, onOpen, onSe
 }) {
   const claims = useClaimsController(pw, t, parsed, topics, now)
   const range = monthRange(t)
-  const [live, setLive] = useState(false)
-  const isMethod = parsed?.format === 'method'
-  const liveOn = live && isMethod
   const [textOpen, setTextOpen] = useState(true)
-  const showDiagram = !!t.diagram && !liveOn
+  const showDiagram = !!t.diagram
+  // 圖解 ↔ 步驟卡：互相捲過去並高亮 2 秒
+  const [hlStep, setHlStep] = useState<string | null>(null)
+  const [hlNode, setHlNode] = useState<string | null>(null)
+  const timers = useRef<{ step?: number; node?: number }>({})
+  useEffect(() => () => { window.clearTimeout(timers.current.step); window.clearTimeout(timers.current.node) }, [])
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id)
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+  const onNodeStep = useCallback((nodeId: string): boolean => {
+    const step = (t.steps ?? []).find((s) => s.node === nodeId)
+    if (!step) return false
+    setHlStep(step.id)
+    window.clearTimeout(timers.current.step)
+    timers.current.step = window.setTimeout(() => setHlStep(null), 2000)
+    // 文字版折起時先打開，卡片才找得到
+    setTextOpen(true)
+    window.setTimeout(() => scrollTo(`kn-step-card-${step.id}`), 0)
+    return true
+  }, [t.steps])
+  const goDiagram = (nodeId: string) => {
+    setHlNode(nodeId)
+    window.clearTimeout(timers.current.node)
+    timers.current.node = window.setTimeout(() => setHlNode(null), 2000)
+    scrollTo('kn-diagram')
+  }
   const body = parsed ? (
     <>
           {parsed.format === 'concept' && <ConceptBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} />}
-          {parsed.format === 'method' && <MethodBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} live={liveOn} />}
+          {parsed.format === 'method' && <MethodBody t={t} parsed={parsed} topics={topics} cited={cited} onOpen={onOpen} pw={pw} onView={onView} highlightStep={hlStep} onGoDiagram={goDiagram} />}
           {parsed.format === 'legacy' && parsed.what.length > 0 && (
             <Section label="這件事在幹嘛" addKey="what">
               <ul className="kn-plain">{parsed.what.map((b, i) => <li key={i}><ClaimBullet b={b} bid={bulletId('what', i)} cited={cited} /></li>)}</ul>
@@ -324,30 +347,27 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, pw, now, onOpen, onSe
               <ul className="kn-cautions">{parsed.caution.map((b, i) => <li key={i}><span aria-hidden="true">⚠</span><div><ClaimBullet b={b} bid={bulletId('caution', i)} cited={cited} /></div></li>)}</ul>
             </Section>
           )}
-          {!liveOn && parsed.unknown.length > 0 && (
+          {parsed.unknown.length > 0 && (
             <Section label="還不知道" addKey="unknown">
               <ul className="kn-unknowns">{parsed.unknown.map((b, i) => <li key={i}><span aria-hidden="true">？</span><div><ClaimBullet b={b} bid={bulletId('unknown', i)} cited={cited} /></div></li>)}</ul>
             </Section>
           )}
-          {!liveOn && parsed.other && <section className="kn-section" aria-label="其他"><p className="kn-other">{parsed.other}</p></section>}
+          {parsed.other && <section className="kn-section" aria-label="其他"><p className="kn-other">{parsed.other}</p></section>}
     </>
   ) : null
   return (
     <ClaimsProvider value={claims}>
-    <article className="kn-page" data-live={liveOn}>
-      {!liveOn && t.path.length > 0 && <p className="kn-crumb">{t.path.join(' › ')}</p>}
+    <article className="kn-page">
+      {t.path.length > 0 && <p className="kn-crumb">{t.path.join(' › ')}</p>}
       <h2 className="kn-title">{t.name} <span className="kn-kind" data-kind={t.kind}>{kindLabel(t.kind)}</span></h2>
-      {isMethod && <button type="button" className="kn-btn kn-live-btn" aria-pressed={live} onClick={() => setLive((v) => !v)}>{live ? '離開現場模式' : '現場模式'}</button>}
       {t.claimStats && <p className="kn-ca-stats">{formatClaimStats(t.claimStats)}</p>}
-      {!liveOn && t.why && <p className="kn-why">{t.why}</p>}
-      {!liveOn && (
-        <p className="kn-meta">
-          <span>{t.docs} 份來源</span>
-          {t.monthsSpan > 0 && <span>橫跨 {t.monthsSpan} 個月{range ? `（${range}）` : ''}</span>}
-          <span>{t.updated ? `更新於 ${t.updated}` : '尚未成頁'}</span>
-          {t.newDocs > 0 && <span className="kn-new">＋{t.newDocs} 新素材</span>}
-        </p>
-      )}
+      {t.why && <p className="kn-why">{t.why}</p>}
+      <p className="kn-meta">
+        <span>{t.docs} 份來源</span>
+        {t.monthsSpan > 0 && <span>橫跨 {t.monthsSpan} 個月{range ? `（${range}）` : ''}</span>}
+        <span>{t.updated ? `更新於 ${t.updated}` : '尚未成頁'}</span>
+        {t.newDocs > 0 && <span className="kn-new">＋{t.newDocs} 新素材</span>}
+      </p>
       {parsed?.format === 'legacy' && <p className="kn-legacy-note">舊格式，之後會自動換成新版</p>}
 
       {parsed && parsed.summary && (
@@ -358,7 +378,7 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, pw, now, onOpen, onSe
           </ClaimRow>
         </section>
       )}
-      {parsed && showDiagram && t.diagram && <KnowledgeDiagram topic={t} diagram={t.diagram} quotes={quotes} onOpenSource={onViewQ} />}
+      {parsed && showDiagram && t.diagram && <div id="kn-diagram"><KnowledgeDiagram topic={t} diagram={t.diagram} quotes={quotes} onOpenSource={onViewQ} onNodeStep={onNodeStep} highlightNode={hlNode} /></div>}
 
       <div className="kn-reading">
         <div className="kn-reading-main">
