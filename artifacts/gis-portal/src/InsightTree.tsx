@@ -18,6 +18,7 @@ import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } fr
 import type { IdeaItem } from './boardApi'
 import { rootAction, rootPaths, rootSlots, type RootAction } from './insightLinks'
 import { HIGH, LOW, bornBand, insightsByBand } from './hhiBorn'
+import { rootFlarePath, soilBand } from './insightTreeArt'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
 // 總覽時主題多會自動精簡（葉叢、標籤縮成色點），滑過／聚焦才放大；聚焦一個主題會畫出全部脈絡與沿枝的時間。
@@ -71,10 +72,16 @@ function useTheme(): PaletteTheme {
 
 const Limb = memo(function Limb({ l, color, lit, dimc, fresh }: { l: InsightLimb; color: string; lit: boolean; dimc: boolean; fresh: boolean }) {
   return (
-    <path
-      d={l.d} pathLength={1} data-level={l.level} data-ci={l.clusterIndex} data-withered={l.withered ? '1' : undefined}
-      className={`it-limb${l.withered ? ' it-dead' : ''}${lit ? ' it-lit' : ''}${dimc ? ' it-dimc' : ''}${fresh ? ' it-fresh' : ''}`}
-      style={{ fill: l.withered ? undefined : color, color: l.withered ? undefined : color }} />
+    <>
+      {/* 主枝的圓柱感：同形狀往左上偏一點的亮邊，畫在枝底下，只露出左上外緣一圈（只給主枝，不加元素量） */}
+      {l.level === 'cluster' && !l.withered && (
+        <path d={l.d} transform="translate(-0.7,-0.7)" className={`it-limb-hl${lit ? ' it-lit' : ''}${dimc ? ' it-dimc' : ''}`} style={{ color }} aria-hidden />
+      )}
+      <path
+        d={l.d} pathLength={1} data-level={l.level} data-ci={l.clusterIndex} data-withered={l.withered ? '1' : undefined}
+        className={`it-limb${l.withered ? ' it-dead' : ''}${lit ? ' it-lit' : ''}${dimc ? ' it-dimc' : ''}${fresh ? ' it-fresh' : ''}`}
+        style={{ fill: l.withered ? undefined : color, color: l.withered ? undefined : color }} />
+    </>
   )
 })
 
@@ -92,10 +99,15 @@ const Leaf = memo(function Leaf({ lf, ins, color, lit, dimc, fresh, onOpen, onHo
     >
       <g transform={`translate(${lf.x},${lf.y})`}>
         <g className={fresh ? 'it-pop' : undefined}>
-          {lf.glow && !lf.withered && <circle className="it-halo" r={lf.r * 1.9} style={{ fill: color }} />}
+          {lf.glow && !lf.withered && (
+            <g className="it-halo" aria-hidden style={{ fill: color }}>
+              <circle r={lf.r * 2.2} fillOpacity={0.35} /><circle r={lf.r * 1.7} fillOpacity={0.5} /><circle r={lf.r * 1.3} fillOpacity={0.8} />
+            </g>
+          )}
           <circle r={lf.r * 1.5} className="it-hit" />
           <g transform={`rotate(${lf.angle}) scale(${lf.r})`}>
             <path className="it-shape" d={sh.d} style={{ fill: lf.withered ? undefined : color }} data-kind={sh.kind} />
+            {!lf.withered && <path className="it-gloss" d={sh.d} fill="url(#it-leaf-gloss)" aria-hidden />}
             {sh.vein && <path className="it-vein" d={sh.vein} vectorEffect="non-scaling-stroke" />}
           </g>
         </g>
@@ -140,6 +152,11 @@ function Roots({ ins, cx, top, width, canIdea, onPick, onEnter }: {
   const paths = rootPaths(cx, width, slots.length, ROOT_DEPTH)
   return (
     <svg className="it-roots" data-testid="insight-roots" width={width} height={ROOT_DEPTH + 14} style={{ top }} role="group" aria-label="這則心得連到的人與想法">
+      <defs>
+        <linearGradient id="it-soil-g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" className="it-soil-s0" /><stop offset="1" className="it-soil-s1" /></linearGradient>
+      </defs>
+      {/* 土壤底板：蓋住下面的提示文字與月份列，根與節點畫在它上面 */}
+      <rect className="it-soil-plate" data-testid="insight-roots-soil" x={0.5} y={0} width={Math.max(0, width - 1)} height={ROOT_DEPTH + 13} rx={10} fill="url(#it-soil-g)" />
       {paths.map((p, k) => {
         const sl = slots[k]!
         const act = sl.kind === 'idea' && !canIdea ? null : rootAction(sl)
@@ -162,6 +179,7 @@ function Roots({ ins, cx, top, width, canIdea, onPick, onEnter }: {
               ? { role: act.kind === 'dossier' ? 'link' : 'button', 'aria-label': label, tabIndex: -1, onClick: () => onPick(act) }
               : { title: sl.kind === 'person' ? '還沒有人物卷宗' : undefined })}>
             <path className="it-root-hit" d={p.d} />
+            <path className="it-root-p0" d={p.d} />
             <path className="it-root-p" d={p.d} />
             {node}
           </g>
@@ -228,6 +246,14 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
     return () => window.removeEventListener('resize', f)
   }, [])
   const idxRef = useRef(0)
+  // 入場動畫：首次載入樹「長出來」，只播一次（class 約 1.1 秒後拿掉）；減少動態時不啟用
+  const [intro, setIntro] = useState<boolean>(() => !reducedMotion())
+  const hasLayout = hasTree
+  useEffect(() => {
+    if (!hasLayout || !intro) return
+    const t = window.setTimeout(() => setIntro(false), 1100)
+    return () => window.clearTimeout(t)
+  }, [hasLayout, intro])
 
   // #insight/<id>（搜尋、釘選、推送卡的連結）→ 打開那一則的面板
   useEffect(() => {
@@ -399,7 +425,7 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
             <div className="it-main">
               <div className="it-stage" ref={stageRef} style={{ height: layout.height }} onMouseLeave={leaveStage} onMouseEnter={clearRootTimer}>
                 <svg
-                  className={`it-svg${hovered ? ' it-hl' : ''}${focus !== null ? ' it-fx' : ''}`} viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+                  className={`it-svg${intro ? ' it-intro' : ''}${hovered ? ' it-hl' : ''}${focus !== null ? ' it-fx' : ''}`} viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
                   width={layout.width} height={layout.height} role="group" aria-label="我的心得樹：一棵樹是我的人生，每條主枝是一個主題，越外越新" data-focus={focus ?? undefined}
                   onMouseOver={(e) => { const t = (e.target as Element).closest?.('[data-ci]'); const v = t ? Number(t.getAttribute('data-ci')) : null; setCapHover((o) => (o === v ? o : v)) }}
                   onMouseLeave={() => setCapHover(null)}
@@ -410,13 +436,21 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
                       <stop offset="0" className="it-trunk-s0" />
                       <stop offset="1" className="it-trunk-s1" />
                     </linearGradient>
+                    <linearGradient id="it-trunk-side" x1="0" x2="1" y1="0" y2="0">
+                      <stop offset="0" className="it-side-s0" /><stop offset="0.3" className="it-side-s1" /><stop offset="0.5" className="it-side-s0" /><stop offset="1" className="it-side-s2" />
+                    </linearGradient>
+                    <linearGradient id="it-soil-band-g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" className="it-band-s0" /><stop offset="1" className="it-band-s1" /></linearGradient>
+                    <radialGradient id="it-leaf-gloss" cx="0.34" cy="0.3" r="0.7"><stop offset="0" className="it-gloss-s0" /><stop offset="1" className="it-gloss-s1" /></radialGradient>
                     <radialGradient id="it-ground-g"><stop offset="0" className="it-ground-s0" /><stop offset="1" className="it-ground-s1" /></radialGradient>
                     <linearGradient id="it-hline-g" x1="0" x2="1" y1="0" y2="0"><stop offset="0" className="it-hline-s1" /><stop offset="0.5" className="it-hline-s0" /><stop offset="1" className="it-hline-s1" /></linearGradient>
                   </defs>
                   {/* 地面：帶柔光的地平線（沒有時間刻度：主枝在樹幹上的先後是出現的順序，時間沿著每條主枝往外走） */}
                   <ellipse className="it-ground" cx={layout.axis.cx} cy={layout.axis.ground + 2} rx={layout.width * 0.46} ry={14} fill="url(#it-ground-g)" />
                   <rect x={6} y={layout.axis.ground} width={layout.width - 12} height={1.4} fill="url(#it-hline-g)" />
-                  <path className="it-trunk" d={layout.trunk.d} fill="url(#it-trunk-g)" />
+                  {(() => { const sb = soilBand(layout.width, layout.axis.ground, layout.height); return sb.h > 0 ? <rect className="it-soil-band" x={sb.x} y={sb.y} width={sb.w} height={sb.h} fill="url(#it-soil-band-g)" aria-hidden /> : null })()}
+                  <path className="it-flare" d={rootFlarePath(layout.axis.cx, layout.axis.ground, layout.trunk.width)} fill="url(#it-trunk-g)" aria-hidden />
+                  <path className="it-trunk" d={layout.trunk.d} pathLength={1} fill="url(#it-trunk-g)" />
+                  <path className="it-trunk-gloss" d={layout.trunk.d} fill="url(#it-trunk-side)" aria-hidden />
                   {layout.limbs.map((l) => {
                     const ci = l.clusterIndex ?? 0
                     let color = col(ci, l.shade ?? 0)

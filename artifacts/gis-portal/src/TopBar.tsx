@@ -48,6 +48,8 @@ export function TopBar({ portals, legacy, onOpenAdmin, layout, onToggleLayout }:
           </a>
         )}
       </div>
+      {/* 3.10.0：首頁 v3 的搜尋列插槽（HomeBoard 用 createPortal 把 OmniSearch 放進來；其他頁面留空＝:empty 不佔位） */}
+      <div className="tb-search" id="tb-search-slot" data-testid="tb-search-slot" />
       <div className="tb-right ip-head-right">
         {layout && onToggleLayout && (
           <button type="button" className="tb-layout" data-testid="hm-layout-toggle" aria-pressed={layout === 'classic'} onClick={onToggleLayout} title={CLASSIC_REMOVAL_NOTE}>
