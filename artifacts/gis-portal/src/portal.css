@@ -2576,9 +2576,9 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 /* 3.11.0 稀疏點綴：很淡、不可點，畫在樹幹之前 */
 .it-decor, .it-decor * { pointer-events: none; }
 .it-hill { stroke: none; }
-/* 3.12.0：淺色的遠山像晨霧（偏暖、淡），不再像灰塊；深色由下方規則覆寫回偏 ink 的混色 */
-.it-hill-0 { fill: color-mix(in srgb, var(--c-accent) 45%, var(--c-warn)); opacity: 0.14; }
-.it-hill-1 { fill: color-mix(in srgb, var(--c-accent) 62%, var(--c-warn)); opacity: 0.17; }
+/* 3.12.0：淺色的遠山像晨霧——遠的一道淡杏、近的一道淡薄荷（與底色混，不發灰）；深色由下方規則覆寫回偏 ink 的混色 */
+.it-hill-0 { fill: color-mix(in srgb, var(--c-warn) 38%, var(--c-surface)); opacity: 0.4; }
+.it-hill-1 { fill: color-mix(in srgb, var(--c-accent) 30%, var(--c-surface)); opacity: 0.42; }
 .it-grass { fill: none; stroke: color-mix(in srgb, var(--c-accent) 40%, var(--c-ink-3)); stroke-width: 0.9; stroke-linecap: round; opacity: 0.32; }
 .it-mote { fill: var(--c-accent); opacity: 0.22; }
 /* 深色：土壤不發灰（多一點暖色與強調色），點綴維持很淡 */
