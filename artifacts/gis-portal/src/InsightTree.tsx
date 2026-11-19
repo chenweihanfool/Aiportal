@@ -18,6 +18,8 @@ import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } fr
 import type { IdeaItem } from './boardApi'
 import { rootAction, rootPaths, rootSlots, type RootAction } from './insightLinks'
 import { HIGH, LOW, bornBand, insightsByBand } from './hhiBorn'
+import { insightUsages } from './knowledgeSteps'
+import { parseTopics, type Topic } from './knowledgeView'
 import { decorFade, decorLayout, leafAgeScale, leafJitter, rootFlarePath, soilBand, soilPlate } from './insightTreeArt'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
@@ -594,6 +596,15 @@ type DetailState = { id: string; state: 'loading' | 'ok' | 'missing' | 'error'; 
 
 const DAY_HEADINGS_SHOWN = 4
 
+const API_BASE = import.meta.env.BASE_URL ?? '/'
+
+/** 心得面板「用在」：讀知識頁同一支 feed；失敗或沒有就回 null（不顯示這一區） */
+async function fetchTopicsForUsage(pw: string, signal: AbortSignal): Promise<Topic[] | null> {
+  const r = await fetch(`${API_BASE}api/feed/topics`, { headers: { 'x-admin-password': pw }, signal })
+  if (!r.ok) return null
+  return parseTopics(await r.json())?.topics ?? null
+}
+
 export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null, onOpenIdea, hhiScores = null }: {
   pw: string | null; id: string; fallback: Insight | null; onClose: () => void; onSelect: (id: string) => void
   ideas?: IdeaItem[] | null; onOpenIdea?: (id: string) => void; hhiScores?: Map<string, number> | null
@@ -601,6 +612,14 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null
   const [det, setDet] = useState<DetailState | null>(null)
   const [showDay, setShowDay] = useState(false)
   const [moreDay, setMoreDay] = useState(false)
+  const [topicsData, setTopicsData] = useState<Topic[] | null>(null)
+  useEffect(() => {
+    if (!pw) { setTopicsData(null); return }
+    const ctl = new AbortController()
+    fetchTopicsForUsage(pw, ctl.signal).then((t) => { if (!ctl.signal.aborted) setTopicsData(t) }).catch(() => { if (!ctl.signal.aborted) setTopicsData(null) })
+    return () => ctl.abort()
+  }, [pw])
+  const usages = useMemo(() => (topicsData ? insightUsages(topicsData, id) : []), [topicsData, id])
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => { closeRef.current?.focus() }, [])
   useEffect(() => {
@@ -746,6 +765,18 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null
               ))}
             </ul>
           </>
+        )}
+        {usages.length > 0 && (
+          <div className="it-grp" data-testid="insight-usages">
+            <h4 className="it-lb">用在</h4>
+            <ul className="it-usage">
+              {usages.map((u) => (
+                <li key={`${u.topicId}:${u.stepNo}`}>
+                  <a className="it-usage-link" href={`#knowledge/${encodeURIComponent(u.topicId)}`}>用在：{u.topicName} › 步驟 {u.stepNo} {u.stepTitle}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <div className="it-act"><PinButton pw={pw} target={pinTarget} /></div>
       </aside>

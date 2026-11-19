@@ -171,3 +171,19 @@ export function showsDocs(business: string | null | undefined): boolean {
 export function stepForNode(steps: readonly Pick<TopicStep, 'id' | 'node'>[], nodeId: string): Pick<TopicStep, 'id' | 'node'> | null {
   return steps.find((s) => s.node === nodeId) ?? null
 }
+
+export interface InsightUsage { topicId: string; topicName: string; stepNo: number; stepTitle: string }
+
+/** 心得面板「用在」：找出哪些題目的哪個步驟（序號 1 起算）引用了這則心得 */
+export function insightUsages(
+  topics: readonly { id: string; name: string; steps?: readonly Pick<TopicStep, 'title' | 'why'>[] }[],
+  insightId: string,
+): InsightUsage[] {
+  const out: InsightUsage[] = []
+  for (const t of topics) {
+    ;(t.steps ?? []).forEach((st, i) => {
+      if (st.why.insights.some((x) => x.insightId === insightId)) out.push({ topicId: t.id, topicName: t.name, stepNo: i + 1, stepTitle: st.title })
+    })
+  }
+  return out
+}

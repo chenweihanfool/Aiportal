@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { caseSourcePosition, parseSteps, showsDocs, stepForNode, unlinkText, type TopicStep } from './knowledgeSteps'
+import { caseSourcePosition, insightUsages, parseSteps, showsDocs, stepForNode, unlinkText, type TopicStep } from './knowledgeSteps'
 
 const doc = {
   templateId: 'tpl_ab12cd34ef',
@@ -100,5 +100,14 @@ describe('stepForNode', () => {
     const steps = parseSteps([step, { ...step, id: 's2', node: 'n2' }])
     expect(stepForNode(steps, 'n1')?.id).toBe('s1')
     expect(stepForNode(steps, 'zz')).toBeNull()
+  })
+})
+
+describe('insightUsages', () => {
+  it('列出引用該心得的題目與步驟序號；沒有就空陣列', () => {
+    const steps = parseSteps([step, { ...step, id: 's2', title: '第二步', why: { rules: [], insights: [], pitfalls: [] } }])
+    const topics = [{ id: 'T1', name: '測試鑑界', steps }, { id: 'T2', name: '沒步驟' }]
+    expect(insightUsages(topics, 'INS-2026-11-19-0a1b2c3d')).toEqual([{ topicId: 'T1', topicName: '測試鑑界', stepNo: 1, stepTitle: '確認退費依據' }])
+    expect(insightUsages(topics, 'INS-none')).toEqual([])
   })
 })
