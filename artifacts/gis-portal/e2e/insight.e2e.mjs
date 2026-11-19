@@ -415,6 +415,18 @@ try {
     check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))
     await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `r1-sparse${n}-dark-desktop.png`) })
     await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `r2-sparse${n}-dark-desktop.png`) })
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `r3-sparse${n}-dark-desktop.png`) })
+    const mo = await page.evaluate(() => {
+      const t = document.querySelector('.it-trunk').getBoundingClientRect()
+      const cx = (t.left + t.right) / 2
+      const xs = [...document.querySelectorAll('.it-mote')].map((e) => { const r = e.getBoundingClientRect(); return (r.left + r.right) / 2 })
+      return { n: xs.length, left: xs.filter((x) => x < cx).length, right: xs.filter((x) => x > cx).length }
+    })
+    check(`${T}：光點在樹幹左右兩側都有（各 ≥ 2）`, mo.left >= 2 && mo.right >= 2, JSON.stringify(mo))
+    if (n === 2) {
+      const gop = await page.evaluate(() => { const g = document.querySelector('.it-grass'); return g ? Number(getComputedStyle(g).opacity) : -1 })
+      check(`${T}：深色背景草 opacity ≥ 0.4`, gop >= 0.4, String(gop))
+    }
     const dec = await page.evaluate(() => {
       const g = document.querySelector('[data-testid="insight-decor"]')
       const kid = g ? g.querySelector('path, circle') : null
@@ -429,11 +441,13 @@ try {
       await lt.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
       await lt.page.waitForTimeout(500)
       await lt.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-sparse2-light-desktop.png') })
+      await lt.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r3-sparse2-light-desktop.png') })
       await lt.ctx.close()
       const m375 = await open({ width: 375, height: 1100 }, { mode })
       await m375.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
       await m375.page.waitForTimeout(500)
       await m375.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-sparse2-mobile-375.png') })
+      await m375.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r3-sparse2-mobile-375.png') })
       await m375.ctx.close()
     }
     if (n === 2) {
@@ -443,6 +457,7 @@ try {
       check(`${T}：手機 360 無橫向捲動、群標籤都在`, (await noHScroll(mob.page)) && (await mob.page.locator('[data-testid="insight-cap"]').count()) === 2)
       await mob.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-sparse2-mobile-360.png') })
       await mob.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-sparse2-mobile-360.png') })
+      await mob.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r3-sparse2-mobile-360.png') })
       await mob.ctx.close()
     }
     await ctx.close()
@@ -466,10 +481,12 @@ try {
     check(`${T}：300 則不渲染點綴層`, (await page.locator('[data-testid="insight-decor"]').count()) === 0)
     if (w === 1440) {
       await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-big300-dark-desktop.png') })
+      await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r3-big300-dark-desktop.png') })
       const lt = await open({ width: 1440, height: 900 }, { mode: 'big300', colorScheme: 'light' })
       await lt.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
       await lt.page.waitForTimeout(600)
       await lt.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-big300-light-desktop.png') })
+      await lt.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r3-big300-light-desktop.png') })
       await lt.ctx.close()
     }
     if (w === 360) {
@@ -631,6 +648,7 @@ try {
     await hov(r.page, 'R-1')
     await r.page.screenshot({ path: path.join(SHOTS, 'roots-desktop-dark.png') })
     await r.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-roots-dark-desktop.png') })
+    await r.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r3-roots-dark-desktop.png') })
     await r.page.mouse.move(5, 5)
     await r.page.waitForTimeout(450)
     check(`${T}：移開後根消失`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 0)
