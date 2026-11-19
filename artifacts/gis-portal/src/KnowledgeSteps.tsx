@@ -120,7 +120,7 @@ export function KnowledgeSteps({ t, steps, pw, onView, highlightStep, onGoDiagra
                       <li key={r.claim} className="kn-sc-link" data-unlinked={done}>
                         <span><strong className="kn-sc-article">{r.article}</strong> {r.text}</span>
                         <button type="button" className="kn-sc-src" disabled={done} onClick={() => onView(r.src)}>出處 ⟦{r.src}⟧</button>
-                        <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, text)} />
+                        <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, step.claim, text)} />
                         <Status status={linkStatus(step.id, text)} />
                       </li>
                     )
@@ -142,7 +142,7 @@ export function KnowledgeSteps({ t, steps, pw, onView, highlightStep, onGoDiagra
                           <span className="kn-sc-quote">「{ins.quote}」</span>
                           <span className="kn-sc-date">{ins.date}</span>
                         </a>
-                        <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, text)} />
+                        <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, step.claim, text)} />
                         <Status status={linkStatus(step.id, text)} />
                       </li>
                     )
@@ -160,7 +160,7 @@ export function KnowledgeSteps({ t, steps, pw, onView, highlightStep, onGoDiagra
                     return (
                       <li key={p.claim} className="kn-sc-link" data-unlinked={done}>
                         <span>{p.text}{p.case && <span className="kn-sc-case-inline">{p.case}</span>}</span>
-                        <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, text)} />
+                        <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, step.claim, text)} />
                         <Status status={linkStatus(step.id, text)} />
                       </li>
                     )
@@ -183,7 +183,7 @@ export function KnowledgeSteps({ t, steps, pw, onView, highlightStep, onGoDiagra
                       <button type="button" className="kn-sc-case" disabled={n === null || done} onClick={() => { if (n !== null) onView(n) }} title={n === null ? '這頁的來源沒有這個案件' : undefined}>
                         {c.case}
                       </button>
-                      <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, text)} />
+                      <UnlinkButton busy={done || linkStatus(step.id, text) === 'pending'} onUnlink={() => unlink(step.id, step.claim, text)} />
                       <Status status={linkStatus(step.id, text)} />
                     </li>
                   )
