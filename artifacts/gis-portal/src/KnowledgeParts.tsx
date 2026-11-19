@@ -2,10 +2,11 @@ import { useState, type ReactNode } from 'react'
 import { FootRefs } from './KnowledgeTrace'
 import { InlineText } from './MarkdownView'
 import { AddClaim, ClaimRow, ClaimText, useClaims } from './KnowledgeClaimActions'
-import { isWrongNow } from './knowledgeCorrections'
-import { bulletId, checkIdFor, checkKeyFor, loadChecks, relatedByKind, saveChecks, stripMarks, type Bullet, type BulletSection, type CheckStore, type ParsedBody, type Topic } from './knowledgeView'
+import { KnowledgeSteps } from './KnowledgeSteps'
+import { bulletId, relatedByKind, stripMarks, type Bullet, type BulletSection, type ParsedBody, type Topic } from './knowledgeView'
+import type { TopicStep } from './knowledgeSteps'
 
-// 知識頁題目頁的新版面元件（概念頁翻牌誤解、方法頁勾選清單／現場模式、關係區）。純函式在 knowledgeView.ts。
+// 知識頁題目頁的新版面元件（概念頁翻牌誤解、方法頁步驟卡、關係區）。純函式在 knowledgeView.ts／knowledgeSteps.ts。
 
 export function BulletText({ b, bid, cited, text }: { b: Bullet; bid: string; cited: ReadonlySet<string>; text?: string }) {
   return (
@@ -141,145 +142,85 @@ export function ConceptBody({ t, parsed, topics, cited, onOpen }: {
 
 /* ───────── 方法頁 ───────── */
 
-function browserStore(): CheckStore | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
-
-function CheckItem({ b, bid, no, checked, cited, onToggle }: {
-  b: Bullet; bid: string; no?: number; checked: boolean; cited: ReadonlySet<string>; onToggle: () => void
+export function MethodBody({ t, parsed, topics, cited, onOpen, pw, onView, highlightStep, onGoDiagram }: {
+  t: Topic; parsed: ParsedBody; topics: readonly Topic[]; cited: ReadonlySet<string>; onOpen: (id: string) => void
+  pw: string
+  /** 原文面板：n＝sources 的 1 起算位置 */
+  onView: (n: number) => void
+  /** 從圖解點節點跳過來時，要高亮的步驟卡 id */
+  highlightStep: string | null
+  /** 步驟卡「在流程圖上看」：捲到圖解並高亮該節點 */
+  onGoDiagram: (nodeId: string) => void
 }) {
-  return (
-    <li className="kn-ck" data-checked={checked}>
-      <ClaimRow bid={bid} b={b}>
-        {(v) => (
-          <div className="kn-ck-line">
-            {!v.wrong && <input type="checkbox" className="kn-ck-box" checked={checked} onChange={onToggle} aria-label={`完成：${v.text}`} />}
-            {no !== undefined && <span className="kn-stepno" aria-hidden="true">{no}</span>}
-            <div className="kn-ck-body"><ClaimText v={v}><BulletText b={v.override ? { ...b, refs: [], single: false } : b} bid={bid} cited={cited} text={v.text} /></ClaimText></div>
-          </div>
-        )}
-      </ClaimRow>
-    </li>
-  )
-}
-
-export function MethodBody({ t, parsed, topics, cited, onOpen, live }: {
-  t: Topic; parsed: ParsedBody; topics: readonly Topic[]; cited: ReadonlySet<string>; onOpen: (id: string) => void; live: boolean
-}) {
-  const ctl = useClaims()
-  const key = checkKeyFor(t)
-  const [checks, setChecks] = useState<ReadonlySet<string>>(() => loadChecks(browserStore(), key))
-  // 有帳本時勾選用條目 id（c001…）記，改版後同一條還在；有誤（正式或暫定）的不列入進度
-  const checkId = (bid: string) => checkIdFor(bid, t.claims ? ctl?.byBid.get(bid) : null)
-  const isWrong = (bid: string) => {
-    const c = ctl?.byBid.get(bid)
-    return !!c && isWrongNow(c, ctl?.overlay.byClaim.get(c.id))
-  }
-  const bids = [...parsed.prep.map((_, i) => bulletId('prep', i)), ...parsed.steps.map((_, i) => bulletId('steps', i))].filter((bid) => !isWrong(bid))
-  const ids = bids.map(checkId)
-  const total = ids.length
-  const done = ids.filter((id) => checks.has(id)).length
-  const update = (next: Set<string>) => {
-    setChecks(next)
-    saveChecks(browserStore(), key, next)
-  }
-  const toggle = (id: string) => {
-    const next = new Set(checks)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    update(next)
-  }
+  const steps: TopicStep[] = t.steps ?? []
   return (
     <>
-      {total > 0 && (
-        <div className="kn-progress">
-          <div className="kn-progress-row">
-            <div className="kn-bar" role="progressbar" aria-label="完成進度" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
-              <div className="kn-bar-fill" style={{ width: `${(done / total) * 100}%` }} />
-            </div>
-            <span className="kn-progress-n">{done}／{total}</span>
-          </div>
-          {done === total && (
-            <p className="kn-done" role="status">
-              🎉 全部完成，辛苦了
-              <button type="button" className="kn-btn" onClick={() => update(new Set())}>重來</button>
-            </p>
-          )}
-        </div>
-      )}
       {parsed.prep.length > 0 && (
         <Section label="開工前準備" addKey="prep">
-          <ul className="kn-checklist">
-            {parsed.prep.map((b, i) => {
-              const bid = bulletId('prep', i)
-              const id = checkId(bid)
-              return <CheckItem key={i} b={b} bid={bid} checked={checks.has(id)} cited={cited} onToggle={() => toggle(id)} />
-            })}
+          <ul className="kn-plain">
+            {parsed.prep.map((b, i) => <li key={i}><ClaimBullet b={b} bid={bulletId('prep', i)} cited={cited} /></li>)}
           </ul>
         </Section>
       )}
-      {parsed.steps.length > 0 && (
+      {steps.length > 0 ? (
         <Section label="步驟" addKey="steps">
-          <ol className="kn-checklist">
-            {parsed.steps.map((b, i) => {
-              const bid = bulletId('steps', i)
-              const id = checkId(bid)
-              return <CheckItem key={i} b={b} bid={bid} no={i + 1} checked={checks.has(id)} cited={cited} onToggle={() => toggle(id)} />
-            })}
+          <KnowledgeSteps t={t} steps={steps} pw={pw} onView={onView} highlightStep={highlightStep} onGoDiagram={onGoDiagram} />
+        </Section>
+      ) : parsed.steps.length > 0 && (
+        <Section label="步驟" addKey="steps">
+          <ol className="kn-steps">
+            {parsed.steps.map((b, i) => (
+              <li key={i}>
+                <span className="kn-stepno" aria-hidden="true">{i + 1}</span>
+                <div><ClaimBullet b={b} bid={bulletId('steps', i)} cited={cited} /></div>
+              </li>
+            ))}
           </ol>
         </Section>
       )}
-      {!live && (
-        <>
-          {parsed.decisions.length > 0 && (
-            <Section label="判斷點" addKey="decisions">
-              <ul className="kn-forks">
-                {parsed.decisions.map((b, i) => (
-                  <li key={i} className="kn-fork">
-                    <ClaimRow bid={bulletId('decisions', i)} b={b}>
-                      {(v) => (b.when && b.then && !v.override && !v.wrong) ? (
-                        <>
-                          <div className="kn-fork-if"><span className="kn-fork-tag">如果</span><BulletText b={{ ...b, refs: [] }} bid={`${bulletId('decisions', i)}-if`} cited={cited} text={b.when} /></div>
-                          <div className="kn-fork-then" id={`kn-b-${bulletId('decisions', i)}`} data-cited={cited.has(bulletId('decisions', i))}>
-                            <span className="kn-fork-tag kn-fork-tag--then">就</span>
-                            <span><InlineText text={stripMarks(b.then)} />{b.single && <span className="kn-single">僅一例</span>}<FootRefs refs={b.refs} k0={b.k0} /></span>
-                          </div>
-                        </>
-                      ) : <ClaimText v={v}><BulletText b={v.override ? { ...b, refs: [], single: false } : b} bid={bulletId('decisions', i)} cited={cited} text={v.text} /></ClaimText>}
-                    </ClaimRow>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-          {parsed.pitfalls.length > 0 && (
-            <Section label="踩過的坑" addKey="pitfalls">
-              <ul className="kn-cautions kn-pitfalls">
-                {parsed.pitfalls.map((b, i) => (
-                  <li key={i}>
-                    <span aria-hidden="true">⚠</span>
-                    <div className="kn-pit-body">
-                      <ClaimRow bid={bulletId('pitfalls', i)} b={b}>
-                        {(v) => (b.trap && b.avoid && !v.override && !v.wrong) ? (
-                          <span className="kn-bt" id={`kn-b-${bulletId('pitfalls', i)}`} data-cited={cited.has(bulletId('pitfalls', i))}>
-                            <strong className="kn-trap">{b.trap}</strong>
-                            <span className="kn-avoid"><InlineText text={stripMarks(b.avoid)} />{b.single && <span className="kn-single">僅一例</span>}<FootRefs refs={b.refs} k0={b.k0} /></span>
-                          </span>
-                        ) : <ClaimText v={v}><BulletText b={v.override ? { ...b, refs: [], single: false } : b} bid={bulletId('pitfalls', i)} cited={cited} text={v.text} /></ClaimText>}
-                      </ClaimRow>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-          <Relations t={t} topics={topics} onOpen={onOpen} conceptsTitle="這個方法用到的概念" methodsTitle="相關方法" order="concepts-first" />
-        </>
+      {parsed.decisions.length > 0 && (
+        <Section label="判斷點" addKey="decisions">
+          <ul className="kn-forks">
+            {parsed.decisions.map((b, i) => (
+              <li key={i} className="kn-fork">
+                <ClaimRow bid={bulletId('decisions', i)} b={b}>
+                  {(v) => (b.when && b.then && !v.override && !v.wrong) ? (
+                    <>
+                      <div className="kn-fork-if"><span className="kn-fork-tag">如果</span><BulletText b={{ ...b, refs: [] }} bid={`${bulletId('decisions', i)}-if`} cited={cited} text={b.when} /></div>
+                      <div className="kn-fork-then" id={`kn-b-${bulletId('decisions', i)}`} data-cited={cited.has(bulletId('decisions', i))}>
+                        <span className="kn-fork-tag kn-fork-tag--then">就</span>
+                        <span><InlineText text={stripMarks(b.then)} />{b.single && <span className="kn-single">僅一例</span>}<FootRefs refs={b.refs} k0={b.k0} /></span>
+                      </div>
+                    </>
+                  ) : <ClaimText v={v}><BulletText b={v.override ? { ...b, refs: [], single: false } : b} bid={bulletId('decisions', i)} cited={cited} text={v.text} /></ClaimText>}
+                </ClaimRow>
+              </li>
+            ))}
+          </ul>
+        </Section>
       )}
+      {parsed.pitfalls.length > 0 && (
+        <Section label="踩過的坑" addKey="pitfalls">
+          <ul className="kn-cautions kn-pitfalls">
+            {parsed.pitfalls.map((b, i) => (
+              <li key={i}>
+                <span aria-hidden="true">⚠</span>
+                <div className="kn-pit-body">
+                  <ClaimRow bid={bulletId('pitfalls', i)} b={b}>
+                    {(v) => (b.trap && b.avoid && !v.override && !v.wrong) ? (
+                      <span className="kn-bt" id={`kn-b-${bulletId('pitfalls', i)}`} data-cited={cited.has(bulletId('pitfalls', i))}>
+                        <strong className="kn-trap">{b.trap}</strong>
+                        <span className="kn-avoid"><InlineText text={stripMarks(b.avoid)} />{b.single && <span className="kn-single">僅一例</span>}<FootRefs refs={b.refs} k0={b.k0} /></span>
+                      </span>
+                    ) : <ClaimText v={v}><BulletText b={v.override ? { ...b, refs: [], single: false } : b} bid={bulletId('pitfalls', i)} cited={cited} text={v.text} /></ClaimText>}
+                  </ClaimRow>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      <Relations t={t} topics={topics} onOpen={onOpen} conceptsTitle="這個方法用到的概念" methodsTitle="相關方法" order="concepts-first" />
     </>
   )
 }
