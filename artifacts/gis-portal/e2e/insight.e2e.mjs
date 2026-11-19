@@ -414,12 +414,35 @@ try {
     check(`${T}：沒有時間刻度與參考線`, (await page.locator('.it-tick').count()) === 0)
     check(`${T}：沒有 JS 錯誤`, errors.length === 0, errors.join(' | '))
     await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `r1-sparse${n}-dark-desktop.png`) })
+    await page.locator('.it-root').screenshot({ path: path.join(SHOTS, `r2-sparse${n}-dark-desktop.png`) })
+    const dec = await page.evaluate(() => {
+      const g = document.querySelector('[data-testid="insight-decor"]')
+      const kid = g ? g.querySelector('path, circle') : null
+      const first = document.querySelector('.it-trunk')
+      return { n: document.querySelectorAll('[data-testid="insight-decor"]').length, pe: g ? getComputedStyle(g).pointerEvents : null, kidPe: kid ? getComputedStyle(kid).pointerEvents : null, kids: g ? g.children.length : 0, before: !!g && !!first && !!(g.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING) }
+    })
+    check(`${T}：點綴層存在、pointer-events none（含子元素）、DOM 在樹幹之前`, dec.n === 1 && dec.pe === 'none' && dec.kidPe === 'none' && dec.kids > 0 && dec.before, JSON.stringify(dec))
+    await page.locator('[data-testid="insight-leaf"]').first().click({ force: true })
+    check(`${T}：有點綴時點葉子仍開面板`, (await page.locator('[data-testid="insight-panel"]').count()) === 1)
+    if (n === 2) {
+      const lt = await open({ width: 1440, height: 900 }, { mode, colorScheme: 'light' })
+      await lt.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+      await lt.page.waitForTimeout(500)
+      await lt.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-sparse2-light-desktop.png') })
+      await lt.ctx.close()
+      const m375 = await open({ width: 375, height: 1100 }, { mode })
+      await m375.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+      await m375.page.waitForTimeout(500)
+      await m375.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-sparse2-mobile-375.png') })
+      await m375.ctx.close()
+    }
     if (n === 2) {
       const mob = await open({ width: 360, height: 1100 }, { mode })
       await mob.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
       await mob.page.waitForTimeout(500)
       check(`${T}：手機 360 無橫向捲動、群標籤都在`, (await noHScroll(mob.page)) && (await mob.page.locator('[data-testid="insight-cap"]').count()) === 2)
       await mob.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-sparse2-mobile-360.png') })
+      await mob.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-sparse2-mobile-360.png') })
       await mob.ctx.close()
     }
     await ctx.close()
@@ -440,6 +463,15 @@ try {
     check(`${T}：300 片葉、總覽自動精簡成葉叢（葉子少於 300）、12 個主題各有膠囊或色點`, (await page.locator('[data-testid="insight-leaf"]').count()) < 300 && (await page.locator('[data-testid="insight-clump"]').count()) >= 1 && (await page.locator('[data-testid="insight-cap"], [data-testid="insight-dot"]').count()) === 12)
     check(`${T}：標籤都在畫布內`, await page.evaluate(() => { const st = document.querySelector('.it-stage').getBoundingClientRect(); return [...document.querySelectorAll('[data-testid="insight-cap"] .it-cap-bg')].every((e) => { const r = e.getBoundingClientRect(); return r.left >= st.left - 1 && r.right <= st.right + 1 && r.top >= st.top - 1 && r.bottom <= st.bottom + 1 }) }))
     if (w === 1440) await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r1-big300-dark-desktop.png') })
+    check(`${T}：300 則不渲染點綴層`, (await page.locator('[data-testid="insight-decor"]').count()) === 0)
+    if (w === 1440) {
+      await page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-big300-dark-desktop.png') })
+      const lt = await open({ width: 1440, height: 900 }, { mode: 'big300', colorScheme: 'light' })
+      await lt.page.waitForSelector('[data-testid="insight-leaf"]', { timeout: 10000 })
+      await lt.page.waitForTimeout(600)
+      await lt.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-big300-light-desktop.png') })
+      await lt.ctx.close()
+    }
     if (w === 360) {
       const nDots = await page.locator('[data-testid="insight-dot"]').count()
       check(`${T}：主題太多放不下的縮成色點（≥ 1 個）`, nDots >= 1, String(nDots))
@@ -585,11 +617,20 @@ try {
       const later = [...e.querySelectorAll('.it-root-p, .it-root-hit, [data-testid="insight-root-person"]')]
       return !!soil && getComputedStyle(soil).pointerEvents === 'none' && later.length > 0 && later.every((n) => !!(soil.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING))
     }))
+    const plateW = await r.page.evaluate(() => {
+      const e = document.querySelector('[data-testid="insight-roots"]'), soil = e.querySelector('[data-testid="insight-roots-soil"]')
+      const nodes = [...e.querySelectorAll('[data-testid="insight-root-go"] > g, [data-testid="insight-root-more"]')].map((n) => n.getBBox())
+      const sb = soil.getBBox()
+      return { sw: sb.width, full: Number(e.getAttribute('width')), covers: nodes.every((b) => b.x >= sb.x - 1 && b.x + b.width <= sb.x + sb.width + 1) }
+    })
+    // 3.11.0：底板只包住根節點（左右各 14 padding），明顯窄於舞台（3.10.0 是 width-1，這項會 FAIL）
+    check(`${T}：土壤底板只包住根的範圍（寬度小於舞台寬、仍蓋住全部根節點）`, plateW.sw > 0 && plateW.sw < plateW.full - 40 && plateW.covers, JSON.stringify(plateW))
     await r.page.mouse.move(5, 5)
     await r.page.evaluate(() => document.querySelector('.it-stage').scrollIntoView({ block: 'start' }))
     await r.page.waitForTimeout(200)
     await hov(r.page, 'R-1')
     await r.page.screenshot({ path: path.join(SHOTS, 'roots-desktop-dark.png') })
+    await r.page.locator('.it-root').screenshot({ path: path.join(SHOTS, 'r2-roots-dark-desktop.png') })
     await r.page.mouse.move(5, 5)
     await r.page.waitForTimeout(450)
     check(`${T}：移開後根消失`, (await r.page.locator('[data-testid="insight-roots"]').count()) === 0)

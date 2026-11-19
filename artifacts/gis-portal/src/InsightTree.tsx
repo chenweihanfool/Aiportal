@@ -18,7 +18,7 @@ import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } fr
 import type { IdeaItem } from './boardApi'
 import { rootAction, rootPaths, rootSlots, type RootAction } from './insightLinks'
 import { HIGH, LOW, bornBand, insightsByBand } from './hhiBorn'
-import { rootFlarePath, soilBand } from './insightTreeArt'
+import { decorFade, decorLayout, leafJitter, rootFlarePath, soilBand, soilPlate } from './insightTreeArt'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
 // 總覽時主題多會自動精簡（葉叢、標籤縮成色點），滑過／聚焦才放大；聚焦一個主題會畫出全部脈絡與沿枝的時間。
@@ -105,7 +105,7 @@ const Leaf = memo(function Leaf({ lf, ins, color, lit, dimc, fresh, onOpen, onHo
             </g>
           )}
           <circle r={lf.r * 1.5} className="it-hit" />
-          <g transform={`rotate(${lf.angle}) scale(${lf.r})`}>
+          <g transform={`rotate(${lf.angle + leafJitter(lf.id)}) scale(${lf.r})`}>
             <path className="it-shape" d={sh.d} style={{ fill: lf.withered ? undefined : color }} data-kind={sh.kind} />
             {!lf.withered && <path className="it-gloss" d={sh.d} fill="url(#it-leaf-gloss)" aria-hidden />}
             {sh.vein && <path className="it-vein" d={sh.vein} vectorEffect="non-scaling-stroke" />}
@@ -150,13 +150,15 @@ function Roots({ ins, cx, top, width, canIdea, onPick, onEnter }: {
   const slots = rootSlots(ins)
   if (slots.length === 0) return null
   const paths = rootPaths(cx, width, slots.length, ROOT_DEPTH)
+  const ideaX = (x: number): number => Math.min(Math.max(x, 52), Math.max(52, width - 52))
+  const plate = soilPlate(paths.map((p, k) => { const sl = slots[k]!; return sl.kind === 'idea' ? { x: ideaX(p.x), half: 50 } : { x: p.x, half: sl.kind === 'person' ? 9 : 12 } }), cx, width)
   return (
     <svg className="it-roots" data-testid="insight-roots" width={width} height={ROOT_DEPTH + 14} style={{ top }} role="group" aria-label="這則心得連到的人與想法">
       <defs>
         <linearGradient id="it-soil-g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" className="it-soil-s0" /><stop offset="1" className="it-soil-s1" /></linearGradient>
       </defs>
       {/* 土壤底板：蓋住下面的提示文字與月份列，根與節點畫在它上面 */}
-      <rect className="it-soil-plate" data-testid="insight-roots-soil" x={0.5} y={0} width={Math.max(0, width - 1)} height={ROOT_DEPTH + 13} rx={10} fill="url(#it-soil-g)" />
+      <rect className="it-soil-plate" data-testid="insight-roots-soil" x={plate.x} y={0} width={plate.w} height={ROOT_DEPTH + 13} rx={10} fill="url(#it-soil-g)" />
       {paths.map((p, k) => {
         const sl = slots[k]!
         const act = sl.kind === 'idea' && !canIdea ? null : rootAction(sl)
@@ -167,8 +169,8 @@ function Roots({ ins, cx, top, width, canIdea, onPick, onEnter }: {
           </g>
         ) : sl.kind === 'idea' ? (
           <g className="it-root-i" data-testid="insight-root-idea">
-            <rect x={Math.min(Math.max(p.x, 52), Math.max(52, width - 52)) - 50} y={p.y - 9} width={100} height={18} rx={6} />
-            <text x={Math.min(Math.max(p.x, 52), Math.max(52, width - 52))} y={p.y + 3.5} textAnchor="middle">{`💡${idea6(sl.title)}`}</text>
+            <rect x={ideaX(p.x) - 50} y={p.y - 9} width={100} height={18} rx={6} />
+            <text x={ideaX(p.x)} y={p.y + 3.5} textAnchor="middle">{`💡${idea6(sl.title)}`}</text>
           </g>
         ) : (
           <text className="it-root-more" data-testid="insight-root-more" x={p.x} y={p.y + 3.5} textAnchor="middle">+{sl.n}</text>
@@ -448,6 +450,18 @@ export function InsightTree({ pw, now, onRequestUnlock, ideas, onOpenIdea, hhiSc
                   <ellipse className="it-ground" cx={layout.axis.cx} cy={layout.axis.ground + 2} rx={layout.width * 0.46} ry={14} fill="url(#it-ground-g)" />
                   <rect x={6} y={layout.axis.ground} width={layout.width - 12} height={1.4} fill="url(#it-hline-g)" />
                   {(() => { const sb = soilBand(layout.width, layout.axis.ground, layout.height); return sb.h > 0 ? <rect className="it-soil-band" x={sb.x} y={sb.y} width={sb.w} height={sb.h} fill="url(#it-soil-band-g)" aria-hidden /> : null })()}
+                  {(() => {
+                    const fade = decorFade(stats.total)
+                    if (fade <= 0) return null
+                    const dl = decorLayout(layout.width, layout.axis.ground, layout.axis.cx, layout.trunk.width, stats.total)
+                    return (
+                      <g className="it-decor" data-testid="insight-decor" aria-hidden style={fade < 1 ? { opacity: fade } : undefined}>
+                        {dl.hills.map((d, k) => <path key={`h${k}`} className={`it-hill it-hill-${k}`} d={d} />)}
+                        {dl.grass.map((g, k) => <path key={`g${k}`} className="it-grass" d={g.d} />)}
+                        {dl.motes.map((m, k) => <circle key={`m${k}`} className="it-mote" cx={m.x} cy={m.y} r={m.r} style={{ animationDelay: `${m.delay}s` }} />)}
+                      </g>
+                    )
+                  })()}
                   <path className="it-flare" d={rootFlarePath(layout.axis.cx, layout.axis.ground, layout.trunk.width)} fill="url(#it-trunk-g)" aria-hidden />
                   <path className="it-trunk" d={layout.trunk.d} pathLength={1} fill="url(#it-trunk-g)" />
                   <path className="it-trunk-gloss" d={layout.trunk.d} fill="url(#it-trunk-side)" aria-hidden />

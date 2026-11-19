@@ -2573,6 +2573,23 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .it-hl .it-limb-hl:not(.it-lit) { opacity: 0.08; }
 .it-fx .it-limb-hl.it-dimc { opacity: 0.1; }
 .it-soil-plate { stroke: color-mix(in srgb, var(--c-accent) 22%, transparent); stroke-width: 1; }
+/* 3.11.0 稀疏點綴：很淡、不可點，畫在樹幹之前 */
+.it-decor, .it-decor * { pointer-events: none; }
+.it-hill { stroke: none; }
+.it-hill-0 { fill: color-mix(in srgb, var(--c-accent) 14%, var(--c-ink-3)); opacity: 0.1; }
+.it-hill-1 { fill: color-mix(in srgb, var(--c-accent) 22%, var(--c-ink-3)); opacity: 0.14; }
+.it-grass { fill: none; stroke: color-mix(in srgb, var(--c-accent) 40%, var(--c-ink-3)); stroke-width: 0.9; stroke-linecap: round; opacity: 0.32; }
+.it-mote { fill: var(--c-accent); opacity: 0.22; }
+/* 深色：土壤不發灰（多一點暖色與強調色），點綴維持很淡 */
+.it-root[data-theme-mode="dark"] .it-soil-s0 { stop-color: color-mix(in srgb, var(--c-warn) 22%, var(--c-surface)); }
+.it-root[data-theme-mode="dark"] .it-soil-s1 { stop-color: color-mix(in srgb, var(--c-accent) 12%, var(--c-surface)); }
+.it-root[data-theme-mode="dark"] .it-band-s0 { stop-opacity: 0.3; }
+.it-root[data-theme-mode="dark"] .it-ground-s0 { stop-opacity: 0.28; }
+.it-root[data-theme-mode="dark"] .it-soil-plate { stroke: color-mix(in srgb, var(--c-accent) 30%, transparent); }
+.it-root[data-theme-mode="dark"] .it-hill-0 { opacity: 0.08; }
+.it-root[data-theme-mode="dark"] .it-hill-1 { opacity: 0.12; }
+.it-root[data-theme-mode="dark"] .it-grass { opacity: 0.26; }
+.it-root[data-theme-mode="dark"] .it-mote { opacity: 0.18; }
 .it-root-p0 { fill: none; stroke: var(--c-accent-dim); stroke-width: 3.4; stroke-linecap: round; opacity: 0.22; }
 .it-bigmonth { font: 700 26px var(--font-mono); fill: var(--c-accent-ink); opacity: 0.45; pointer-events: none; }
 
@@ -2670,6 +2687,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 /* 重播：枝逐段描邊長出（先描邊、再填色）、葉子彈性縮放冒出 */
 @media (prefers-reduced-motion: no-preference) {
   .it-halo { animation: it-breath 2.6s ease-in-out infinite; }
+  .it-mote { animation: it-mote 7s ease-in-out infinite; }
   .it-fresh { stroke-dasharray: 1; stroke-dashoffset: 1; stroke-width: 1.6; fill-opacity: 0; animation: it-draw 0.7s ease-out forwards; }
   .it-pop { transform-origin: 0 0; animation: it-pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
   /* 入場：樹幹由下往上描邊、主枝與細枝依序、葉子最後彈出，合計約 0.85 秒；只在 svg 帶 it-intro 時（掛載後第一次） */
@@ -2683,6 +2701,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 @keyframes it-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes it-breath { 0%, 100% { opacity: 0.12; transform: scale(0.8); } 50% { opacity: 0.4; transform: scale(1.15); } }
 @keyframes it-draw { 0% { stroke-dashoffset: 1; fill-opacity: 0; } 55% { stroke-dashoffset: 0; fill-opacity: 0.1; } 100% { stroke-dashoffset: 0; fill-opacity: 1; stroke-width: 0.6; } }
+@keyframes it-mote { 0%, 100% { opacity: 0.08; } 50% { opacity: 0.3; } }
 @keyframes it-pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .it-halo, .it-skel, .it-fresh, .it-pop, .it-intro * { animation: none !important; } .it-limb, .it-leaf, .it-cap { transition: none; } }
 
