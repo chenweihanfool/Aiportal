@@ -117,6 +117,13 @@ export function soilPlate(nodes: { x: number; half: number }[], originX: number,
   return { x: r1(a), w: Math.max(0, r1(b - a)) }
 }
 
+/** 葉子大小隨年齡的細微層次（渲染層）：age 0（最新）＝1，越舊略小，最舊（age 3）約 0.88；四捨五入 3 位、夾在 [0.85,1]，非有限數回 1 */
+export function leafAgeScale(age: number): number {
+  if (!Number.isFinite(age)) return 1
+  const t = Math.min(1, Math.max(0, age / 3))
+  return Math.round(Math.min(1, Math.max(0.85, 1 - 0.12 * t)) * 1000) / 1000
+}
+
 /** 葉子微偏轉：以 id 決定的 ±6° 內角度 */
 export function leafJitter(id: string): number {
   let h = 2166136261
