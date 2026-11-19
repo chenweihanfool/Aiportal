@@ -88,11 +88,20 @@ export function decorLayout(width: number, ground: number, cx: number, trunkW: n
     grass.push({ x: r1(x), d })
   }
 
+  // 光點：左右決定性交替（7 顆時 4／3），整體是否鏡像由 hash 決定；同側的 dx 分區取樣，避免擠在一起
   const motes: DecorLayout['motes'] = []
   const top = Math.max(6, ground * 0.18), bot = Math.max(top + 1, ground - 16)
+  const flip = hash01(seed + 17, 0) < 0.5 ? -1 : 1
+  const perSide: Record<number, number> = { [-1]: flip === -1 ? 4 : 3, [1]: flip === 1 ? 4 : 3 }
+  const seen: Record<number, number> = { [-1]: 0, [1]: 0 }
   for (let i = 0; i < 7; i++) {
-    const side = hash01(seed + 17, i) < 0.5 ? -1 : 1
-    const dx = (0.06 + hash01(seed + 19, i) * 0.3) * width
+    const side = (i % 2 === 0 ? -1 : 1) * flip
+    const k = seen[side]!
+    seen[side] = k + 1
+    const cnt = perSide[side]!
+    const lo = 0.06 + (0.3 * k) / cnt
+    const hi = 0.06 + (0.3 * (k + 1)) / cnt
+    const dx = (lo + hash01(seed + 19, i) * (hi - lo)) * width
     const x = Math.min(x1, Math.max(x0, cx + side * dx))
     const y = top + hash01(seed + 23, i) * (bot - top)
     motes.push({ x: r1(x), y: r1(y), r: r1(1 + hash01(seed + 29, i)), delay: r1(hash01(seed + 31, i) * 6) })

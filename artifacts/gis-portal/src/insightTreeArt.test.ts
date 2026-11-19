@@ -42,6 +42,16 @@ describe('insightTreeArt', () => {
     const small = decorLayout(320, 200, 160, 12, 1)
     for (const g of small.grass) expect(g.x).toBeLessThan(320)
   })
+  it('motes 左右平衡：seed 0..50 兩側都 ≥ 3，且決定性', () => {
+    for (let s = 0; s <= 50; s++) {
+      const a = decorLayout(800, 320, 400, 20, s)
+      expect(decorLayout(800, 320, 400, 20, s).motes).toEqual(a.motes)
+      const left = a.motes.filter((m) => m.x < 400).length
+      const right = a.motes.filter((m) => m.x > 400).length
+      expect(left).toBeGreaterThanOrEqual(3)
+      expect(right).toBeGreaterThanOrEqual(3)
+    }
+  })
   it('soilPlate：單一節點、多節點、靠邊夾住、窄於舞台', () => {
     const one = soilPlate([{ x: 300, half: 9 }], 300, 640)
     expect(one).toEqual({ x: 277, w: 46 })
