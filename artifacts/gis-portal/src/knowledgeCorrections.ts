@@ -106,7 +106,7 @@ export function overlay(claims: readonly Pick<TopicClaim, 'id'>[], pendingOfTopi
       const arr = adds.get(key)
       if (arr) arr.push(p)
       else adds.set(key, [p])
-    } else if (p.claimId && known.has(p.claimId)) {
+    } else if (p.kind !== 'unlink' && p.claimId && known.has(p.claimId)) {
       byClaim.set(p.claimId, { kind: p.kind, text: p.kind === 'fix' ? p.text : null, item: p })
     }
   }
