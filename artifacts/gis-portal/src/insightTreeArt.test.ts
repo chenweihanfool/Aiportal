@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decorFade, decorLayout, leafJitter, rootFlarePath, soilBand, soilPlate } from './insightTreeArt'
+import { decorFade, decorLayout, leafAgeScale, leafJitter, rootFlarePath, soilBand, soilPlate } from './insightTreeArt'
 
 describe('insightTreeArt', () => {
   it('根基外擴是封閉路徑，左右對稱', () => {
@@ -42,6 +42,16 @@ describe('insightTreeArt', () => {
     const small = decorLayout(320, 200, 160, 12, 1)
     for (const g of small.grass) expect(g.x).toBeLessThan(320)
   })
+  it('motes 左右平衡：seed 0..50 兩側都 ≥ 3，且決定性', () => {
+    for (let s = 0; s <= 50; s++) {
+      const a = decorLayout(800, 320, 400, 20, s)
+      expect(decorLayout(800, 320, 400, 20, s).motes).toEqual(a.motes)
+      const left = a.motes.filter((m) => m.x < 400).length
+      const right = a.motes.filter((m) => m.x > 400).length
+      expect(left).toBeGreaterThanOrEqual(3)
+      expect(right).toBeGreaterThanOrEqual(3)
+    }
+  })
   it('soilPlate：單一節點、多節點、靠邊夾住、窄於舞台', () => {
     const one = soilPlate([{ x: 300, half: 9 }], 300, 640)
     expect(one).toEqual({ x: 277, w: 46 })
@@ -52,6 +62,17 @@ describe('insightTreeArt', () => {
     const edge = soilPlate([{ x: 10, half: 9 }, { x: 630, half: 12 }], 320, 640)
     expect(edge.x).toBe(0.5)
     expect(edge.x + edge.w).toBeCloseTo(639.5, 1)
+  })
+  it('leafAgeScale：新葉 1、最舊約 0.88、單調不增、非有限數回 1、夾在 [0.85,1]', () => {
+    expect(leafAgeScale(0)).toBe(1)
+    expect(leafAgeScale(3)).toBeCloseTo(0.88, 2)
+    let prev = leafAgeScale(0)
+    for (let a = 0.5; a <= 3.5; a += 0.5) { const v = leafAgeScale(a); expect(v).toBeLessThanOrEqual(prev); expect(v).toBeGreaterThanOrEqual(0.85); expect(v).toBeLessThanOrEqual(1); prev = v }
+    expect(leafAgeScale(NaN)).toBe(1)
+    expect(leafAgeScale(Infinity)).toBe(1)
+    expect(leafAgeScale(-5)).toBe(1)
+    expect(leafAgeScale(99)).toBeGreaterThanOrEqual(0.85)
+    expect(Math.round(leafAgeScale(1.5) * 1000) / 1000).toBe(leafAgeScale(1.5))
   })
   it('leafJitter：決定性且在 ±6° 內，且不是全部同值', () => {
     expect(leafJitter('I-01')).toBe(leafJitter('I-01'))

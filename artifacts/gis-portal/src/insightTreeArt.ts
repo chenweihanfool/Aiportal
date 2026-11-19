@@ -88,11 +88,20 @@ export function decorLayout(width: number, ground: number, cx: number, trunkW: n
     grass.push({ x: r1(x), d })
   }
 
+  // 光點：左右決定性交替（7 顆時 4／3），整體是否鏡像由 hash 決定；同側的 dx 分區取樣，避免擠在一起
   const motes: DecorLayout['motes'] = []
   const top = Math.max(6, ground * 0.18), bot = Math.max(top + 1, ground - 16)
+  const flip = hash01(seed + 17, 0) < 0.5 ? -1 : 1
+  const perSide: Record<number, number> = { [-1]: flip === -1 ? 4 : 3, [1]: flip === 1 ? 4 : 3 }
+  const seen: Record<number, number> = { [-1]: 0, [1]: 0 }
   for (let i = 0; i < 7; i++) {
-    const side = hash01(seed + 17, i) < 0.5 ? -1 : 1
-    const dx = (0.06 + hash01(seed + 19, i) * 0.3) * width
+    const side = (i % 2 === 0 ? -1 : 1) * flip
+    const k = seen[side]!
+    seen[side] = k + 1
+    const cnt = perSide[side]!
+    const lo = 0.06 + (0.3 * k) / cnt
+    const hi = 0.06 + (0.3 * (k + 1)) / cnt
+    const dx = (lo + hash01(seed + 19, i) * (hi - lo)) * width
     const x = Math.min(x1, Math.max(x0, cx + side * dx))
     const y = top + hash01(seed + 23, i) * (bot - top)
     motes.push({ x: r1(x), y: r1(y), r: r1(1 + hash01(seed + 29, i)), delay: r1(hash01(seed + 31, i) * 6) })
@@ -106,6 +115,13 @@ export function soilPlate(nodes: { x: number; half: number }[], originX: number,
   for (const n of nodes) { lo = Math.min(lo, n.x - n.half); hi = Math.max(hi, n.x + n.half) }
   const a = Math.max(0.5, lo - pad), b = Math.min(width - 0.5, hi + pad)
   return { x: r1(a), w: Math.max(0, r1(b - a)) }
+}
+
+/** 葉子大小隨年齡的細微層次（渲染層）：age 0（最新）＝1，越舊略小，最舊（age 3）約 0.88；四捨五入 3 位、夾在 [0.85,1]，非有限數回 1 */
+export function leafAgeScale(age: number): number {
+  if (!Number.isFinite(age)) return 1
+  const t = Math.min(1, Math.max(0, age / 3))
+  return Math.round(Math.min(1, Math.max(0.85, 1 - 0.12 * t)) * 1000) / 1000
 }
 
 /** 葉子微偏轉：以 id 決定的 ±6° 內角度 */

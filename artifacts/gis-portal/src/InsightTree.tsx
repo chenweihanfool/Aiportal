@@ -18,7 +18,7 @@ import { FOCUS_ICON, STAGE_COLOR, STAGE_ICON, STAGE_LABEL, isFocus, stageOf } fr
 import type { IdeaItem } from './boardApi'
 import { rootAction, rootPaths, rootSlots, type RootAction } from './insightLinks'
 import { HIGH, LOW, bornBand, insightsByBand } from './hhiBorn'
-import { decorFade, decorLayout, leafJitter, rootFlarePath, soilBand, soilPlate } from './insightTreeArt'
+import { decorFade, decorLayout, leafAgeScale, leafJitter, rootFlarePath, soilBand, soilPlate } from './insightTreeArt'
 
 // 首頁「我的心得樹」（3.0.0）：一棵樹＝人生，每條主枝是一個主題，時間沿主枝往外走（越外越新）；印證的脈絡變粗、修正分岔、推翻轉灰，近 30 天的新葉發光，可逐月重播。
 // 總覽時主題多會自動精簡（葉叢、標籤縮成色點），滑過／聚焦才放大；聚焦一個主題會畫出全部脈絡與沿枝的時間。
@@ -105,7 +105,7 @@ const Leaf = memo(function Leaf({ lf, ins, color, lit, dimc, fresh, onOpen, onHo
             </g>
           )}
           <circle r={lf.r * 1.5} className="it-hit" />
-          <g transform={`rotate(${lf.angle + leafJitter(lf.id)}) scale(${lf.r})`}>
+          <g transform={`rotate(${lf.angle + leafJitter(lf.id)}) scale(${Math.round(lf.r * leafAgeScale(lf.age) * 100) / 100})`}>
             <path className="it-shape" d={sh.d} style={{ fill: lf.withered ? undefined : color }} data-kind={sh.kind} />
             {!lf.withered && <path className="it-gloss" d={sh.d} fill="url(#it-leaf-gloss)" aria-hidden />}
             {sh.vein && <path className="it-vein" d={sh.vein} vectorEffect="non-scaling-stroke" />}
