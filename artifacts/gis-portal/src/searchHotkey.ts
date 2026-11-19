@@ -8,7 +8,8 @@ export interface SearchHotkeyEvent {
   ctrlKey: boolean
   metaKey: boolean
   altKey: boolean
-  target: HotkeyTarget
+  /** 原生 KeyboardEvent 的 target（EventTarget）或測試用的簡化物件 */
+  target: EventTarget | HotkeyTarget
 }
 
 const EDITABLE_TAGS = new Set(['input', 'textarea', 'select'])
@@ -17,8 +18,9 @@ const EDITABLE_TAGS = new Set(['input', 'textarea', 'select'])
 export function shouldFocusSearch(e: SearchHotkeyEvent): boolean {
   if (e.key !== '/') return false
   if (e.ctrlKey || e.metaKey || e.altKey) return false
-  const tag = (e.target?.tagName ?? '').toLowerCase()
+  const t = e.target as HotkeyTarget
+  const tag = (t?.tagName ?? '').toLowerCase()
   if (EDITABLE_TAGS.has(tag)) return false
-  if (e.target?.isContentEditable === true) return false
+  if (t?.isContentEditable === true) return false
   return true
 }
