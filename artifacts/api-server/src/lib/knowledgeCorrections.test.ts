@@ -70,6 +70,23 @@ describe("parseCorrectionBody", () => {
     expect(parseCorrectionBody({ topicId: TOPIC, kind: "undo", claimId: "c123", text: null })).toMatchObject({ text: null });
   });
 
+  it("unlink：claimId 必填、text 必填且為 <類型>:<識別碼>、不得帶 section", () => {
+    expect(typeof parseCorrectionBody({ topicId: TOPIC, kind: "unlink", text: "rule:c010" })).toBe("string");
+    expect(typeof parseCorrectionBody({ topicId: TOPIC, kind: "unlink", claimId: "c010" })).toBe("string");
+    for (const text of ["doc:tpl_ab12cd34ef", "insight:INS-2026-11-19-0a1b2c3d", "rule:c010", "pitfall:c011", "case:1150101測試段12再鑑界"]) {
+      expect(parseCorrectionBody({ topicId: TOPIC, kind: "unlink", claimId: "c010", text }), text).toMatchObject({ kind: "unlink", claimId: "c010", text });
+    }
+    for (const text of ["c010", "doc:", "doc", "doc:a\nb", "other:x", `doc:${"a".repeat(201)}`]) {
+      expect(typeof parseCorrectionBody({ topicId: TOPIC, kind: "unlink", claimId: "c010", text }), text).toBe("string");
+    }
+    expect(typeof parseCorrectionBody({ topicId: TOPIC, kind: "unlink", claimId: "c010", text: "rule:c010", section: "步驟" })).toBe("string");
+  });
+
+  it("kind 錯誤訊息列出五種", () => {
+    const msg = parseCorrectionBody({ topicId: TOPIC, kind: "retract", claimId: "c123" });
+    expect(msg).toBe("kind 必須是 wrong、fix、add、undo 或 unlink");
+  });
+
   it("section：只有 add 可帶，去頭尾空白後 1–40 字", () => {
     expect(parseCorrectionBody({ topicId: TOPIC, kind: "add", text: "補充", section: " 重點 " })).toMatchObject({ section: "重點" });
     expect(typeof parseCorrectionBody({ topicId: TOPIC, kind: "add", text: "補充", section: " " })).toBe("string");

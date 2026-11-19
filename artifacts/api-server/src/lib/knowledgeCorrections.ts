@@ -1,9 +1,11 @@
 // 知識頁更正的驗證（純函式，路由與測試共用）。
-export const CORRECTION_KINDS = ["wrong", "fix", "add", "undo"] as const;
+export const CORRECTION_KINDS = ["wrong", "fix", "add", "undo", "unlink"] as const;
 export type CorrectionKind = (typeof CORRECTION_KINDS)[number];
 
 export const CORRECTION_TEXT_MAX = 500;
 export const CORRECTION_SECTION_MAX = 40;
+/** unlink 的 text：連結類型前綴＋識別碼（例：doc:tpl_ab12cd34ef、case:1150101測試段12再鑑界） */
+const UNLINK_TEXT_RE = /^(doc|insight|rule|pitfall|case):[^\r\n]{1,200}$/;
 
 export interface ParsedCorrectionBody {
   topicId: string;
@@ -25,7 +27,7 @@ function checkKeys(b: Record<string, unknown>): string | null {
 
 /**
  * POST body 驗證：回正規化物件，或回錯誤訊息字串（400）。
- * wrong／undo 不帶 text；fix／add 必帶 text；section 只有 add 可帶。
+ * wrong／undo 不帶 text；fix／add 必帶 text；unlink 必帶 `<類型>:<識別碼>` 的 text；section 只有 add 可帶。
  */
 export function parseCorrectionBody(body: unknown): ParsedCorrectionBody | string {
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body 必須是物件";
@@ -37,7 +39,7 @@ export function parseCorrectionBody(body: unknown): ParsedCorrectionBody | strin
   if (typeof topicId !== "string" || !TOPIC_ID.test(topicId)) return "topicId 必須符合 T12345678-01 的格式";
 
   const kind = b["kind"];
-  if (typeof kind !== "string" || !(CORRECTION_KINDS as readonly string[]).includes(kind)) return "kind 必須是 wrong、fix、add 或 undo";
+  if (typeof kind !== "string" || !(CORRECTION_KINDS as readonly string[]).includes(kind)) return "kind 必須是 wrong、fix、add、undo 或 unlink";
 
   const rawClaimId = b["claimId"];
   let claimId: string | null = null;
@@ -54,7 +56,10 @@ export function parseCorrectionBody(body: unknown): ParsedCorrectionBody | strin
     const trimmed = rawText.trim();
     if (trimmed !== "") text = trimmed;
   }
-  if (kind === "fix" || kind === "add") {
+  if (kind === "unlink") {
+    if (text === null) return "unlink 需要 text";
+    if (!UNLINK_TEXT_RE.test(text)) return "unlink 的 text 必須是 doc:、insight:、rule:、pitfall: 或 case: 開頭，且不含換行";
+  } else if (kind === "fix" || kind === "add") {
     if (text === null) return `${kind} 需要 text`;
     if (text.length > CORRECTION_TEXT_MAX) return `text 不可超過 ${CORRECTION_TEXT_MAX} 字`;
     if (/[\r\n]/.test(text)) return "text 不可含換行";
