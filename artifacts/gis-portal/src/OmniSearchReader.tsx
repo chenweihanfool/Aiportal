@@ -6,11 +6,13 @@ import { SearchDiaryReport } from './SearchDiaryReport'
 import { buildTimelineDayLink } from './timelineLink'
 import { PinButton } from './PinButton'
 import { pinTargetFor } from './pushTriggers'
+import { TemplateAnswer, TopicAnswer } from './SearchAnswerPanel'
+import type { Topic } from './knowledgeView'
 import { CTX_H, CTX_W, contextLayout, ctxLabel, highlightSegments, kindLabel, openAction, type PreviewRelated, type SearchKind, type SearchPreview } from './omniSearch'
 
 // 全站搜尋的右側閱讀面板（類型、標題、一句話、重點、脈絡圖、出處、開啟）。狀態都由 OmniSearch.tsx 傳進來。
 
-export type ReaderItem = { kind: SearchKind; id: string; title: string }
+export type ReaderItem = { kind: SearchKind; id: string; title: string; /** 範本命中的家族名（舊版範本用家族對方法） */ family?: string }
 export type PreviewState = { kind: SearchKind; id: string; state: 'loading' | 'ok' | 'missing' | 'error'; data: SearchPreview | null }
 
 export function Marked({ text, q }: { text: string; q: string }) {
@@ -113,7 +115,7 @@ function ContextMap({ related, onJump }: { related: PreviewRelated[]; onJump: (r
   )
 }
 
-export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, onOpen, onJump, pw }: {
+export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, onOpen, onJump, pw, topics }: {
   item: ReaderItem | null
   preview: PreviewState | null
   q: string
@@ -123,6 +125,8 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
   onJump: (r: PreviewRelated) => void
   /** 解鎖後的密碼；有給才會顯示 📌 需要時提醒我 */
   pw?: string | null
+  /** 方法頁資料（OmniSearch 已抓的 topics feed）；null＝還沒載入 */
+  topics?: readonly Topic[] | null
 }) {
   if (!item) return <div className="om-none om-lb">NO PREVIEW</div>
   const data = preview && preview.kind === item.kind && preview.id === item.id ? preview : null
@@ -132,16 +136,19 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
   const isDiary = item.kind === 'diary'
   const isEvent = item.kind === 'event'
   const isInsight = item.kind === 'insight'
+  const isTemplate = item.kind === 'template'
   const rawBtn = isDiary || isEvent
+  const topicHit = item.kind === 'topic' ? (topics ?? []).find((t) => t.id === item.id) : undefined
   return (
     <div className="om-reader-in">
       <span className="om-kd">{kindLabel(item.kind)}</span>
       <h2><Marked text={item.title} q={q} /></h2>
-      {isDiary || isInsight ? null : !data || data.state === 'loading' ? <p className="om-one om-dim">載入預覽中…</p> : null}
-      {!isDiary && !isInsight && data?.state === 'error' ? <p className="om-one om-dim" role="status">預覽暫時讀不到，稍後再試。</p> : null}
-      {!isDiary && !isInsight && data?.state === 'missing' ? <p className="om-one om-dim">這一筆沒有預覽資料。</p> : null}
+      {isDiary || isInsight || isTemplate ? null : !data || data.state === 'loading' ? <p className="om-one om-dim">載入預覽中…</p> : null}
+      {!isDiary && !isInsight && !isTemplate && data?.state === 'error' ? <p className="om-one om-dim" role="status">預覽暫時讀不到，稍後再試。</p> : null}
+      {!isDiary && !isInsight && !isTemplate && data?.state === 'missing' ? <p className="om-one om-dim">這一筆沒有預覽資料。</p> : null}
       {isDiary && <SearchDiaryReport date={item.id} pw={pw ?? null} />}
       {isInsight && <InsightReaderBody id={item.id} pw={pw ?? null} />}
+      {isTemplate && <TemplateAnswer pw={pw ?? null} templateId={item.id} family={item.family ?? null} topics={topics} />}
       {p && (
         <>
           {!isDiary && p.one && <p className="om-one"><Marked text={p.one} q={q} /></p>}
@@ -152,6 +159,7 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
             </>
           )}
           <ContextMap related={p.related} onJump={onJump} />
+          {topicHit && <TopicAnswer pw={pw ?? null} topic={topicHit} />}
           {p.source && (
             <>
               <h3 className="om-lb">出處</h3>
@@ -161,7 +169,7 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
         </>
       )}
       <div className="om-act">
-        {isDiary
+        {isTemplate ? null : isDiary
           ? <button type="button" className="om-cta" onClick={() => { window.location.hash = buildTimelineDayLink(item.id, '') }}>在時間軸看 ↵</button>
           : <button type="button" className={inPanel ? 'om-gh' : 'om-cta'} onClick={onOpen}>{inPanel ? (expanded ? '收合原文 ↵' : '看原文 ↵') : isEvent ? '開啟事件卷宗 ↵' : item.kind === 'repo' ? '在 GitHub 開啟 ↵' : '開啟 ↵'}</button>}
         {p?.url && <a className="om-gh" href={p.url} target="_blank" rel="noopener noreferrer">在 GitHub 開啟 ↗</a>}

@@ -242,11 +242,15 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
     repoMode ? (repoState === 'ok' && sel >= 0 ? repoHits[sel] ?? null : null)
       : parsed.mode === 'search' && status === 'ok' && sel >= 0 ? flat[sel] ?? null : null
   )
+  // 範本命中多帶家族名（flat 的 hit 才有 meta；脈絡圖跳過去的 detour 沒有）
+  const curItem: ReaderItem | null = cur && cur.kind === 'template'
+    ? { kind: cur.kind, id: cur.id, title: cur.title, family: (flat.find((h) => h.kind === 'template' && h.id === cur.id)?.meta as { family?: string } | undefined)?.family }
+    : cur
   const curKind = cur?.kind
   const curId = cur?.id
   useEffect(() => { setExpanded(false) }, [curKind, curId])
   useEffect(() => {
-    // 範本沒有預覽端點，右側閱讀面板不顯示；下載走卡片上的 ⬇。
+    // 範本沒有預覽端點：閱讀面板改顯示 TemplateAnswer（下載＋方法路線）；清單卡片上的 ⬇ 保留。
     if (!curKind || !curId || !pw || curKind === 'template') { setPrev(null); return }
     const ctl = new AbortController()
     setPrev({ kind: curKind, id: curId, state: 'loading', data: null })
@@ -551,7 +555,8 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
           {(parsed.mode === 'search' || repoMode) && (
             <div className="om-panel om-reader" onMouseMove={glow}>
               <OmniSearchReader pw={pw}
-                item={repoMode ? (repoState === 'ok' ? cur : null) : status === 'ok' ? cur : null}
+                item={repoMode ? (repoState === 'ok' ? curItem : null) : status === 'ok' ? curItem : null}
+                topics={ctx?.topics ?? null}
                 preview={prev} q={repoMode ? '' : searchQ} expanded={expanded}
                 onToggleExpand={() => setExpanded((v) => !v)}
                 onOpen={() => { if (cur) { if (repoMode) openRepo(cur); else openItem(cur) } }} onJump={jump}
