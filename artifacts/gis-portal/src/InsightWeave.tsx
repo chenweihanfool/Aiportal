@@ -221,7 +221,9 @@ export function WeaveToggle({ cid, open, onToggle }: { cid: string; open: boolea
   const c = w.index.cluster(cid)
   return (
     <button type="button" className={`ii-wv-btn${open ? ' ii-on' : ''}`} data-testid="ii-wv-toggle" aria-expanded={open} title="AI 從這座島歸納的原則、呼應的島、張力" onClick={onToggle}>
-      ✦ 本島編織 <span>🗼{c.lighthouses.length} 〰{c.bridges.length} ⚡{c.tensions.length}</span>
+      ✦ 本島編織 <span>{c.lighthouses.length === 0 && c.insufficient && c.bridges.length === 0 && c.tensions.length === 0 && c.kb.length === 0
+        ? '🗼證據不足'   // 只有證據不足時別顯示 0 0 0，免得像是什麼都沒有
+        : `🗼${c.lighthouses.length} 〰${c.bridges.length} ⚡${c.tensions.length}`}</span>
     </button>
   )
 }
