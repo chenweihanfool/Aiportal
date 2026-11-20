@@ -5,7 +5,7 @@ import { GLOW_DAYS, taipeiDay } from './insightTree'
 import type { Insight, InsightRelation } from './insightTree'
 
 export const ISLAND = { cellW: 128, cellH: 42, gap: 7, pad: 18, label: 100, margin: 46 } as const
-export const TIMELINE = { minGap: 50, spMin: 62, cardW: 176, cardH: 46, maxLanes: 4, laneGap: 10, axisPad: 24 } as const
+export const TIMELINE = { minGap: 256, spMin: 270, cardW: 232, cardH: 46, maxLanes: 4, laneGap: 10, axisPad: 24 } as const
 
 const dayNumber = (d: string): number => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 86_400_000
 

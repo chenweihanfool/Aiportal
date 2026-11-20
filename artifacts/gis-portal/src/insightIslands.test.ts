@@ -200,6 +200,15 @@ describe('layoutTimeline', () => {
     expect(l.arcs).toEqual([])
   })
 
+  it('3.15.1：心得事件拉開——相鄰間距大於卡寬，46 則也只排一排、卡片不重疊', () => {
+    expect(TIMELINE.minGap).toBeGreaterThanOrEqual(TIMELINE.cardW + TIMELINE.laneGap)
+    for (const n of [2, 8, 46]) {
+      const l = layoutTimeline(timelineItems(n), 1000)
+      expect(l.laneCount).toBe(1)
+      for (let i = 1; i < n; i++) expect(l.xs[i]! - l.xs[i - 1]!).toBeGreaterThanOrEqual(TIMELINE.cardW + TIMELINE.laneGap)
+    }
+  })
+
   for (const n of [2, 8, 46]) {
     it(`n=${n}：xs 單調且間距 ≥ ${TIMELINE.minGap}、同排不重疊、排數 ≤ ${TIMELINE.maxLanes}、公式與 arcs`, () => {
       const items = timelineItems(n)
