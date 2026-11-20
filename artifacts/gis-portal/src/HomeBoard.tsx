@@ -311,9 +311,13 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             onOpenIdeas={openIdeas}
             onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
             onRequestUnlock={onRequestUnlock} />
+          {/* 3.16.0：附近搬到搜尋框旁邊——點了直接開美食地圖的「附近・由近到遠」 */}
+          <button type="button" className="tb-nearby" data-testid="tb-nearby" aria-label="附近有什麼：開美食地圖，由近到遠"
+            onClick={() => { if (on) window.location.hash = '#food/nearby'; else onRequestUnlock() }}>
+            <span aria-hidden>📍</span><span className="tb-nearby-tx">附近</span>
+          </button>
         </TopBarSearch>
         <div className="st-home">
-          <InsightIslands pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
           <StatusAside
             on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
             hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
@@ -331,6 +335,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
               boost={boost} recipe={recipe} onActionsChange={personActions.reload}
               todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
           </div>
+          {/* 3.16.0：島嶼圖移到首頁最下方，一般滾輪先捲頁面 */}
+          <InsightIslands pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
         </div>
         {drawer === 'hhi' && <Drawer title="幸福指數詳情：活動洞察・雷達・30 天洞察・趨勢・六維度子系統・成長軌跡" onClose={closeDrawer}>{insightBlock}{hhiDetail}{growthBlock}</Drawer>}
         {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} focusIdeaId={focusIdea} onClose={closeDrawer} hhiScores={hhiScores} /></Drawer>}

@@ -119,8 +119,9 @@ export default function App() {
     return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} initialDay={timelineRoute.day} from={timelineRoute.from} />
   }
   // 美食地圖（2026-10-15）：解鎖後讀知識庫的地點（/api/hermes-places），沒有資料才退回示範資料；入口見首頁按鈕與全站搜尋輸入 >美食。
-  if (hashRoute === '#food') {
-    return <FoodMapView onBack={() => { window.location.hash = '' }} unlockedPassword={unlockedPassword} />
+  // #food/nearby（3.16.0）：頂欄「📍 附近」直接開美食地圖的「附近・由近到遠」
+  if (hashRoute === '#food' || hashRoute === '#food/nearby') {
+    return <FoodMapView onBack={() => { window.location.hash = '' }} unlockedPassword={unlockedPassword} autoNearby={hashRoute === '#food/nearby'} />
   }
   // 遊記（2026-10-15）：#trips 列表、#trips/<id> 單趟；兩者同一個元件，切換時不重抓資料
   if (hashRoute === '#trips') {

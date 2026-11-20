@@ -7,8 +7,8 @@ import {
 } from './nowCards'
 import { knowledgeHref, type TopicNudges } from './topicNudges'
 import { dossierHref } from './dossier'
-import { apiDonePin, apiFetchCalendarToday, apiFetchMeetingMatcher, apiFetchPinsDue, apiFetchPlaces } from './pushTriggersApi'
-import { meetingCards, nearbyCard, nearestPlace, orderTriggerFirst, pinnedCards } from './pushTriggers'
+import { apiDonePin, apiFetchCalendarToday, apiFetchMeetingMatcher, apiFetchPinsDue } from './pushTriggersApi'
+import { meetingCards, orderTriggerFirst, pinnedCards } from './pushTriggers'
 
 // 首頁「現在用得上」（2.87.0）：搜尋區正下方的時間軌＋最多 5 張推送卡，每張說得出「為什麼是現在」。
 // 純邏輯在 nowCards.ts；樣式 nw- 前綴在 portal.css，顏色變數只定義在 .nw-root。
@@ -122,14 +122,13 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
     return () => { cancelled = true }
   }, [pw])
 
-  // 4-4：釘選卡、會前卡（只在「今天」）；📍 附近卡只存在記憶體
+  // 4-4：釘選卡、會前卡（只在「今天」）
   const pins = useAsync(pw, apiFetchPinsDue)
   const calendar = useAsync(pw, apiFetchCalendarToday)
   const hasTimedEvents = !!calendar.data?.events.some((e) => !e.allDay)
   const matcher = useAsync(hasTimedEvents ? pw : null, apiFetchMeetingMatcher)
   const [clock, setClock] = useState(nowMs)
   const [donePins, setDonePins] = useState<number[]>([])
-  const [near, setNear] = useState<{ card: NowCard | null; busy: boolean; msg: string }>({ card: null, busy: false, msg: '' })
   const reloadCalendar = calendar.reload
   useEffect(() => {
     const a = setInterval(() => setClock(Date.now()), 5 * 60_000)
@@ -147,7 +146,6 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
     const extra = [
       ...pinnedCards((pins.data ?? []).filter((p) => !donePins.includes(p.id)), todayIso),
       ...(matcher.data ? meetingCards(calendar.data, clock, matcher.data.match) : []),
-      ...(near.card ? [near.card] : []),
       ...(boost ? [boost] : []),
       ...(recipe ? [recipe] : []),
     ]
@@ -156,7 +154,7 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
     const person = boost?.person
     const merged = person ? [...base, ...extra].filter((c) => !(c.kind === 'quiet' && c.person === person)) : [...base, ...extra]
     return orderTriggerFirst(sortCards(merged))
-  }, [base, day, pins.data, donePins, matcher.data, calendar.data, clock, near.card, todayIso, boost, recipe])
+  }, [base, day, pins.data, donePins, matcher.data, calendar.data, clock, todayIso, boost, recipe])
   const fb: FeedbackState = useMemo(() => {
     const server = feedback.data ?? NO_FEEDBACK
     return {
@@ -217,24 +215,6 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
       send(card, 'useful')
       leave(card, () => setDonePins((l) => [...l, id]))
     } catch { say('標記失敗，請稍後再試。') }
-  }
-
-  // 只在按下時要一次定位；座標只留在這個函式裡，不送後端、不寫 localStorage
-  const findNearby = () => {
-    if (!pw || near.busy) return
-    if (typeof navigator === 'undefined' || !navigator.geolocation) { setNear((n) => ({ ...n, msg: '這個瀏覽器不能定位。' })); return }
-    setNear((n) => ({ ...n, busy: true, msg: '' }))
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        void apiFetchPlaces(pw).then((places) => {
-          const r = nearestPlace(places, { lat: pos.coords.latitude, lng: pos.coords.longitude })
-          setNear(r ? { card: nearbyCard(r.place, r.meters, todayIso), busy: false, msg: '' } : { card: null, busy: false, msg: '1 公里內沒有收藏的地點。' })
-          if (r) setDay('today')
-        }, () => setNear((n) => ({ ...n, busy: false, msg: '地點資料讀取失敗。' })))
-      },
-      (err) => setNear((n) => ({ ...n, busy: false, msg: err.code === 1 ? '你沒有允許定位，所以不顯示附近。' : '定位失敗，稍後再試。' })),
-      { timeout: 10_000, maximumAge: 5 * 60_000 },
-    )
   }
 
   const quietAct = async (card: NowCard, body: PersonActionBody) => {
@@ -312,10 +292,6 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
           )}
         </div>
       )}
-      <div className="pt-foot">
-        <button type="button" className="pt-near" data-testid="now-nearby" disabled={near.busy} onClick={findNearby}>{near.busy ? '定位中…' : '📍 附近有什麼'}</button>
-        {near.msg && <span className="pt-near-msg" role="status">{near.msg}</span>}
-      </div>
       <div className="nw-toast" role="status" aria-live="polite">{toast}</div>
     </section>
   )

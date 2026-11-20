@@ -211,16 +211,40 @@ try {
       for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) { const a = r[i], b = r[j]; if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) return false }
       return true
     }))
+    // 3.16.0：島嶼圖在首頁最下方；先捲到看得見再操作滾輪
+    await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
+    await page.waitForTimeout(200)
+    check(`${T}：心得島嶼在首頁 DOM 最下方（st-left 之後）`, await page.evaluate(() => {
+      const t = document.querySelector('[data-testid="insight-islands"]'), l = document.querySelector('.st-left'), h = document.querySelector('.st-home')
+      return !!t && !!l && !!h && !!(l.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) && t === h.lastElementChild
+    }))
     await page.screenshot({ path: path.join(SHOTS, 'islands-overview-dark.png') })
-    // 滾輪對準游標放大：游標下的島中心不位移太多
+    // 3.16.0：不按 Ctrl 的一般滾輪只捲頁面、鏡頭不動，中央出現提示
+    const scrollOf = () => page.evaluate(() => { const sc = document.querySelector('.ip-scroll'); return { win: window.scrollY, el: sc ? sc.scrollTop : 0 } })
+    const relIsland = () => page.evaluate(() => { const i = document.querySelectorAll('[data-testid="ii-island"]')[1].getBoundingClientRect(); const b = document.querySelector('[data-testid="ii-box"]').getBoundingClientRect(); return { x: i.left - b.left, y: i.top - b.top, w: i.width } })
+    {
+      const isl0 = await page.locator('[data-testid="ii-island"]').nth(1).boundingBox()
+      await page.mouse.move(isl0.x + isl0.width / 2, isl0.y + isl0.height / 2)
+      const s0 = await scrollOf(), r0 = await relIsland()
+      await page.mouse.wheel(0, -400)
+      await page.waitForTimeout(150)
+      const s1 = await scrollOf(), r1 = await relIsland()
+      const hintOp = await page.evaluate(() => Number(getComputedStyle(document.querySelector('[data-testid="ii-wheel-hint"]')).opacity))
+      check(`${T}：一般滾輪捲頁面、鏡頭沒動、中央出現提示`, (s1.win !== s0.win || s1.el !== s0.el) && Math.abs(r1.x - r0.x) <= 1 && Math.abs(r1.y - r0.y) <= 1 && Math.abs(r1.w - r0.w) <= 1 && hintOp > 0.5, `scroll ${s0.el}→${s1.el} hint=${hintOp}`)
+    }
+    await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
+    await page.waitForTimeout(200)
+    // Ctrl＋滾輪對準游標放大：游標下的島中心不位移太多
     const isl = await page.locator('[data-testid="ii-island"]').nth(1).boundingBox()
     const cx = isl.x + isl.width / 2, cy = isl.y + isl.height / 2
     const lv0 = await page.locator('[data-testid="ii-level"]').getAttribute('data-level')
     await page.mouse.move(cx, cy)
+    await page.keyboard.down('Control')
     await page.mouse.wheel(0, -500)
+    await page.keyboard.up('Control')
     await page.waitForTimeout(300)
     const isl2 = await page.locator('[data-testid="ii-island"]').nth(1).boundingBox()
-    check(`${T}：滾輪對準游標放大，游標下的島中心位移 ≤ 12px、島變大`, Math.abs(isl2.x + isl2.width / 2 - cx) <= 12 && Math.abs(isl2.y + isl2.height / 2 - cy) <= 12 && isl2.width > isl.width * 1.2, `dx=${Math.round(isl2.x + isl2.width / 2 - cx)} w ${Math.round(isl.width)}→${Math.round(isl2.width)}`)
+    check(`${T}：Ctrl＋滾輪對準游標放大，游標下的島中心位移 ≤ 12px、島變大`, Math.abs(isl2.x + isl2.width / 2 - cx) <= 12 && Math.abs(isl2.y + isl2.height / 2 - cy) <= 12 && isl2.width > isl.width * 1.2, `dx=${Math.round(isl2.x + isl2.width / 2 - cx)} w ${Math.round(isl.width)}→${Math.round(isl2.width)}`)
     for (let i = 0; i < 4; i++) { await page.locator('[data-testid="ii-zoom-in"]').click(); await page.waitForTimeout(350) }
     const lv1 = await page.locator('[data-testid="ii-level"]').getAttribute('data-level')
     check(`${T}：拉近後層級改變（${lv0} → ${lv1}）`, lv0 !== lv1)
@@ -261,10 +285,26 @@ try {
     await page.setViewportSize({ width: 1100, height: 900 }); await page.waitForTimeout(500)
     check(`${T}：視窗縮小後重新置中`, Math.abs(await settled(page)) <= 2)
     await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(500)
+    // 3.16.0：一般直向滾輪不攔截——頁面照常捲、時間軸橫向位置不變
+    const stateOf = () => page.evaluate(() => { const t = document.querySelector('[data-testid="ii-tl-scroll"]'); const p = document.querySelector('.ip-scroll'); return { left: t.scrollLeft, top: p ? p.scrollTop : window.scrollY } })
     const sc = await page.locator('[data-testid="ii-tl-scroll"]').boundingBox()
-    const before = await page.evaluate(() => document.querySelector('[data-testid="ii-tl-scroll"]').scrollLeft)
-    await page.mouse.move(sc.x + sc.width / 2, sc.y + sc.height / 2); await page.mouse.wheel(0, 200); await page.waitForTimeout(200)
-    check(`${T}：滾輪在時間軸上是橫向捲動`, (await page.evaluate(() => document.querySelector('[data-testid="ii-tl-scroll"]').scrollLeft)) !== before)
+    const b0 = await stateOf()
+    await page.mouse.move(sc.x + sc.width / 2, sc.y + sc.height / 2); await page.mouse.wheel(0, -180); await page.waitForTimeout(300)
+    const b1 = await stateOf()
+    check(`${T}：時間軸上一般滾輪不改橫向位置、頁面會捲`, b1.left === b0.left && b1.top !== b0.top, `left ${b0.left}→${b1.left} top ${b0.top}→${b1.top}`)
+    // Shift＋滾輪照舊橫向捲動
+    const sc2 = await page.locator('[data-testid="ii-tl-scroll"]').boundingBox()
+    await page.mouse.move(sc2.x + sc2.width / 2, sc2.y + sc2.height / 2)
+    await page.keyboard.down('Shift'); await page.mouse.wheel(0, 200); await page.keyboard.up('Shift'); await page.waitForTimeout(250)
+    check(`${T}：Shift＋滾輪在時間軸上是橫向捲動`, (await page.evaluate(() => document.querySelector('[data-testid="ii-tl-scroll"]').scrollLeft)) !== b1.left)
+    // 3.16.0：拖曳橫移有效、拖曳不會誤選卡片
+    const sel0 = await selId(page)
+    const left0 = await page.evaluate(() => document.querySelector('[data-testid="ii-tl-scroll"]').scrollLeft)
+    const sd = await page.locator('[data-testid="ii-tl-scroll"]').boundingBox()
+    const dx0 = sd.x + sd.width * 0.7, dy0 = sd.y + sd.height / 2
+    await page.mouse.move(dx0, dy0); await page.mouse.down(); await page.mouse.move(dx0 - 160, dy0, { steps: 8 }); await page.mouse.up(); await page.waitForTimeout(250)
+    const left1 = await page.evaluate(() => document.querySelector('[data-testid="ii-tl-scroll"]').scrollLeft)
+    check(`${T}：拖曳橫移有效、沒有誤選卡片`, left1 >= left0 + 120 && (await selId(page)) === sel0, `scrollLeft ${left0}→${left1}`)
     await page.locator('[data-testid="ii-dossier"]').click()
     await page.waitForSelector('[data-testid="insight-panel"]', { timeout: 10000 })
     await page.keyboard.press('Escape')
@@ -278,7 +318,7 @@ try {
     await page.waitForSelector('[data-testid="ii-timeline"]', { state: 'detached', timeout: 5000 })
     check(`${T}：Esc 回全景、網址的 #insight 清掉`, !/#insight/.test(page.url()) && (await page.locator('[data-testid="ii-island"]').count()) === 7)
     await page.waitForTimeout(700)
-    { const bb = await page.locator('[data-testid="ii-island"]').nth(2).boundingBox(); await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2) }
+    { await page.locator('[data-testid="ii-island"]').nth(2).scrollIntoViewIfNeeded(); await page.waitForTimeout(300); const bb = await page.locator('[data-testid="ii-island"]').nth(2).boundingBox(); await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2) }
     await waitTl(page)
     check(`${T}：點島本體也能飛進去`, true)
     await page.locator('[data-testid="ii-back"]').click()
