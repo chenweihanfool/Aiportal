@@ -44,6 +44,7 @@
 | `topic-nudges` | 1 | 首頁主動推播主題知識：「今天」卡、明日報告區塊、陪伴區塊的「一年前的這時候」（kb-pipeline `vikunja-gantt-pusher.py`，每 10 分鐘） |
 | `calendar-today` | 1 | 今天的行程：只有標題、開始／結束時間、地點文字；不含與會者、描述、會議連結（台北日期，私領域） |
 | `templates` | 1 | 公文範本索引：檔名、家族、類別、文件類型、版本、別名與檔案位置（`root`＋`rel`）；下載走 `GET /api/templates/:id/file`（3.9.0） |
+| `insight-weave` | 1 | 心得 AI 編織層：燈塔／橋／張力／知識庫交織（kb-pipeline 每週）；使用者確認／否決走 `GET`／`POST /api/insights/weave/verdicts`（見 `docs/insight-weave-api.md`） |
 
 ## topics 的 sources 選填欄位（v1 只加選填，舊 payload 照常通過）
 `sources[]` 每筆除了 `id`、`title`、`month`，還可帶：
