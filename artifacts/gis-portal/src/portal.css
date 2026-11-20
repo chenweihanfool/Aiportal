@@ -2965,6 +2965,7 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .ii-isw:hover { color: var(--c-ink); }
 .ii-isw i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .ii-tls { flex: none; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--c) 5%, transparent)); }
+.ii-tls.ii-tls-drag { cursor: grabbing; user-select: none; }
 .ii-tli { position: relative; }
 .ii-tlsvg { position: absolute; left: 0; top: 0; }
 .ii-axis { stroke: var(--c-line-strong); }

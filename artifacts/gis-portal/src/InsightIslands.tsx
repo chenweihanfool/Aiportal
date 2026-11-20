@@ -526,11 +526,13 @@ function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, 
   }, [center, cid]) // eslint-disable-line react-hooks/exhaustive-deps
   // 面板展開動畫結束再置中一次（動畫中量到的寬度可能是縮小的）
   const onTransEnd = (e: React.TransitionEvent) => { if (e.target === panelRef.current && e.propertyName === 'transform') center(true) }
+  // 3.16.0：一般直向滾輪不攔截（讓頁面捲動）；Shift＋滾輪或觸控板橫滑才橫移時間軸
   const wheel = useCallback((e: WheelEvent) => {
     const el = scrollRef.current
     if (!el) return
+    if (!e.shiftKey && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return
     e.preventDefault(); e.stopPropagation()
-    el.scrollLeft += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX
+    el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
   }, [])
   useEffect(() => {
     const el = scrollRef.current
@@ -538,6 +540,33 @@ function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, 
     el.addEventListener('wheel', wheel, { passive: false })
     return () => el.removeEventListener('wheel', wheel)
   }, [wheel])
+  // 3.16.0：拖曳橫移——水平移動超過 5px 才開始拖；沒超過就照常當點擊（卡片仍能選取）
+  const drag = useRef<{ id: number; x: number; left: number; active: boolean } | null>(null)
+  const onPtrDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = scrollRef.current
+    if (!el || e.button !== 0 || !e.isPrimary) return
+    drag.current = { id: e.pointerId, x: e.clientX, left: el.scrollLeft, active: false }
+  }
+  const onPtrMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    const el = scrollRef.current
+    if (!d || !el || d.id !== e.pointerId) return
+    const dx = e.clientX - d.x
+    if (!d.active) {
+      if (Math.abs(dx) < 5) return
+      d.active = true
+      try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* 略過 */ }
+      e.currentTarget.classList.add('ii-tls-drag')
+    }
+    el.scrollLeft = d.left - dx
+  }
+  const onPtrEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (!d || d.id !== e.pointerId) return
+    drag.current = null
+    e.currentTarget.classList.remove('ii-tls-drag')
+    if (d.active) { try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* 略過 */ } }
+  }
   const step = (d: number) => { const t = items[idx + d]; if (t) onSelect(t.id) }
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -560,11 +589,12 @@ function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, 
           <span className="ii-tl-ct">{items.length} 則 · {ym(items[0]!.date)} ～ {ym(items[items.length - 1]!.date)}{fresh > 0 && <span className="ii-ln-new"> · 近 30 天 +{fresh}</span>}</span>
         </div>
         <span className="ii-sp" />
-        <span className="ii-keys">← → 切換心得 · 滾輪橫移 · Esc 回全景</span>
+        <span className="ii-keys">← → 切換心得 · 拖曳或 Shift＋滾輪橫移 · Esc 回全景</span>
         <button type="button" className="ii-isw" data-testid="ii-island-prev" aria-label={`上一座島：${prev.name}`} onClick={() => onIsland(prev.id)}><i style={{ background: colorOf(prev.id) }} aria-hidden />‹ {prev.name}</button>
         <button type="button" className="ii-isw" data-testid="ii-island-next" aria-label={`下一座島：${next.name}`} onClick={() => onIsland(next.id)}>{next.name} ›<i style={{ background: colorOf(next.id) }} aria-hidden /></button>
       </div>
-      <div className="ii-tls" ref={scrollRef} data-testid="ii-tl-scroll">
+      <div className="ii-tls" ref={scrollRef} data-testid="ii-tl-scroll"
+        onPointerDown={onPtrDown} onPointerMove={onPtrMove} onPointerUp={onPtrEnd} onPointerCancel={onPtrEnd}>
         <div className="ii-tli" style={{ width: lay.width, height: lay.height }}>
           <svg className="ii-tlsvg" width={lay.width} height={lay.height} aria-hidden>
             <line className="ii-axis" x1={lay.xs[0]! - 40} y1={lay.axisY} x2={lay.xs[lay.xs.length - 1]! + 40} y2={lay.axisY} strokeWidth={3} strokeLinecap="round" />
