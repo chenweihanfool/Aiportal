@@ -115,8 +115,25 @@ const searchBody = {
   ],
 }
 
+// 3.17.0 AI 編織層假資料（全部虛構）：K01↔K02 一座橋、K01↔K03 跨島張力、K01 單島張力、K04 證據不足、一條知識庫交織
+const WEAVE_PAYLOAD = {
+  generatedAt: tpDate(0), basis: { insights: INSIGHTS.length, lastInsightDate: tpDate(-5) },
+  lighthouses: [
+    { id: 'L-00000001', cluster: 'K01', text: '虛構原則一：做事前先把話講清楚', evidence: ['I-01', 'I-02'], confidence: 'high', status: 'proposed', since: tpDate(-3) },
+    { id: 'L-00000002', cluster: 'K02', text: '虛構原則二：節奏比速度重要', evidence: ['I-08', 'I-09'], confidence: 'mid', status: 'proposed', since: tpDate(-3) },
+  ],
+  insufficient: [{ cluster: 'K04', evidence: ['I-15'], note: '虛構：只有 1 則，不提煉' }],
+  bridges: [{ id: 'B-00000001', title: '先講清楚', text: '虛構橋：兩座島都在說先對齊再行動', ends: [{ cluster: 'K01', evidence: ['I-03'] }, { cluster: 'K02', evidence: ['I-08'] }], confidence: 'mid', status: 'proposed', note: '', since: tpDate(-3) }],
+  tensions: [
+    { id: 'T-00000001', text: '虛構跨島張力：效率與周全', members: ['I-04', 'I-12'], clusters: ['K01', 'K03'], confidence: 'low', status: 'proposed', since: tpDate(-3) },
+    { id: 'T-00000002', text: '虛構單島張力：講清楚與先做做看', members: ['I-05', 'I-06'], clusters: ['K01'], confidence: 'low', status: 'proposed', since: tpDate(-3) },
+  ],
+  kbLinks: [{ id: 'K-00000001', kind: 'apply', topic: '虛構知識主題', insights: ['I-01', 'I-09'], text: '虛構：可用在某個流程', confidence: 'high', status: 'proposed', since: tpDate(-3) }],
+}
+const newWeaveState = () => ({ rows: [], posts: [], failNext: false, feedHits: 0, verdictGets: 0 })
+
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, channel: process.env.CHROMIUM_PATH ? undefined : 'chrome', args: ['--no-sandbox'] })
-async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorScheme = 'dark', reducedMotion = 'no-preference' } = {}) {
+async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorScheme = 'dark', reducedMotion = 'no-preference', weave = null } = {}) {
   const ctx = await browser.newContext({ viewport, colorScheme, reducedMotion })
   if (unlocked) await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
   await ctx.addInitScript(() => { try { localStorage.setItem('hm-layout', 'v3') } catch { /* 略過 */ } })
@@ -137,6 +154,19 @@ async function open(viewport, { unlocked = true, hash = '', mode = 'ok', colorSc
       return json(modeBody(mode))
     }
     const m = /^\/api\/insights\/(.+)$/.exec(p)
+    if (p === '/api/feed/insight-weave') { if (weave) weave.feedHits++; return weave ? json({ available: true, payload: WEAVE_PAYLOAD }) : json({ message: 'none' }, 404) }
+    if (p === '/api/insights/weave/verdicts') {
+      if (!weave) return json({ message: 'none' }, 404)
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}')
+        weave.posts.push(body)
+        if (weave.failNext) { weave.failNext = false; return json({ message: 'boom' }, 500) }
+        weave.rows.push({ id: weave.rows.length + 1, itemId: body.itemId, verdict: body.verdict, createdAt: new Date().toISOString() })
+        return json({ id: weave.rows.length }, 201)
+      }
+      weave.verdictGets++
+      return json({ verdicts: weave.rows })
+    }
     if (m && mode === 'dcrowd') {
       const id = decodeURIComponent(m[1]); const it = DC.find((x) => x.id === id)
       if (!it) return json({ message: 'none' }, 404)
@@ -416,6 +446,177 @@ try {
     await m.page.waitForSelector('[data-testid="ii-timeline"].ii-on', { timeout: 3000 })
     check('減少動態：點島直接開時間軸、置中', Math.abs(await settled(m.page)) <= 2)
     await m.ctx.close()
+  }
+
+
+  // ── 7. 3.17.0 AI 編織層 ──
+  {
+    const T = 'AI 編織：沒有 feed'
+    const ws = null
+    const { ctx, page, errors } = await open({ width: 1440, height: 900 }, { weave: ws })
+    await page.waitForSelector('[data-testid="ii-island"]', { timeout: 10000 })
+    await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').hover()
+    await page.waitForTimeout(250)
+    check(`${T}：全景沒有編織圖層、滑過也沒有橋標籤`, (await page.locator('.ii-wv-l,.ii-wv-svg,[data-testid="ii-wv-bridge"]').count()) === 0)
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').click(); await waitTl(page)
+    check(`${T}：時間軸沒有「本島編織」按鈕、詳情沒有 AI 欄`, (await page.locator('[data-testid="ii-wv-toggle"]').count()) === 0 && (await page.locator('[data-testid="ii-wv-col"]').count()) === 0)
+    check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | '))
+    await ctx.close()
+  }
+  {
+    const T = 'AI 編織：桌面'
+    const ws = newWeaveState()
+    const { ctx, page, errors } = await open({ width: 1440, height: 900 }, { weave: ws })
+    await page.waitForSelector('[data-testid="ii-island"]', { timeout: 10000 })
+    await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
+    await page.waitForTimeout(300)
+    check(`${T}：全景平時不畫編織（沒有開關按鈕、沒有橋標籤）`, (await page.locator('[data-testid="ii-wv-bridge"]').count()) === 0 && (await page.locator('[data-testid="ii-wv-lh"]').count()) === 0 && (await page.locator('[data-testid="ii-wv-toggle"]').count()) === 0)
+    check(`${T}：有 feed 時各請求只發一次`, ws.feedHits === 1 && ws.verdictGets === 1, `feed=${ws.feedHits} verdicts=${ws.verdictGets}`)
+    // 滑過島 K01：燈塔章、橋標籤、兩個張力章；非相關島淡化
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').hover()
+    await page.waitForSelector('[data-testid="ii-wv-bridge"]', { timeout: 3000 })
+    check(`${T}：滑過島出現燈塔章「🗼 1」`, (await page.locator('[data-testid="ii-wv-lh"]').first().innerText()).includes('🗼 1'))
+    check(`${T}：滑過島出現橋標籤「〰 先講清楚」`, (await page.locator('[data-testid="ii-wv-bridge"]').first().innerText()).includes('〰 先講清楚'))
+    check(`${T}：滑過島出現 2 個 ⚡（單島＋跨島）`, (await page.locator('[data-testid="ii-wv-tension"]').count()) === 2)
+    check(`${T}：橋標籤不壓在島名標籤上`, await page.evaluate(() => {
+      const b = document.querySelector('[data-testid="ii-wv-bridge"]').getBoundingClientRect()
+      return [...document.querySelectorAll('[data-testid="ii-island-label"]')].every((e) => { const r = e.getBoundingClientRect(); return !(b.left < r.right && r.left < b.right && b.top < r.bottom && r.top < b.bottom) })
+    }))
+    const ops = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-testid="ii-island"]')].map((e) => [e.getAttribute('data-id'), Number(e.style.opacity)])))
+    check(`${T}：不相關的島淡化到約 0.35、相關的島（K01、K02、K03）不淡化`, ops.K05 <= 0.36 && ops.K06 <= 0.36 && ops.K01 > 0.5 && ops.K02 > 0.5 && ops.K03 > 0.5, JSON.stringify(ops))
+    check(`${T}：編織圖層不攔截點擊`, await page.evaluate(() => getComputedStyle(document.querySelector('.ii-wv-l')).pointerEvents === 'none' && getComputedStyle(document.querySelector('.ii-wv-svg')).pointerEvents === 'none'))
+    await page.screenshot({ path: path.join(SHOTS, 'weave-hover-dark.png') })
+    // 滑出消失
+    const sb = await page.locator('[data-testid="ii-stage"]').boundingBox()
+    await page.mouse.move(sb.x + 2, sb.y + 2)
+    await page.waitForTimeout(250)
+    check(`${T}：滑出後編織消失、島恢復不透明`, (await page.locator('[data-testid="ii-wv-bridge"]').count()) === 0 && (await page.evaluate(() => Number(document.querySelector('[data-testid="ii-island"][data-id="K05"]').style.opacity))) > 0.5)
+    // 點島照舊飛入時間軸
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').click(); await waitTl(page)
+    check(`${T}：點島照舊飛入時間軸`, (await page.locator('[data-testid="ii-tl-name"]').innerText()) === '測量作業')
+    // 本島編織抽屜
+    const tg = page.locator('[data-testid="ii-wv-toggle"]')
+    check(`${T}：標題列有「✦ 本島編織 🗼1 〰1 ⚡2」`, /本島編織\s*🗼1\s*〰1\s*⚡2/.test((await tg.innerText()).replace(/\s+/g, ' ')), await tg.innerText())
+    check(`${T}：預設抽屜是關的`, (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
+    await tg.click()
+    await page.waitForSelector('[data-testid="ii-wv-drawer"]')
+    const dr = page.locator('[data-testid="ii-wv-drawer"]')
+    const dtxt = await dr.innerText()
+    check(`${T}：抽屜四段標題都在`, ['🗼 這座島的原則', '〰 和哪些島呼應', '⚡ 還沒想清楚的拉扯', '📚 與知識庫交織'].every((t) => dtxt.includes(t)))
+    check(`${T}：抽屜寬 ≤ 440、蓋在時間軸面板內、有 ×`, (await page.evaluate(() => { const d = document.querySelector('[data-testid="ii-wv-drawer"]').getBoundingClientRect(), t = document.querySelector('[data-testid="ii-timeline"]').getBoundingClientRect(); return d.width <= 441 && d.left >= t.left - 1 && d.right <= t.right + 1 && d.top >= t.top - 1 && d.bottom <= t.bottom + 1 })) && (await page.locator('[data-testid="ii-wv-close"]').count()) === 1)
+    check(`${T}：抽屜內 AI 卡有「✦ AI 歸納」標籤、信心點、待你確認`, /✦ AI 歸納/.test(dtxt) && /信心 高 ●●●/.test(dtxt) && /待你確認/.test(dtxt))
+    check(`${T}：依據原話是日期在前的「…」按鈕`, /^\d\d\/\d\d「/.test(await dr.locator('[data-testid="ii-wv-ev"]').first().innerText()))
+    await page.screenshot({ path: path.join(SHOTS, 'weave-drawer-dark.png') })
+    await page.locator('[data-testid="ii-wv-close"]').click()
+    check(`${T}：× 關得掉`, (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
+    await tg.click()
+    // 抽屜內點跨島依據：切島、選那則、關抽屜
+    await page.locator('[data-testid="ii-wv-drawer"] [data-testid="ii-wv-card"][data-kind="B"] [data-testid="ii-wv-ev"][data-id="I-08"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-tl-name"]')?.textContent === '工作習慣', null, { timeout: 5000 })
+    check(`${T}：點跨島依據→切到那座島、選到那則、抽屜關閉`, (await selId(page)) === 'I-08' && (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
+    // 換島時抽屜關閉
+    await page.locator('[data-testid="ii-wv-toggle"]').click()
+    await page.locator('[data-testid="ii-island-next"]').click()
+    await page.waitForTimeout(200)
+    check(`${T}：換島時抽屜關閉`, (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
+    // 回 K01 選 I-02：單則 AI 欄
+    await page.locator('[data-testid="ii-back"]').click()
+    await page.waitForTimeout(800)
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').click(); await waitTl(page)
+    await page.locator('[data-testid="ii-wv-toggle"]').click()
+    await page.locator('[data-testid="ii-wv-drawer"] [data-testid="ii-wv-ev"][data-id="I-02"]').first().click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-tl-card"][data-selected="true"]')?.getAttribute('data-id') === 'I-02', null, { timeout: 5000 })
+    check(`${T}：點同島依據→選到那則並關抽屜`, (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
+    const col = page.locator('[data-testid="ii-wv-col"]')
+    const ctxt = await col.innerText()
+    check(`${T}：選到心得時詳情下方有「✦ AI 編織」欄與提示、四格標題`, /✦ AI 編織/.test(ctxt) && /不是你寫的原話/.test(ctxt) && ['🗼 這則撐起哪條原則', '〰 和哪座島呼應', '⚡ 牽涉的張力', '📚 與知識庫交織'].every((t) => ctxt.includes(t)))
+    check(`${T}：本則撐起的原則卡在 AI 欄裡`, (await col.locator('[data-testid="ii-wv-card"][data-wid="L-00000001"]').count()) === 1)
+    // 沒被編進原則的一則：說明句
+    await page.locator('[data-testid="ii-tl-card"][data-id="I-07"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-tl-card"][data-selected="true"]')?.getAttribute('data-id') === 'I-07', null, { timeout: 5000 })
+    check(`${T}：沒被編進原則的一則顯示「沒有直接撐起原則。本島另有 n 條…」`, /沒有直接撐起原則。本島另有 1 條，點上方「✦ 本島編織」看。/.test(await page.locator('[data-testid="ii-wv-lempty"]').innerText()))
+    await page.locator('[data-testid="ii-tl-card"][data-id="I-02"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-tl-card"][data-selected="true"]')?.getAttribute('data-id') === 'I-02', null, { timeout: 5000 })
+    // 確認／否決
+    const card = page.locator('[data-testid="ii-wv-col"] [data-testid="ii-wv-card"][data-wid="L-00000001"]')
+    await card.locator('[data-testid="ii-wv-ok"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-wv-col"] [data-wid="L-00000001"]')?.getAttribute('data-v') === 'ok')
+    check(`${T}：按 ✓ → 卡片變已確認並 POST {itemId, verdict:"ok"}`, (await card.locator('[data-testid="ii-wv-st"]').innerText()) === '已確認' && ws.posts.length === 1 && ws.posts[0].itemId === 'L-00000001' && ws.posts[0].verdict === 'ok', JSON.stringify(ws.posts))
+    await page.screenshot({ path: path.join(SHOTS, 'weave-column-dark.png') })
+    await card.locator('[data-testid="ii-wv-ok"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-wv-col"] [data-wid="L-00000001"]')?.getAttribute('data-v') === '')
+    check(`${T}：再按同一顆 ✓ → 送 undo、回到待你確認`, ws.posts.length === 2 && ws.posts[1].verdict === 'undo' && (await card.locator('[data-testid="ii-wv-st"]').innerText()) === '待你確認')
+    await card.locator('[data-testid="ii-wv-no"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-wv-col"] [data-wid="L-00000001"]')?.getAttribute('data-v') === 'no')
+    check(`${T}：按 ✕ → 已否決（半透明）並 POST no`, ws.posts[2].verdict === 'no' && (await card.locator('[data-testid="ii-wv-st"]').innerText()) === '已否決' && (await card.evaluate((e) => Number(getComputedStyle(e).opacity))) < 0.8)
+    // 全景的燈塔章反映否決
+    await page.locator('[data-testid="ii-back"]').click()
+    await page.waitForTimeout(800)
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').hover()
+    await page.waitForSelector('[data-testid="ii-wv-lh"]')
+    check(`${T}：已否決的燈塔章在全景變淡`, await page.evaluate(() => document.querySelector('[data-testid="ii-wv-lh"]').classList.contains('ii-no')))
+    // 失敗：回復原狀並顯示「沒送出，重試」
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').click(); await waitTl(page)
+    await page.locator('[data-testid="ii-tl-card"][data-id="I-03"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-tl-card"][data-selected="true"]')?.getAttribute('data-id') === 'I-03', null, { timeout: 5000 })
+    const bc = page.locator('[data-testid="ii-wv-col"] [data-testid="ii-wv-card"][data-wid="B-00000001"]')
+    ws.failNext = true
+    await bc.locator('[data-testid="ii-wv-ok"]').click()
+    await page.waitForSelector('[data-testid="ii-wv-retry"]', { timeout: 3000 })
+    check(`${T}：POST 失敗→回復原狀（待你確認）並顯示「沒送出，重試」`, (await bc.locator('[data-testid="ii-wv-st"]').innerText()) === '待你確認' && (await bc.locator('[data-testid="ii-wv-retry"]').innerText()) === '沒送出，重試')
+    await bc.locator('[data-testid="ii-wv-retry"]').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="ii-wv-col"] [data-wid="B-00000001"]')?.getAttribute('data-v') === 'ok')
+    check(`${T}：按重試→送出成功、已確認、重試鈕消失`, (await page.locator('[data-testid="ii-wv-retry"]').count()) === 0 && ws.posts[ws.posts.length - 1].verdict === 'ok')
+    check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | '))
+    // 重新整理後從伺服器紀錄還原
+    await page.reload(); await page.waitForSelector('.st-home')
+    await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').click(); await waitTl(page)
+    await page.locator('[data-testid="ii-wv-toggle"]').click()
+    check(`${T}：重新整理後確認／否決從紀錄還原`, (await page.locator('[data-testid="ii-wv-drawer"] [data-wid="L-00000001"]').getAttribute('data-v')) === 'no' && (await page.locator('[data-testid="ii-wv-drawer"] [data-wid="B-00000001"]').getAttribute('data-v')) === 'ok')
+    await ctx.close()
+  }
+  {
+    const T = 'AI 編織：淺色'
+    const ws = newWeaveState()
+    const { ctx, page } = await open({ width: 1440, height: 900 }, { weave: ws, colorScheme: 'light' })
+    await page.waitForSelector('[data-testid="ii-island"]', { timeout: 10000 })
+    await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').hover()
+    await page.waitForSelector('[data-testid="ii-wv-bridge"]', { timeout: 3000 })
+    await page.screenshot({ path: path.join(SHOTS, 'weave-hover-light.png') })
+    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').click(); await waitTl(page)
+    await page.locator('[data-testid="ii-wv-toggle"]').click()
+    await page.waitForSelector('[data-testid="ii-wv-drawer"]')
+    await page.screenshot({ path: path.join(SHOTS, 'weave-drawer-light.png') })
+    check(`${T}：淺色 AI 標籤用淺色 token（#6a4fc2）`, await page.evaluate(() => getComputedStyle(document.querySelector('.ii-wv-tag')).backgroundColor === 'rgb(106, 79, 194)'))
+    await ctx.close()
+  }
+  {
+    const T = 'AI 編織：手機 375'
+    const ws = newWeaveState()
+    const r = await open({ width: 375, height: 740 }, { weave: ws })
+    await r.page.waitForSelector('[data-testid="ii-m-theme"]', { timeout: 10000 })
+    check(`${T}：手機沒有全景、無橫向捲動`, (await r.page.locator('[data-testid="ii-box"]').count()) === 0 && (await noHScroll(r.page)))
+    await r.page.locator('[data-testid="ii-m-theme"][data-id="K01"]').click()
+    await r.page.waitForSelector('[data-testid="ii-m-item"]')
+    const tg = r.page.locator('[data-testid="ii-wv-toggle"]')
+    check(`${T}：主題頁標題旁有「✦ 本島編織」`, (await tg.count()) === 1)
+    await tg.click()
+    await r.page.waitForSelector('[data-testid="ii-wv-drawer"]')
+    check(`${T}：底部抽屜約 78vh、貼底、可捲、有 ×、無橫向捲動`, (await r.page.evaluate(() => { const d = document.querySelector('[data-testid="ii-wv-drawer"]'), b = d.getBoundingClientRect(); return Math.abs(b.height - window.innerHeight * 0.78) <= 4 && Math.abs(b.bottom - window.innerHeight) <= 2 && b.width <= window.innerWidth + 1 && getComputedStyle(d).overflowY !== 'visible' })) && (await r.page.locator('[data-testid="ii-wv-close"]').count()) === 1 && (await noHScroll(r.page)))
+    await r.page.screenshot({ path: path.join(SHOTS, 'weave-mobile-drawer.png') })
+    await r.page.locator('[data-testid="ii-wv-close"]').click()
+    check(`${T}：× 關得掉`, (await r.page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
+    await r.page.locator('[data-testid="ii-m-item"]').first().click()
+    await r.page.waitForSelector('[data-testid="ii-m-sheet"]')
+    await r.page.waitForSelector('[data-testid="ii-wv-col"]')
+    check(`${T}：心得頁 sheet 下方有 AI 編織欄、無橫向捲動`, (await r.page.locator('[data-testid="ii-m-sheet"] [data-testid="ii-wv-col"]').count()) === 1 && (await noHScroll(r.page)))
+    await r.page.locator('[data-testid="ii-wv-col"]').scrollIntoViewIfNeeded()
+    await r.page.screenshot({ path: path.join(SHOTS, 'weave-mobile-column.png') })
+    check(`${T}：沒有頁面錯誤`, r.errors.length === 0, r.errors.join(' | '))
+    await r.ctx.close()
   }
 
 
