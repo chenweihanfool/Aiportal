@@ -516,8 +516,14 @@ try {
     await page.locator('[data-testid="ii-wv-drawer"] [data-testid="ii-wv-card"][data-kind="B"] [data-testid="ii-wv-ev"][data-id="I-08"]').click()
     await page.waitForFunction(() => document.querySelector('[data-testid="ii-tl-name"]')?.textContent === '工作習慣', null, { timeout: 5000 })
     check(`${T}：點跨島依據→切到那座島、選到那則、抽屜關閉`, (await selId(page)) === 'I-08' && (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
-    // 換島時抽屜關閉
+    // 同島切換心得：抽屜保持開（規格 S7）
     await page.locator('[data-testid="ii-wv-toggle"]').click()
+    await page.waitForSelector('[data-testid="ii-wv-drawer"]')
+    const before = await selId(page)
+    await page.evaluate(() => document.querySelector('[data-testid="ii-tl-card"]:not([data-selected="true"])')?.click())
+    await page.waitForTimeout(250)
+    check(`${T}：同島切換心得時抽屜保持開`, (await selId(page)) !== before && (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 1)
+    // 換島時抽屜關閉
     await page.locator('[data-testid="ii-island-next"]').click()
     await page.waitForTimeout(200)
     check(`${T}：換島時抽屜關閉`, (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)

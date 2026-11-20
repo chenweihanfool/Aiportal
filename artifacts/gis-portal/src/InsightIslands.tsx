@@ -791,7 +791,7 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
   const startIsland = useRef(hashId ? byId.get(hashId)!.cluster : null).current
 
   const latestOf = (cid: string): string | null => { const l = groups.get(cid); return l && l.length > 0 ? l[l.length - 1]!.id : null }
-  const select = useCallback((id: string) => { setSel(id); setDrawer(null); writeHash(id) }, [])
+  const select = useCallback((id: string) => { setSel(id); writeHash(id) }, [])   // 同島切換心得：抽屜保持開（換島靠 drawer===open 自動關、跳轉由 jump 關）
   const enter = useCallback((cid: string, id: string | null) => {
     if (!groups.has(cid)) return
     if (mobile) { setOpen(cid); setSel(id); setDrawer(null); writeHash(id); return }
@@ -916,7 +916,7 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
                 <WeaveToggle cid={open} open={drawer === open} onToggle={() => setDrawer(drawer === open ? null : open)} />
               </div>
               <MiniBars bins={monthBins(openItems, now)} color={colorOf(open)} />
-              <MobileTimeline items={openItems} onPick={select} />
+              <MobileTimeline items={openItems} onPick={(id) => { setDrawer(null); select(id) }} />
               {drawer === open && <IslandDrawer cid={open} mobile onClose={() => setDrawer(null)} />}
             </div>
           )}
