@@ -26,6 +26,7 @@ import knowledgeCorrectionsRouter from "./knowledgeCorrections";
 import searchRouter from "./search";
 import templatesRouter from "./templates";
 import insightsRouter from "./insights";
+import insightWeaveRouter from "./insightWeave";
 import pushFeedbackRouter from "./pushFeedback";
 import pushPinsRouter from "./pushPins";
 import exportRouter from "./export";
@@ -59,6 +60,8 @@ router.use(companionActionsRouter);
 router.use(knowledgeCorrectionsRouter);
 router.use(searchRouter);
 router.use(templatesRouter);
+// 先掛編織層的 /insights/weave/verdicts，再掛 /insights 與 /insights/:id（兩段路徑本來就不會撞，順序上更保險）。
+router.use(insightWeaveRouter);
 router.use(insightsRouter);
 router.use(pushFeedbackRouter);
 router.use(pushPinsRouter);

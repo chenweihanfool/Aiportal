@@ -23,3 +23,4 @@ export * from "./knowledgeCorrections";
 export * from "./searchLog";
 export * from "./pushFeedback";
 export * from "./pushPin";
+export * from "./insightWeaveVerdicts";

@@ -232,6 +232,13 @@
       "when": 1794630769183,
       "tag": "0032_natural_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795189098447,
+      "tag": "0033_insight_weave_verdicts",
+      "breakpoints": true
     }
   ]
 }

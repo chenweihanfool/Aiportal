@@ -895,6 +895,142 @@ export const FEED_REGISTRY: Record<string, FeedDef> = {
       },
     },
   },
+  // 心得 AI 編織層（2026-11-20）：燈塔／橋／張力／知識庫交織。推送端 kb-pipeline 每週產生後推送；
+  // 使用者的確認／否決另外走 GET／POST /api/insights/weave/verdicts（只新增，管線拉回去套用）。
+  // 契約來源：PM 定稿的 insight-weave.v1.schema.json，逐字轉成物件。
+  "insight-weave": {
+    version: 1,
+    description: "心得 AI 編織層：燈塔／橋／張力／知識庫交織（kb-pipeline 每週）",
+    schema: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: "insight-weave v1：心得 AI 編織層（燈塔／橋／張力／知識庫交織）",
+      type: "object",
+      additionalProperties: false,
+      required: ["generatedAt", "basis", "lighthouses", "insufficient", "bridges", "tensions", "kbLinks"],
+      definitions: {
+        insId: { type: "string", pattern: "^INS-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9a-f]{8}$" },
+        cluster: { type: "string", pattern: "^K[0-9]{2}$" },
+        date: { type: "string", pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        text: { type: "string", minLength: 1, maxLength: 200 },
+        note: { type: "string", maxLength: 120 },
+        confidence: { type: "string", enum: ["high", "mid", "low"] },
+        status: { type: "string", enum: ["proposed", "confirmed"] },
+      },
+      properties: {
+        generatedAt: { $ref: "#/definitions/date" },
+        basis: {
+          type: "object",
+          additionalProperties: false,
+          required: ["insights", "lastInsightDate"],
+          properties: {
+            insights: { type: "integer", minimum: 0 },
+            lastInsightDate: { anyOf: [{ $ref: "#/definitions/date" }, { type: "null" }] },
+          },
+        },
+        lighthouses: {
+          type: "array",
+          maxItems: 60,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "cluster", "text", "evidence", "confidence", "status", "since"],
+            properties: {
+              id: { type: "string", pattern: "^L-[0-9a-f]{8}$" },
+              cluster: { $ref: "#/definitions/cluster" },
+              text: { $ref: "#/definitions/text" },
+              evidence: { type: "array", minItems: 2, maxItems: 8, items: { $ref: "#/definitions/insId" } },
+              confidence: { $ref: "#/definitions/confidence" },
+              status: { $ref: "#/definitions/status" },
+              since: { $ref: "#/definitions/date" },
+            },
+          },
+        },
+        insufficient: {
+          type: "array",
+          maxItems: 12,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["cluster", "evidence", "note"],
+            properties: {
+              cluster: { $ref: "#/definitions/cluster" },
+              evidence: { type: "array", minItems: 1, maxItems: 8, items: { $ref: "#/definitions/insId" } },
+              note: { $ref: "#/definitions/note" },
+            },
+          },
+        },
+        bridges: {
+          type: "array",
+          maxItems: 12,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "title", "text", "ends", "confidence", "status", "note", "since"],
+            properties: {
+              id: { type: "string", pattern: "^B-[0-9a-f]{8}$" },
+              title: { type: "string", minLength: 1, maxLength: 12 },
+              text: { $ref: "#/definitions/text" },
+              ends: {
+                type: "array",
+                minItems: 2,
+                maxItems: 4,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["cluster", "evidence"],
+                  properties: {
+                    cluster: { $ref: "#/definitions/cluster" },
+                    evidence: { type: "array", minItems: 1, maxItems: 4, items: { $ref: "#/definitions/insId" } },
+                  },
+                },
+              },
+              confidence: { $ref: "#/definitions/confidence" },
+              status: { $ref: "#/definitions/status" },
+              note: { $ref: "#/definitions/note" },
+              since: { $ref: "#/definitions/date" },
+            },
+          },
+        },
+        tensions: {
+          type: "array",
+          maxItems: 8,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "text", "members", "clusters", "confidence", "status", "since"],
+            properties: {
+              id: { type: "string", pattern: "^T-[0-9a-f]{8}$" },
+              text: { $ref: "#/definitions/text" },
+              members: { type: "array", minItems: 2, maxItems: 6, items: { $ref: "#/definitions/insId" } },
+              clusters: { type: "array", minItems: 1, maxItems: 4, items: { $ref: "#/definitions/cluster" } },
+              confidence: { $ref: "#/definitions/confidence" },
+              status: { $ref: "#/definitions/status" },
+              since: { $ref: "#/definitions/date" },
+            },
+          },
+        },
+        kbLinks: {
+          type: "array",
+          maxItems: 16,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "kind", "topic", "insights", "text", "confidence", "status", "since"],
+            properties: {
+              id: { type: "string", pattern: "^K-[0-9a-f]{8}$" },
+              kind: { type: "string", enum: ["apply", "seed", "blindspot"] },
+              topic: { type: "string", minLength: 1, maxLength: 80 },
+              insights: { type: "array", minItems: 0, maxItems: 10, items: { $ref: "#/definitions/insId" } },
+              text: { $ref: "#/definitions/text" },
+              confidence: { $ref: "#/definitions/confidence" },
+              status: { $ref: "#/definitions/status" },
+              since: { $ref: "#/definitions/date" },
+            },
+          },
+        },
+      },
+    },
+  },
   // 範例：示範格式與測試用，沒有任何畫面使用它；之後第一個真的新 feed 進來時可以刪掉
   example: {
     version: 1,
