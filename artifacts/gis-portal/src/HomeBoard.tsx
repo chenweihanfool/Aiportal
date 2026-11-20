@@ -311,6 +311,11 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             onOpenIdeas={openIdeas}
             onOpenChat={(text) => { if (on) prefillHermesChat(text ?? ''); else onRequestUnlock() }}
             onRequestUnlock={onRequestUnlock} />
+          {/* 3.16.0：附近搬到搜尋框旁邊——點了直接開美食地圖的「附近・由近到遠」 */}
+          <button type="button" className="tb-nearby" data-testid="tb-nearby" aria-label="附近有什麼：開美食地圖，由近到遠"
+            onClick={() => { if (on) window.location.hash = '#food/nearby'; else onRequestUnlock() }}>
+            <span aria-hidden>📍</span><span className="tb-nearby-tx">附近</span>
+          </button>
         </TopBarSearch>
         <div className="st-home">
           <StatusAside

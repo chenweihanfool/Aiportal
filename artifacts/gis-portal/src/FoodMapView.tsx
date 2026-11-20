@@ -195,13 +195,13 @@ function useFoodSource(pw: string | null, enabled: boolean): FoodSource {
   return { loading: false, real: got.data.available ? got.data : null, note: null }
 }
 
-type FoodMapViewProps = { onBack: () => void; data?: FoodData; now?: Date; unlockedPassword?: string | null }
+type FoodMapViewProps = { onBack: () => void; data?: FoodData; now?: Date; unlockedPassword?: string | null; autoNearby?: boolean }
 
 export function FoodMapView(props: FoodMapViewProps) {
   return <MediaAuthContext.Provider value={props.unlockedPassword ?? ''}><FoodMapPage {...props} /></MediaAuthContext.Provider>
 }
 
-function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = null }: FoodMapViewProps) {
+function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = null, autoNearby = false }: FoodMapViewProps) {
   const src = useFoodSource(unlockedPassword, dataProp === undefined)
   const data = useMemo(() => dataProp ?? src.real ?? sampleFoodData(), [dataProp, src.real])
   // 既有的 data prop（測試／原型）照舊：只看它自己的 sample 旗標
@@ -213,6 +213,13 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
   const [selected, setSelected] = useState<string | null>(null)
   const [glFailed, setGlFailed] = useState(false)
   const geo = useGeolocation()
+  // 3.16.0：#food/nearby 掛載後自動開一次「附近・由近到遠」；之後使用者仍可用 nearby-toggle 關掉／再開
+  const autoStarted = useRef(false)
+  useEffect(() => {
+    if (!autoNearby || autoStarted.current) return
+    autoStarted.current = true
+    geo.start()
+  }, [autoNearby, geo.start])
   const [radiusM, setRadiusM] = useState<number | null>(3000)
   const [wishOnly, setWishOnly] = useState(true)
   const listRef = useRef<HTMLOListElement>(null)

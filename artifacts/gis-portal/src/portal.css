@@ -1210,6 +1210,11 @@ button.hm-lock:hover { border-color: var(--c-warn); }
 .tb-search { position: relative; z-index: 100; flex: 1 1 240px; min-width: 0; max-width: min(480px, 40vw); display: flex; align-items: center; }
 .tb-search:empty { display: none; }
 @media (max-width: 640px) { .tb-search { flex-basis: 100%; order: 3; width: 100%; max-width: none; } }
+/* 3.16.0：「📍 附近」放在搜尋列旁；窄螢幕只留 📍，aria-label 不變 */
+.tb-nearby { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; margin-left: var(--sp-2); font: 12px var(--font-mono); padding: 3px 9px; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-sm); cursor: pointer; white-space: nowrap; }
+.tb-nearby:hover { color: var(--c-accent); border-color: var(--c-accent); }
+.tb-nearby:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+@media (max-width: 640px) { .tb-nearby { width: 28px; height: 28px; justify-content: center; padding: 0; margin-left: var(--sp-1); } .tb-nearby-tx { display: none; } }
 .tb-portals { font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: 0.08em; color: var(--c-ink-3); white-space: nowrap; }
 .tb-icon { flex: 0 0 auto; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; font-size: 0.9rem; line-height: 1; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-sm); cursor: pointer; }
 .tb-icon:hover, .tb-ver:hover { border-color: var(--c-accent) !important; color: var(--c-accent); }
@@ -2539,7 +2544,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .pt-pin { position: relative; display: inline-block; }
 .pt-pin-btn { border-radius: 6px; padding: 5px 11px; font-size: 13.5px; color: var(--c-ink-2); background: none; border: 1px solid var(--c-line-strong); cursor: pointer; }
 .pt-pin-btn:hover { color: var(--c-ink); border-color: var(--c-accent); }
-.pt-pin-btn:focus-visible, .pt-opt:focus-visible, .pt-date:focus-visible, .pt-near:focus-visible, .pt-go:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.pt-pin-btn:focus-visible, .pt-opt:focus-visible, .pt-date:focus-visible, .pt-go:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .pt-menu { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px; border: 1px solid var(--c-line-strong); border-radius: 8px; background: var(--c-raised); }
 .pt-opt, .pt-go { border-radius: 6px; padding: 5px 11px; font-size: 13.5px; color: var(--c-ink); background: none; border: 1px solid var(--c-line-strong); cursor: pointer; }
 .pt-opt:hover, .pt-go:hover { border-color: var(--c-accent); }
@@ -2548,10 +2553,6 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .pt-msg { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--c-accent-ink); }
 .pt-msg.pt-err { color: var(--c-ink); }
 .pt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
-.pt-near { border-radius: 6px; padding: 4px 10px; font-size: 12.5px; color: var(--c-accent-ink); background: none; border: 1px dashed var(--c-line-strong); cursor: pointer; }
-.pt-near:hover { border-color: var(--c-accent); }
-.pt-near:disabled { opacity: 0.6; cursor: default; }
-.pt-near-msg { font-size: 12.5px; color: var(--c-ink-2); }
 
 /* ─── 我的心得樹（2.99.0）：樹高＝時間，枝為由粗到細的填色輪廓，葉形依關係，群色盤由 insightPalette.ts 算（深淺主題各一組）。class 一律 it- 開頭；其餘顏色只用全站 --c-* token。 ─── */
 .st-left { display: grid; gap: var(--sp-3); min-width: 0; align-content: start; }
