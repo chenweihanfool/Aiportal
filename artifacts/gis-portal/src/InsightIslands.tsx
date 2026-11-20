@@ -17,6 +17,8 @@ import { InsightPanel } from './InsightTree'
 import { dossierHref } from './dossier'
 import type { IdeaItem } from './boardApi'
 import { HIGH, LOW, insightsByBand } from './hhiBorn'
+import { weaveIndex } from './insightWeave'
+import { IslandDrawer, WeaveColumn, WeaveProvider, WeaveToggle, paintWeave, useWeaveData, type IslandGeom, type WeaveCtx } from './InsightWeave'
 
 // 首頁「我的心得」（3.15.0）：島嶼全景（每個主題一座島，語意縮放）→ 點島飛入 → 橫向時間軸（左舊右新，選到的置中、正下方顯示內容）。
 // 手機（元件寬 < 760）逐層點進。排版與鏡頭是純函式（insightIslands.ts，有測試），這裡只畫畫面。樣式 ii- 前綴在 portal.css。
@@ -162,6 +164,7 @@ function DetailBody({ ins, pw, siblings, onSelect, ideas, onOpenIdea, onDossier,
       <div className="ii-d-act">
         <button type="button" className="ii-btn" data-testid="ii-dossier" onClick={() => onDossier(ins.id)}>完整卷宗</button>
       </div>
+      <WeaveColumn ins={ins} />
     </div>
   )
 }
@@ -169,6 +172,8 @@ function DetailBody({ ins, pw, siblings, onSelect, ideas, onOpenIdea, onDossier,
 // ─────────────────────────────────────────────
 // 島嶼全景
 // ─────────────────────────────────────────────
+
+const EMPTY_INDEX = weaveIndex({ generatedAt: '', lighthouses: [], insufficient: [], bridges: [], tensions: [], kbLinks: [] }, [])
 
 interface PanoApi {
   flyOverview: () => void
@@ -178,9 +183,11 @@ interface PanoApi {
 interface PanoProps {
   world: IslandWorld; byId: ReadonlyMap<string, Insight>; colorOf: (cid: string) => string; nameOf: (cid: string) => string
   todayN: number; startIsland: string | null; onEnter: (cid: string, id: string | null) => void
+  /** 3.17.0：AI 編織層（沒有 feed 資料時是 null）；hoverOff＝時間軸開著，不畫滑過的編織 */
+  weave: WeaveCtx | null; hoverOff: boolean
 }
 
-const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId, colorOf, nameOf, todayN, startIsland, onEnter }, apiRef) {
+const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId, colorOf, nameOf, todayN, startIsland, onEnter, weave, hoverOff }, apiRef) {
   const boxRef = useRef<HTMLDivElement>(null)
   const islRefs = useRef<(HTMLDivElement | null)[]>([])
   const labRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -194,6 +201,12 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
   const raf = useRef(0)
   const touched = useRef(false)
   const flying = useRef(false)
+  // 3.17.0：滑過哪座島（只用 ref，不 re-render 整個全景）與編織圖層
+  const hoverRef = useRef<string | null>(null)
+  const weaveRef = useRef<WeaveCtx | null>(weave)
+  weaveRef.current = weave
+  const wvSvg = useRef<SVGSVGElement>(null)
+  const wvLayer = useRef<HTMLDivElement>(null)
   // 3.16.0：一般滾輪只捲頁面，正中顯示一下提示；Ctrl／⌘＋滾輪才縮放
   const [wheelHint, setWheelHint] = useState(false)
   const hintTimer = useRef(0)
@@ -232,11 +245,16 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
     const asDot = ch < 24
     const focusOn = k >= 0.95
     const ops: number[] = []
+    const wv = weaveRef.current
+    const hv = wv && hoverRef.current ? hoverRef.current : null
+    const relSet = wv && hv ? wv.index.related(hv) : null
+    const geom = new Map<string, IslandGeom>()
     world.islands.forEach((is, i) => {
       const L = sx(is.x), T = sy(is.y), Wd = is.w * k, Hd = is.h * k
       const dx = Math.max(L - W / 2, 0, W / 2 - (L + Wd))
       const dy = Math.max(T - H / 2, 0, H / 2 - (T + Hd))
-      const op = focusOn ? Math.max(0.22, 1 - Math.hypot(dx, dy) / (Math.min(W, H) * 0.55)) : 1
+      const op0 = focusOn ? Math.max(0.22, 1 - Math.hypot(dx, dy) / (Math.min(W, H) * 0.55)) : 1
+      const op = relSet && !relSet.has(is.id) ? Math.min(op0, 0.35) : op0
       ops[i] = op
       const el = islRefs.current[i]
       if (el) { const s = el.style; s.left = `${L}px`; s.top = `${T}px`; s.width = `${Wd}px`; s.height = `${Hd}px`; s.opacity = String(op); s.borderRadius = `${Math.max(10, 28 * Math.min(1, k))}px` }
@@ -248,6 +266,10 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
         s.fontSize = `${clamp(0.42 * availH, 11, 19)}px`; s.maxWidth = `${Math.max(40, (is.w + ISLAND.margin) * k)}px`
         const sub = lab.lastElementChild as HTMLElement | null
         if (sub) sub.style.display = availH < 48 ? 'none' : 'block'
+        if (relSet) {
+          const lw = lab.offsetWidth, lh = lab.offsetHeight
+          geom.set(is.id, { cx: L + Wd / 2, cy: T + Hd / 2, L, T, R: L + Wd, B: T + Hd, lab: { x: L + Wd / 2 - lw / 2, y: T - 4 - lh, w: lw, h: lh } })
+        }
       }
     })
     let lines = ''
@@ -284,6 +306,7 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
       }
     })
     if (lineRef.current) lineRef.current.innerHTML = lines
+    if (wvLayer.current && wvSvg.current) paintWeave({ layer: wvLayer.current, svg: wvSvg.current, hover: relSet ? hv : null, ctx: wv ?? { index: EMPTY_INDEX, verdicts: new Map() }, geom })
     if (vpRef.current) {
       const v = vpRef.current
       v.setAttribute('x', String((c.x - W / 2 / k) * mini.ms + mini.ox)); v.setAttribute('y', String((c.y - H / 2 / k) * mini.ms + mini.oy))
@@ -340,6 +363,8 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
     return () => ro.disconnect()
   }, [world]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { draw() }, [draw])
+  useEffect(() => { draw() }, [weave]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (hoverOff && hoverRef.current) { hoverRef.current = null; draw() } }, [hoverOff]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
 
   // 滾輪（需要 non-passive 才能擋掉頁面捲動）：一般滾輪不攔截，讓頁面正常捲動，只顯示提示；
@@ -373,7 +398,23 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
   const moved = useRef(0)
   const pinch = useRef<{ d: number; m: [number, number] } | null>(null)
   const local = (e: React.PointerEvent): [number, number] => { const r = boxRef.current!.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] }
+  // 3.17.0：只有滑鼠（沒按鍵）滑過島本體、島名或該島的卡片才算；觸控與拖曳中不觸發
+  const hoverAt = (e: React.PointerEvent) => {
+    if (!weaveRef.current) return
+    let k: string | null = null
+    if (e.pointerType === 'mouse' && e.buttons === 0 && !hoverOff) {
+      const t = e.target as Element
+      if (!t.closest('.ii-tools,.ii-mini,.ii-tlp')) {
+        const lab = t.closest('.ii-ilab')
+        const zc = t.closest('.ii-zc')
+        const isl = t.closest('.ii-isl')
+        k = lab ? lab.getAttribute('data-id') : zc ? byId.get(zc.getAttribute('data-id') ?? '')?.cluster ?? null : isl ? isl.getAttribute('data-id') : null
+      }
+    }
+    if (k !== hoverRef.current) { hoverRef.current = k; draw() }
+  }
   const onDown = (e: React.PointerEvent) => {
+    if (hoverRef.current) { hoverRef.current = null; draw() }
     if ((e.target as Element).closest('.ii-tools,.ii-mini,.ii-tlp')) return
     touched.current = true
     cancelAnimationFrame(raf.current); flying.current = false
@@ -386,6 +427,7 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
     }
   }
   const onMove = (e: React.PointerEvent) => {
+    hoverAt(e)
     if (!pts.current.has(e.pointerId)) return
     const p = local(e)
     const prev = pts.current.get(e.pointerId)!
@@ -427,7 +469,8 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
   const latest = world.islands[0]
   
   return (
-    <div className="ii-box" ref={boxRef} data-testid="ii-box" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onDoubleClick={onDbl}>
+    <div className="ii-box" ref={boxRef} data-testid="ii-box" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+      onPointerLeave={() => { if (hoverRef.current) { hoverRef.current = null; draw() } }} onDoubleClick={onDbl}>
       {[0, 1, 2].map((i) => <div key={i} className={`ii-par ii-p${3 - i}`} ref={(el) => { parRefs.current[i] = el }} aria-hidden />)}
       <div className="ii-layer">
         {world.islands.map((is, i) => (
@@ -452,6 +495,8 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
             <span className="ii-ln-sub">{is.cells.length} 則 · {md(is.last)}{is.fresh > 0 && <span className="ii-ln-new"> · 近 30 天 +{is.fresh}</span>}</span>
           </button>
         ))}
+        {weave && <svg className="ii-wv-svg" ref={wvSvg} aria-hidden />}
+        {weave && <div className="ii-wv-l" ref={wvLayer} aria-hidden />}
       </div>
       <div className="ii-hint">Ctrl＋滾輪：縮放 · 拖曳：移動 · 點島：飛進去 · 雙擊：放大</div>
       <div className={`ii-wheel-hint${wheelHint ? ' ii-on' : ''}`} data-testid="ii-wheel-hint" aria-hidden>按住 Ctrl 再滾動來縮放</div>
@@ -483,13 +528,15 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable
 }
 
-function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, next, colorOf, pw, ideas, onOpenIdea, dossierOpen, onSelect, onClose, onIsland, onDossier }: {
+function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, next, colorOf, pw, ideas, onOpenIdea, dossierOpen, drawerOpen, onDrawer, onSelect, onClose, onIsland, onDossier }: {
   cid: string; name: string; color: string; items: Insight[]; sel: string; on: boolean; origin: [number, number] | null; fresh: number
   prev: { id: string; name: string }; next: { id: string; name: string }; colorOf: (cid: string) => string
   pw: string | null; ideas: IdeaItem[] | null; onOpenIdea?: (id: string) => void; dossierOpen: boolean
+  drawerOpen: boolean; onDrawer: (open: boolean) => void
   onSelect: (id: string) => void; onClose: () => void; onIsland: (cid: string) => void; onDossier: (id: string) => void
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const headRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [viewW, setViewW] = useState(0)
   const [shown, setShown] = useState<boolean>(() => reducedMotion())
@@ -571,7 +618,7 @@ function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, 
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       if (dossierOpen || isTypingTarget(e.target)) return
-      if (e.key === 'Escape') { e.preventDefault(); onClose() }
+      if (e.key === 'Escape') { e.preventDefault(); if (drawerOpen) onDrawer(false); else onClose() }
       else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); step(e.key === 'ArrowRight' ? 1 : -1) }
     }
     window.addEventListener('keydown', f)
@@ -582,12 +629,13 @@ function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, 
   return (
     <div ref={panelRef} className={`ii-tlp${shown && on ? ' ii-on' : ''}`} data-testid="ii-timeline" role="dialog" aria-label={`${name} 時間軸`}
       style={{ ['--c' as string]: color, transformOrigin: origin ? `${origin[0]}px ${origin[1]}px` : '50% 50%' }} onTransitionEnd={onTransEnd}>
-      <div className="ii-tlh">
+      <div className="ii-tlh" ref={headRef}>
         <button type="button" className="ii-btn" data-testid="ii-back" onClick={onClose} aria-label="回到島嶼全景">‹ 全景</button>
         <div className="ii-tlt">
           <span className="ii-tl-nm" data-testid="ii-tl-name">{name}</span>
           <span className="ii-tl-ct">{items.length} 則 · {ym(items[0]!.date)} ～ {ym(items[items.length - 1]!.date)}{fresh > 0 && <span className="ii-ln-new"> · 近 30 天 +{fresh}</span>}</span>
         </div>
+        <WeaveToggle cid={cid} open={drawerOpen} onToggle={() => onDrawer(!drawerOpen)} />
         <span className="ii-sp" />
         <span className="ii-keys">← → 切換心得 · 拖曳或 Shift＋滾輪橫移 · Esc 回全景</span>
         <button type="button" className="ii-isw" data-testid="ii-island-prev" aria-label={`上一座島：${prev.name}`} onClick={() => onIsland(prev.id)}><i style={{ background: colorOf(prev.id) }} aria-hidden />‹ {prev.name}</button>
@@ -640,6 +688,7 @@ function TimelinePanel({ cid, name, color, items, sel, on, origin, fresh, prev, 
             )} />
         </div>
       </div>
+      {drawerOpen && <IslandDrawer cid={cid} top={headRef.current?.offsetHeight ?? 56} onClose={() => onDrawer(false)} />}
     </div>
   )
 }
@@ -733,22 +782,26 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
   const [closing, setClosing] = useState(false)
   const [origin, setOrigin] = useState<[number, number] | null>(null)
   const [dossier, setDossier] = useState<string | null>(null)
+  // 3.17.0：本島編織抽屜開在哪座島（預設關；換島、跳到別則、回全景就關）
+  const [drawer, setDrawer] = useState<string | null>(null)
+  const wd = useWeaveData(pw, data.insights)
   const pano = useRef<PanoApi>(null)
   const closeTimer = useRef(0)
   useEffect(() => () => window.clearTimeout(closeTimer.current), [])
   const startIsland = useRef(hashId ? byId.get(hashId)!.cluster : null).current
 
   const latestOf = (cid: string): string | null => { const l = groups.get(cid); return l && l.length > 0 ? l[l.length - 1]!.id : null }
-  const select = useCallback((id: string) => { setSel(id); writeHash(id) }, [])
+  const select = useCallback((id: string) => { setSel(id); writeHash(id) }, [])   // 同島切換心得：抽屜保持開（換島靠 drawer===open 自動關、跳轉由 jump 關）
   const enter = useCallback((cid: string, id: string | null) => {
     if (!groups.has(cid)) return
-    if (mobile) { setOpen(cid); setSel(id); writeHash(id); return }
+    if (mobile) { setOpen(cid); setSel(id); setDrawer(null); writeHash(id); return }
     const target = id ?? latestOf(cid)
     const go = () => { setOrigin(pano.current?.screenOf(cid) ?? null); setClosing(false); setOpen(cid); setSel(target); writeHash(target) }
     if (pano.current) pano.current.flyIsland(cid, false, go, 1.8)
     else go()
   }, [groups, mobile]) // eslint-disable-line react-hooks/exhaustive-deps
   const closeTl = useCallback(() => {
+    setDrawer(null)
     if (mobile || reducedMotion()) { setOpen(null); setSel(null); writeHash(null); pano.current?.flyOverview(); return }
     setClosing(true); writeHash(null); pano.current?.flyOverview()
     window.clearTimeout(closeTimer.current)
@@ -772,6 +825,19 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
     return () => window.removeEventListener('hashchange', f)
   }, [byId])
 
+  // 跳到某則心得：同島就選它，不同島就切島並選它，並關抽屜
+  const jumpRef = useRef<(id: string) => void>(() => undefined)
+  jumpRef.current = (id: string) => {
+    const it = byId.get(id)
+    if (!it) return
+    setDrawer(null)
+    if (it.cluster === open) { select(id); return }
+    setClosing(false); setOpen(it.cluster); setSel(id); writeHash(id)
+    pano.current?.flyIsland(it.cluster, true)
+  }
+  const jump = useCallback((id: string) => jumpRef.current(id), [])
+  const wctx = useMemo<WeaveCtx | null>(() => (wd ? { ...wd, byId, colorOf, nameOf, jump } : null), [wd, byId, colorOf, nameOf, jump])
+
   const order = world.islands.map((i) => i.id)
   const openIdx = open ? order.indexOf(open) : -1
   const nameAt = (i: number): { id: string; name: string } => { const id = order[(i + order.length) % order.length]!; return { id, name: nameOf(id) } }
@@ -785,6 +851,7 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
   )
 
   return (
+    <WeaveProvider value={wctx}>
     <div className="ii-body" ref={wrapRef}>
       <div className="ii-metrics" data-testid="ii-stats">
         <p className="ii-stats-line">
@@ -813,11 +880,11 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
 
       {w > 0 && !mobile && (
         <div className="ii-stage" data-testid="ii-stage">
-          <Panorama ref={pano} world={world} byId={byId} colorOf={colorOf} nameOf={nameOf} todayN={todayN} startIsland={startIsland} onEnter={enter} />
+          <Panorama ref={pano} world={world} byId={byId} colorOf={colorOf} nameOf={nameOf} todayN={todayN} startIsland={startIsland} onEnter={enter} weave={wctx} hoverOff={open !== null} />
           {open && openIsland && selIns && openItems.length > 0 && (
             <TimelinePanel
               cid={open} name={nameOf(open)} color={colorOf(open)} items={openItems} sel={selIns.id} on={!closing} origin={origin} fresh={openIsland.fresh}
-              prev={nameAt(openIdx - 1)} next={nameAt(openIdx + 1)} colorOf={colorOf} pw={pw} ideas={ideas} onOpenIdea={onOpenIdea} dossierOpen={dossier !== null}
+              prev={nameAt(openIdx - 1)} next={nameAt(openIdx + 1)} colorOf={colorOf} pw={pw} ideas={ideas} onOpenIdea={onOpenIdea} dossierOpen={dossier !== null} drawerOpen={drawer === open} onDrawer={(o) => setDrawer(o ? open : null)}
               onSelect={select} onClose={closeTl} onIsland={switchIsland} onDossier={setDossier} />
           )}
         </div>
@@ -846,9 +913,11 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
               <div className="ii-m-head">
                 <button type="button" className="ii-btn" data-testid="ii-back" onClick={closeTl}>‹ 主題</button>
                 <h3 style={{ color: colorOf(open) }}>{nameOf(open)}</h3><span className="ii-m-ct">{openItems.length} 則</span>
+                <WeaveToggle cid={open} open={drawer === open} onToggle={() => setDrawer(drawer === open ? null : open)} />
               </div>
               <MiniBars bins={monthBins(openItems, now)} color={colorOf(open)} />
-              <MobileTimeline items={openItems} onPick={select} />
+              <MobileTimeline items={openItems} onPick={(id) => { setDrawer(null); select(id) }} />
+              {drawer === open && <IslandDrawer cid={open} mobile onClose={() => setDrawer(null)} />}
             </div>
           )}
           {open !== null && selIns && (
@@ -864,6 +933,7 @@ function Body({ pw, now, data, ideas, onOpenIdea, hhiScores }: {
           ideas={ideas} onOpenIdea={onOpenIdea ? (iid) => { setDossier(null); onOpenIdea(iid) } : undefined} hhiScores={hhiScores} />
       )}
     </div>
+    </WeaveProvider>
   )
 }
 

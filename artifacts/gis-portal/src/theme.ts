@@ -118,6 +118,10 @@ export const CSS_TOKENS: Record<string, string> = {
   // 知識星空樹的枝條漸層（由下往上：天藍 → 薄荷）
   '--c-sky': '#4b8df7',
   '--c-mint': '#5eead4',
+  // AI 編織層（3.17.0）：AI 歸納用紫色系、張力用琥珀，與使用者原話區分
+  '--weave-ai': '#b8a2f5',
+  '--weave-ai-ink': '#1b1430',
+  '--weave-tension': '#f0b44a',
   // 間距：4px 為一階
   '--sp-1': '0.25rem',
   '--sp-2': '0.5rem',
@@ -171,6 +175,9 @@ export const CSS_TOKENS_LIGHT: Record<string, string> = {
   '--c-score-great': '#1b7f45',
   '--c-sky': '#2563eb',
   '--c-mint': '#0f9f8a',
+  '--weave-ai': '#6a4fc2',
+  '--weave-ai-ink': '#ffffff',
+  '--weave-tension': '#c77a00',
 }
 
 /** 把任何顏色（hex 或 var(--c-…)）調成指定百分比的半透明：取代以前的 `${hex}33` 拼接，深淺主題都能用。 */
