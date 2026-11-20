@@ -501,6 +501,7 @@ try {
     check(`${T}：預設抽屜是關的`, (await page.locator('[data-testid="ii-wv-drawer"]').count()) === 0)
     await tg.click()
     await page.waitForSelector('[data-testid="ii-wv-drawer"]')
+    await page.waitForTimeout(400)
     const dr = page.locator('[data-testid="ii-wv-drawer"]')
     const dtxt = await dr.innerText()
     check(`${T}：抽屜四段標題都在`, ['🗼 這座島的原則', '〰 和哪些島呼應', '⚡ 還沒想清楚的拉扯', '📚 與知識庫交織'].every((t) => dtxt.includes(t)))
@@ -571,8 +572,7 @@ try {
     check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | '))
     // 重新整理後從伺服器紀錄還原
     await page.reload(); await page.waitForSelector('.st-home')
-    await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
-    await page.locator('[data-testid="ii-island-label"][data-id="K01"]').click(); await waitTl(page)
+    await waitTl(page)
     await page.locator('[data-testid="ii-wv-toggle"]').click()
     check(`${T}：重新整理後確認／否決從紀錄還原`, (await page.locator('[data-testid="ii-wv-drawer"] [data-wid="L-00000001"]').getAttribute('data-v')) === 'no' && (await page.locator('[data-testid="ii-wv-drawer"] [data-wid="B-00000001"]').getAttribute('data-v')) === 'ok')
     await ctx.close()
