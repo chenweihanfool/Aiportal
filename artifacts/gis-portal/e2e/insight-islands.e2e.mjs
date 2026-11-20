@@ -72,7 +72,9 @@ const P13 = [
 ].sort((x, y) => (x.date < y.date ? -1 : 1))
 const bodyOf = (list, names) => ({ total: list.length, thisMonth: list.filter((x) => x.date.slice(0, 7) === tpDate(0).slice(0, 7)).length, clusters: names.map(([id, name]) => ({ id, name, count: list.filter((x) => x.cluster === id).length })).filter((c) => c.count > 0), insights: list })
 const C46 = Array.from({ length: 46 }, (_, i) => mk(`C-${i}`, 520 - i * 10, 'K01', `TH-c${Math.floor(i / 3)}`, i % 3 === 0 ? 'new' : 'reinforce', i % 3 === 0 ? null : `C-${i - 1}`))
-const modeBody = (mode) => mode === 'c46' ? bodyOf(C46, [['K01', '測量作業']]) : mode === 'roots' ? bodyOf(ROOTS, [['K01', '測量作業']]) : mode === 'dcrowd' ? bodyOf(DC, [['K01', '測量作業']]) : mode === 'prod13' ? bodyOf(P13, P13NAMES.map((n, i) => [`K0${i + 1}`, n])) : mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
+const C12N = [1, 3, 5, 8, 12, 15, 20, 24, 30, 36, 40, 46]
+const C12 = C12N.flatMap((n, c) => Array.from({ length: n }, (_, i) => mk(`Q-${c}-${i}`, 540 - i * 7 - c, `K${String(c + 1).padStart(2, '0')}`, `TH-q${c}-${i}`, 'new', null)))
+const modeBody = (mode) => mode === 'c12' ? bodyOf(C12, C12N.map((_, c) => [`K${String(c + 1).padStart(2, '0')}`, ['測量作業', '工作習慣與效率管理', '人際關係經營', '健康與運動', '財務觀念', '學習方法', '家庭生活', '旅行與休息', '職涯規劃與發展', '情緒覺察', '專案管理實務', '創作與興趣'][c]])) : mode === 'c46' ? bodyOf(C46, [['K01', '測量作業']]) : mode === 'roots' ? bodyOf(ROOTS, [['K01', '測量作業']]) : mode === 'dcrowd' ? bodyOf(DC, [['K01', '測量作業']]) : mode === 'prod13' ? bodyOf(P13, P13NAMES.map((n, i) => [`K0${i + 1}`, n])) : mode === 'sparse1' ? bodyOf(SP.slice(0, 1), [['K01', '測量作業']]) : mode === 'sparse2' ? bodyOf(SP.slice(0, 2), [['K01', '測量作業'], ['K02', '工作習慣']]) : mode === 'sparse3' ? bodyOf(SP, [['K01', '測量作業'], ['K02', '工作習慣'], ['K03', '人際']])
   : mode === 'big300' ? bodyOf(BIG, Array.from({ length: 12 }, (_, i) => [`K${String(i + 1).padStart(2, '0')}`, ['測量作業', '工作習慣', '人際關係經營', '健康與運動', '財務觀念', '學習方法', '家庭生活', '旅行與休息', '職涯規劃', '情緒覺察', '專案管理', '創作與興趣'][i]])) : insightsBody
 // 卷宗情境（全部虛構）：D-1 → D-2（印證）→ D-3（修正）同一脈絡；D-2 帶滿 8 人、6 想法、3 知識、8 條 headings
 const DC = [mk('D-1', 30, 'K01', 'TH-d1', 'new'), mk('D-2', 20, 'K01', 'TH-d1', 'reinforce', 'D-1'), mk('D-3', 10, 'K01', 'TH-d1', 'refine', 'D-2')]
@@ -276,7 +278,7 @@ try {
     await page.waitForSelector('[data-testid="ii-timeline"]', { state: 'detached', timeout: 5000 })
     check(`${T}：Esc 回全景、網址的 #insight 清掉`, !/#insight/.test(page.url()) && (await page.locator('[data-testid="ii-island"]').count()) === 7)
     await page.waitForTimeout(700)
-    await page.locator('[data-testid="ii-island"]').nth(2).click({ position: { x: 3, y: 3 } })
+    { const bb = await page.locator('[data-testid="ii-island"]').nth(2).boundingBox(); await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2) }
     await waitTl(page)
     check(`${T}：點島本體也能飛進去`, true)
     await page.locator('[data-testid="ii-back"]').click()
@@ -315,6 +317,22 @@ try {
     check('46 則的群：46 張卡、同排不重疊、置中', (await r.page.locator('[data-testid="ii-tl-card"]').count()) === 46 && (await noOverlap(r.page)) && Math.abs(await settled(r.page)) <= 2)
     await r.page.screenshot({ path: path.join(SHOTS, 'islands-timeline-46.png') })
     await r.ctx.close()
+    {
+      const cnt = [1, 3, 5, 8, 12, 15, 20, 24, 30, 36, 40, 46]
+      const r = await open({ width: 1440, height: 900 }, { mode: 'c12' })
+      for (const vp of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+        await r.page.setViewportSize(vp); await r.page.waitForTimeout(500)
+        await r.page.waitForSelector('[data-testid="ii-island"]')
+        const hit = await r.page.evaluate(() => {
+          const rs = (sel) => [...document.querySelectorAll(sel)].map((e) => ({ id: e.getAttribute('data-id'), b: e.getBoundingClientRect() }))
+          const isl = rs('[data-testid="ii-island"]'), labs = rs('[data-testid="ii-island-label"]'), bad = []
+          for (const l of labs) for (const i of isl) { if (i.id === l.id) continue; const w = Math.min(l.b.right, i.b.right) - Math.max(l.b.left, i.b.left), h = Math.min(l.b.bottom, i.b.bottom) - Math.max(l.b.top, i.b.top); if (w > 0.5 && h > 0.5) bad.push(`${l.id}壓${i.id}`) }
+          return { n: isl.length, bad }
+        })
+        check(`12 群（${cnt.join('、')} 則）${vp.width}×${vp.height} 全景：標籤不壓到其他島`, hit.n === 12 && hit.bad.length === 0, hit.bad.join(','))
+      }
+      await r.ctx.close()
+    }
     r = await open({ width: 1440, height: 900 }, { mode: 'big300' })
     await r.page.waitForSelector('[data-testid="ii-island"]')
     check('300 則 12 群：12 座島', (await r.page.locator('[data-testid="ii-island"]').count()) === 12)

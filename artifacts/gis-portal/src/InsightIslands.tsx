@@ -238,7 +238,14 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
       const el = islRefs.current[i]
       if (el) { const s = el.style; s.left = `${L}px`; s.top = `${T}px`; s.width = `${Wd}px`; s.height = `${Hd}px`; s.opacity = String(op); s.borderRadius = `${Math.max(10, 28 * Math.min(1, k))}px` }
       const lab = labRefs.current[i]
-      if (lab) { const s = lab.style; s.left = `${L + Wd / 2}px`; s.top = `${T - 6}px`; s.opacity = String(Math.max(0.35, op)); s.fontSize = k < 0.75 ? '19px' : '15px' }
+      if (lab) {
+        const s = lab.style
+        const availH = ISLAND.label * k
+        s.left = `${L + Wd / 2}px`; s.top = `${T - 4}px`; s.opacity = String(Math.max(0.35, op))
+        s.fontSize = `${clamp(0.42 * availH, 11, 19)}px`; s.maxWidth = `${Math.max(40, (is.w + ISLAND.margin) * k)}px`
+        const sub = lab.lastElementChild as HTMLElement | null
+        if (sub) sub.style.display = availH < 48 ? 'none' : 'block'
+      }
     })
     let lines = ''
     cards.forEach((cd, i) => {
@@ -429,7 +436,7 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
         ))}
         {world.islands.map((is, i) => (
           <button key={`l${is.id}`} type="button" ref={(el) => { labRefs.current[i] = el }} className="ii-ilab" data-testid="ii-island-label" data-id={is.id}
-            aria-label={`${nameOf(is.id)}，${is.cells.length} 則，點一下飛進去看時間軸`} style={{ ['--c' as string]: colorOf(is.id) }} onClick={() => onEnter(is.id, null)}>
+            title={nameOf(is.id)} aria-label={`${nameOf(is.id)}，${is.cells.length} 則，點一下飛進去看時間軸`} style={{ ['--c' as string]: colorOf(is.id) }} onClick={() => onEnter(is.id, null)}>
             <span className="ii-ln-name">{nameOf(is.id)}</span>
             <span className="ii-ln-sub">{is.cells.length} 則 · {md(is.last)}{is.fresh > 0 && <span className="ii-ln-new"> · 近 30 天 +{is.fresh}</span>}</span>
           </button>
