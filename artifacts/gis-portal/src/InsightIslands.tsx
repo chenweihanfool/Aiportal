@@ -194,6 +194,9 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
   const raf = useRef(0)
   const touched = useRef(false)
   const flying = useRef(false)
+  // 3.16.0：一般滾輪只捲頁面，正中顯示一下提示；Ctrl／⌘＋滾輪才縮放
+  const [wheelHint, setWheelHint] = useState(false)
+  const hintTimer = useRef(0)
   const { bounds } = world
 
   const cards = useMemo(() => world.islands.flatMap((is, ii) => is.cells.flatMap((cell) => { const ins = byId.get(cell.id); return ins ? [{ ii, cell, ins }] : [] })), [world, byId])
@@ -339,23 +342,31 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
   useEffect(() => { draw() }, [draw])
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
 
-  // 滾輪（需要 non-passive 才能擋掉頁面捲動）
+  // 滾輪（需要 non-passive 才能擋掉頁面捲動）：一般滾輪不攔截，讓頁面正常捲動，只顯示提示；
+  // Ctrl／⌘＋滾輪才縮放（觸控板雙指縮放瀏覽器會送 ctrlKey）
   useEffect(() => {
     const box = boxRef.current
     if (!box) return
     const f = (e: WheelEvent) => {
       if ((e.target as Element).closest?.('.ii-tools,.ii-mini,.ii-tlp')) return
+      if (!e.ctrlKey && !e.metaKey) {
+        setWheelHint(true)
+        window.clearTimeout(hintTimer.current)
+        hintTimer.current = window.setTimeout(() => setWheelHint(false), 1200)
+        return
+      }
       e.preventDefault()
       touched.current = true
       cancelAnimationFrame(raf.current); flying.current = false
       const r = box.getBoundingClientRect()
       const { W, H } = size()
-      cam.current = zoomAt(cam.current, e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0016)), W, H, kMin(), KMAX)
+      cam.current = zoomAt(cam.current, e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.01), W, H, kMin(), KMAX)
       draw()
     }
     box.addEventListener('wheel', f, { passive: false })
     return () => box.removeEventListener('wheel', f)
   }, [draw]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => window.clearTimeout(hintTimer.current), [])
 
   // 拖曳平移、雙指縮放
   const pts = useRef(new Map<number, [number, number]>())
@@ -442,7 +453,8 @@ const Panorama = forwardRef<PanoApi, PanoProps>(function Panorama({ world, byId,
           </button>
         ))}
       </div>
-      <div className="ii-hint">滾輪：對準游標縮放 · 拖曳：移動 · 點島或主題名：飛進去 · 雙擊：放大</div>
+      <div className="ii-hint">Ctrl＋滾輪：縮放 · 拖曳：移動 · 點島：飛進去 · 雙擊：放大</div>
+      <div className={`ii-wheel-hint${wheelHint ? ' ii-on' : ''}`} data-testid="ii-wheel-hint" aria-hidden>按住 Ctrl 再滾動來縮放</div>
       <div className="ii-tools">
         <button type="button" data-testid="ii-zoom-in" aria-label="放大" onClick={() => zoomBy(1.6)}>＋</button>
         <button type="button" data-testid="ii-zoom-out" aria-label="縮小" onClick={() => zoomBy(1 / 1.6)}>－</button>

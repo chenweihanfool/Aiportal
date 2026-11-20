@@ -2939,6 +2939,9 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .ii-dot { position: absolute; display: none; border-radius: 50%; background: var(--c); transform: translate(-50%, -50%); pointer-events: none; }
 .ii-dot-fresh { box-shadow: 0 0 0 3px var(--c-accent-soft); }
 .ii-hint { position: absolute; left: 12px; top: 12px; z-index: 5; pointer-events: none; font-size: var(--fs-sm); color: var(--c-ink-2); background: color-mix(in srgb, var(--c-surface) 85%, transparent); padding: 4px 10px; border-radius: var(--r-pill); border: 1px solid var(--c-line); }
+/* 3.16.0：一般滾輪只捲頁面時，正中央淡入一下的提示（不擋滑鼠） */
+.ii-wheel-hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; pointer-events: none; opacity: 0; transition: opacity 0.18s ease; font-size: var(--fs-sm); color: var(--c-ink); background: color-mix(in srgb, var(--c-surface) 92%, transparent); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 6px 14px; white-space: nowrap; box-shadow: var(--shadow-card); }
+.ii-wheel-hint.ii-on { opacity: 1; }
 .ii-tools { position: absolute; right: 12px; top: 12px; z-index: 5; display: flex; flex-direction: column; gap: 6px; }
 .ii-tools button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--c-line); background: var(--c-surface); color: var(--c-ink); cursor: pointer; font-size: 17px; box-shadow: var(--shadow-card); }
 .ii-tools button.ii-txt { width: auto; font-size: var(--fs-sm); padding: 0 10px; }
@@ -3038,5 +3041,5 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 
 @media (max-width: 900px) { .ii-keys { display: none; } }
 @media (max-width: 760px) { .ii-d-cols { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { .ii-tlp { transition: none; transform: none; } .ii-tldc { animation: none; } .ii-tlc, .ii-isl, .ii-zc, .ii-ilab { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ii-tlp { transition: none; transform: none; } .ii-tldc { animation: none; } .ii-tlc, .ii-isl, .ii-zc, .ii-ilab { transition: none; } .ii-wheel-hint { transition: none; } }
 @media (max-width: 600px) { .ii-hint { display: none; } }
