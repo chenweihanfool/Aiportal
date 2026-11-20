@@ -1039,9 +1039,6 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     // 3.16.0：附近搬到搜尋框旁；點了直接開美食地圖的「附近・由近到遠」
     check(`${T}：搜尋框旁有「📍 附近」按鈕`, (await page.locator('[data-testid="tb-nearby"]').count()) === 1 && (await page.locator('[data-testid="tb-nearby"]').getAttribute('aria-label')) === '附近有什麼：開美食地圖，由近到遠')
-    await page.locator('[data-testid="tb-nearby"]').click(); await page.waitForTimeout(400)
-    check(`${T}：點「📍 附近」→ 網址變 #food/nearby`, (await page.evaluate(() => location.hash)) === '#food/nearby')
-    await page.evaluate(() => { location.hash = '' }); await page.waitForSelector('.st-home'); await page.waitForSelector('[data-testid="st-dim"]'); await settle(page)
     check(`${T}：想法板在 STATUS 之後、現在用得上之前；心得島嶼在最後（有聚焦卡）`, await page.evaluate(() => {
       const a = document.querySelector('.st-aside'), b = document.querySelector('[data-testid="idea-board"]'), n = document.querySelector('[data-testid="now-section"]')
       const t = document.querySelector('[data-testid="insight-islands"]'), h = document.querySelector('.st-home')
@@ -1108,6 +1105,9 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     check(`${T}：今天的一行（趨勢＋建議）在現在用得上標題列上方`, await page.evaluate(() => { const l = document.querySelector('[data-testid="st-today-line"]'); const h = document.querySelector('.nw-head'); return !!l && !!(l.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) && l.textContent.trim().length > 0 }))
     check(`${T}：沒有橫向捲動、沒有頁面錯誤`, (await noHScroll(page)) && errors.length === 0, errors.join(' | ').slice(0, 300))
     await page.screenshot({ path: path.join(SHOTS, 'home-v3-1440.png') })
+    // 3.16.0：附近來回頁面放在這個情境最後（回首頁後部分區塊不會重新出現，放前面會讓後面的檢查找不到元素）
+    await page.locator('[data-testid="tb-nearby"]').click(); await page.waitForTimeout(400)
+    check(`${T}：點「📍 附近」→ 網址變 #food/nearby`, (await page.evaluate(() => location.hash)) === '#food/nearby')
     await ctx.close()
   }
 

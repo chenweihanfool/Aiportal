@@ -318,7 +318,7 @@ try {
     await page.waitForSelector('[data-testid="ii-timeline"]', { state: 'detached', timeout: 5000 })
     check(`${T}：Esc 回全景、網址的 #insight 清掉`, !/#insight/.test(page.url()) && (await page.locator('[data-testid="ii-island"]').count()) === 7)
     await page.waitForTimeout(700)
-    { const bb = await page.locator('[data-testid="ii-island"]').nth(2).boundingBox(); await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2) }
+    { await page.locator('[data-testid="ii-island"]').nth(2).scrollIntoViewIfNeeded(); await page.waitForTimeout(300); const bb = await page.locator('[data-testid="ii-island"]').nth(2).boundingBox(); await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2) }
     await waitTl(page)
     check(`${T}：點島本體也能飛進去`, true)
     await page.locator('[data-testid="ii-back"]').click()
