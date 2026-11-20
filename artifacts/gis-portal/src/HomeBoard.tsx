@@ -36,7 +36,7 @@ import { boostCard } from './hhiBoost'
 import { recipeCard } from './hhiRecipe'
 import { scoreByDate } from './hhiBorn'
 import { NowSection } from './NowSection'
-import { InsightTree } from './InsightTree'
+import { InsightIslands } from './InsightIslands'
 import { IdeaBoard } from './IdeaBoard'
 import { nowReady } from './nowCards'
 import {
@@ -313,7 +313,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             onRequestUnlock={onRequestUnlock} />
         </TopBarSearch>
         <div className="st-home">
-          <InsightTree pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
+          <InsightIslands pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
           <StatusAside
             on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
             hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
