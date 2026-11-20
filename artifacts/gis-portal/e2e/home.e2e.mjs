@@ -1049,14 +1049,14 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     }))
     check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
     check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
-    // 3.10.0：首頁順序改為心得樹 → STATUS → 想法板 → 現在用得上（STATUS 佔滿整列，不再是右欄）
-    check(`${T}：心得樹 → STATUS → 想法板 → 現在用得上、STATUS 佔滿整列`, await page.evaluate(() => {
+    // 3.16.0：首頁順序改為 STATUS → 想法板 → 現在用得上 → 心得島嶼（島嶼移到最下方；STATUS 佔滿整列）
+    check(`${T}：STATUS → 想法板 → 現在用得上 → 心得島嶼、STATUS 佔滿整列`, await page.evaluate(() => {
       const h = document.querySelector('.st-home').getBoundingClientRect()
       const t = document.querySelector('[data-testid="insight-islands"]').getBoundingClientRect()
       const a = document.querySelector('.st-aside').getBoundingClientRect()
       const b = document.querySelector('[data-testid="idea-board"]').getBoundingClientRect()
       const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect()
-      return a.top >= t.bottom - 1 && b.top >= a.bottom - 1 && n.top >= b.bottom - 1 && a.width >= h.width * 0.9
+      return b.top >= a.bottom - 1 && n.top >= b.bottom - 1 && t.top >= n.bottom - 1 && a.width >= h.width * 0.9
     }))
     check(`${T}：st-dims 有 6 格、盒頭有 STATUS 與整體分數 71`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && /STATUS/.test(await page.locator('[data-testid="st-dims"]').innerText()) && (await page.locator('[data-testid="st-hhi"]').innerText()) === '71')
     const spark = await page.locator('[data-testid="st-spark"]').count()
@@ -1192,12 +1192,11 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
       check(`${T}：點搜尋列後浮層展開且完全在視窗內（左右都不切到）`, popBox.h > 0 && popBox.l >= 0 && popBox.r <= popBox.vw, JSON.stringify(popBox))
       await page.keyboard.press('Escape'); await page.waitForTimeout(150)
       check(`${T}：搜尋列在頂欄插槽內、搜尋列與「現在用得上」標題在首屏內（om ${omTop}、now ${nowTop} < ${h}）`, inSlot && omTop !== null && omTop < h && nowTop !== null && nowTop < h)
-      // 2.99.0：左側多了一塊心得樹（首頁左側大塊），1.5 屏的上限扣掉它的高度再比
-      const treeH = await page.evaluate(() => Math.round(document.querySelector('[data-testid="insight-islands"]')?.getBoundingClientRect().height ?? 0) + 12)
-      check(`${T}：st-dims 的上緣 ${dimsTop}（扣掉心得樹 ${treeH}）≤ ${limit}（1.5 屏）`, dimsTop !== null && dimsTop - treeH <= limit, String(dimsTop))
+      // 3.16.0：心得島嶼移到最下方，STATUS 不再被它往下推，直接比 1.5 屏
+      check(`${T}：st-dims 的上緣 ${dimsTop} ≤ ${limit}（1.5 屏）`, dimsTop !== null && dimsTop <= limit, String(dimsTop))
       check(`${T}：st-dims 有 6 格、3 欄 2 列`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && (await page.evaluate(() => new Set([...document.querySelectorAll('[data-testid="st-dim"]')].map((e) => Math.round(e.getBoundingClientRect().left))).size)) === 3)
       check(`${T}：不橫向捲動、沒有頁面錯誤`, (await noHScroll(page)) && errors.length === 0, errors.join(' | ').slice(0, 300))
-      check(`${T}：單欄順序 心得樹 → STATUS → 現在用得上`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-islands"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); return a.top >= t.bottom - 1 && n.top >= a.bottom - 1 }))
+      check(`${T}：單欄順序 STATUS → 現在用得上 → 心得島嶼`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-islands"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); return n.top >= a.bottom - 1 && t.top >= n.bottom - 1 }))
       if (cards === 5) {
         check(`${T}：5 張推送卡時先顯示 2 張，其餘收在「再看 3 則」（畫面上 ${shownCards} 張）`, shownCards === 2 && /再看 3 則/.test(await page.locator('[data-testid="now-more"]').innerText()), String(shownCards))
         await page.locator('[data-testid="now-more"]').click(); await page.waitForTimeout(500)
