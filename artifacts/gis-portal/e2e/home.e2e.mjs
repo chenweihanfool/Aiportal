@@ -1037,7 +1037,16 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     check(`${T}：浮層左緣對齊搜尋列、右緣不出視窗`, await page.evaluate(() => { const s = document.querySelector('[data-testid="tb-search-slot"]').getBoundingClientRect(), p = document.querySelector('[data-testid="om-pop"]').getBoundingClientRect(); return Math.abs(p.left - s.left) <= 1 && p.right <= window.innerWidth && p.width >= s.width - 1 }))
     check(`${T}：按 / 聚焦搜尋列並展開浮層`, await page.evaluate(() => document.activeElement === document.querySelector('[data-testid="tb-search-slot"] input') && (document.querySelector('[data-testid="om-pop"]')?.getBoundingClientRect().height ?? 0) > 0))
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
-    check(`${T}：想法板在心得樹之後、現在用得上之前（有聚焦卡）`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-islands"]'); const b = document.querySelector('[data-testid="idea-board"]'); const n = document.querySelector('[data-testid="now-section"]'); return !!t && !!b && !!n && !!(t.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card').length === 1 }))
+    // 3.16.0：附近搬到搜尋框旁；點了直接開美食地圖的「附近・由近到遠」
+    check(`${T}：搜尋框旁有「📍 附近」按鈕`, (await page.locator('[data-testid="tb-nearby"]').count()) === 1 && (await page.locator('[data-testid="tb-nearby"]').getAttribute('aria-label')) === '附近有什麼：開美食地圖，由近到遠')
+    await page.locator('[data-testid="tb-nearby"]').click(); await page.waitForTimeout(400)
+    check(`${T}：點「📍 附近」→ 網址變 #food/nearby`, (await page.evaluate(() => location.hash)) === '#food/nearby')
+    await page.evaluate(() => { location.hash = '' }); await page.waitForSelector('.st-home'); await page.waitForSelector('[data-testid="st-dim"]'); await settle(page)
+    check(`${T}：想法板在 STATUS 之後、現在用得上之前；心得島嶼在最後（有聚焦卡）`, await page.evaluate(() => {
+      const a = document.querySelector('.st-aside'), b = document.querySelector('[data-testid="idea-board"]'), n = document.querySelector('[data-testid="now-section"]')
+      const t = document.querySelector('[data-testid="insight-islands"]'), h = document.querySelector('.st-home')
+      return !!a && !!b && !!n && !!t && !!h && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(n.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) && t === h.lastElementChild && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card').length === 1
+    }))
     check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
     check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
     // 3.10.0：首頁順序改為心得樹 → STATUS → 想法板 → 現在用得上（STATUS 佔滿整列，不再是右欄）
