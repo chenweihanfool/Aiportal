@@ -3218,3 +3218,24 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
   .kis-mode { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .kis-in { animation: none; } }
+
+/* 3.20.0 知識庫這週明細 */
+.kw-panel { display: grid; gap: var(--sp-3); min-width: 0; color: var(--c-ink); }
+.kw-sec { display: grid; gap: var(--sp-2); min-width: 0; }
+.kw-h { margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--c-ink); }
+.kw-list, .kw-sents { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.kw-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; font-size: 0.84rem; color: var(--c-ink); }
+.kw-date { flex: 0 0 auto; font: 12px var(--font-mono); color: var(--c-ink-3); }
+.kw-kind { flex: 0 0 auto; padding: 0 8px; font-size: 0.7rem; color: var(--c-accent); border: 1px solid var(--c-accent); border-radius: var(--r-pill); }
+.kw-topic { appearance: none; background: none; border: 0; margin: 0; padding: 0; font-family: inherit; font-size: 0.86rem; font-weight: 600; color: var(--c-ink); text-align: left; cursor: pointer; }
+.kw-topic:hover, .kw-topic:focus-visible { color: var(--c-accent); text-decoration: underline; }
+.kw-detail { min-width: 0; color: var(--c-ink-2); overflow-wrap: anywhere; }
+.kw-group { display: grid; gap: 4px; min-width: 0; padding: 8px 12px; background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); }
+.kw-group-h { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
+.kw-count { flex: 0 0 auto; font: 12px var(--font-mono); color: var(--c-ink-3); }
+.kw-sents { font-size: 0.84rem; line-height: 1.6; color: var(--c-ink); overflow-wrap: anywhere; }
+.kw-more { justify-self: start; font: 12px var(--font-mono); padding: 2px 10px; color: var(--c-accent); background: none; border: 1px solid var(--c-accent); border-radius: var(--r-pill); cursor: pointer; }
+.kw-more:hover { border-color: var(--c-ink-2); }
+.kw-when { margin-left: var(--sp-2); font: 11.5px var(--font-mono); color: var(--c-ink-3); }
+.kw-badge { margin-left: var(--sp-2); padding: 0 7px; font-size: 0.7rem; color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: var(--r-pill); }
+.kw-empty, .kw-note { margin: 0; font-size: 0.8rem; color: var(--c-ink-2); }
