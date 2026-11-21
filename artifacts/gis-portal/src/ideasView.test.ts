@@ -355,3 +355,27 @@ describe('moodPicks', () => {
     expect(normal.picks.map((i) => i.id)).toEqual(['A', 'D'])
   })
 })
+
+import { boardCounts, daysAgoText } from './ideasView'
+
+describe('想法板小字與計數', () => {
+  const now = Date.parse('2026-11-21T12:00:00+08:00')
+  it('daysAgoText：今天、N 天前、解析不到', () => {
+    expect(daysAgoText('2026-11-21T08:00:00+08:00', now)).toBe('今天')
+    expect(daysAgoText('2026-11-22T08:00:00+08:00', now)).toBe('今天')
+    expect(daysAgoText('2026-11-18T11:00:00+08:00', now)).toBe('3 天前')
+    expect(daysAgoText('壞掉', now)).toBeNull()
+    expect(daysAgoText(null, now)).toBeNull()
+  })
+  it('boardCounts：候選扣掉聚焦、聚焦數、本月完成', () => {
+    const list = [
+      idea('A'),
+      idea('B', { status: 'doing' }),
+      idea('C', { status: 'done', history: [{ status: 'done', at: '2026-11-10T10:00:00+08:00' }] as IdeaItem['history'] }),
+      idea('D', { status: 'done', history: [{ status: 'done', at: '2026-10-10T10:00:00+08:00' }] as IdeaItem['history'] }),
+      idea('E', { status: 'dropped' }),
+    ]
+    expect(boardCounts(list, now)).toEqual({ candidate: 1, focus: 1, monthDone: 1 })
+    expect(boardCounts([], now)).toEqual({ candidate: 0, focus: 0, monthDone: 0 })
+  })
+})
