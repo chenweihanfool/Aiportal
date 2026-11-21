@@ -6,6 +6,7 @@ import { BulletText, ClaimBullet, ConceptBody, MethodBody, Section } from './Kno
 import { ClaimRow, ClaimText, ClaimsProvider, useClaimsController } from './KnowledgeClaimActions'
 import { KnowledgeDiagram } from './KnowledgeDiagram'
 import { KnowledgeGrowthTree } from './KnowledgeGrowthTree'
+import { KnowledgeIslands } from './KnowledgeIslands'
 import type { HermesTopicQuote } from './hermesDocApi'
 import { useAsync, useNow } from './homeHooks'
 import {
@@ -536,6 +537,17 @@ function Layout({ data, now, topic, topicId, onOpen, onBack, pw }: {
   )
 }
 
+const PAGE_MODE_KEY = 'kn-page-mode-v1'
+type PageMode = 'islands' | 'outline'
+
+function loadPageMode(): PageMode {
+  try {
+    return window.localStorage.getItem(PAGE_MODE_KEY) === 'outline' ? 'outline' : 'islands'
+  } catch {
+    return 'islands'
+  }
+}
+
 export function KnowledgeView({ unlockedPassword, topicId, onRequestUnlock }: {
   unlockedPassword: string | null
   /** null＝全樹；有值＝題目頁（已經 decodeURIComponent） */
@@ -544,6 +556,11 @@ export function KnowledgeView({ unlockedPassword, topicId, onRequestUnlock }: {
 }) {
   const feed = useAsync(unlockedPassword, apiFetchTopics)
   const now = useNow()
+  const [mode, setMode] = useState<PageMode>(loadPageMode)
+  const pickMode = (m: PageMode) => {
+    setMode(m)
+    try { window.localStorage.setItem(PAGE_MODE_KEY, m) } catch { /* 寫不進去就只在這次有效 */ }
+  }
   const unlocked = !!unlockedPassword
   const data = feed.data?.data ?? null
   const openTopic = (id: string) => { window.location.hash = `#knowledge/${encodeURIComponent(id)}` }
@@ -559,6 +576,8 @@ export function KnowledgeView({ unlockedPassword, topicId, onRequestUnlock }: {
     content = <div className="kn-body"><p className="kn-muted kn-bad">題目資料暫時無法取得，稍後再試。</p></div>
   } else if (!feed.data || !feed.data.available || !data) {
     content = <div className="kn-body"><p className="kn-empty">尚未收到推送，HERMES 部署後才會有資料。</p></div>
+  } else if (!topicId && mode === 'islands') {
+    content = <div className="kn-body"><KnowledgeIslands data={data} pw={unlockedPassword as string} onOpen={openTopic} /></div>
   } else {
     content = <Layout data={data} now={now} topic={topic} topicId={topicId} onOpen={openTopic} onBack={backToTree} pw={unlockedPassword as string} />
   }
@@ -569,6 +588,12 @@ export function KnowledgeView({ unlockedPassword, topicId, onRequestUnlock }: {
         <button type="button" className="kn-back" onClick={() => { window.location.hash = '' }}>← 返回儀表板</button>
         <h1>知識</h1>
         {unlocked && data && isStale(data.computedAt, now) && <span className="kn-stale">資料已過期（{stamp(data.computedAt)}）</span>}
+        {unlocked && data && !topicId && (
+          <div className="kn-seg kis-mode" role="group" aria-label="知識頁檢視">
+            <button type="button" aria-pressed={mode === 'islands'} onClick={() => pickMode('islands')}>島嶼</button>
+            <button type="button" aria-pressed={mode === 'outline'} onClick={() => pickMode('outline')}>大綱</button>
+          </div>
+        )}
         {!unlocked && <button type="button" className="kn-btn kn-btn--head" onClick={onRequestUnlock}>🔒 解鎖</button>}
       </header>
       {content}
