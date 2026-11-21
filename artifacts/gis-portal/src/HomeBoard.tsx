@@ -16,7 +16,7 @@ import { Drawer, FEED_LABEL, IdeasPanel, PusherHealthPanel, pusherSummary } from
 import { dimHash } from './dimensionPage'
 import { fetchHhiHistoryStrict } from './homeApi'
 import { DIMENSIONS, dimensionSiteLinks } from './dimensions'
-import type { SiteData } from './portalApi'
+import { apiFetchDashboard, type SiteData } from './portalApi'
 import { useAsync, useNow } from './homeHooks'
 import { PaidServicesPanel, PaidServicesSection } from './PaidServices'
 import { BriefSection, CompanionSection, DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection, YearHeat } from './HomeSections'
@@ -35,6 +35,7 @@ import { apiFetchTopicNudges } from './topicNudges'
 import { apiFetchInsights } from './insightApi'
 import { boostCard } from './hhiBoost'
 import { recipeCard } from './hhiRecipe'
+import { ideaAgeCard, travelFreshCard } from './nowPushesC'
 import { scoreByDate } from './hhiBorn'
 import { NowSection } from './NowSection'
 import { InsightIslands } from './InsightIslands'
@@ -102,6 +103,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const graph = useAsync(pw, apiFetchHermesGraph)
   const ideas = useAsync(pw, apiFetchIdeas)
   const food = useAsync(pw, apiFetchFood)
+  // 旅遊摘要（3.23.0 旅遊新鮮度卡）：/api/dashboard 的 travel 子系統；讀不到當沒有
+  const dashboard = useAsync(pw, apiFetchDashboard)
   const trips = useAsync(pw, apiFetchTrips)
   const pipeline = useAsync(pw, apiFetchBoardPipeline)
   const status = useAsync(pw, apiFetchBoardStatus)
@@ -138,6 +141,25 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     companion: companion.data, personActions: personActions.data, today: todayIso,
   }), [breakdown, histData, insightsForBoost.data, companion.data, personActions.data, todayIso])
   const recipe = useMemo(() => recipeCard({ history: histData, life: dailyLife.data ?? null, today: todayIso }), [histData, dailyLife.data, todayIso])
+  // 3.23.0：想法快過期、旅遊新鮮度倒數（資料沒到或讀失敗就不出現，不影響其他卡）
+  const ideaAge = useMemo(() => ideaAgeCard({ ideas: ideas.data?.ideas ?? null, today: todayIso }), [ideas.data, todayIso])
+  const travelSummary = useMemo(() => {
+    const d = dashboard.data?.summaries.find((s) => s.subsystemId === 'travel')?.data
+    if (!d) return null
+    const num = (k: string): number | null => (typeof d[k] === 'number' ? d[k] as number : null)
+    return {
+      daysSinceLastTrip: num('daysSinceLastTrip'),
+      hasUpcomingTrip: d['hasUpcomingTrip'] === true,
+      travelScore: num('travelScore'),
+      recencyScore: num('recencyScore'),
+      frequencyScore: num('frequencyScore'),
+      foodScore: num('foodScore'),
+    }
+  }, [dashboard.data])
+  const travelFresh = useMemo(
+    () => travelFreshCard({ travel: travelSummary, places: food.data?.places ?? null, today: todayIso }),
+    [travelSummary, food.data, todayIso],
+  )
   const recipeMonth = useMemo(
     () => monthlyRecipe(histData, dailyLife.data, prevMonth(todayIso)),
     [histData, dailyLife.data, todayIso],
@@ -338,7 +360,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} hhi={breakdown?.displayed ?? null} onOpenIdeas={openIdeas} onOpenIdea={(id) => { if (on) openIdeaFromInsight(id); else onRequestUnlock() }} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
             <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
               briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
-              boost={boost} recipe={recipe} onActionsChange={personActions.reload}
+              boost={boost} recipe={recipe} ideaAge={ideaAge} travelFresh={travelFresh} onActionsChange={personActions.reload}
               todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
           </div>
           <div className="st-col st-col--r">
@@ -384,7 +406,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       onRequestUnlock={onRequestUnlock} />
     <NowSection pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
       briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
-      boost={boost} recipe={recipe} onActionsChange={personActions.reload} />
+      boost={boost} recipe={recipe} ideaAge={ideaAge} travelFresh={travelFresh} onActionsChange={personActions.reload} />
     <div className="hm-layout">
     <HomeNav onOpenIdeas={() => { if (on) setDrawer('ideas'); else onRequestUnlock() }} />
     <div className="hm-root" data-sys={alert ? 'alert' : 'ok'}>
