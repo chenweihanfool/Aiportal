@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
-import { apiFetchWeave } from './insightWeaveApi'
+import { apiFetchVerdicts, apiFetchWeave, apiPostVerdict } from './insightWeaveApi'
+import { apiFetchInsights } from './insightApi'
 import { paletteColor, type PaletteTheme } from './insightPalette'
 import { useAsync } from './homeHooks'
 import {
-  analyzeTopic, bridgesAt, buildIslandModel, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, kbLinksFor, layoutSea, stationCoverage, stationKindLabel, zoomAt,
-  CARD_H, CARD_W, DOMAIN_HEAD_H, ISL_LABEL_H, type Bridge, type IslandModelIsland, type Placed, type Station, type TopicAnalysis, type View,
+  aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, kbLinksFor, layoutSea, resolveStepBridges, stationCoverage, stationKindLabel, zoomAt,
+  CARD_H, CARD_W, DOMAIN_HEAD_H, ISL_LABEL_H, type AiBridge, type Bridge, type IslandModelIsland, type Placed, type Station, type TopicAnalysis, type View,
 } from './knowledgeIslands'
 import { buildTree, stripMarks, type Bullet, type Topic, type TopicsData } from './knowledgeView'
-import type { KbLink } from './insightWeave'
+import { RELATION_TEXT, foldVerdicts, verdictOf, type KbLink, type KbStep } from './insightWeave'
+import type { Insight } from './insightTree'
 
 // 知識島（3.18.0）：知識頁的「島嶼」視圖。島＝知識樹的枝；點島飛入後橫軸是該題的做事順序（SOP）；疊加層顯示心得掛在哪一步、共用步驟（橋）與盲點。
 // 互動與外觀照首頁心得島（InsightIslands）；純函式在 knowledgeIslands.ts，樣式在 portal.css 的 kis-*。
@@ -53,10 +55,34 @@ export function KnowledgeIslands({ data, pw, onOpen }: { data: TopicsData; pw: s
   const theme = useTheme()
   const mobile = useMobile()
   const model = useMemo(() => buildIslandModel(buildTree(data)), [data])
-  const analyses = useMemo(() => new Map(data.topics.map((t) => [t.id, analyzeTopic(t)])), [data])
-  const bridges = useMemo(() => computeBridges([...analyses.values()]), [analyses])
   const names = useMemo(() => new Map(data.topics.map((t) => [t.id, t.name])), [data])
   const weave = useAsync(pw, apiFetchWeave)
+  const verdictRows = useAsync(pw, apiFetchVerdicts)
+  const insightData = useAsync(pw, apiFetchInsights)
+  // 本頁剛按的判定（送出成功才記）；與 feed 紀錄折疊成目前判定。任何一項載入失敗都只是少了 AI 內容。
+  const [override, setOverride] = useState<ReadonlyMap<string, 'ok' | 'no' | 'undo'>>(new Map())
+  const [rejected, setRejected] = useState<readonly string[]>([])
+  const [voteErr, setVoteErr] = useState<string | null>(null)
+  const verdicts = useMemo(() => {
+    const m = foldVerdicts(verdictRows.data ?? [])
+    for (const [id, v] of override) { if (v === 'undo') m.delete(id); else m.set(id, v) }
+    return m
+  }, [verdictRows.data, override])
+  const hidden = useMemo(() => new Set([...verdicts].filter(([, v]) => v === 'no').map(([id]) => id)), [verdicts])
+  const kbSteps = weave.data?.kbSteps
+  const stepBridgeList = weave.data?.stepBridges
+  const analyses = useMemo(() => new Map(data.topics.map((t) => [t.id, analyzeTopic(t, kbSteps ?? [], hidden)])), [data, kbSteps, hidden])
+  const bridges = useMemo(() => computeBridges([...analyses.values()]), [analyses])
+  const aiBridges = useMemo(() => resolveStepBridges(stepBridgeList ?? [], analyses, hidden), [stepBridgeList, analyses, hidden])
+  const insightById = useMemo(() => new Map((insightData.data?.insights ?? []).map((i) => [i.id, i])), [insightData.data])
+  const vote = useCallback(async (id: string, v: 'ok' | 'no' | 'undo') => {
+    setVoteErr(null)
+    try {
+      await apiPostVerdict(pw, id, v)
+      setOverride((m) => new Map(m).set(id, v))
+      if (v === 'no') setRejected((r) => (r.includes(id) ? r : [...r, id]))
+    } catch { setVoteErr('送出失敗，請稍後再試。') }
+  }, [pw])
   const kbLinks: readonly KbLink[] | null = weave.data?.kbLinks ?? null
   const [where, setWhere] = useState<Where | null>(null)
   const [hover, setHover] = useState<string | null>(null)
@@ -91,7 +117,8 @@ export function KnowledgeIslands({ data, pw, onOpen }: { data: TopicsData; pw: s
     if (e) {
       return (
         <IslandInside
-          key={where.island} island={e.island} color={colorOf(e.slot)} where={where} setWhere={setWhere} analyses={analyses} bridges={bridges} kbLinks={kbLinks}
+          key={where.island} island={e.island} color={colorOf(e.slot)} where={where} setWhere={setWhere} analyses={analyses} bridges={bridges} aiBridges={aiBridges} kbLinks={kbLinks}
+          verdicts={verdicts} rejected={rejected.filter((id) => hidden.has(id))} voteErr={voteErr} vote={vote} insightById={insightById}
           pw={pw} onBack={() => setWhere(null)} onOpen={onOpen} onJump={go} names={names}
         />
       )
@@ -104,7 +131,7 @@ export function KnowledgeIslands({ data, pw, onOpen }: { data: TopicsData; pw: s
           <section key={d.id} className="kis-m-dom">
             <h2 className="kis-m-domh">{d.name}</h2>
             {d.islands.map((i) => {
-              const st = islandStats(i, analyses, bridges)
+              const st = islandStats(i, analyses, bridges, aiBridges)
               return (
                 <button key={i.id} type="button" className="kis-m-isl" style={cvar(colorOf(d.slot))} onClick={() => enter(i.id)}>
                   <b>{i.name}</b>
@@ -117,15 +144,16 @@ export function KnowledgeIslands({ data, pw, onOpen }: { data: TopicsData; pw: s
       </div>
     )
   }
-  return <Sea model={model} analyses={analyses} bridges={bridges} kbLinks={kbLinks} colorOf={colorOf} hover={hover} setHover={setHover} onEnter={enter} />
+  return <Sea model={model} analyses={analyses} bridges={bridges} aiBridges={aiBridges} kbLinks={kbLinks} colorOf={colorOf} hover={hover} setHover={setHover} onEnter={enter} />
 }
 
 /* ───────── 全景 ───────── */
 
-function Sea({ model, analyses, bridges, kbLinks, colorOf, hover, setHover, onEnter }: {
+function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, setHover, onEnter }: {
   model: ReturnType<typeof buildIslandModel>
   analyses: ReadonlyMap<string, TopicAnalysis>
   bridges: readonly Bridge[]
+  aiBridges: readonly AiBridge[]
   kbLinks: readonly KbLink[] | null
   colorOf: (slot: number) => string
   hover: string | null
@@ -185,8 +213,15 @@ function Sea({ model, analyses, bridges, kbLinks, colorOf, hover, setHover, onEn
     return m
   }, [model, layout])
 
+  const curve = (p: Placed, q: Placed) => {
+    const x1 = p.x + p.w / 2, y1 = p.y + p.h / 2, x2 = q.x + q.w / 2, y2 = q.y + q.h / 2
+    // PM 修正：同一列的兩張卡改往下彎，標籤放在曲線真正的中點，才不會壓到島名
+    const sameRow = Math.abs(y2 - y1) < 1
+    const cx = (x1 + x2) / 2, cy = sameRow ? y1 + p.h / 2 + 36 : (y1 + y2) / 2 - Math.min(80, Math.hypot(x2 - x1, y2 - y1) / 6)
+    return { d: `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`, mx: cx, my: (y1 + 2 * cy + y2) / 4 + (sameRow ? 12 : -4) }
+  }
   const hovered = hover ? model.flatMap((d) => d.islands).find((i) => i.id === hover) ?? null : null
-  const lines: Array<{ key: string; d: string; name: string; mx: number; my: number }> = []
+  const lines: Array<{ key: string; d: string; name: string; mx: number; my: number; ai: boolean }> = []
   if (hovered) {
     const seen = new Set<string>()
     for (const t of hovered.topics) {
@@ -200,18 +235,28 @@ function Sea({ model, analyses, bridges, kbLinks, colorOf, hover, setHover, onEn
             const q = cardPos.get(o.topicId)
             if (seen.has(k) || !p || !q) continue
             seen.add(k)
-            const x1 = p.x + p.w / 2, y1 = p.y + p.h / 2, x2 = q.x + q.w / 2, y2 = q.y + q.h / 2
-            // PM 修正：同一列的兩張卡改往下彎，標籤放在曲線真正的中點，才不會壓到島名
-            const sameRow = Math.abs(y2 - y1) < 1
-            const cx = (x1 + x2) / 2, cy = sameRow ? y1 + p.h / 2 + 36 : (y1 + y2) / 2 - Math.min(80, Math.hypot(x2 - x1, y2 - y1) / 6)
-            const mx = cx, my = (y1 + 2 * cy + y2) / 4 + (sameRow ? 12 : -4)
-            lines.push({ key: k, d: `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`, name: bridge.name, mx, my })
+            lines.push({ key: k, ...curve(p, q), name: bridge.name, ai: false })
           }
         }
       }
     }
+    // AI 步驟橋：每座橋、每對題目只畫一條
+    for (const b of aiBridges) {
+      for (const e of b.ends) {
+        if (!hovered.topics.some((t) => t.id === e.topicId)) continue
+        for (const o of b.ends) {
+          if (o.topicId === e.topicId) continue
+          const k = `ai:${b.id}:${[e.topicId, o.topicId].sort().join(':')}`
+          const p = cardPos.get(e.topicId)
+          const q = cardPos.get(o.topicId)
+          if (seen.has(k) || !p || !q) continue
+          seen.add(k)
+          lines.push({ key: k, ...curve(p, q), name: b.title, ai: true })
+        }
+      }
+    }
   }
-  const stats = hovered ? islandStats(hovered, analyses, bridges) : null
+  const stats = hovered ? islandStats(hovered, analyses, bridges, aiBridges) : null
 
   return (
     <div className="kis-root" data-testid="kis-overview">
@@ -279,8 +324,8 @@ function Sea({ model, analyses, bridges, kbLinks, colorOf, hover, setHover, onEn
             <svg className="kis-lines" width={layout.width} height={layout.height} aria-hidden="true">
               {lines.map((l) => (
                 <g key={l.key}>
-                  <path d={l.d} className="kis-bridge" />
-                  <text x={l.mx} y={l.my} className="kis-bridge-t" textAnchor="middle">{l.name}</text>
+                  <path d={l.d} className={l.ai ? 'kis-bridge-ai' : 'kis-bridge'} />
+                  <text x={l.mx} y={l.my} className={l.ai ? 'kis-bridge-ai-t' : 'kis-bridge-t'} textAnchor="middle">{l.name}</text>
                 </g>
               ))}
             </svg>
@@ -299,6 +344,31 @@ function Sea({ model, analyses, bridges, kbLinks, colorOf, hover, setHover, onEn
 }
 
 /* ───────── 島內 ───────── */
+
+const CONF_SHORT = { high: '把握高', mid: '把握中', low: '把握低' } as const
+
+function VerdictCtl({ v, onVote }: { v: 'ok' | 'no' | null; onVote: (x: 'ok' | 'no' | 'undo') => void }) {
+  return (
+    <span className="kis-vote">
+      {v === 'ok'
+        ? <><span className="kis-ok">已確認</span><button type="button" className="kis-vbtn" onClick={() => onVote('undo')}>撤回</button></>
+        : <><button type="button" className="kis-vbtn" aria-label="確認" onClick={() => onVote('ok')}>✓</button><button type="button" className="kis-vbtn" aria-label="否決" onClick={() => onVote('no')}>✕</button></>}
+    </span>
+  )
+}
+
+function AiStepView({ k, insight, ctl }: { k: KbStep; insight: Insight | undefined; ctl: ReactNode }) {
+  return (
+    <div className="kis-ai" data-testid="kis-ai-step">
+      <span className="kis-ai-tag">✦ AI</span> <span className="kis-rel">{RELATION_TEXT[k.relation]}</span>
+      <p>{k.text}</p>
+      <blockquote className="kis-quote">{insight ? insight.text : '（心得已不在清單）'}</blockquote>
+      {insight?.date && <span className="kis-date">{insight.date} · </span>}
+      <span className="kis-date">{CONF_SHORT[k.confidence]}</span>
+      {ctl}
+    </div>
+  )
+}
 
 function Chips({ b, t, onSrc }: { b: Bullet; t: Topic; onSrc: (id: string) => void }) {
   if (b.refs.length === 0) return null
@@ -323,14 +393,20 @@ function BulletView({ b, t, big, onSrc }: { b: Bullet; t: Topic; big: boolean; o
   return <div className="kis-bullet">{body}<Chips b={b} t={t} onSrc={onSrc} /></div>
 }
 
-function IslandInside({ island, color, where, setWhere, analyses, bridges, kbLinks, pw, onBack, onOpen, onJump, names }: {
+function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBridges, kbLinks, verdicts, rejected, voteErr, vote, insightById, pw, onBack, onOpen, onJump, names }: {
   island: IslandModelIsland
   color: string
   where: { island: string; topicId: string; stationId: string }
   setWhere: (w: { island: string; topicId: string; stationId: string }) => void
   analyses: ReadonlyMap<string, TopicAnalysis>
   bridges: readonly Bridge[]
+  aiBridges: readonly AiBridge[]
   kbLinks: readonly KbLink[] | null
+  verdicts: ReadonlyMap<string, 'ok' | 'no'>
+  rejected: readonly string[]
+  voteErr: string | null
+  vote: (id: string, v: 'ok' | 'no' | 'undo') => void
+  insightById: ReadonlyMap<string, Insight>
   pw: string
   onBack: () => void
   onOpen: (id: string) => void
@@ -376,13 +452,22 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, kbLin
   const cov = a ? stationCoverage(a) : { covered: 0, total: 0 }
   const links = station && a ? a.links.get(station.id) : undefined
   const stBridges = station ? bridgesAt(bridges, topic.id, station.id) : []
+  const stAiBridges = station ? aiBridgesAt(aiBridges, topic.id, station.id) : []
+  const stAi = station && a ? a.ai.get(station.id) ?? [] : []
+  const ctl = (item: { id: string; status: 'proposed' | 'confirmed' }) => <VerdictCtl v={verdictOf(verdicts, item)} onVote={(x) => vote(item.id, x)} />
 
   const drawer = ov && (
     <aside className="kis-drawer" data-testid="kis-drawer" aria-label="疊加層">
       <h3 className="kis-dh">✦ 疊加層</h3>
+      {rejected.map((id) => (
+        <p key={id} className="kis-undo">已否決，<button type="button" className="kis-vbtn" onClick={() => vote(id, 'undo')}>撤回</button></p>
+      ))}
+      {voteErr && <p className="kis-err" role="alert">{voteErr}</p>}
       {station && (
         <>
           <h4 className="kis-sec">這一站的心得</h4>
+          {stAi.map((k) => <AiStepView key={k.id} k={k} insight={insightById.get(k.insight)} ctl={ctl(k)} />)}
+          {stAi.length > 0 && links && links.insights.length > 0 && <h4 className="kis-sec">自動比對</h4>}
           {links && links.insights.length > 0
             ? links.insights.map((i) => (
               <div key={i.insightId} className="kis-ins">
@@ -391,7 +476,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, kbLin
                 <span className="kis-date">{i.date}</span>
               </div>
             ))
-            : <p className="kis-none">{station.kind === 'step' ? '盲點：這一站還沒有心得。' : '這一站沒有掛心得。'}</p>}
+            : stAi.length === 0 && <p className="kis-none">{station.kind === 'step' ? '盲點：這一站還沒有心得。' : '這一站沒有掛心得。'}</p>}
           {myLinks.length > 0 && (
             <>
               <h4 className="kis-sec">AI 編織（這一題）</h4>
@@ -401,6 +486,17 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, kbLin
             </>
           )}
           <h4 className="kis-sec">橋</h4>
+          {stAiBridges.map(({ bridge, others }) => (
+            <div key={bridge.id} className="kis-ai kis-aib">
+              <span className="kis-ai-tag">✦ AI</span> <b>{bridge.title}</b>
+              <p>{bridge.text}</p>
+              {others.map((o) => {
+                const os = analyses.get(o.topicId)?.stations.find((s) => s.id === o.stationId)
+                return <button key={`${o.topicId}:${o.stationId}`} type="button" className="kis-jump" onClick={() => onJump(o.topicId, o.stationId)}>→ {names.get(o.topicId) ?? o.topicId} · {os?.label ?? ''}</button>
+              })}
+              {ctl(bridge)}
+            </div>
+          ))}
           {stBridges.length > 0
             ? stBridges.map(({ bridge, others }) => (
               <div key={bridge.key} className="kis-br">
@@ -412,7 +508,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, kbLin
                 })}
               </div>
             ))
-            : <p className="kis-none">這一站沒有和別的題目共用步驟。</p>}
+            : stAiBridges.length === 0 && <p className="kis-none">這一站沒有和別的題目共用步驟。</p>}
         </>
       )}
       <h4 className="kis-sec">盲點</h4>
@@ -449,8 +545,8 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, kbLin
           <div className="kis-rail" ref={railRef} data-testid="kis-rail">
             {stations.map((s, i) => {
               const l = a?.links.get(s.id)
-              const n = l?.insights.length ?? 0
-              const b = bridgesAt(bridges, topic.id, s.id).length
+              const n = new Set([...(l?.insights ?? []).map((x) => x.insightId), ...(a?.ai.get(s.id) ?? []).map((x) => x.insight)]).size
+              const b = bridgesAt(bridges, topic.id, s.id).length + aiBridgesAt(aiBridges, topic.id, s.id).length
               return (
                 <button key={s.id} type="button" className={`kis-st kis-k-${s.kind}${i === idx ? ' kis-cur' : ''}`} aria-current={i === idx ? 'step' : undefined} onClick={() => pick(i)}>
                   <span className="kis-st-no">{s.stepNo ?? '•'}</span>

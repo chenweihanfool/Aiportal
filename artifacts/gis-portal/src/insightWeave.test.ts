@@ -31,6 +31,36 @@ describe('parseWeave', () => {
     expect(p.bridges).toHaveLength(0)
     expect(p.tensions).toHaveLength(2)
   })
+  it('新欄位 kbSteps／stepBridges：缺了是空陣列，合法就解析', () => {
+    const stepRaw = { id: 'S-00000001', insight: 'a', topic: 'T20261105-01', claim: 'c005', relation: 'support', text: '印證了這一步', confidence: 'mid', status: 'proposed', since: '2026-11-22' }
+    const bridgeRaw = { id: 'J-00000001', title: '同一步', text: '兩題在做同一件事', ends: [{ topic: 'T20261105-01', claim: 'c005' }, { topic: 'T20261107-02', claim: 'c012' }], confidence: 'mid', status: 'proposed', since: '2026-11-22' }
+    const empty = parseWeave(RAW)!
+    expect(empty.kbSteps).toEqual([])
+    expect(empty.stepBridges).toEqual([])
+    const p = parseWeave({ ...RAW, kbSteps: [stepRaw], stepBridges: [bridgeRaw] })!
+    expect(p.kbSteps[0]).toMatchObject({ insight: 'a', topic: 'T20261105-01', claim: 'c005', relation: 'support' })
+    expect(p.stepBridges[0]!.ends).toHaveLength(2)
+  })
+  it('新欄位的壞項丟掉：缺必要欄位、端數 <2', () => {
+    const stepRaw = { id: 'S-00000001', insight: 'a', topic: 'T20261105-01', claim: 'c005', relation: 'support', text: '印證', confidence: 'mid', status: 'proposed', since: '2026-11-22' }
+    const bridgeRaw = { id: 'J-00000001', title: '同一步', text: '兩題同一步', ends: [{ topic: 'T20261105-01', claim: 'c005' }, { topic: 'T20261107-02', claim: 'c012' }], confidence: 'mid', status: 'proposed', since: '2026-11-22' }
+    const p = parseWeave({
+      ...RAW,
+      kbSteps: [stepRaw, { ...stepRaw, id: 'S-00000002', text: '' }, { id: 'S-00000003' }],
+      stepBridges: [bridgeRaw, { ...bridgeRaw, id: 'J-00000002', ends: [{ topic: 'T20261105-01', claim: 'c005' }] }, { ...bridgeRaw, id: 'J-00000003', title: '' }],
+    })!
+    expect(p.kbSteps.map((s) => s.id)).toEqual(['S-00000001'])
+    expect(p.stepBridges.map((b) => b.id)).toEqual(['J-00000001'])
+  })
+  it('relation 只收英文（後端已轉換）', () => {
+    const stepRaw = { id: 'S-00000001', insight: 'a', topic: 'T20261105-01', claim: 'c005', relation: 'extend', text: '補充', confidence: 'mid', status: 'proposed', since: '2026-11-22' }
+    for (const relation of ['support', 'extend', 'contrast']) {
+      expect(parseWeave({ ...RAW, kbSteps: [{ ...stepRaw, relation }] })!.kbSteps).toHaveLength(1)
+    }
+    for (const relation of ['印證', '補充', '對照', 'SUPPORT']) {
+      expect(parseWeave({ ...RAW, kbSteps: [{ ...stepRaw, relation }] })!.kbSteps).toEqual([])
+    }
+  })
   it('整份壞回 null', () => {
     for (const bad of [null, undefined, 'x', 5, [], {}, { lighthouses: 'no' }]) expect(parseWeave(bad)).toBeNull()
   })
@@ -86,5 +116,15 @@ describe('weaveIndex', () => {
   })
   it('全空時 hasAny 為 false', () => {
     expect(weaveIndex(parseWeave({ lighthouses: [] })!, INS).hasAny).toBe(false)
+  })
+  it('payload 帶上 kbSteps（心得不在清單的丟掉）與 stepBridges 原樣；hasAny 不含新欄位', () => {
+    const stepRaw = { id: 'S-00000001', insight: 'a', topic: 'T20261105-01', claim: 'c005', relation: 'support', text: '印證', confidence: 'mid', status: 'proposed', since: '2026-11-22' }
+    const bridgeRaw = { id: 'J-00000001', title: '同一步', text: '兩題同一步', ends: [{ topic: 'T20261105-01', claim: 'c005' }, { topic: 'T20261107-02', claim: 'c012' }], confidence: 'mid', status: 'proposed', since: '2026-11-22' }
+    const p = parseWeave({ ...RAW, kbSteps: [stepRaw, { ...stepRaw, id: 'S-00000002', insight: 'zzz' }], stepBridges: [bridgeRaw] })!
+    const i2 = weaveIndex(p, INS)
+    expect(i2.payload.kbSteps.map((s) => s.id)).toEqual(['S-00000001'])
+    expect(i2.payload.stepBridges.map((b) => b.id)).toEqual(['J-00000001'])
+    expect(i2.hasAny).toBe(true)
+    expect(weaveIndex(parseWeave({ lighthouses: [], kbSteps: [stepRaw] })!, INS).hasAny).toBe(false)
   })
 })

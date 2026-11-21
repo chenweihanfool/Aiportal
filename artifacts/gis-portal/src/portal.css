@@ -3133,8 +3133,10 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-b-blind { color: var(--c-warn); border-color: var(--c-warn); }
 .kis-b-waiting { color: var(--weave-ai); border: 1px dashed var(--weave-ai); }
 .kis-lines { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
-.kis-bridge { fill: none; stroke: var(--weave-ai); stroke-width: 2; stroke-dasharray: 7 5; }
-.kis-bridge-t { fill: var(--weave-ai); font-size: 12px; font-weight: 700; paint-order: stroke; stroke: var(--c-surface); stroke-width: 4px; }
+.kis-bridge { fill: none; stroke: var(--c-ink-2); stroke-width: 2; }
+.kis-bridge-t { fill: var(--c-ink-2); font-size: 12px; font-weight: 700; paint-order: stroke; stroke: var(--c-surface); stroke-width: 4px; }
+.kis-bridge-ai { fill: none; stroke: var(--weave-ai); stroke-width: 2; stroke-dasharray: 7 5; }
+.kis-bridge-ai-t { fill: var(--weave-ai); font-size: 12px; font-weight: 700; paint-order: stroke; stroke: var(--c-surface); stroke-width: 4px; }
 .kis-hint { position: absolute; left: 12px; top: 12px; z-index: 5; pointer-events: none; font-size: var(--fs-sm); color: var(--c-ink-2); background: color-mix(in srgb, var(--c-surface) 85%, transparent); padding: 4px 10px; border-radius: var(--r-pill); border: 1px solid var(--c-line); }
 .kis-tools { position: absolute; right: 12px; top: 12px; z-index: 5; display: flex; flex-direction: column; gap: 6px; }
 .kis-tools button { font: inherit; font-size: 14px; color: var(--c-ink); background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--r-md); padding: 4px 10px; cursor: pointer; }
@@ -3194,6 +3196,13 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-ai-tag { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: var(--r-pill); background: var(--weave-ai); color: var(--weave-ai-ink); }
 .kis-jump { display: block; width: 100%; text-align: left; margin-top: 4px; font: inherit; font-size: 13px; color: var(--c-ink); background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); padding: 3px 8px; cursor: pointer; }
 .kis-jump:hover { border-color: var(--c-accent); }
+.kis-rel { font-size: 11px; line-height: 16px; padding: 0 6px; border: 1px solid var(--weave-ai); border-radius: var(--r-pill); color: var(--weave-ai); }
+.kis-vote { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.kis-vbtn { font: inherit; font-size: 12.5px; color: var(--c-ink); background: var(--c-raised); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 1px 10px; cursor: pointer; }
+.kis-vbtn:hover { border-color: var(--c-accent); }
+.kis-ok { font-size: 12.5px; color: var(--c-ink-2); }
+.kis-undo, .kis-err { margin: 0 0 6px; font-size: 12.5px; color: var(--c-ink-2); }
+.kis-err { color: var(--c-ink); }
 
 /* 手機：全景改直向清單，島內橫軸可橫捲、內容在下、疊加層接在內容下方 */
 .kis-mobile { display: grid; gap: var(--sp-4); }

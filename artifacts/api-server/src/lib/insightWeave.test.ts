@@ -14,7 +14,7 @@ describe("parseVerdictBody", () => {
     expect(parseVerdictBody({ itemId: "L-0a1b2c3d", verdict: "ok", extra: 1 })).toBe("不接受的欄位：extra");
   });
 
-  it("itemId 必須是 L、B、T、K 加 8 位小寫十六進位", () => {
+  it("itemId 必須是 L、B、T、K、S、J 加 8 位小寫十六進位", () => {
     for (const bad of [
       undefined,
       "l-0a1b2c3d",
@@ -27,7 +27,7 @@ describe("parseVerdictBody", () => {
     ]) {
       expect(typeof parseVerdictBody({ itemId: bad, verdict: "ok" }), String(bad)).toBe("string");
     }
-    for (const [kind, id] of [["L", "L-0a1b2c3d"], ["B", "B-deadbeef"], ["T", "T-01234567"], ["K", "K-89abcdef"]] as const) {
+    for (const [kind, id] of [["L", "L-0a1b2c3d"], ["B", "B-deadbeef"], ["T", "T-01234567"], ["K", "K-89abcdef"], ["S", "S-0a1b2c3d"], ["J", "J-fedcba98"]] as const) {
       expect(parseVerdictBody({ itemId: id, verdict: "ok" }), kind).toEqual({ itemId: id, verdict: "ok" });
     }
   });
@@ -40,7 +40,7 @@ describe("parseVerdictBody", () => {
       expect(parseVerdictBody({ itemId: "T-01234567", verdict })).toEqual({ itemId: "T-01234567", verdict });
     }
     expect(parseVerdictBody({ itemId: "L-0a1b2c3d", verdict: "maybe" })).toBe("verdict 必須是 ok、no 或 undo");
-    expect(parseVerdictBody({ itemId: "l-0a1b2c3d", verdict: "ok" })).toBe("itemId 必須符合 L-、B-、T- 或 K- 加 8 位小寫十六進位的格式");
+    expect(parseVerdictBody({ itemId: "l-0a1b2c3d", verdict: "ok" })).toBe("itemId 必須符合 L-、B-、T-、K-、S- 或 J- 加 8 位小寫十六進位的格式");
   });
 
   it("after 沿用更正 API 的規則（缺省 0、只收非負整數）", () => {
@@ -165,8 +165,9 @@ describe("insight weave 路由：權限、本文驗證與順序", () => {
   it("POST 本文不合法回 400（繁中訊息）", async () => {
     const cases: Array<[unknown, string]> = [
       [{ itemId: "L-0a1b2c3d", verdict: "ok", extra: 1 }, "不接受的欄位：extra"],
-      [{ itemId: "l-0a1b2c3d", verdict: "ok" }, "itemId 必須符合 L-、B-、T- 或 K- 加 8 位小寫十六進位的格式"],
-      [{ itemId: "L-0A1B2C3D", verdict: "ok" }, "itemId 必須符合 L-、B-、T- 或 K- 加 8 位小寫十六進位的格式"],
+      [{ itemId: "l-0a1b2c3d", verdict: "ok" }, "itemId 必須符合 L-、B-、T-、K-、S- 或 J- 加 8 位小寫十六進位的格式"],
+      [{ itemId: "L-0A1B2C3D", verdict: "ok" }, "itemId 必須符合 L-、B-、T-、K-、S- 或 J- 加 8 位小寫十六進位的格式"],
+      [{ itemId: "X-0a1b2c3d", verdict: "ok" }, "itemId 必須符合 L-、B-、T-、K-、S- 或 J- 加 8 位小寫十六進位的格式"],
       [{ itemId: "L-0a1b2c3d", verdict: "yes" }, "verdict 必須是 ok、no 或 undo"],
       [[], "body 必須是物件"],
     ];
