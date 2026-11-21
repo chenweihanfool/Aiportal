@@ -2384,7 +2384,7 @@ button.ms-col { cursor: pointer; }
 .st-root a:focus-visible, .st-root button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 6px; }
 /* 3.0.0：心得樹占滿整列寬度，STATUS 儀表板移到樹的下方（桌機橫排成多欄） */
 .st-home { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
-.st-home > .st-aside { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); align-items: start; }
+.st-home > .st-aside { align-items: start; }
 .st-home > * { min-width: 0; }
 .st-home > .nw-root { margin: 0; }
 
@@ -2474,7 +2474,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .nw-root .nw-card[data-kind="onthisday"] .nw-why { color: var(--c-ink-2); }
 
 @media (max-width: 860px) {
-  .st-home { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+  .st-home { gap: var(--sp-3); }
   .st-box { padding: 10px 12px; }
   .nw-root { padding: var(--sp-3); margin-bottom: var(--sp-2); }
   .nw-head { margin-bottom: 6px; }
@@ -2565,8 +2565,22 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .pt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 
 /* ─── 我的心得樹（2.99.0）：樹高＝時間，枝為由粗到細的填色輪廓，葉形依關係，群色盤由 insightPalette.ts 算（深淺主題各一組）。class 一律 it- 開頭；其餘顏色只用全站 --c-* token。 ─── */
-.st-left { display: grid; gap: var(--sp-3); min-width: 0; align-content: start; }
-.st-left > .nw-root { margin: 0; }
+/* 首頁三欄（3.20.0）：左 STATUS＋成長、中 想法板＋現在用得上、右 好玩的＋報告庫＋最近＋捷徑，各欄自己往下堆，不互相撐高。
+   <700 單欄（l → c → r → 島嶼）；700–1099 兩欄（左格 l 與 r 上下、右格 c）；≥1100 三欄。 */
+.st-col { display: grid; gap: var(--sp-3); min-width: 0; align-content: start; }
+.st-col > .nw-root { margin: 0; }
+.st-aside--left, .st-aside--right { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+.st-home > [data-testid="insight-islands"] { grid-column: 1 / -1; }
+@media (min-width: 700px) {
+  .st-home { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); grid-template-areas: "l c" "r c" "isl isl"; grid-template-rows: auto 1fr auto; }
+  .st-col--l { grid-area: l; }
+  .st-col--c { grid-area: c; }
+  .st-col--r { grid-area: r; }
+  .st-home > [data-testid="insight-islands"] { grid-area: isl; }
+}
+@media (min-width: 1100px) {
+  .st-home { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(280px, 320px); grid-template-areas: "l c r" "isl isl isl"; grid-template-rows: none; align-items: start; gap: var(--sp-4); }
+}
 .it-root {
   --it-trunk0: color-mix(in srgb, var(--c-warn) 38%, var(--c-ink-3));
   --it-trunk1: color-mix(in srgb, var(--c-accent) 62%, var(--c-ink-3));
