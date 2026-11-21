@@ -1086,8 +1086,7 @@ button.hm-lock:hover { border-color: var(--c-warn); }
   .hm-layout { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 0.9rem; align-items: start; }
   .hm-nav { flex-direction: column; overflow: visible; top: 0.4rem; margin: 0; padding: 0; background: transparent; gap: 0.3rem; }
   .hm-nav-item, .hm-nav-short { border-radius: 8px; padding: 6px 10px; justify-content: flex-start; }
-  /* 常用入口排在區塊錨點前面：首頁上方有搜尋框與「現在用得上」，排在後面會被推到首屏外 */
-  .hm-nav-shorts { order: -1; flex-direction: column; gap: 0.3rem; margin-bottom: 0.35rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--c-line); }
+  .hm-nav-shorts { order: 0; flex-direction: column; gap: 0.3rem; margin-top: 0.35rem; padding-top: 0.6rem; border-top: 1px solid var(--c-line); }
   .hm-layout section[id^="sec-"] { scroll-margin-top: 0.6rem; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
