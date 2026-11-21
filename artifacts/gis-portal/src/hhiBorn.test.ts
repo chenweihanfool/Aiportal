@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { HhiHistoryPoint } from './boardApi'
 import { SCALE_SINCE } from './companion'
-import type { Insight } from './insightTree'
+import type { Insight } from './insightModel'
 import { HIGH, LOW, bornBand, insightsByBand, scoreByDate } from './hhiBorn'
 
 const pt = (date: string, displayedScore: number): HhiHistoryPoint => ({ date, displayedScore })

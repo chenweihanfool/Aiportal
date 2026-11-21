@@ -12,7 +12,7 @@ import { buildTree, recentChangeOf, stripMarks, type Bullet, type Topic, type To
 import { KnowledgeReader } from './KnowledgeReader'
 import { formatKnowledgeHash, parseKnowledgeHash, type KnowledgeRoute } from './knowledgeRoute'
 import { RELATION_TEXT, foldVerdicts, verdictOf, type KbLink, type KbStep } from './insightWeave'
-import type { Insight } from './insightTree'
+import type { Insight } from './insightModel'
 
 // 知識島（3.18.0）：知識頁的「島嶼」視圖。島＝知識樹的枝；點島飛入後橫軸是該題的做事順序（SOP）；疊加層顯示心得掛在哪一步、共用步驟（橋）與盲點。
 // 互動與外觀照首頁心得島（InsightIslands）；純函式在 knowledgeIslands.ts，樣式在 portal.css 的 kis-*。

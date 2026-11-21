@@ -4,7 +4,7 @@ import { apiFetchInsightDetail, apiFetchInsights } from './insightApi'
 import {
   GLOW_DAYS, RELATION_LABEL, insightIdFromHash, insightStats, taipeiDay,
   type Insight, type InsightData, type InsightDetail, type InsightLinks, type InsightRelation,
-} from './insightTree'
+} from './insightModel'
 import {
   ISLAND, TIMELINE, centerScroll, fitCamera, islandCamera, layoutIslands, layoutTimeline, monthBins, zoomAt, zoomLevel,
   type Camera, type Island, type IslandWorld,
@@ -13,7 +13,7 @@ import { clusterSlots, paletteColor, type PaletteTheme } from './insightPalette'
 import { useAsync } from './homeHooks'
 import { blockState } from './homeView'
 import { StateFrame } from './StateFrame'
-import { InsightPanel } from './InsightTree'
+import { InsightPanel } from './InsightPanel'
 import { dossierHref } from './dossier'
 import type { IdeaItem } from './boardApi'
 import { HIGH, LOW, insightsByBand } from './hhiBorn'

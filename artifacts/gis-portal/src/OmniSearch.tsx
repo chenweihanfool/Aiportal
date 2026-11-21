@@ -5,7 +5,7 @@ import { buildIndex } from './graphInsights'
 import { apiFetchTopicsData } from './statsApi'
 import { apiFetchTrips } from './tripsApi'
 import { HitCard } from './SearchCards'
-import { threadDots } from './insightTree'
+import { threadDots } from './insightModel'
 import { SearchOverview, type DateFilter } from './SearchOverview'
 import { cardModel, taipeiYm, type CardCtx, type CardModel } from './searchViz'
 import {

@@ -1,7 +1,7 @@
 // 幸福觸發 4（3.7.0）：心得與想法誕生那天的幸福指數。純函式，不碰 DOM、不發網路。
 // 每日分數只收換尺（SCALE_SINCE）之後的點；之前的分數是另一把尺，對不上就當沒有。
 import type { HhiHistoryPoint } from './boardApi'
-import type { Insight } from './insightTree'
+import type { Insight } from './insightModel'
 import { SCALE_SINCE } from './companion'
 
 /** 高分門檻（含） */

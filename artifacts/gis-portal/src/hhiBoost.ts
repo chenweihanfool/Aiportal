@@ -4,7 +4,7 @@
 import { MOVES, visibleQuietPeople, type CompanionData, type PersonAction } from './companion'
 import type { HhiHistoryPoint } from './boardApi'
 import type { HhiRow } from './boardView'
-import type { Insight } from './insightTree'
+import type { Insight } from './insightModel'
 import { RANK, cardKeyOf, type NowCard } from './nowCards'
 
 /** 最弱面向低於這個分數才推卡 */

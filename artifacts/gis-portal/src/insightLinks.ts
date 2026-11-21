@@ -1,6 +1,6 @@
 // 心得 ↔ 人物／想法的反向連結與根系排版（純函式：不碰 DOM、不用亂數）。
 import { dossierHref } from './dossier'
-import type { Insight, InsightData, InsightIdeaLink, InsightPersonLink } from './insightTree'
+import type { Insight, InsightData, InsightIdeaLink, InsightPersonLink } from './insightModel'
 
 /** 新到舊：date、time、id 都由大到小 */
 function newestFirst(a: Insight, b: Insight): number {

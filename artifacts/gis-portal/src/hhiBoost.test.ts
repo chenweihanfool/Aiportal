@@ -3,7 +3,7 @@ import { BOOST_THRESHOLD, boostCard, lowDayInsight, weakestDimension } from './h
 import { MOVES, type CompanionData, type PersonAction } from './companion'
 import type { HhiHistoryPoint } from './boardApi'
 import type { HhiRow } from './boardView'
-import type { Insight } from './insightTree'
+import type { Insight } from './insightModel'
 
 const TODAY = '2026-11-13'
 const LABELS: Record<string, string> = { lifeFreedom: '財務', fitness: '身體', calm: '從容', mind: '心智', social: '社交', travel: '旅遊' }

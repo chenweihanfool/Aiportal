@@ -253,7 +253,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const dateLabel = new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', weekday: 'short' }).format(now)
   const [focusIdea, setFocusIdea] = useState<string | null>(null)
   const closeDrawer = () => { setDrawer(null); setFocusIdea(null) }
-  // 心得卷宗按想法 chip：心得面板由 InsightTree 先關掉，這裡開想法庫並定位到那一張
+  // 心得卷宗按想法 chip：心得面板由 InsightPanel 先關掉，這裡開想法庫並定位到那一張
   const openIdeaFromInsight = (id: string) => { setFocusIdea(id); setDrawer('ideas') }
 
   // 全站搜尋（2.86.0）：工具連結沿用原指令面板的做法——解鎖後才有 sites，直接開第一個連結

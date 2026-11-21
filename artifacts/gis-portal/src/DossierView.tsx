@@ -15,7 +15,7 @@ import { DossierIndex } from './DossierIndex'
 import { PinButton } from './PinButton'
 import { apiFetchInsights } from './insightApi'
 import { insightsForPerson } from './insightLinks'
-import { RELATION_LABEL, type Insight } from './insightTree'
+import { RELATION_LABEL, type Insight } from './insightModel'
 import './dossier.css'
 
 const go = (hash: string) => { window.location.hash = hash }

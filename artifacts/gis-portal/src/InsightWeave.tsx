@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import type { Insight } from './insightTree'
+import type { Insight } from './insightModel'
 import { apiFetchVerdicts, apiFetchWeave, apiPostVerdict } from './insightWeaveApi'
 import {
   CONF_TEXT, KB_KIND_TEXT, foldVerdicts, verdictOf, weaveIndex,

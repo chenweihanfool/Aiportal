@@ -8,7 +8,7 @@ import { apiFetchTimelineDetail, type TimelineDetail, type TimelineItem, type Ti
 import { LEVEL_LABEL, reportScoreLine, rowDateLabel } from './timelineLogic'
 import { isValidDay } from './timelineLink'
 
-// 全尺寸日報視窗：時間軸（TimelineView）與心得面板（InsightTree）共用。
+// 全尺寸日報視窗：時間軸（TimelineView）與心得面板（InsightPanel）共用。
 export interface Ref { level: TimelineLevel; periodKey: string }
 
 export function useIsMobile(): boolean {

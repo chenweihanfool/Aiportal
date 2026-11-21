@@ -1,6 +1,6 @@
 // insightIslands 純函式的測試（3.15.0）：排序、島嶼版面、鏡頭縮放、時間軸排列、置中捲動、月份分箱。
 import { describe, expect, it } from 'vitest'
-import type { Insight, InsightRelation } from './insightTree'
+import type { Insight, InsightRelation } from './insightModel'
 import {
   ISLAND, TIMELINE, centerScroll, fitCamera, islandCamera, islandOrder, layoutIslands, layoutTimeline, monthBins, threadOrder, worldToScreen, zoomAt, zoomLevel,
   type Island,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MarkdownView } from './MarkdownView'
 import { apiFetchInsightDetail } from './insightApi'
-import { PROVENANCE_LABEL, RELATION_LABEL, type InsightDetail, type ThreadDot } from './insightTree'
+import { PROVENANCE_LABEL, RELATION_LABEL, type InsightDetail, type ThreadDot } from './insightModel'
 import { SearchDiaryReport } from './SearchDiaryReport'
 import { buildTimelineDayLink } from './timelineLink'
 import { PinButton } from './PinButton'

@@ -1,8 +1,7 @@
 // 島嶼全景＋橫向時間軸的純函式（3.15.0）：島嶼版面（螺旋擺放）、鏡頭（對準、縮放）、時間軸排列與月份分箱。
-// 不碰 DOM、不用 Math.random；同一輸入永遠得到同一輸出。畫面元件在 InsightIslands.tsx，資料型別沿用 insightTree.ts。
+// 不碰 DOM、不用 Math.random；同一輸入永遠得到同一輸出。畫面元件在 InsightIslands.tsx，資料型別沿用 insightModel.ts。
 
-import { GLOW_DAYS, taipeiDay } from './insightTree'
-import type { Insight, InsightRelation } from './insightTree'
+import { GLOW_DAYS, taipeiDay, type Insight, type InsightRelation } from './insightModel'
 
 export const ISLAND = { cellW: 128, cellH: 42, gap: 7, pad: 18, label: 100, margin: 46 } as const
 export const TIMELINE = { minGap: 256, spMin: 270, cardW: 232, cardH: 46, maxLanes: 4, laneGap: 10, axisPad: 24 } as const
