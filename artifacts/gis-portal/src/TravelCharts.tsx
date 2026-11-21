@@ -55,7 +55,7 @@ export function TravelCharts({ pw, now, color, onRequestUnlock }: {
 
   return (
     <>
-      <section className="hm-card tc-card" aria-label="今年的旅行日" data-testid="tc-cal" style={dimStyle}>
+      <section className="hm-card dp-gantt tc-card" aria-label="今年的旅行日" data-testid="tc-cal" style={dimStyle}>
         <h2 className="hm-h">今年的旅行日
           {cal && <span className="hm-h-right tc-sum" data-testid="tc-cal-sum">今年 {cal.daysThisYear} 天旅行（去年同期 {cal.daysLastYear} 天）</span>}
         </h2>
@@ -96,7 +96,7 @@ export function TravelCharts({ pw, now, color, onRequestUnlock }: {
         </StateFrame>
       </section>
 
-      <section className="hm-card tc-card" aria-label="足跡" data-testid="tc-foot" style={dimStyle}>
+      <section className="hm-card dp-gantt tc-card" aria-label="足跡" data-testid="tc-foot" style={dimStyle}>
         <h2 className="hm-h">足跡</h2>
         <StateFrame {...frameProps} className="tc-frame">
           {foot && (
