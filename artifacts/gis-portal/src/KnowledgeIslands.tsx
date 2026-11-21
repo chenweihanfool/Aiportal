@@ -568,8 +568,9 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
       const head = document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0
       const top = s.getBoundingClientRect().top - head
       const h = fullH.current
-      if (!compactRef.current && h > 0 && top < -h) setCompact(true)
-      else if (compactRef.current && top > -h / 2) setCompact(false)
+      // PM 修正：索引一黏頂（捲過 40px）就切精簡，回到 10px 內才恢復；縮的是黏頂元素本身、sentinel 位置不變，不會來回跳
+      if (!compactRef.current && h > 0 && top < -40) setCompact(true)
+      else if (compactRef.current && top > -10) setCompact(false)
     }
     measureHead()
     target.addEventListener('scroll', onScroll, { passive: true })
