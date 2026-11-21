@@ -161,6 +161,39 @@ export function dossierRows(index: GraphIndex, kind: DossierKind, name: string):
   return entityEvents(index, kind, name)
 }
 
+export type RailItem =
+  | { type: 'event'; row: TimelineRow; diary: boolean }
+  | { type: 'month'; ym: string }
+
+/**
+ * 橫向時間軸的項目：事件由舊到新（日期不明的排最前面），在每個月份第一件事件前插入月份分隔。
+ * diary＝日期是 YYYY-MM-DD 且是同日第一件（不重複顯示同一天的日記入口）。
+ */
+export function railItems(rows: readonly TimelineRow[]): RailItem[] {
+  const sorted = [...rows].sort((a, b) =>
+    a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '') || a.title.localeCompare(b.title))
+  const out: RailItem[] = []
+  let lastYm = ''
+  const seenDays = new Set<string>()
+  for (const row of sorted) {
+    const dated = DATE_RE.test(row.date)
+    if (dated) {
+      const ym = row.date.slice(0, 7)
+      if (ym !== lastYm) { out.push({ type: 'month', ym }); lastYm = ym }
+    }
+    const diary = dated && !seenDays.has(row.date)
+    if (dated) seenDays.add(row.date)
+    out.push({ type: 'event', row, diary })
+  }
+  return out
+}
+
+/** 預設選中的事件＝最新一件的 id；沒有事件回 null。 */
+export function defaultRailEvent(rows: readonly TimelineRow[]): string | null {
+  const events = railItems(rows).filter((it): it is Extract<RailItem, { type: 'event' }> => it.type === 'event')
+  return events.length > 0 ? events[events.length - 1].row.id : null
+}
+
 export interface EgoNode { kind: DossierKind; name: string; shared: number; x: number; y: number }
 export interface EgoGraph {
   center: { kind: DossierKind; name: string; x: number; y: number }

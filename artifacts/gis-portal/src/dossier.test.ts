@@ -3,7 +3,8 @@ import { buildIndex } from './graphInsights'
 import type { HermesGraphData } from './hermesGraphApi'
 import type { TimelineRow } from './nodeTimeline'
 import {
-  dossierForEvent, dossierFromHash, dossierHref, dossierIndex, dossierSummary, egoGraph, monthGroups, plainWikilinks, relatedRanked, relatedTopics,
+  defaultRailEvent, dossierForEvent, dossierFromHash, dossierHref, dossierIndex, dossierSummary, egoGraph, monthGroups, plainWikilinks,
+  railItems, relatedRanked, relatedTopics,
 } from './dossier'
 
 type Graph = NonNullable<HermesGraphData['graph']>
@@ -75,6 +76,41 @@ describe('monthGroups', () => {
     expect(g.map(x => x.open)).toEqual([true, true, true, false, false])
     expect(g[0].n).toBe(2)
     expect(g[0].rows.map(r => r.id)).toEqual(['e', 'b'])
+  })
+})
+
+describe('railItems / defaultRailEvent', () => {
+  const row = (id: string, date: string, time?: string): TimelineRow => ({ id, date, title: `T${id}`, status: null, case: null, time })
+  const ids = (items: ReturnType<typeof railItems>) => items.map(x => x.type === 'month' ? `month:${x.ym}` : `event:${x.row.id}`)
+
+  it('由舊到新、日期不明的排最前面', () => {
+    const items = railItems([row('a', '2026-03-05'), row('u', ''), row('b', '2026-01-10'), row('c', '2026-01-02')])
+    expect(ids(items)).toEqual(['event:u', 'month:2026-01', 'event:c', 'event:b', 'month:2026-03', 'event:a'])
+  })
+
+  it('月份分隔的數量與位置', () => {
+    const items = railItems([row('a', '2026-01-02'), row('b', '2026-01-20'), row('c', '2026-02-01'), row('d', '2025-12-31')])
+    expect(items.filter(x => x.type === 'month').length).toBe(3)
+    expect(ids(items)).toEqual(['month:2025-12', 'event:d', 'month:2026-01', 'event:a', 'event:b', 'month:2026-02', 'event:c'])
+  })
+
+  it('同日第一件才有 diary 旗標；日期不明沒有', () => {
+    const items = railItems([row('a', '2026-01-02', '09:00'), row('b', '2026-01-02', '10:00'), row('c', '2026-01-03'), row('u', '')])
+    const flag = (id: string) => items.find(x => x.type === 'event' && x.row.id === id)
+    expect(flag('a')).toMatchObject({ diary: true })
+    expect(flag('b')).toMatchObject({ diary: false })
+    expect(flag('c')).toMatchObject({ diary: true })
+    expect(flag('u')).toMatchObject({ diary: false })
+  })
+
+  it('空陣列', () => {
+    expect(railItems([])).toEqual([])
+    expect(defaultRailEvent([])).toBeNull()
+  })
+
+  it('日期不明不插月份分隔；預設回最新一件', () => {
+    expect(ids(railItems([row('u', ''), row('a', '2026-01-02')]))).toEqual(['event:u', 'month:2026-01', 'event:a'])
+    expect(defaultRailEvent([row('u', ''), row('a', '2026-01-02'), row('b', '2026-01-10')])).toBe('b')
   })
 })
 

@@ -162,7 +162,7 @@ function DetailBody({ ins, pw, siblings, onSelect, ideas, onOpenIdea, onDossier,
         </ul>
       )}
       <div className="ii-d-act">
-        <button type="button" className="ii-btn" data-testid="ii-dossier" onClick={() => onDossier(ins.id)}>完整卷宗</button>
+        <button type="button" className="ii-btn" data-testid="ii-dossier" onClick={() => onDossier(ins.id)}>全文與脈絡</button>
       </div>
       <WeaveColumn ins={ins} />
     </div>
