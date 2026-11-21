@@ -60,7 +60,7 @@ export function userCorrectionDetail(topics: readonly Topic[]): CorrectionDetail
   for (const t of topics) {
     const claims = (t.claims ?? [])
       .filter((c) => c.origin === 'user')
-      .map((c) => ({ id: c.id, text: c.text, lastChanged: c.lastChanged, disputed: c.status === 'disputed' }))
+      .map((c) => ({ id: c.id, text: cleanClaimText(c.text), lastChanged: c.lastChanged.slice(0, 10), disputed: c.status === 'disputed' }))
       .sort((a, b) => desc(a.lastChanged, b.lastChanged))
     if (claims.length > 0) groups.push({ id: t.id, name: t.name, kind: t.kind, claims })
   }
