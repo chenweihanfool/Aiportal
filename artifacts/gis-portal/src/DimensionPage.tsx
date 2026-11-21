@@ -6,6 +6,7 @@ import { DIMENSIONS, DIMENSION_FALLBACK_COLOR, dimensionOf } from './dimensions'
 import { useAsync, useNow } from './homeHooks'
 import { EXPECTED_EVERY_MIN, blockState, buildDimensionHeatmap, dimensionSeries, historyUpdatedAtMs, sparkGeometry, taipeiDate, type DimSeries } from './homeView'
 import { YearHeat } from './HomeSections'
+import { MindCharts } from './MindCharts'
 import { Skeleton, StateFrame } from './StateFrame'
 import { TaskGantt } from './TaskGantt'
 import { CV, FONT, themedColor } from './theme'
@@ -123,6 +124,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
               </section>
 
               {dimKey === 'calm' && <TaskGantt pw={pw} now={now} color={color} onRequestUnlock={onRequestUnlock} />}
+              {dimKey === 'mind' && <MindCharts pw={pw} now={now} color={color} onRequestUnlock={onRequestUnlock} />}
 
               <section className="hm-card dp-trend" aria-label={`${dim.label}走勢`}>
                 <h2 className="hm-h">走勢<span className="hm-h-right">

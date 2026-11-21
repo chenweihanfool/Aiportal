@@ -3096,3 +3096,27 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kw-when { margin-left: var(--sp-2); font: 11.5px var(--font-mono); color: var(--c-ink-3); }
 .kw-badge { margin-left: var(--sp-2); padding: 0 7px; font-size: 0.7rem; color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: var(--r-pill); }
 .kw-empty, .kw-note { margin: 0; font-size: 0.8rem; color: var(--c-ink-2); }
+
+/* 心智面向頁主圖（MindCharts.tsx）：想法漏斗、五力 */
+.mc-card { overflow: hidden; min-width: 0; }
+.mc-frame { min-height: 6rem; }
+.mc-funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.mc-step { margin: 0.1rem 0 0.3rem 0.4rem; font: 0.74rem var(--font-mono); color: var(--c-ink-3); }
+.mc-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; max-width: 100%; min-height: 2.2rem; padding: 0 0.8rem; border: 1px solid var(--c-line); border-radius: 6px; color: var(--c-ink); font-size: 0.9rem; cursor: pointer; }
+.mc-bar b { font-variant-numeric: tabular-nums; }
+.mc-bar:hover, .mc-bar:focus-visible { border-color: var(--c-ink-2); }
+.mc-list { margin: 0.4rem 0 0.2rem; padding-left: 1.1rem; font-size: 0.82rem; color: var(--c-ink-2); display: grid; gap: 0.15rem; }
+.mc-list li { overflow-wrap: anywhere; }
+.mc-more { list-style: none; margin-left: -1.1rem; color: var(--c-ink-3); }
+.mc-radar { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.mc-radar-svg { width: min(100%, 260px); height: auto; overflow: visible; }
+.mc-legend { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; justify-content: center; font-size: 0.74rem; color: var(--c-ink-2); }
+.mc-legend i { display: inline-block; width: 1.2rem; height: 0; border-top: 2px solid; margin-right: 0.35rem; vertical-align: middle; }
+.mc-legend .mc-dash { border-top-style: dashed; }
+.mc-sparks { display: grid; gap: 0.3rem; margin-top: 0.4rem; }
+.mc-spark { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr) 5.2rem; align-items: center; gap: 0.5rem; }
+.mc-spark svg { width: 100%; height: 26px; }
+.mc-spark-l { font-size: 0.82rem; color: var(--c-ink); }
+.mc-spark-l em { margin-left: 0.3rem; padding: 0 5px; font-style: normal; font-size: 0.66rem; color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: 999px; }
+.mc-spark-v { text-align: right; font: 0.9rem var(--font-mono); color: var(--c-ink); font-variant-numeric: tabular-nums; }
+.mc-spark-v small { display: block; font-size: 0.66rem; color: var(--c-ink-3); }
