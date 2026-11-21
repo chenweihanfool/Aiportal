@@ -201,8 +201,11 @@ function Sea({ model, analyses, bridges, kbLinks, colorOf, hover, setHover, onEn
             if (seen.has(k) || !p || !q) continue
             seen.add(k)
             const x1 = p.x + p.w / 2, y1 = p.y + p.h / 2, x2 = q.x + q.w / 2, y2 = q.y + q.h / 2
-            const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - Math.min(80, Math.hypot(x2 - x1, y2 - y1) / 6)
-            lines.push({ key: k, d: `M${x1},${y1} Q${mx},${my} ${x2},${y2}`, name: bridge.name, mx, my })
+            // PM 修正：同一列的兩張卡改往下彎，標籤放在曲線真正的中點，才不會壓到島名
+            const sameRow = Math.abs(y2 - y1) < 1
+            const cx = (x1 + x2) / 2, cy = sameRow ? y1 + p.h / 2 + 36 : (y1 + y2) / 2 - Math.min(80, Math.hypot(x2 - x1, y2 - y1) / 6)
+            const mx = cx, my = (y1 + 2 * cy + y2) / 4 + (sameRow ? 12 : -4)
+            lines.push({ key: k, d: `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`, name: bridge.name, mx, my })
           }
         }
       }
@@ -353,10 +356,11 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, kbLin
       if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable)) return
       if (e.key === 'ArrowLeft') { e.preventDefault(); pick(Math.max(0, idx - 1)) }
       else if (e.key === 'ArrowRight') { e.preventDefault(); pick(Math.min(stations.length - 1, idx + 1)) }
-      else if (e.key === 'Escape') { if (panel) setPanel(null); else onBack() }
+      // PM 修正：來源面板開著時 Esc 只關面板（捕獲階段先攔，避免面板關掉後同一次事件又退回全景）
+      else if (e.key === 'Escape') { if (panel) { e.stopPropagation(); setPanel(null) } else onBack() }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   })
 
   // 選中的站置中
