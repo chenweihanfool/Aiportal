@@ -44,7 +44,7 @@ const topics = [
       claim({ id: 'b2', firstSeen: day(-1), text: '- 乙一⟦3⟧' }),
       claim({ id: 'b3', firstSeen: day(-6), text: '- 乙三' }),
       claim({ id: 'ub1', origin: 'user', firstSeen: day(-20), lastChanged: day(-1), text: '- 我補的乙一' }),
-      claim({ id: 'ub2', origin: 'user', firstSeen: day(-20), lastChanged: day(-4), text: '- 我補的乙二', status: 'disputed' }),
+      claim({ id: 'ub2', origin: 'user', firstSeen: day(-20), lastChanged: day(-4), text: '我補的乙二', status: 'disputed' }),
     ],
     claimStats: { active: 3, retired: 0, disputed: 1, user: 2 },
   }),
@@ -103,8 +103,8 @@ describe('userCorrectionDetail', () => {
     expect(d.total).toBe(3)
     expect(d.groups.map((g) => g.id)).toEqual(['b', 'a', 'f'])
     expect(d.groups[0]!.claims.map((c) => c.lastChanged)).toEqual([day(-1), day(-4)])
-    expect(d.groups[0]!.claims[1]).toEqual({ id: 'ub2', text: '- 我補的乙二', lastChanged: day(-4), disputed: true })
-    expect(d.groups[2]!.claims).toEqual([{ id: 'u1', text: '- 我補的', lastChanged: day(-2), disputed: true }])
+    expect(d.groups[0]!.claims[1]).toEqual({ id: 'ub2', text: '我補的乙二', lastChanged: day(-4), disputed: true })
+    expect(d.groups[2]!.claims).toEqual([{ id: 'u1', text: '我補的', lastChanged: day(-2), disputed: true }])
     expect(d.missingText).toBe(false)
   })
 
