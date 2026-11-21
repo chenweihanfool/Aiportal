@@ -508,6 +508,9 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   const [full, setFull] = useState(false)
   const [compact, setCompact] = useState(false)
   const [headH, setHeadH] = useState(0)
+  const mobile = useMobile()
+  const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 900))
+  const contentRef = useRef<HTMLElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const idxRef = useRef<HTMLDivElement>(null)
   const fullH = useRef(0)
@@ -567,9 +570,34 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     }
     measureHead()
     target.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', measureHead)
-    return () => { target.removeEventListener('scroll', onScroll); window.removeEventListener('resize', measureHead) }
+    const onResize = () => { measureHead(); setVh(window.innerHeight) }
+    window.addEventListener('resize', onResize)
+    return () => { target.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onResize) }
   }, [])
+
+  // 索引圖高上限：完整 42vh／精簡 24vh（手機 34vh／20vh）；整張縮進去，不在框內垂直捲
+  const maxH = Math.round(vh * (mobile ? (compact ? 0.2 : 0.34) : compact ? 0.24 : 0.42))
+
+  // 換格子／組／題之後，主畫面頂端若被黏頂索引蓋住或在視窗下方，就平滑捲動讓它落在索引底部下方 8px；已在視窗內不捲
+  const lastKey = useRef(`${where.topicId}|${where.sel}`)
+  useEffect(() => {
+    const key = `${where.topicId}|${where.sel}`
+    if (lastKey.current === key) return
+    lastKey.current = key
+    const id = window.requestAnimationFrame(() => {
+      const el = contentRef.current
+      const idx = idxRef.current
+      const sc = sentinelRef.current?.closest<HTMLElement>('.kn-root') ?? null
+      if (!el || !sc) return
+      const top = el.getBoundingClientRect().top
+      const floor = idx ? idx.getBoundingClientRect().bottom : headH
+      if (top >= floor && top < window.innerHeight - 40) return
+      const delta = top - (floor + 8)
+      if (typeof sc.scrollBy === 'function') sc.scrollBy({ top: delta, behavior: 'smooth' })
+      else sc.scrollTop += delta
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [where.topicId, where.sel, headH])
 
   const cov = a ? stationCoverage(a) : { covered: 0, total: 0 }
   const flowNode = !groupKey && diagram?.type === 'flow' ? diagram.nodes.find((n) => n.id === sel) : undefined
@@ -776,7 +804,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
               {diagram && (
                 <KnowledgeDiagram
                   topic={topic} diagram={diagram} quotes={quotes} onOpenSource={openSrc} now={now}
-                  selectedNode={groupKey ? null : sel} onSelectNode={select} nodeDots={nodeDots} compact={compact} hideDetail hideLegend
+                  selectedNode={groupKey ? null : sel} onSelectNode={select} nodeDots={nodeDots} compact={compact} maxH={maxH} hideDetail hideLegend
                 />
               )}
               {groups.length > 0 && (
@@ -789,7 +817,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
             </div>
           )}
           <div className="kis-split">
-            <section className="kis-content" data-testid="kis-content">
+            <section className="kis-content" data-testid="kis-content" ref={contentRef}>
               <div className="kis-ch">
                 <span className="kis-kind">{label}</span>
                 <span className="kis-nav">

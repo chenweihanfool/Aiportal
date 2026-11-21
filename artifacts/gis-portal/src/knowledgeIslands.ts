@@ -448,6 +448,20 @@ export function nodeOrder(d: TopicDiagram | null | undefined): string[] {
   return [...d.observations, ...d.frameworks, ...d.judgments].map((n) => n.id)
 }
 
+/**
+ * 索引圖縮放：整張圖縮到放得進高度上限（不允許框內垂直捲動），比例不超過 1；
+ * 比例低於 minScale 時改用 minScale 繪製（clamped），這時高度會超過上限、寬度超過框就橫向捲（hScroll）。
+ * natural＝圖的自然尺寸（viewBox），box.w＝可用寬度，box.maxH＝高度上限。
+ */
+export function indexScale(natural: { w: number; h: number }, box: { w: number; maxH: number }, minScale = 0.45): { scale: number; width: number; height: number; clamped: boolean; hScroll: boolean } {
+  if (natural.w <= 0 || natural.h <= 0) return { scale: 1, width: Math.max(0, natural.w), height: Math.max(0, natural.h), clamped: false, hScroll: false }
+  const want = Math.min(1, box.maxH > 0 ? box.maxH / natural.h : 1)
+  const clamped = want < minScale
+  const scale = clamped ? minScale : want
+  const width = natural.w * scale
+  return { scale, width, height: natural.h * scale, clamped, hScroll: width > box.w }
+}
+
 export const isGroupSel = (sel: string): boolean => sel.startsWith('g:')
 export const groupOfSel = (sel: string): GroupKey | null => (isGroupSel(sel) ? (sel.slice(2) as GroupKey) : null)
 

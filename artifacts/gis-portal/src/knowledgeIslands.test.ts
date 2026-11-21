@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
-  layoutSea, resolveStepBridges, chipGroups, defaultSelection, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
+  layoutSea, resolveStepBridges, chipGroups, defaultSelection, indexScale, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
 } from './knowledgeIslands'
 import { buildTree, parseBodyWithMarkers, type Topic, type TopicClaim } from './knowledgeView'
 import type { FlowDiagram } from './knowledgeView'
@@ -330,6 +330,18 @@ describe('索引模式（3.23.0）', () => {
     expect(isValidSelection('g:steps', a, flow)).toBe(false)
     const none = topic({ id: 'n', body: METHOD_BODY, diagram: flow, steps: [{ ...step('s1', 'c1'), node: 'n1' }] })
     expect(isValidSelection('g:steps', analyzeTopic(none), flow, none)).toBe(false)
+  })
+
+  it('indexScale：縮到放得進高度上限、不放大、低於下限改用下限並橫捲', () => {
+    expect(indexScale({ w: 900, h: 400 }, { w: 1200, maxH: 500 })).toMatchObject({ scale: 1, height: 400, clamped: false, hScroll: false })
+    const half = indexScale({ w: 1000, h: 600 }, { w: 1200, maxH: 300 })
+    expect(half.scale).toBeCloseTo(0.5)
+    expect(half.height).toBeCloseTo(300)
+    expect(half.width).toBeCloseTo(500)
+    const tiny = indexScale({ w: 1000, h: 1000 }, { w: 400, maxH: 100 })
+    expect(tiny).toMatchObject({ scale: 0.45, clamped: true, hScroll: true })
+    expect(tiny.height).toBeCloseTo(450)
+    expect(indexScale({ w: 0, h: 0 }, { w: 100, maxH: 100 }).scale).toBe(1)
   })
 
   it('isValidSelection', () => {

@@ -3141,7 +3141,8 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-sentinel { height: 0; }
 .kis-index { position: sticky; z-index: 4; top: 0; background: var(--c-bg); padding: var(--sp-2) 0; margin-bottom: var(--sp-3); border-bottom: 1px solid var(--c-line); min-width: 0; }
 .kis-index .kn-dg { margin: 0; }
-.kis-index[data-compact="true"] .kn-dg-scroll { max-height: 220px; }
+.kis-index .kn-dg-scroll { overflow-x: auto; overflow-y: hidden; }
+.kis-index .kn-dg-svg { margin: 0; }
 .kis-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-2); }
 .kis-grp { font: inherit; font-size: 13px; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 2px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .kis-grp em { font-style: normal; font-size: 11px; padding: 0 6px; border-radius: var(--r-pill); border: 1px solid var(--c-line-strong); }
