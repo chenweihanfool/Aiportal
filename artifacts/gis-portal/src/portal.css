@@ -3096,3 +3096,28 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kw-when { margin-left: var(--sp-2); font: 11.5px var(--font-mono); color: var(--c-ink-3); }
 .kw-badge { margin-left: var(--sp-2); padding: 0 7px; font-size: 0.7rem; color: var(--c-warn); border: 1px solid var(--c-warn); border-radius: var(--r-pill); }
 .kw-empty, .kw-note { margin: 0; font-size: 0.8rem; color: var(--c-ink-2); }
+
+/* ── 旅遊面向頁的旅行日曆與足跡縣市圖（#dim/travel；TravelCharts.tsx）── */
+.tc-card { order: 1; padding: 0.85rem 1rem; gap: 0.6rem; min-width: 0; }
+.tc-frame { min-height: 6rem; }
+.tc-sum { font-size: 0.74rem; color: var(--c-ink-2); font-weight: 400; }
+.tc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; border: 1px solid var(--c-hover); border-radius: 8px; background: var(--c-bg); padding: 0.5rem 0.6rem; }
+.tc-cal { --cs: 13px; --cg: 3px; width: calc(var(--weeks) * (var(--cs) + var(--cg))); }
+.tc-months { display: grid; grid-auto-flow: column; grid-auto-columns: calc(var(--cs) + var(--cg)); font-size: 0.62rem; color: var(--c-ink-3); height: 1rem; white-space: nowrap; }
+.tc-months span { overflow: visible; }
+.tc-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--cs)); grid-auto-columns: var(--cs); gap: var(--cg); }
+.tc-cell { position: relative; display: block; width: var(--cs); height: var(--cs); box-sizing: border-box; border-radius: 3px; background: var(--c-hover); border: 0; padding: 0; }
+.tc-cell.is-blank { background: transparent; }
+.tc-cell.is-trip { background: var(--dim); cursor: pointer; }
+.tc-cell.is-trip:hover, .tc-cell.is-trip:focus-visible { outline: 2px solid var(--c-ink); outline-offset: 1px; }
+.tc-cell.is-plan { background: transparent; border: 1px dashed var(--dim); }
+.tc-cell.is-today { box-shadow: 0 0 0 2px var(--c-ink); z-index: 1; }
+.tc-dot { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--c-ink); opacity: 0.85; }
+.tc-cell.is-trip .tc-dot { background: var(--c-bg); }
+.tc-foot { display: flex; flex-wrap: wrap; gap: 0.2rem 1.2rem; margin: 0; font-size: 0.78rem; color: var(--c-ink-2); }
+.tc-foot b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1rem; color: var(--c-ink); }
+.tc-map { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 3.4rem)); grid-template-rows: repeat(var(--rows), 2.2rem); gap: 4px; justify-content: center; }
+.tc-tile { display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--c-line); font-size: 0.72rem; color: var(--c-ink-2); background: color-mix(in srgb, var(--dim) var(--pct), transparent); }
+.tc-tile.lv-0 { background: transparent; }
+.tc-tile.lv-3, .tc-tile.lv-4 { color: var(--c-bg); border-color: transparent; font-weight: 600; }
+.tc-tile.lv-1, .tc-tile.lv-2 { color: var(--c-ink); border-color: transparent; }
