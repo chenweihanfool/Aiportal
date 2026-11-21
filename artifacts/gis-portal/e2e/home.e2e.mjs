@@ -709,8 +709,9 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
         check(`${T}：按「再看 3 則」後 5 張全部出現、按鈕消失`, afterCards === 5 && (await page.locator('[data-testid="now-more"]').count()) === 0, String(afterCards))
         if (w === 390) { await page.evaluate(() => document.querySelector('.ip-shell').scrollTo({ top: 0 })); await page.waitForTimeout(200) }
       } else {
-        // 3.4.0 起最弱面向卡一定在（由幸福指數算出，不靠推送），所以沒有推送卡時畫面上只剩這一張
-        check(`${T}：沒有推送卡時只剩最弱面向卡`, shownCards === 1 && /今天最弱的一面/.test(await page.locator('[data-testid="now-card"]').first().innerText()), String(shownCards))
+        // 首頁自己算的卡（3.4.0 最弱面向、3.23.0 想法快過期／旅遊新鮮度）不靠推送，所以沒有推送卡時只剩這幾種，最弱面向排第一
+        const kinds = await page.locator('[data-testid="now-card"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-kind')))
+        check(`${T}：沒有推送卡時只剩首頁自己算的卡（最弱面向排第一）`, kinds[0] === 'boost' && kinds.every((k) => ['boost', 'ideaAge', 'travelFresh'].includes(k)) && /今天最弱的一面/.test(await page.locator('[data-testid="now-card"]').first().innerText()), kinds.join(','))
       }
       await ctx.close()
     }
