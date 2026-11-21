@@ -318,22 +318,36 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
           </button>
         </TopBarSearch>
         <div className="st-home">
-          <StatusAside
-            on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
-            hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
-            topics={topicsFeed} searchStats={searchStats} pushStats={pushStats} reportLib={reportLib}
-            onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')}
-            sysSt={sysSt} light={light} onOpenOps={() => setDrawer('ops')}
-            svcSt={svcSt} svc={svc} onOpenSvc={() => setDrawer('svc')}
-            recent={recent.data ?? []} onPickRecent={(q) => setSeed((x) => ({ q, n: x.n + 1 }))}
-            ideasSt={ideasSt} topIdea={ideaTop[0] ?? null} foodSt={foodSt} wantEat={wantLine(wantEat)} wantGo={wantLine(wantGo)}
-            tripsSt={tripsSt} trip={trip} onOpenIdeas={openIdeas} />
-          <div className="st-left">
+          <div className="st-col st-col--l">
+            <StatusAside slot="left"
+              on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
+              hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
+              topics={topicsFeed} searchStats={searchStats} pushStats={pushStats} reportLib={reportLib}
+              onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')}
+              sysSt={sysSt} light={light} onOpenOps={() => setDrawer('ops')}
+              svcSt={svcSt} svc={svc} onOpenSvc={() => setDrawer('svc')}
+              recent={recent.data ?? []} onPickRecent={(q) => setSeed((x) => ({ q, n: x.n + 1 }))}
+              ideasSt={ideasSt} topIdea={ideaTop[0] ?? null} foodSt={foodSt} wantEat={wantLine(wantEat)} wantGo={wantLine(wantGo)}
+              tripsSt={tripsSt} trip={trip} onOpenIdeas={openIdeas} />
+          </div>
+          <div className="st-col st-col--c">
             <IdeaBoard st={ideaBoardSt} data={ideasList} top={ideaTop} nowMs={nowMs} hhi={breakdown?.displayed ?? null} onOpenIdeas={openIdeas} onOpenIdea={(id) => { if (on) openIdeaFromInsight(id); else onRequestUnlock() }} onRequestUnlock={onRequestUnlock} onRetry={ideas.reload} />
             <NowSection corner pw={pw} nowMs={nowMs} todayIso={todayIso} nudges={nudges.data} companion={companion.data} personActions={personActions.data} sourcesSettled={nowReady([nudges, companion, personActions])}
               briefInfo={brief ? { date: brief.date, summary: briefParsed?.tip ?? (briefParsed && briefParsed.tasks.length > 0 ? `${briefParsed.tasks.length} 件要注意的事` : brief.label) } : null}
               boost={boost} recipe={recipe} onActionsChange={personActions.reload}
               todayLine={on && breakdown ? todayLine(sentence, move) : null} onOpenBrief={() => setDrawer('brief')} />
+          </div>
+          <div className="st-col st-col--r">
+            <StatusAside slot="right"
+              on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
+              hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
+              topics={topicsFeed} searchStats={searchStats} pushStats={pushStats} reportLib={reportLib}
+              onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')}
+              sysSt={sysSt} light={light} onOpenOps={() => setDrawer('ops')}
+              svcSt={svcSt} svc={svc} onOpenSvc={() => setDrawer('svc')}
+              recent={recent.data ?? []} onPickRecent={(q) => setSeed((x) => ({ q, n: x.n + 1 }))}
+              ideasSt={ideasSt} topIdea={ideaTop[0] ?? null} foodSt={foodSt} wantEat={wantLine(wantEat)} wantGo={wantLine(wantGo)}
+              tripsSt={tripsSt} trip={trip} onOpenIdeas={openIdeas} />
           </div>
           {/* 3.16.0：島嶼圖移到首頁最下方，一般滾輪先捲頁面 */}
           <InsightIslands pw={pw} now={now} onRequestUnlock={onRequestUnlock} ideas={ideasList?.ideas ?? null} onOpenIdea={openIdeaFromInsight} hhiScores={hhiScores} />
