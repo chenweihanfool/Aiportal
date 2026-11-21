@@ -45,6 +45,7 @@ function useNarrow(ref: RefObject<HTMLDivElement | null>): boolean {
       window.addEventListener('resize', measure)
       return () => window.removeEventListener('resize', measure)
     }
+    return undefined
   }, [ref])
   return narrow
 }
