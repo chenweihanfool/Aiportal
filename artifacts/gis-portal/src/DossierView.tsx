@@ -178,7 +178,7 @@ function Dossier({ index, kind, name, pw, nudges }: { index: GraphIndex; kind: D
                   </div>
                 </div>
                 <EventBody pw={pw} id={active.row.id} />
-                {active.diary && <DiaryPeek date={active.row.date} pw={pw} />}
+                {active.diary && <DiaryPeek key={active.row.id} date={active.row.date} pw={pw} />}
               </div>
             )}
           </>
