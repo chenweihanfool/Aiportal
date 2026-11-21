@@ -4,7 +4,7 @@
 
 import { matchClaims, parseBodyWithMarkers, type Bullet, type BuiltTree, type ParsedBody, type Topic } from './knowledgeView'
 import type { StepDoc, StepInsight, StepRule } from './knowledgeSteps'
-import type { KbLink } from './insightWeave'
+import type { Confidence, KbLink, KbStep, StepBridge, WeaveStatus } from './insightWeave'
 
 /* ───────── 島模型 ───────── */
 
@@ -116,29 +116,40 @@ export interface TopicAnalysis {
   stations: Station[]
   /** stationId → 掛在這站的心得／法條／範本（只含有掛東西的站） */
   links: Map<string, StationLinks>
-  /** 這題所有不同的心得 id（含對不到站的） */
+  /** claim id → stationId（parsed 與 claims 都有就算，不限定有 steps） */
+  stationOfClaim: Map<string, string>
+  /** stationId → 掛在這站的 AI 步驟對應（去重後的同站同心得） */
+  ai: Map<string, KbStep[]>
+  /** 這題所有不同的心得 id（含對不到站的、含 AI 對應） */
   insightIds: Set<string>
 }
 
 /**
  * 分析一題：切站，再用 step.claim → topic.claims 同 id 的條目 → matchClaims 配到的 bullet → 所屬站，把 steps 的心得／法條／範本掛上去。
- * 對不到的步驟略過（不猜）。心得以 insightId 去重。
+ * AI 步驟對應（kbSteps）也走同一條 claim → 站的路徑掛進 ai；對不到的步驟略過（不猜），但心得仍算進 insightIds。
+ * 心得以 insightId 去重。
  */
-export function analyzeTopic(t: Topic): TopicAnalysis {
+export function analyzeTopic(t: Topic, kbSteps: readonly KbStep[] = [], hidden: ReadonlySet<string> = new Set()): TopicAnalysis {
   const parsed = t.body ? parseBodyWithMarkers(t.body) : null
   const stations = buildStations(parsed)
   const links = new Map<string, StationLinks>()
   const insightIds = new Set<string>()
-  const steps = t.steps ?? []
-  for (const s of steps) for (const i of s.why.insights) insightIds.add(i.insightId)
-  if (parsed && steps.length > 0 && t.claims && t.claims.length > 0) {
-    const bidOfClaim = new Map<string, string>()
-    for (const [bid, c] of matchClaims(parsed, t.claims)) bidOfClaim.set(c.id, bid)
+  const stationOfClaim = new Map<string, string>()
+  if (parsed) {
     const stationOfBid = new Map<string, string>()
     for (const st of stations) for (const sb of st.bullets) stationOfBid.set(sb.bid, st.id)
+    if (t.claims && t.claims.length > 0) {
+      for (const [bid, c] of matchClaims(parsed, t.claims)) {
+        const sid = stationOfBid.get(bid)
+        if (sid) stationOfClaim.set(c.id, sid)
+      }
+    }
+  }
+  const steps = t.steps ?? []
+  for (const s of steps) for (const i of s.why.insights) insightIds.add(i.insightId)
+  if (parsed && steps.length > 0) {
     for (const step of steps) {
-      const bid = bidOfClaim.get(step.claim)
-      const sid = bid ? stationOfBid.get(bid) : undefined
+      const sid = stationOfClaim.get(step.claim)
       if (!sid) continue
       let l = links.get(sid)
       if (!l) { l = { insights: [], rules: [], docs: [] }; links.set(sid, l) }
@@ -147,13 +158,26 @@ export function analyzeTopic(t: Topic): TopicAnalysis {
       for (const d of step.docs) if (!l.docs.some((x) => x.templateId === d.templateId)) l.docs.push(d)
     }
   }
-  return { topicId: t.id, seed: isSeed(t), parsed, stations, links, insightIds }
+  const ai = new Map<string, KbStep[]>()
+  for (const s of kbSteps) {
+    if (s.topic !== t.id || hidden.has(s.id)) continue
+    insightIds.add(s.insight)
+    const sid = stationOfClaim.get(s.claim)
+    if (!sid) continue
+    let l = ai.get(sid)
+    if (!l) { l = []; ai.set(sid, l) }
+    if (!l.some((x) => x.insight === s.insight)) l.push(s)
+  }
+  return { topicId: t.id, seed: isSeed(t), parsed, stations, links, stationOfClaim, ai, insightIds }
 }
 
-/** 這題掛了心得的站數 / 可掛心得的站數（只算步驟站） */
+/** 這題掛了心得的站數 / 可掛心得的站數（只算步驟站；規則比對心得或 AI 對應有其一就算） */
 export function stationCoverage(a: TopicAnalysis): { covered: number; total: number } {
   const steps = a.stations.filter((s) => s.kind === 'step')
-  return { total: steps.length, covered: steps.filter((s) => (a.links.get(s.id)?.insights.length ?? 0) > 0).length }
+  return {
+    total: steps.length,
+    covered: steps.filter((s) => (a.links.get(s.id)?.insights.length ?? 0) > 0 || (a.ai.get(s.id)?.length ?? 0) > 0).length,
+  }
 }
 
 /* ───────── 橋 ───────── */
@@ -193,6 +217,39 @@ export function bridgesAt(bridges: readonly Bridge[], topicId: string, stationId
   return out
 }
 
+/** AI 步驟橋（J）：端點已經解析成站；其餘欄位沿用 feed 的 StepBridge */
+export interface AiBridge { id: string; title: string; text: string; confidence: Confidence; status: WeaveStatus; ends: BridgeEnd[] }
+
+/**
+ * 把 feed 的 stepBridges 解析成站座標：每端用 analyses 的 stationOfClaim 對到站，對不到的端丟掉；
+ * 剩下不同題目 ≥2 才保留；id 在 hidden 的整座丟掉。輸出順序同輸入。
+ */
+export function resolveStepBridges(list: readonly StepBridge[], analyses: ReadonlyMap<string, TopicAnalysis>, hidden: ReadonlySet<string> = new Set()): AiBridge[] {
+  const out: AiBridge[] = []
+  for (const b of list) {
+    if (hidden.has(b.id)) continue
+    const ends: BridgeEnd[] = []
+    for (const e of b.ends) {
+      const stationId = analyses.get(e.topic)?.stationOfClaim.get(e.claim)
+      if (!stationId) continue
+      if (!ends.some((x) => x.topicId === e.topic && x.stationId === stationId)) ends.push({ topicId: e.topic, stationId })
+    }
+    if (new Set(ends.map((e) => e.topicId)).size < 2) continue
+    out.push({ id: b.id, title: b.title, text: b.text, confidence: b.confidence, status: b.status, ends })
+  }
+  return out
+}
+
+/** 這一站的 AI 橋，以及「別題」的另一端 */
+export function aiBridgesAt(list: readonly AiBridge[], topicId: string, stationId: string): Array<{ bridge: AiBridge; others: BridgeEnd[] }> {
+  const out: Array<{ bridge: AiBridge; others: BridgeEnd[] }> = []
+  for (const bridge of list) {
+    if (!bridge.ends.some((e) => e.topicId === topicId && e.stationId === stationId)) continue
+    out.push({ bridge, others: bridge.ends.filter((e) => e.topicId !== topicId) })
+  }
+  return out
+}
+
 /* ───────── weave kbLinks、卡片標記、統計 ───────── */
 
 /** weave kbLinks 以「題目名稱」指到題目（沒有 weave 就空陣列） */
@@ -210,8 +267,8 @@ export function cardMark(t: Topic, a: TopicAnalysis, kbLinks: readonly KbLink[] 
 
 export interface IslandStats { insights: number; bridges: number; blind: number; published: number }
 
-/** 一座島的統計：心得則數（各題不同心得加總）、碰到這座島的橋數、盲點題數／已發布題數 */
-export function islandStats(island: Pick<IslandModelIsland, 'topics'>, analyses: ReadonlyMap<string, TopicAnalysis>, bridges: readonly Bridge[]): IslandStats {
+/** 一座島的統計：心得則數（各題不同心得加總）、碰到這座島的橋數（規則橋＋AI 橋）、盲點題數／已發布題數 */
+export function islandStats(island: Pick<IslandModelIsland, 'topics'>, analyses: ReadonlyMap<string, TopicAnalysis>, bridges: readonly Bridge[], aiBridges: readonly AiBridge[] = []): IslandStats {
   const ids = new Set(island.topics.map((t) => t.id))
   let insights = 0
   let blind = 0
@@ -222,7 +279,9 @@ export function islandStats(island: Pick<IslandModelIsland, 'topics'>, analyses:
     insights += a.insightIds.size
     if (!a.seed) { published++; if (a.insightIds.size === 0) blind++ }
   }
-  return { insights, bridges: bridges.filter((b) => b.ends.some((e) => ids.has(e.topicId))).length, blind, published }
+  const bridgeCount = bridges.filter((b) => b.ends.some((e) => ids.has(e.topicId))).length
+    + aiBridges.filter((b) => b.ends.some((e) => ids.has(e.topicId))).length
+  return { insights, bridges: bridgeCount, blind, published }
 }
 
 /* ───────── 版面 ───────── */

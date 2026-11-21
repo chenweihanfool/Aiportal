@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
-  layoutSea, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
+  aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
+  layoutSea, resolveStepBridges, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
 } from './knowledgeIslands'
 import { buildTree, parseBodyWithMarkers, type Topic, type TopicClaim } from './knowledgeView'
 import type { TopicStep } from './knowledgeSteps'
-import type { KbLink } from './insightWeave'
+import type { KbLink, KbStep, StepBridge } from './insightWeave'
 
 function topic(over: Partial<Topic> & { id: string }): Topic {
   return {
@@ -154,6 +154,65 @@ describe('橋', () => {
     const an = new Map([a, b, c].map((x) => [x.topicId, x]))
     expect(islandStats({ topics: [topic({ id: 'a' })] }, an, br).bridges).toBe(2)
     expect(islandStats({ topics: [topic({ id: 'c' })] }, an, br).bridges).toBe(0)
+  })
+})
+
+describe('AI 步驟對應與 AI 橋', () => {
+  const t1 = methodTopic('m1', [])
+  const t2 = methodTopic('m2', [])
+  const aiStep = (id: string, topicId: string, claimId: string, insightId: string): KbStep => ({
+    id, insight: insightId, topic: topicId, claim: claimId, relation: 'support', text: '假對應', confidence: 'mid', status: 'proposed', since: '2026-11-22',
+  })
+  const stepBridge = (id: string, ends: StepBridge['ends']): StepBridge => ({
+    id, title: '同一步', text: '兩題同一步', ends, confidence: 'mid', status: 'proposed', since: '2026-11-22',
+  })
+  const ka = aiStep('S-00000001', 'm1', 'c001', 'INS-2026-11-01-00000051')
+  const kb2 = aiStep('S-00000002', 'm2', 'c002', 'INS-2026-11-01-00000052')
+
+  it('AI 對應掛到 claim 對到的站，同站同心得去重', () => {
+    const a = analyzeTopic(t1, [ka, { ...ka, id: 'S-0000000f' }])
+    expect(a.ai.get('step:0')!.map((s) => s.insight)).toEqual([ka.insight])
+    expect(a.ai.has('step:1')).toBe(false)
+    expect(a.insightIds.has(ka.insight)).toBe(true)
+  })
+  it('claim 對不到站的不掛，但心得仍算進 insightIds', () => {
+    const a = analyzeTopic(t1, [aiStep('S-00000003', 'm1', 'c999', 'INS-2026-11-01-00000053')])
+    expect(a.ai.size).toBe(0)
+    expect(a.insightIds.has('INS-2026-11-01-00000053')).toBe(true)
+  })
+  it('hidden 的 AI 對應不掛也不算心得；別題的不掛', () => {
+    const a = analyzeTopic(t1, [ka], new Set([ka.id]))
+    expect(a.ai.size).toBe(0)
+    expect(a.insightIds.has(ka.insight)).toBe(false)
+    expect(analyzeTopic(t1, [kb2]).ai.size).toBe(0)
+  })
+  it('站覆蓋把 AI 對應算進去', () => {
+    expect(stationCoverage(analyzeTopic(t1, [ka]))).toEqual({ covered: 1, total: 2 })
+  })
+  it('resolveStepBridges：對不到的端丟掉、不同題不到 2 題丟整座、hidden 丟整座', () => {
+    const an = new Map([t1, t2].map((t) => [t.id, analyzeTopic(t, [ka, kb2])]))
+    const good = stepBridge('J-00000001', [{ topic: 'm1', claim: 'c001' }, { topic: 'm2', claim: 'c002' }])
+    const mixed = stepBridge('J-00000002', [{ topic: 'm1', claim: 'c001' }, { topic: 'm2', claim: 'c999' }])
+    const sameTopic = stepBridge('J-00000003', [{ topic: 'm1', claim: 'c001' }, { topic: 'm1', claim: 'c002' }])
+    const res = resolveStepBridges([good, mixed, sameTopic], an)
+    expect(res.map((b) => b.id)).toEqual(['J-00000001'])
+    expect(res[0]!.ends).toEqual([{ topicId: 'm1', stationId: 'step:0' }, { topicId: 'm2', stationId: 'step:1' }])
+    expect(resolveStepBridges([good], an, new Set(['J-00000001']))).toEqual([])
+  })
+  it('aiBridgesAt 回別題的另一端', () => {
+    const an = new Map([t1, t2].map((t) => [t.id, analyzeTopic(t)]))
+    const b = resolveStepBridges([stepBridge('J-00000001', [{ topic: 'm1', claim: 'c001' }, { topic: 'm2', claim: 'c002' }])], an)
+    const at = aiBridgesAt(b, 'm1', 'step:0')
+    expect(at).toHaveLength(1)
+    expect(at[0]!.others).toEqual([{ topicId: 'm2', stationId: 'step:1' }])
+    expect(aiBridgesAt(b, 'm1', 'step:1')).toEqual([])
+  })
+  it('islandStats 的橋數含 AI 橋', () => {
+    const an = new Map([t1, t2].map((t) => [t.id, analyzeTopic(t)]))
+    const b = resolveStepBridges([stepBridge('J-00000001', [{ topic: 'm1', claim: 'c001' }, { topic: 'm2', claim: 'c002' }])], an)
+    expect(islandStats({ topics: [t1] }, an, [], b).bridges).toBe(1)
+    expect(islandStats({ topics: [topic({ id: 'zzz' })] }, an, [], b).bridges).toBe(0)
+    expect(islandStats({ topics: [t1] }, an, []).bridges).toBe(0)
   })
 })
 
