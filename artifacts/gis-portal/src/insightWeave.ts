@@ -15,6 +15,13 @@ export interface Tension extends Base { text: string; members: string[]; cluster
 export interface KbLink extends Base { kind: KbKind; topic: string; insights: string[]; text: string }
 export type WeaveItem = Lighthouse | Bridge | Tension | KbLink
 
+export type StepRelation = 'support' | 'extend' | 'contrast'
+/** 步驟對應（S）：一則心得對到某題的某一條 claim */
+export interface KbStep extends Base { insight: string; topic: string; claim: string; relation: StepRelation; text: string }
+export interface StepBridgeEnd { topic: string; claim: string }
+/** 步驟橋（J）：跨題目的同一步 */
+export interface StepBridge extends Base { title: string; text: string; ends: StepBridgeEnd[] }
+
 export interface WeavePayload {
   generatedAt: string
   lighthouses: Lighthouse[]
@@ -22,6 +29,8 @@ export interface WeavePayload {
   bridges: Bridge[]
   tensions: Tension[]
   kbLinks: KbLink[]
+  kbSteps: KbStep[]
+  stepBridges: StepBridge[]
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -73,7 +82,20 @@ export function parseWeave(raw: unknown): WeavePayload | null {
     const kind: KbKind | null = o.kind === 'apply' || o.kind === 'seed' || o.kind === 'blindspot' ? o.kind : null
     return b && text && topic && kind ? { ...b, kind, topic, text, insights: strs(o.insights) } : null
   })
-  return { generatedAt: typeof raw.generatedAt === 'string' ? raw.generatedAt : '', lighthouses, insufficient, bridges, tensions, kbLinks }
+  const kbSteps = eachItem<KbStep>(raw.kbSteps, (o) => {
+    const b = base(o); const insight = str(o.insight); const topic = str(o.topic); const claim = str(o.claim); const text = str(o.text)
+    const relation: StepRelation | null = o.relation === 'support' || o.relation === 'extend' || o.relation === 'contrast' ? o.relation : null
+    return b && insight && topic && claim && text && relation ? { ...b, insight, topic, claim, relation, text } : null
+  })
+  const stepBridges = eachItem<StepBridge>(raw.stepBridges, (o) => {
+    const b = base(o); const title = str(o.title); const text = str(o.text)
+    const ends = eachItem<StepBridgeEnd>(o.ends, (e) => {
+      const topic = str(e.topic); const claim = str(e.claim)
+      return topic && claim ? { topic, claim } : null
+    })
+    return b && title && text && ends.length >= 2 ? { ...b, title, text, ends } : null
+  })
+  return { generatedAt: typeof raw.generatedAt === 'string' ? raw.generatedAt : '', lighthouses, insufficient, bridges, tensions, kbLinks, kbSteps, stepBridges }
 }
 
 export interface VerdictRow { id?: string | number; itemId: string; verdict: Verdict }
@@ -93,6 +115,7 @@ export function verdictOf(verdicts: ReadonlyMap<string, 'ok' | 'no'>, item: { id
   return verdicts.get(item.id) ?? (item.status === 'confirmed' ? 'ok' : null)
 }
 
+export const RELATION_TEXT: Record<StepRelation, string> = { support: '印證', extend: '補充', contrast: '對照' }
 export const CONF_TEXT: Record<Confidence, string> = { high: '信心 高 ●●●', mid: '信心 中 ●●○', low: '信心 低 ●○○' }
 export const KB_KIND_TEXT: Record<KbKind, string> = { apply: '可用在', seed: '可起頭', blindspot: '盲點' }
 
@@ -113,8 +136,11 @@ const EMPTY: ClusterWeave = { lighthouses: [], insufficient: null, bridges: [], 
 const blank = (): ClusterWeave => ({ lighthouses: [], insufficient: null, bridges: [], tensions: [], kb: [] })
 const push = <T>(list: T[], x: T): void => { if (!list.includes(x)) list.push(x) }
 
+/** 只有舊欄位的 payload（新欄位選填）：weaveIndex 接受，讓還沒有新欄位的呼叫端不用改。 */
+export type WeavePayloadInput = Omit<WeavePayload, 'kbSteps' | 'stepBridges'> & Partial<Pick<WeavePayload, 'kbSteps' | 'stepBridges'>>
+
 /** 依島、依心得 id 建索引。依據 id 不在心得清單的不列入；剩下沒有依據的項目整個丟掉。 */
-export function weaveIndex(payload: WeavePayload, insights: readonly { id: string; cluster: string }[]): WeaveIndex {
+export function weaveIndex(payload: WeavePayloadInput, insights: readonly { id: string; cluster: string }[]): WeaveIndex {
   const known = new Map(insights.map((i) => [i.id, i.cluster]))
   const keep = (ids: readonly string[]): string[] => ids.filter((i) => known.has(i))
   const lighthouses = payload.lighthouses.map((l) => ({ ...l, evidence: keep(l.evidence) })).filter((l) => l.evidence.length > 0)
@@ -125,6 +151,8 @@ export function weaveIndex(payload: WeavePayload, insights: readonly { id: strin
   const tensions = payload.tensions.map((t) => ({ ...t, members: keep(t.members) })).filter((t) => t.members.length > 0)
     .map((t) => ({ ...t, clusters: t.clusters.length > 0 ? t.clusters : [...new Set(t.members.map((m) => known.get(m)!))] }))
   const kbLinks = payload.kbLinks.map((k) => ({ ...k, insights: keep(k.insights) }))
+  const kbSteps = (payload.kbSteps ?? []).filter((s) => known.has(s.insight))
+  const stepBridges = payload.stepBridges ?? []
 
   const byC = new Map<string, ClusterWeave>()
   const cw = (cid: string): ClusterWeave => { let c = byC.get(cid); if (!c) { c = blank(); byC.set(cid, c) } return c }
@@ -153,7 +181,7 @@ export function weaveIndex(payload: WeavePayload, insights: readonly { id: strin
     return s
   }
   return {
-    payload: { ...payload, lighthouses, insufficient, bridges, tensions, kbLinks },
+    payload: { ...payload, lighthouses, insufficient, bridges, tensions, kbLinks, kbSteps, stepBridges },
     hasAny: lighthouses.length + insufficient.length + bridges.length + tensions.length + kbLinks.length > 0,
     cluster: (cid) => byC.get(cid) ?? EMPTY,
     insight: (id) => byI.get(id) ?? EMPTY,
