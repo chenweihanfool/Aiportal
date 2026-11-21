@@ -3,7 +3,9 @@
 // 做什麼：本機靜態伺服器提供 dist/public，Playwright 攔截所有 /api/*，用 fixtures/topics-diagram.json 的題目，
 // 替方法頁 tflow 加上假的 steps／business，驗證：
 // 有 steps 的方法頁出現步驟卡與 ⬇ 範本 chip、business 為 null 的頁不顯示 📄、沒有 steps 的方法頁（ttime）沒有步驟卡也沒有現場模式按鈕、
-// 按「✕」會 POST unlink 更正並顯示「已記下」、375 寬沒有橫向捲動。全程不碰真實服務，資料全是虛構。
+// 按「✕」會 POST unlink 更正並顯示「已記下」、375 寬沒有橫向捲動。
+// 3.23.0 起進島是泳道圖索引畫面：預設選第一個有步驟卡的格子、一次只顯示被選中格子的那張步驟卡，點別的格子才換；判斷點格子用分岔卡。
+// 全程不碰真實服務，資料全是虛構。
 //
 // 執行（需先 build）：
 //   BASE_PATH=/ pnpm --filter @workspace/gis-portal run build
@@ -46,7 +48,7 @@ const STEPS = [
     },
     cases: [{ case: '示範案甲', date: '2026-05-12' }],
   },
-  { id: 's2', title: '寄出通知', claim: 'c011', node: null, docs: [], why: { rules: [], insights: [], pitfalls: [{ text: '只寄申請書沒附收據', claim: 'c011', case: null }] }, cases: [] },
+  { id: 's2', title: '寄出通知', claim: 'c011', node: 'b', docs: [], why: { rules: [], insights: [], pitfalls: [{ text: '只寄申請書沒附收據', claim: 'c011', case: null }] }, cases: [] },
 ]
 const topicsFor = (business) => ({
   ...fixture,
@@ -88,18 +90,28 @@ try {
   // 1. 有 steps、有 business：步驟卡、範本 chip、沒有現場模式按鈕
   let r = await open({ width: 1280, height: 900 }, 'knowledge/tflow', '鑑界')
   await r.page.waitForSelector('.kn-stepcard', { timeout: 15000 })
-  check('有 steps 的方法頁出現 2 張步驟卡', (await r.page.locator('.kn-stepcard').count()) === 2)
+  check('進島是索引畫面：有常駐的泳道圖，沒有舊的橫軸與「完整頁面」按鈕', (await r.page.locator('[data-testid="kis-index"] .kn-dg-svg').count()) === 1 && (await r.page.locator('.kis-rail').count()) === 0 && (await r.page.getByText('完整頁面').count()) === 0)
+  check('預設選第一個有步驟卡的格子，只顯示那一張步驟卡', (await r.page.locator('.kn-stepcard').count()) === 1 && /確認退費依據/.test(await r.page.locator('.kn-stepcard').first().innerText()))
+  check('右側有「這一格的旁註」', (await r.page.locator('[data-testid="kis-side"]').count()) === 1)
   const chipText = await r.page.locator('.kn-sc-docbtn').first().innerText()
   check('範本 chip 有 ⬇ 與家族名', /鑑界退費/.test(chipText) && /⬇/.test(chipText))
   check('舊版數顯示「＋2 版」', /＋2 版/.test(await r.page.locator('.kn-sc-others').first().innerText()))
   check('沒有現場模式按鈕', (await r.page.getByText('現場模式').count()) === 0)
   check('步驟卡沒有勾選框', (await r.page.locator('.kn-stepcards input[type="checkbox"]').count()) === 0)
-  check('沒有範本的步驟顯示灰字「還不知道」', /還不知道/.test(await r.page.locator('.kn-stepcard').nth(1).locator('[aria-label="要用的文件"]').innerText()))
   // 按規定依據的「✕」：POST unlink 並顯示「已記下」
   await r.page.locator('.kn-stepcard').first().locator('.kn-sc-link').first().locator('.kn-sc-x').click()
   await r.page.waitForSelector('.kn-sc-ok', { timeout: 5000 })
   check('按 ✕ 送出 unlink 更正（含 claimId 與 text）', r.posts.length === 1 && r.posts[0].kind === 'unlink' && r.posts[0].claimId === 'c010' && r.posts[0].text === 'rule:c010', JSON.stringify(r.posts[0] ?? null))
   check('送出後顯示「已記下」', (await r.page.locator('.kn-sc-ok').count()) >= 1)
+  // 點別的格子：換成那一格的步驟卡，網址同步成 /s/<格子>
+  await r.page.locator('.kn-dg-node[aria-label^="收件登記"]').click()
+  await r.page.waitForFunction(() => /寄出通知/.test(document.querySelector('.kn-stepcard')?.textContent ?? ''), null, { timeout: 5000 })
+  check('點「收件登記」格子換成第二張步驟卡，網址同步', (await r.page.locator('.kn-stepcard').count()) === 1 && /\/s\/b$/.test(await r.page.evaluate(() => location.hash)), await r.page.evaluate(() => location.hash))
+  check('沒有範本的步驟顯示灰字「還不知道」', /還不知道/.test(await r.page.locator('.kn-stepcard').first().locator('[aria-label="要用的文件"]').innerText()))
+  // 判斷點格子：分岔卡
+  await r.page.locator('.kn-dg-node[aria-label^="附件齊全"]').click()
+  await r.page.waitForSelector('.kfk, .kn-dg-detail', { timeout: 5000 })
+  check('點判斷點格子顯示分岔卡（沒有分支時退回格子說明）', (await r.page.locator('.kfk').count()) + (await r.page.locator('.kn-dg-detail').count()) >= 1)
   check('沒有 pageerror', r.errors.length === 0, r.errors.join(' | '))
   await r.ctx.close()
 
@@ -111,7 +123,7 @@ try {
 
   // 3. 沒有 steps 的方法頁（ttime）：沒有步驟卡、沒有現場模式按鈕
   r = await open({ width: 1280, height: 900 }, 'knowledge/ttime', '鑑界')
-  await r.page.waitForSelector('.kn-title', { timeout: 15000 })
+  await r.page.waitForSelector('.kis-title', { timeout: 15000 })
   check('沒有 steps 的方法頁沒有步驟卡', (await r.page.locator('.kn-stepcard').count()) === 0)
   check('沒有 steps 的方法頁沒有現場模式按鈕', (await r.page.getByText('現場模式').count()) === 0)
   await r.ctx.close()
