@@ -1,5 +1,5 @@
-// /api/insights 的 fetcher（後端：api-server，契約見任務單 insight-tree-web）。純邏輯在 insightTree.ts。
-import { parseInsightDetail, parseInsights, type InsightData, type InsightDetail } from './insightTree'
+// /api/insights 的 fetcher（後端：api-server，契約見任務單 insight-tree-web）。純邏輯在 insightModel.ts。
+import { parseInsightDetail, parseInsights, type InsightData, type InsightDetail } from './insightModel'
 
 const API_BASE = import.meta.env.BASE_URL ?? '/'
 

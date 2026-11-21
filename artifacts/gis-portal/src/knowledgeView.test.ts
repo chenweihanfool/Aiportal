@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDiagram, bulletId, bulletsCiting, buildTree, checkKey, cleanGrowthText, changesByDay, recentChangeOf, loadChecks, relatedByKind, saveChecks, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, layoutTidyTree, monthSeries, parseBody, parseTopics, STALE_MIN, treeToLayoutInput, type Topic, type TreeInput } from './knowledgeView'
+import { parseDiagram, bulletId, bulletsCiting, buildTree, checkKey, cleanGrowthText, changesByDay, recentChangeOf, loadChecks, relatedByKind, saveChecks, caseTimeline, commonTitlePrefix, groupSourcesByCase, highlightRanges, markerOrdinals, parseBodyWithMarkers, stageOf, filterTopics, groupTopics, isStale, kindLabel, monthSeries, parseBody, parseTopics, STALE_MIN, type Topic } from './knowledgeView'
 
 const feed = (payload: unknown, available = true) => ({ available, payload })
 
@@ -261,98 +261,6 @@ describe('parseBody', () => {
 
   it('多餘空白被收乾淨', () => {
     expect(parseBody('## 這件事到底在幹嘛\n- A   ⟦1⟧  B').summary!.text).toBe('A B')
-  })
-})
-
-describe('layoutTidyTree', () => {
-  const tree: TreeInput = {
-    id: 'R', label: '根', kind: 'root',
-    children: [
-      { id: 'D1', label: '領域', kind: 'domain', children: [
-        { id: 'B1', label: '枝', kind: 'branch', children: [
-          { id: 'T1', label: '一', kind: 'topic', docs: 0 },
-          { id: 'T2', label: '二', kind: 'topic', docs: 100 },
-        ] },
-      ] },
-      { id: 'T3', label: '三', kind: 'topic', docs: 8 },
-    ],
-  }
-  const at = (l: ReturnType<typeof layoutTidyTree>, id: string) => l.nodes.find((n) => n.id === id)!
-
-  it('根在左、葉在右：x 依深度遞增', () => {
-    const l = layoutTidyTree(tree)
-    expect(at(l, 'R').x).toBeLessThan(at(l, 'D1').x)
-    expect(at(l, 'D1').x).toBeLessThan(at(l, 'B1').x)
-    expect(at(l, 'B1').x).toBeLessThan(at(l, 'T1').x)
-    expect(at(l, 'R').depth).toBe(0)
-    expect(at(l, 'T1').depth).toBe(3)
-  })
-
-  it('葉節點依序等距，父節點 y＝子節點 y 平均', () => {
-    const l = layoutTidyTree(tree, { dy: 30, pad: 10 })
-    expect(at(l, 'T1').y).toBe(10)
-    expect(at(l, 'T2').y).toBe(40)
-    expect(at(l, 'T3').y).toBe(70)
-    expect(at(l, 'B1').y).toBe(25)
-    expect(at(l, 'D1').y).toBe(25)
-    expect(at(l, 'R').y).toBe((25 + 70) / 2)
-  })
-
-  it('邊：每個非根節點一條，from 是父', () => {
-    const l = layoutTidyTree(tree)
-    expect(l.edges).toHaveLength(l.nodes.length - 1)
-    expect(l.edges).toContainEqual({ from: 'B1', to: 'T2' })
-  })
-
-  it('題目的 r 依 docs 在 5～14 之間', () => {
-    const l = layoutTidyTree(tree)
-    expect(at(l, 'T1').r).toBe(5)
-    expect(at(l, 'T2').r).toBe(14)
-    expect(at(l, 'T3').r).toBe(9)
-  })
-
-  it('收合：collapsed 節點的子孫不出現，本身變成葉', () => {
-    const l = layoutTidyTree(tree, { collapsed: new Set(['D1']), dy: 30, pad: 10 })
-    expect(l.nodes.map((n) => n.id)).toEqual(['R', 'D1', 'T3'])
-    expect(at(l, 'D1').y).toBe(10)
-    expect(at(l, 'T3').y).toBe(40)
-  })
-
-  it('確定性：同輸入同輸出；kind 與 label 帶出', () => {
-    expect(layoutTidyTree(tree)).toEqual(layoutTidyTree(tree))
-    expect(at(layoutTidyTree(tree), 'B1')).toMatchObject({ kind: 'branch', label: '枝' })
-  })
-
-  it('只有根時不報錯', () => {
-    const l = layoutTidyTree({ id: 'R', label: 'r', kind: 'root' })
-    expect(l.nodes).toHaveLength(1)
-    expect(l.edges).toEqual([])
-  })
-})
-
-describe('treeToLayoutInput', () => {
-  it('未歸類題目掛在「未歸類」領域下；沒有未歸類時不出現', () => {
-    const A = topic({ id: 'A', docs: 2 })
-    const withU = treeToLayoutInput(buildTree({ topics: [A], tree: null }))
-    expect(withU.children![0]).toMatchObject({ id: '__unassigned', label: '未歸類' })
-    expect(withU.children![0]!.children![0]).toMatchObject({ id: 'A', kind: 'topic', docs: 2 })
-    const none = treeToLayoutInput(buildTree({ topics: [], tree: null }))
-    expect(none.children).toEqual([])
-  })
-})
-
-describe('monthSeries', () => {
-  it('補齊首尾之間缺的月份，跨年也對', () => {
-    expect(monthSeries([{ month: '2025-11', count: 2 }, { month: '2026-02', count: 1 }])).toEqual([
-      { month: '2025-11', count: 2 }, { month: '2025-12', count: 0 }, { month: '2026-01', count: 0 }, { month: '2026-02', count: 1 },
-    ])
-  })
-
-  it('亂序輸入排好、同月份加總；空輸入回空', () => {
-    expect(monthSeries([{ month: '2026-03', count: 1 }, { month: '2026-02', count: 4 }, { month: '2026-03', count: 2 }])).toEqual([
-      { month: '2026-02', count: 4 }, { month: '2026-03', count: 3 },
-    ])
-    expect(monthSeries([])).toEqual([])
   })
 })
 

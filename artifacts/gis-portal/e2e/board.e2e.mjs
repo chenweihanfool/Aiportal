@@ -144,7 +144,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })
 async function newPage(viewport) {
-  const ctx = await browser.newContext({ viewport })
+  const ctx = await browser.newContext({ viewport, colorScheme: 'dark' })
   await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
   const page = await ctx.newPage()
   const errors = []
@@ -225,7 +225,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     await page.locator('.bd-idea .bd-more').click()
     await page.waitForSelector('.bd-drawer .bd-idea-list .bd-idea-item')
     const mindTxt = await page.locator('.bd-drawer section').first().innerText()
-    check('想法庫抽屜最上方：心智分數（合成版）、計入幸福指數、算式與想法分數組成', /🧮 心智分數\s*62\.9/.test(mindTxt) && /計入幸福指數/.test(mindTxt) && !/並行中/.test(mindTxt) && /＝ 想法 62\.4 × 80% ＋ 日報 65 × 20%/.test(mindTxt) && /近 7 天新想法 3 個 ÷ 過去 8 週每週中位數 2/.test(mindTxt) && /近 28 天實行 1 ÷ 有機會實行的 9/.test(mindTxt), mindTxt.slice(0, 300))
+    check('想法庫抽屜最上方：心智分數（合成版）、計入幸福指數、算式與想法分數組成', /🧮 心智分數\s*62\.9/.test(mindTxt) && /計入幸福指數/.test(mindTxt) && !/並行中/.test(mindTxt) && /＝ 想法 62\.4 × 80% ＋ 日報 65 × 20%/.test(mindTxt) && /近 7 天新想法\s*3\s*個，6 個＝50 分/.test(mindTxt) && /近 28 天實行\s*1\s*個，8 個＝50 分/.test(mindTxt), mindTxt.slice(0, 300))
     check('日報五項明細', /📊 日報（.*）推進 3・決策 2・卡點 3・覺察 2・能量 3/.test(mindTxt))
     check('曲線只剩心智分數與想法分數兩條（不再有日記篇數版）', (await page.locator('.bd-drawer svg[aria-label="心智分數與想法分數"] polyline').count()) === 2 && !/日記篇數/.test(mindTxt))
     const nOpen = await page.locator('.bd-drawer .bd-idea-list .bd-idea-item').count()
@@ -251,7 +251,7 @@ for (const [w, h] of [[1920, 1080], [1920, 900], [1440, 900], [1536, 864], [1366
     await open1.getByRole('button', { name: '✅ 已完成' }).click()
     await page.waitForSelector('.bd-drawer .bd-idea-copytext')
     const clip = await page.evaluate(() => navigator.clipboard.readText())
-    check('按「✅ 已完成」複製含編號、標題、標記與補充的一句話', clip.startsWith(`💡✅ ${firstId}「`) && /」已完成\n花了三個晚上$/.test(clip), JSON.stringify(clip))
+    check('按「✅ 已完成」複製含編號、標題、標記與補充的一句話', clip.startsWith(`💡✅ ${firstId}「`) && /」已完成\r?\n花了三個晚上$/.test(clip), JSON.stringify(clip))
     check('複製後畫面顯示已複製的內容', /已複製/.test(await open1.innerText()))
     check('複製按鈕不送出任何寫入請求（入口網只顯示）', reqs.length === 0, reqs.join(','))
     check('候選想法不提供「重新列為候選」按鈕', (await open1.getByRole('button', { name: /重新列為候選/ }).count()) === 0)

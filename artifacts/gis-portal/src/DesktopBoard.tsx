@@ -13,7 +13,7 @@ import { IdeaDashboard } from './IdeaDashboard'
 import { apiFetchInsights } from './insightApi'
 import { insightsForIdea } from './insightLinks'
 import { taipeiDateOf } from './companion'
-import { RELATION_LABEL, type Insight, type InsightData } from './insightTree'
+import { RELATION_LABEL, type Insight, type InsightData } from './insightModel'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
 

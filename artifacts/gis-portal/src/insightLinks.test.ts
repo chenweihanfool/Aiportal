@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { insightsForIdea, insightsForPerson, rootAction, rootPaths, rootSlots, rootTargets } from './insightLinks'
-import type { Insight, InsightData, InsightIdeaLink, InsightPersonLink, InsightRelation } from './insightTree'
+import type { Insight, InsightData, InsightIdeaLink, InsightPersonLink, InsightRelation } from './insightModel'
 
 function mk(id: string, date: string, o: { time?: string | null; relation?: InsightRelation; people?: InsightPersonLink[]; ideas?: InsightIdeaLink[] } = {}): Insight {
   return { id, date, time: o.time ?? null, text: id, provenance: 'diary', cluster: 'c', thread: 't', relation: o.relation ?? 'new', parent: null, links: { people: o.people ?? [], ideas: o.ideas ?? [], topics: [] } } as Insight

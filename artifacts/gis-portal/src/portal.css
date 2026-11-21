@@ -2580,188 +2580,10 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 @media (min-width: 1100px) {
   .st-home { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(280px, 320px); grid-template-areas: "l c r" "isl isl isl"; grid-template-rows: none; align-items: start; gap: var(--sp-4); }
 }
-/* ─── 我的心得樹（2.99.0）：樹高＝時間，枝為由粗到細的填色輪廓，葉形依關係，群色盤由 insightPalette.ts 算（深淺主題各一組）。class 一律 it- 開頭；其餘顏色只用全站 --c-* token。 ─── */
-.it-root {
-  --it-trunk0: color-mix(in srgb, var(--c-warn) 38%, var(--c-ink-3));
-  --it-trunk1: color-mix(in srgb, var(--c-accent) 62%, var(--c-ink-3));
-  position: relative; min-width: 0; padding: var(--sp-4); color: var(--c-ink); container-type: inline-size;
-  background: radial-gradient(ellipse 80% 55% at 45% 100%, var(--c-accent-soft), transparent 75%), var(--c-surface);
-  border: 1px solid var(--c-line); border-radius: var(--r-lg); overflow-x: clip;
-}
-:where(.it-root) button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
-.it-root button:focus-visible, .it-leaf:focus-visible, .it-cap:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 6px; }
-.it-head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-2); }
-.it-title { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--c-ink); }
-.it-play { margin-left: auto; font: 12.5px var(--font-mono); padding: 4px 12px; border: 1px solid var(--c-accent-dim); border-radius: var(--r-pill); color: var(--c-accent-ink); background: var(--c-accent-soft); }
-.it-play:hover:not(:disabled) { border-color: var(--c-accent); }
-.it-play:disabled { opacity: 0.5; cursor: default; }
-.it-frame { min-height: 120px; }
-.it-skel { height: 260px; border-radius: var(--r-md); background: linear-gradient(90deg, var(--c-raised) 25%, var(--c-line) 50%, var(--c-raised) 75%); background-size: 200% 100%; animation: hm-shimmer 1.4s linear infinite; }
-
-/* 版面：桌機樹在左、群清單在右；卡片窄（手機、或首頁左欄被擠窄）時群清單移到樹的下方 */
-.it-body { display: grid; grid-template-columns: minmax(0, 1fr) 15.5rem; gap: var(--sp-4); align-items: start; }
-.it-main { min-width: 0; }
-@container (max-width: 640px) { .it-body { grid-template-columns: minmax(0, 1fr); } }
-.it-stage { position: relative; width: 100%; min-width: 0; }
-.it-svg { display: block; max-width: 100%; overflow: hidden; border-radius: var(--r-md); }
-
-/* 地面、時間刻度 */
-.it-trunk-s0 { stop-color: var(--it-trunk0); }
-.it-trunk-s1 { stop-color: var(--it-trunk1); }
-.it-ground-s0 { stop-color: var(--c-accent); stop-opacity: 0.22; }
-.it-ground-s1 { stop-color: var(--c-accent); stop-opacity: 0; }
-.it-hline-s0 { stop-color: var(--c-accent); stop-opacity: 0.55; }
-.it-hline-s1 { stop-color: var(--c-accent); stop-opacity: 0; }
-/* 質感層（3.10.0）：漸層與半透明疊層，不用 filter／drop-shadow */
-.it-side-s0 { stop-color: white; stop-opacity: 0; }
-.it-side-s1 { stop-color: white; stop-opacity: 0.22; }
-.it-side-s2 { stop-color: var(--c-bg); stop-opacity: 0.28; }
-.it-gloss-s0 { stop-color: white; stop-opacity: 0.38; }
-.it-gloss-s1 { stop-color: white; stop-opacity: 0; }
-.it-band-s0 { stop-color: color-mix(in srgb, var(--c-warn) 40%, var(--c-ink-3)); stop-opacity: 0.22; }
-.it-band-s1 { stop-color: color-mix(in srgb, var(--c-warn) 40%, var(--c-ink-3)); stop-opacity: 0; }
-.it-soil-s0 { stop-color: color-mix(in srgb, var(--c-warn) 14%, var(--c-surface)); }
-.it-soil-s1 { stop-color: color-mix(in srgb, var(--c-accent) 8%, var(--c-surface)); }
-.it-trunk-gloss, .it-flare, .it-soil-band, .it-gloss, .it-limb-hl, .it-soil-plate, .it-root-p0 { pointer-events: none; }
-.it-flare { stroke: var(--it-trunk1); stroke-width: 0.6; stroke-linejoin: round; }
-.it-gloss { stroke: none; }
-.it-limb-hl { fill: none; stroke: color-mix(in srgb, currentColor 55%, white); stroke-width: 0.9; stroke-linejoin: round; opacity: 0.4; transition: opacity 0.12s; }
-.it-hl .it-limb-hl:not(.it-lit) { opacity: 0.08; }
-.it-fx .it-limb-hl.it-dimc { opacity: 0.1; }
-.it-soil-plate { stroke: color-mix(in srgb, var(--c-accent) 22%, transparent); stroke-width: 1; }
-/* 3.11.0 稀疏點綴：很淡、不可點，畫在樹幹之前 */
-.it-decor, .it-decor * { pointer-events: none; }
-.it-hill { stroke: none; }
-/* 3.12.0：淺色的遠山像晨霧——遠的一道淡杏、近的一道淡薄荷（與底色混，不發灰）；深色由下方規則覆寫回偏 ink 的混色 */
-.it-hill-0 { fill: color-mix(in srgb, var(--c-warn) 38%, var(--c-surface)); opacity: 0.4; }
-.it-hill-1 { fill: color-mix(in srgb, var(--c-accent) 30%, var(--c-surface)); opacity: 0.42; }
-.it-grass { fill: none; stroke: color-mix(in srgb, var(--c-accent) 40%, var(--c-ink-3)); stroke-width: 0.9; stroke-linecap: round; opacity: 0.32; }
-.it-mote { fill: var(--c-accent); opacity: 0.22; }
-/* 深色：土壤不發灰（多一點暖色與強調色），點綴維持很淡 */
-.it-root[data-theme-mode="dark"] .it-soil-s0 { stop-color: color-mix(in srgb, var(--c-warn) 22%, var(--c-surface)); }
-.it-root[data-theme-mode="dark"] .it-soil-s1 { stop-color: color-mix(in srgb, var(--c-accent) 12%, var(--c-surface)); }
-.it-root[data-theme-mode="dark"] .it-band-s0 { stop-opacity: 0.3; }
-.it-root[data-theme-mode="dark"] .it-ground-s0 { stop-opacity: 0.28; }
-.it-root[data-theme-mode="dark"] .it-soil-plate { stroke: color-mix(in srgb, var(--c-accent) 30%, transparent); }
-.it-root[data-theme-mode="dark"] .it-hill-0 { fill: color-mix(in srgb, var(--c-accent) 14%, var(--c-ink-3)); opacity: 0.08; }
-.it-root[data-theme-mode="dark"] .it-hill-1 { fill: color-mix(in srgb, var(--c-accent) 22%, var(--c-ink-3)); opacity: 0.12; }
-/* 3.12.0：深色底上原本 0.26 幾乎看不見；調亮、草色也撥亮一點 */
-.it-root[data-theme-mode="dark"] .it-grass { stroke: color-mix(in srgb, var(--c-accent) 55%, var(--c-ink-2)); opacity: 0.46; }
-.it-root[data-theme-mode="dark"] .it-mote { opacity: 0.18; }
-.it-root-p0 { fill: none; stroke: var(--c-accent-dim); stroke-width: 3.4; stroke-linecap: round; opacity: 0.22; }
-.it-bigmonth { font: 700 26px var(--font-mono); fill: var(--c-accent-ink); opacity: 0.45; pointer-events: none; }
-
-/* 枝：填色輪廓（由粗到細），細描邊遮住分段接縫 */
-.it-trunk { stroke: var(--it-trunk1); stroke-width: 0.6; stroke-linejoin: round; }
-.it-limb { stroke: currentColor; stroke-width: 0.6; stroke-linejoin: round; opacity: 0.92; transition: opacity 0.12s; }
-.it-limb.it-dead { fill: var(--c-ink-3); stroke: var(--c-ink-3); opacity: 0.4; }
-.it-hl .it-limb:not(.it-lit), .it-hl .it-leaf:not(.it-lit) { opacity: 0.2; }
-.it-hl .it-trunk { opacity: 0.45; }
-.it-hl .it-trunk-gloss, .it-hl .it-flare { opacity: 0.45; }
-.it-hl .it-limb.it-lit { opacity: 1; stroke-width: 1.4; } /* 不用 drop-shadow：第一次滑過時濾鏡要整片重繪，會有遲滯 */
-.it-fx .it-dimc { opacity: 0.25; }
-.it-fx .it-cap.it-dimc, .it-fx .it-clump.it-dimc { opacity: 0.35; }
-
-/* 葉：形狀依關係，顏色＝群色（同群不同脈絡深淺不同）；枯葉灰色 */
-.it-leaf { cursor: pointer; outline: none; transition: opacity 0.12s; }
-.it-hit { fill: transparent; }
-.it-shape { stroke: var(--c-surface); stroke-width: 0.12; stroke-linejoin: round; }
-.it-leaf.it-dead .it-shape { fill: var(--c-ink-3); opacity: 0.65; }
-.it-vein { fill: none; stroke: var(--c-surface); stroke-width: 1; opacity: 0.6; stroke-linecap: round; }
-.it-leaf:hover .it-shape, .it-leaf:focus-visible .it-shape, .it-leaf.it-lit .it-shape { stroke: var(--c-ink); stroke-width: 0.2; }
-.it-halo { pointer-events: none; opacity: 0.4; transform-box: fill-box; transform-origin: center; }
-.it-lg-bud, .it-lg-leaf, .it-lg-fork { fill: var(--c-accent); stroke: none; }
-.it-lg-dead { fill: var(--c-ink-3); stroke: none; opacity: 0.7; }
-
-/* 群標籤：主枝末端的小膠囊（色點＋群名＋則數） */
-.it-cap { cursor: pointer; outline: none; transition: opacity 0.2s; }
-.it-cap-bg { fill: var(--c-surface); stroke: currentColor; stroke-width: 1; opacity: 0.94; }
-.it-cap:hover .it-cap-bg, .it-cap-on .it-cap-bg { fill: color-mix(in srgb, currentColor 14%, var(--c-surface)); stroke-width: 1.6; }
-.it-cap-dot, .it-tipdot { fill: currentColor; }
-.it-cap-dotmode .it-tipdot { stroke: var(--c-surface); stroke-width: 1.2; }
-.it-cap-hit { fill: transparent; pointer-events: all; }
-.it-btick text { font-family: var(--font-mono); font-weight: 700; fill: var(--c-ink); pointer-events: none; }
-.it-btick rect { fill: var(--c-surface); stroke: currentColor; stroke-width: 0.7; opacity: 0.96; pointer-events: none; vector-effect: non-scaling-stroke; }
-.it-btick line { stroke: currentColor; stroke-width: 1.2; opacity: 0.8; pointer-events: none; vector-effect: non-scaling-stroke; }
-.it-clump { cursor: pointer; outline: none; transition: opacity 0.2s; }
-.it-clump-leaf { pointer-events: none; fill: currentColor; stroke: var(--c-surface); stroke-width: 0.15; opacity: 0.92; }
-.it-clump:hover .it-clump-leaf, .it-clump:focus-visible .it-clump-leaf { opacity: 1; stroke: var(--c-ink); }
-.it-clump-b { fill: var(--c-surface); stroke: currentColor; stroke-width: 1.3; }
-.it-clump-t { font: 700 10px var(--font-mono); fill: var(--c-ink); pointer-events: none; }
-.it-clump:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
-.it-lg-age { width: 22px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--c-accent), color-mix(in srgb, var(--c-accent) 45%, var(--c-bg))); }
-.it-cap-t { font: 600 12px var(--font-body); fill: var(--c-ink); }
-.it-cap-n { font: 11px var(--font-mono); fill: var(--c-ink-3); }
-.it-leader { stroke: currentColor; stroke-width: 1; opacity: 0.6; stroke-dasharray: 2 2; }
-.it-root[data-theme-mode] .it-svg[viewBox] .it-cap-t { paint-order: normal; }
-
-/* 提示卡 */
-.it-tip { position: absolute; z-index: 5; transform: translate(-50%, -100%); width: max-content; max-width: min(240px, 80%); padding: 7px 10px; font-size: 0.82rem; line-height: 1.45; color: var(--c-ink); background: var(--c-raised); border: 1px solid var(--c-line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-card); pointer-events: none; overflow-wrap: anywhere; }
-.it-tip-d { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; font: 11px var(--font-mono); color: var(--c-ink-3); }
-.it-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-
-.it-seedling { margin: var(--sp-2) 0 0; text-align: center; font-size: 0.78rem; color: var(--c-ink-3); letter-spacing: 0.04em; }
-/* 底部：月份、圖例（小圖示列） */
-.it-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-3); margin-top: var(--sp-2); }
-.it-month { font: 12.5px var(--font-mono); color: var(--c-accent-ink); }
-.it-back { font: 12px var(--font-mono); color: var(--c-ink-2); border: 1px solid var(--c-line-strong); border-radius: var(--r-sm); padding: 1px 8px; }
-.it-legend { margin: 0 0 0 auto; padding: 0; list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; font-size: 0.72rem; color: var(--c-ink-3); }
-.it-legend li { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.it-lg-glow { width: 10px; height: 10px; border-radius: 50%; background: var(--c-accent); box-shadow: 0 0 6px 2px var(--c-accent); opacity: 0.8; }
-
-/* 結構化側欄：統計一行＋群清單（色點、群名、則數、最近長葉日期、近 12 個月迷你長條） */
-.it-side { min-width: 0; display: grid; gap: var(--sp-2); align-content: start; }
-.it-stats { margin: 0; padding: var(--sp-2) var(--sp-3); font-size: 0.8rem; line-height: 1.55; color: var(--c-ink-2); background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); overflow-wrap: anywhere; }
-/* 3.7.0 誕生那天的幸福指數：側欄一行（兩個數字是篩選按鈕）＋篩選出的心得清單 */
-.it-born-bands { margin: 0; padding: var(--sp-2) var(--sp-3); font-size: 0.8rem; line-height: 1.55; color: var(--c-ink-2); background: var(--c-raised); border: 1px solid var(--c-line); border-radius: var(--r-md); overflow-wrap: anywhere; }
-.it-born-n { font: 600 0.82rem var(--font-mono); color: var(--c-accent-ink); background: transparent; border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; }
-.it-born-n:hover { border-color: var(--c-accent); background: var(--c-accent-soft); }
-.it-born-on { border-color: var(--c-accent); background: var(--c-accent-soft); }
-.it-born-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
-.it-born-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 6px 9px; border-radius: var(--r-md); border: 1px solid var(--c-line); background: var(--c-raised); color: var(--c-ink); font-size: 0.8rem; cursor: pointer; }
-.it-born-item:hover { border-color: var(--c-accent); background: var(--c-accent-soft); }
-.it-born-item-d { font: 11px var(--font-mono); color: var(--c-ink-3); }
-.it-born-item-x { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ─── 心得面板（it- 前綴）：側邊詳情與搜尋結果的迷你脈絡；顏色只用全站 --c-* token。 ─── */
 .it-born { display: inline-block; font: 11px var(--font-mono); border-radius: var(--r-pill); padding: 0 8px; border: 1px solid currentColor; color: var(--c-ink-3); }
 .it-born-high { color: var(--c-ok); }
 .it-born-low { color: var(--c-crit); }
-.it-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
-.it-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; grid-template-areas: "dot name n d" "bars bars bars bars"; align-items: center; gap: 2px 8px; width: 100%; text-align: left; padding: 6px 9px; border-radius: var(--r-md); border: 1px solid transparent; background: var(--c-raised); }
-.it-row:hover:not(:disabled) { border-color: var(--c-line-strong); }
-.it-row-on { border-color: var(--c-accent); background: var(--c-accent-soft); }
-.it-row-all { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name n"; }
-.it-row-dot { grid-area: dot; width: 9px; height: 9px; border-radius: 50%; }
-.it-row-name { grid-area: name; font-size: 0.86rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.it-row-n { grid-area: n; font: 600 12px var(--font-mono); color: var(--c-ink); }
-.it-row-d { grid-area: d; font: 11px var(--font-mono); color: var(--c-ink-3); }
-.it-bars { grid-area: bars; display: block; width: 100%; height: 16px; }
-.it-bars rect { opacity: 0.9; }
-.it-bars .it-bar0 { fill: var(--c-line-strong); opacity: 0.7; }
-@container (max-width: 640px) {
-  .it-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .it-rows > li:first-child { grid-column: 1 / -1; }
-}
-
-/* 重播：枝逐段描邊長出（先描邊、再填色）、葉子彈性縮放冒出 */
-@media (prefers-reduced-motion: no-preference) {
-  .it-halo { animation: it-breath 2.6s ease-in-out infinite; }
-  .it-mote { animation: it-mote 7s ease-in-out infinite; }
-  .it-fresh { stroke-dasharray: 1; stroke-dashoffset: 1; stroke-width: 1.6; fill-opacity: 0; animation: it-draw 0.7s ease-out forwards; }
-  .it-pop { transform-origin: 0 0; animation: it-pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
-  /* 入場：樹幹由下往上描邊、主枝與細枝依序、葉子最後彈出，合計約 0.85 秒；只在 svg 帶 it-intro 時（掛載後第一次） */
-  .it-intro .it-trunk, .it-intro .it-limb { stroke-dasharray: 1; stroke-dashoffset: 1; animation: it-draw 0.4s ease-out both; }
-  .it-intro .it-limb[data-level="cluster"] { animation-delay: 0.15s; }
-  .it-intro .it-limb[data-level="thread"] { animation-delay: 0.3s; animation-duration: 0.35s; }
-  .it-intro .it-limb-hl, .it-intro .it-trunk-gloss, .it-intro .it-flare { animation: it-fade-in 0.5s ease-out 0.2s both; }
-  .it-intro .it-leaf > g > g { transform-origin: 0 0; animation: it-pop 0.4s cubic-bezier(0.3, 1.7, 0.5, 1) 0.45s both; }
-  .it-intro .it-clump, .it-intro .it-cap { animation: it-fade-in 0.4s ease-out 0.5s both; }
-}
-@keyframes it-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes it-breath { 0%, 100% { opacity: 0.12; transform: scale(0.8); } 50% { opacity: 0.4; transform: scale(1.15); } }
-@keyframes it-draw { 0% { stroke-dashoffset: 1; fill-opacity: 0; } 55% { stroke-dashoffset: 0; fill-opacity: 0.1; } 100% { stroke-dashoffset: 0; fill-opacity: 1; stroke-width: 0.6; } }
-@keyframes it-mote { 0%, 100% { opacity: 0.08; } 50% { opacity: 0.3; } }
-@keyframes it-pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .it-halo, .it-skel, .it-fresh, .it-pop, .it-intro * { animation: none !important; } .it-limb, .it-leaf, .it-cap { transition: none; } }
 
 /* 側邊面板（點葉子）：與搜尋閱讀面板同一套樣式 */
 .it-back-drop { position: fixed; inset: 0; z-index: 240; background: color-mix(in srgb, var(--c-bg) 55%, transparent); }
@@ -2809,7 +2631,6 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .it-mini-dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; border: 0; padding: 0; }
 .it-mini-self { outline: 2px solid var(--c-ink); outline-offset: 1px; }
 @media (max-width: 860px) {
-  .it-root { padding: var(--sp-3); }
   .it-panel { width: 100vw; padding: var(--sp-4); }
 }
 
@@ -2820,8 +2641,6 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .nw-corner-btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .nw-corner-close { margin-left: auto; white-space: nowrap; }
 @media (max-width: 860px) {
-  .it-root { padding: var(--sp-3); }
-  .it-legend { margin-left: 0; flex-basis: 100%; }
   .it-panel { width: 100vw; padding: var(--sp-4); }
 }
 
@@ -2875,26 +2694,6 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .ib-bar-n { position: absolute; top: -2px; font: 600 10px/1 var(--font-mono); color: var(--c-accent-ink); transform: translateY(-100%); }
 .ib-bar .ib-bar-n:empty { display: none; }
 .ib-monthly { padding-top: 12px; box-sizing: content-box; }
-
-/* 心得樹根系（滑過葉子才出現，貼在地面線下，不佔版面） */
-.it-roots { position: absolute; left: 0; z-index: 2; overflow: visible; pointer-events: none; }
-.it-root-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; }
-.it-root-p { fill: none; stroke: var(--c-accent-dim); stroke-width: 1.2; stroke-linecap: round; opacity: 0.55; pointer-events: none; }
-.it-root-n circle { fill: var(--c-surface); stroke: var(--c-accent); stroke-width: 1.2; }
-.it-root-n text { font-size: 10px; fill: var(--c-ink); }
-.it-root-i rect { fill: var(--c-surface); stroke: var(--c-accent-dim); stroke-width: 1; }
-.it-root-i text { font-size: 10px; fill: var(--c-ink-2); }
-.it-root-more { font: 11px var(--font-mono); fill: var(--c-ink-3); }
-.it-root-n circle, .it-root-n text, .it-root-i rect, .it-root-i text, .it-root-more { pointer-events: all; }
-.it-root-go:not(.it-root-off) { cursor: pointer; }
-.it-root-go.it-root-off { cursor: default; }
-.it-root-go:not(.it-root-off):hover .it-root-p { stroke: var(--c-accent); opacity: 1; stroke-width: 2; }
-.it-root-go:not(.it-root-off):hover circle, .it-root-go:not(.it-root-off):hover rect { stroke: var(--c-accent); stroke-width: 2; }
-@media (prefers-reduced-motion: no-preference) {
-  .it-roots { animation: it-roots-in 0.15s ease-out; }
-  @keyframes it-roots-in { from { opacity: 0; } to { opacity: 1; } }
-}
-@media (hover: none) { .it-roots { display: none; } }
 
 /* 人物卷宗：從他身上學到的心得 */
 .dz-ins { list-style: none; margin: 0; padding: 0; }

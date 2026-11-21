@@ -1,7 +1,7 @@
 // 首頁「一個框搜全部」的純邏輯（2.86.0）：不碰 DOM、不打網路（網路在 omniSearchApi.ts，畫面在 OmniSearch.tsx）。
 // 契約（S1～S3）見 docs/search-api.md 與規格；這裡的解析一律寬容：欄位不對的項目略過，整體不丟錯。
 import type { RepoItem } from './repoApi'
-import type { InsightRelation } from './insightTree'
+import type { InsightRelation } from './insightModel'
 
 export type SearchKind = 'template' | 'topic' | 'case' | 'person' | 'object' | 'event' | 'concept' | 'method' | 'source' | 'idea' | 'place' | 'trip' | 'repo' | 'tool' | 'diary' | 'insight'
 
