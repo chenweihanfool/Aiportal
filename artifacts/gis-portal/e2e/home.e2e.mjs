@@ -1,11 +1,10 @@
-// 新首頁（HomeBoard，2.36.0 起的預設首頁）真實瀏覽器驗證（手動執行；不在 CI 內，同 board.e2e.mjs／timeline.e2e.mjs 的做法）。
+// 新版首頁（v3，產品預設）真實瀏覽器驗證（手動執行；不在 CI 內，同 board.e2e.mjs／timeline.e2e.mjs 的做法）。
 //
 // 做什麼：本機靜態伺服器提供 dist/public，Playwright 攔截所有 /api/*，以「假 API」模擬 sites／dashboard／happiness history／
-// 知識庫／想法庫／地點／遊記／管線／主機狀態／Ollama 用量，驗證「預設首頁」（含左側錨點導覽、面向卡的子系統連結、倉庫索引、付費服務卡）：
-// 桌面四種尺寸（1366×768、1440×900、1536×864、1920×1080）可往下捲（2026-10-22 起不再要求一個畫面）、不裁切、左側錨點導覽、倉庫索引；手機 390／360 順序與不橫向捲動；
-// 未解鎖（沒有任何子系統連結、私領域區塊寫「🔒 解鎖後顯示」、不發私領域請求）、載入中、空、失敗、過期、太久沒更新、異常（⑤ 上移）；
-// 六面向新名稱與識別色、里程碑（分組門檻、最多 6 顆、「下一個」進度）、每面向 30 天迷你線（有資料／沒有資料維持數值條）；
-// #home 相容（清掉 hash 回首頁）、#legacy 舊版首頁與退路連結。全程不碰任何真實服務。
+// 知識庫／想法庫／地點／遊記／管線／主機狀態／Ollama 用量，驗證新版首頁（v3：搜尋｜現在用得上｜STATUS 三欄）與各子頁路由：
+// 桌面 1440（搜尋列、現在用得上、STATUS、推送卡與回饋）、手機 390／360 的單欄順序與不橫向捲動、警示帶與未解鎖狀態；
+// #home 相容；#architecture 知識庫架構頁；#dim/<key> 面向頁；#year 年度回顧。
+// 舊版首頁（classic）與 #legacy 已不驗（使用者 2026-11-22：「舊版要退場了 有關舊版的都不要去測試」）。全程不碰任何真實服務。
 //
 // 執行：
 //   BASE_PATH=/ PORT=5174 pnpm --filter @workspace/gis-portal run build
@@ -168,8 +167,8 @@ function scenario(name) {
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })
-// layout：'classic'（預設，既有段落全部照舊驗舊版首頁）或 'v3'（新版三塊）；只在還沒有選擇時寫入，所以點開關、重新整理後會維持最後一次的選擇
-async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait = true, layout = 'classic', expandNow = true } = {}) {
+// 版面：一律用新版首頁（v3，產品預設）；只驗 v3，不驗舊版。localStorage 先寫好，避免受前一個情境影響
+async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait = true, layout = 'v3', expandNow = true } = {}) {
   const S = scenario(scn)
   const ctx = await browser.newContext({ viewport })
   if (unlocked) await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
@@ -247,9 +246,9 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
     return json({}, 404)
   })
   await page.goto(BASE + '/' + hash)
-  if (wait) await page.waitForSelector(layout === 'v3' ? '.st-home' : '.hm-root', { timeout: 15000 })
+  if (wait) await page.waitForSelector('.st-home', { timeout: 15000 })
   // 2.99.0：v3 的「現在用得上」收在角落（預設只有一顆小鈕），既有斷言都針對展開後的區塊，所以先按開（未解鎖沒有小鈕就略過）
-  if (wait && layout === 'v3' && expandNow) {
+  if (wait && expandNow) {
     await page.waitForSelector('[data-testid="now-corner-btn"]', { timeout: 3000 }).catch(() => {})
     const corner = page.locator('[data-testid="now-corner-btn"]')
     if ((await corner.count()) > 0) { await corner.click(); await page.waitForSelector('[data-testid="now-section"]', { timeout: 5000 }) }
@@ -257,275 +256,6 @@ async function open(viewport, scn = 'normal', { unlocked = true, hash = '', wait
   return { ctx, page, errors, calls }
 }
 const settle = async (page, ms = 1700) => { await page.waitForFunction(() => !document.querySelector('.hm-frame[aria-busy="true"]'), null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(ms) }
-const geom = (page) => page.evaluate(() => {
-  const r = (sel) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), left: Math.round(b.left), right: Math.round(b.right) } }
-  const sc = document.querySelector('.ip-scroll')
-  return { today: r('.hm-today'), dims: r('.hm-dimsec'), growth: r('.hm-growth'), fun: r('.hm-fun'), sys: r('.hm-sys'), root: r('.hm-wrap'), aside: r('.ip-aside'),
-    scrollH: sc.scrollHeight, clientH: sc.clientHeight, docW: document.documentElement.scrollWidth, innerW: window.innerWidth, innerH: window.innerHeight, scW: sc.scrollWidth, scCW: sc.clientWidth }
-})
-const clippedCards = (page) => page.evaluate(() => [...document.querySelectorAll('.hm-card')].map((c) => ({ cls: c.className.slice(0, 30), v: c.scrollHeight - c.clientHeight, h: c.scrollWidth - c.clientWidth })).filter((c) => c.v > 2 || c.h > 2))
-const innerClipped = (page) => page.evaluate(() => [...document.querySelectorAll('.hm-dim, .hm-tile, .hm-kb-tile, .hm-idea, .hm-sentence, .hm-today-body, .hm-heat, .hm-next')].map((c) => ({ cls: c.className.slice(0, 24), v: c.scrollHeight - c.clientHeight, h: c.scrollWidth - c.clientWidth })).filter((c) => c.v > 2 || c.h > 2))
-
-// ═══ 1. 桌面四種尺寸：正常（含側欄） ═══
-for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
-  const { ctx, page, errors } = await open({ width: w, height: h }, 'normal')
-  await page.waitForSelector('.hm-dim .hm-dim-num', { timeout: 15000 })
-  await page.waitForSelector('.hm-cell[data-date]')
-  await settle(page)
-  const g = await geom(page)
-  const T = `${w}×${h} 正常`
-  check(`${T}：預設首頁是新首頁（沒有舊儀表板卡片）`, (await page.locator('.hm-root').count()) === 1 && (await page.locator('.bd-card').count()) === 0)
-  check(`${T}：五段都出現`, (await page.locator('.hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys').count()) === 5)
-  check(`${T}：頁面可往下捲（內容 ${g.scrollH} > 視窗 ${g.clientH}），新增區塊往下長不被截掉`, g.scrollH >= g.clientH)
-  check(`${T}：沒有橫向捲動`, g.docW <= g.innerW && g.scW <= g.scCW + 1)
-  const cl = await clippedCards(page)
-  check(`${T}：卡片內容沒被裁切`, cl.length === 0, JSON.stringify(cl))
-  const ic = await innerClipped(page)
-  check(`${T}：小卡／文字沒被裁切`, ic.length === 0, JSON.stringify(ic))
-  check(`${T}：左側錨點導覽有 ${9} 顆按鈕，且每顆都對得到頁面上的區塊`, (await page.locator('.hm-nav-item').count()) === 9 && (await page.evaluate(() => ['sec-today', 'sec-brief', 'sec-dims', 'sec-companion', 'sec-growth', 'sec-fun', 'sec-repos', 'sec-sys', 'sec-svc'].every((id) => document.getElementById(id)))))
-  check(`${T}：導覽在 ≥1300px 是左側直排`, await page.evaluate(() => { const n = document.querySelector('.hm-nav').getBoundingClientRect(); const r = document.querySelector('.hm-root').getBoundingClientRect(); return n.right <= r.left + 1 && n.height > 100 }))
-  check(`${T}：倉庫索引列出 17 個（預設隱藏封存與 fork），先顯示 12 個並有「再顯示」`, (await page.locator('.hm-repo').count()) === 12 && /再顯示 5 個（共 17）/.test(await page.locator('.hm-repos-more').innerText()))
-  check(`${T}：私有倉庫有 🔒、最近推送的排最前`, (await page.locator('.hm-repo').first().innerText()).startsWith('Aiportal') && /🔒\s*kb-pipeline/.test(await page.locator('.hm-repos').innerText()))
-  const dimLinks = await page.evaluate(() => [...document.querySelectorAll('.hm-dim-open')].map((a) => ({ t: a.textContent.trim(), h: a.getAttribute('href'), tg: a.target, rel: a.rel })))
-  check(`${T}：面向卡上有 3 個子系統連結（人生進度、健身追蹤、任務追蹤），都開新分頁`, dimLinks.length === 3 && dimLinks.every((l) => l.tg === '_blank' && /noopener/.test(l.rel)) && ['人生進度管理系統', '健身追蹤', '任務追蹤系統'].every((n) => dimLinks.some((l) => l.t.includes(n))), JSON.stringify(dimLinks))
-  check(`${T}：旅遊面向沒有外部連結（AdventureLog 已退場）`, (await page.locator('.hm-dim-cell', { hasText: '旅遊' }).locator('.hm-dim-open').count()) === 0)
-  const bodyText = await page.locator('body').innerText()
-  check(`${T}：工具連結區已拿掉（沒有側欄、沒有公／私領域分區、沒有手動連結）`, (await page.locator('.ip-aside, .ip-tools').count()) === 0 && !/公領域|私領域|圖根點管理系統|案件排程系統/.test(bodyText))
-  const leftGap = await page.evaluate(() => document.querySelector('.hm-today').getBoundingClientRect().left - document.querySelector('.hm-layout').getBoundingClientRect().left)
-  check(`${T}：主區貼左（左側只剩約 8rem 的錨點導覽，不再有 240px 以上的側欄；距 ${Math.round(leftGap)}px）`, leftGap <= 190, String(leftGap))
-  check(`${T}：⑤ 平常在最下面（細列）`, g.sys.top >= g.growth.bottom - 1 && g.sys.top >= g.fun.bottom - 1, JSON.stringify(g.sys))
-  const sysH = g.sys.bottom - g.sys.top
-  check(`${T}：⑤ 是細列（高 ${sysH}px ≤ 48）`, sysH <= 48)
-  check(`${T}：③ 與 ④ 同一列`, Math.abs(g.growth.top - g.fun.top) <= 2)
-  const sysLink = await page.locator('.hm-sys .hm-link').boundingBox()
-  const gear = await page.locator('button[title="管理後台"]').boundingBox()
-  // 2.53.0 起 ⚙ 收進頂欄：改成真正的矩形相交判斷（以前 ⚙ 固定在右下角，只比右下）
-  const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
-  check(`${T}：⑤ 的「戰情室 →」沒被 ⚙ 蓋住`, !overlap(sysLink, gear), JSON.stringify([sysLink, gear]))
-  const head = await page.locator('.ip-head').boundingBox()
-  check(`${T}：頂欄是單列（高 ${Math.round(head.height)}px ≤ 64），⚙ 在頂欄內`, head.height <= 64 && gear.y >= head.y && gear.y + gear.height <= head.y + head.height + 1, JSON.stringify([head, gear]))
-  const glance = await page.evaluate(() => ({ drag: document.querySelector('[data-testid="hm-glance-drag"]')?.innerText ?? '', sys: document.querySelector('[data-testid="hm-glance-sys"]')?.innerText ?? '', todayBottom: document.querySelector('.hm-today').getBoundingClientRect().bottom }))
-  check(`${T}：今天卡的「一眼看」有最弱面向（財務自由 68、拉低 8.6 分）與系統燈（全部正常），且都在首屏內`, /最弱面向/.test(glance.drag) && /財務自由/.test(glance.drag) && /68/.test(glance.drag) && /拉低總分 8\.6 分/.test(glance.drag) && /全部正常/.test(glance.sys) && glance.todayBottom <= h, JSON.stringify(glance))
-  check(`${T}：最弱面向連到 hash 路由（少了 # 會變站內路徑、畫面全白）`, (await page.locator('[data-testid="hm-glance-drag"]').getAttribute('href')) === '#dim/lifeFreedom')
-  const shortcuts = await page.evaluate(() => ({ names: [...document.querySelectorAll('.hm-nav-short')].map((a) => a.innerText.trim()), hrefs: [...document.querySelectorAll('a.hm-nav-short')].map((a) => a.getAttribute('href')), bottom: Math.max(...[...document.querySelectorAll('.hm-nav-short')].map((a) => a.getBoundingClientRect().bottom)) }))
-  check(`${T}：常用入口（時間軸、想法庫、卷宗、知識）不用捲動就看得到`, shortcuts.names.length === 4 && /時間軸/.test(shortcuts.names[0]) && /想法庫/.test(shortcuts.names[1]) && /卷宗/.test(shortcuts.names[2]) && /知識/.test(shortcuts.names[3]) && shortcuts.hrefs.join() === '#graph/timeline,#dossier,#knowledge' && shortcuts.bottom <= h, JSON.stringify(shortcuts))
-  const txt = await page.locator('.hm-root').innerText()
-  check(`${T}：① 有分數 71、連 3 天上升、今年已過 %`, /71/.test(txt) && /連 3 天上升/.test(txt) && /已過\s*\d+%/.test(txt))
-  check(`${T}：① 一句話含最大短板「財務自由」（biggestDrag：68 分 × 27%）`, /最大的短板是「財務自由」（68 分，拉低總分 8\.6 分）/.test(txt))
-  const dimNames = await page.locator('.hm-dim:not(.hm-dim--ghost) .hm-dim-name').allInnerTexts()
-  check(`${T}：② 六張面向小卡，名稱＝財務自由／身體／從容／心智／社交／旅遊`, dimNames.length === 6 && ['財務自由', '身體', '從容', '心智', '社交', '旅遊'].every((n, k) => dimNames[k].includes(n)), dimNames.join('|'))
-  check(`${T}：② 舊名稱不再出現（人生自由／健身習慣／生活從容／心智指標／社交指標／旅遊生活）`, !/人生自由|健身習慣|生活從容|心智指標|社交指標|旅遊生活/.test(await page.locator('.hm-dimsec').innerText()))
-  const colors = await page.evaluate(() => [...document.querySelectorAll('.hm-dim:not(.hm-dim--ghost)')].map((e) => getComputedStyle(e).getPropertyValue('--dim').trim().toLowerCase()))
-  check(`${T}：② 識別色＝#d9b44a／#3fb6a8／#5f9bf0／#9b8cf0／#ee7a6e／#f29e4c`, colors.join(',') === '#d9b44a,#3fb6a8,#5f9bf0,#9b8cf0,#ee7a6e,#f29e4c', colors.join(','))
-  check(`${T}：② 接口沒有 components → 沒有迷你線，維持六條數值條`, (await page.locator('.hm-dim svg, .hm-dim-spark').count()) === 0 && (await page.locator('.hm-dim-bar').count()) === 6)
-  check(`${T}：② 沒有任何「沒有資料來源／錯誤」提示字樣`, !/沒有資料來源|無法取得走勢|迷你線/.test(await page.locator('.hm-dimsec').innerText()))
-  check(`${T}：③ 年熱圖 365 格`, (await page.locator('.hm-cell[data-date]').count()) === 365)
-  const emptyCells = await page.locator('.hm-cell[data-date].is-empty').count()
-  const filled = await page.locator('.hm-cell[data-date]:not(.is-empty)').count()
-  check(`${T}：熱圖沒資料的日子是空格（空 ${emptyCells} / 有 ${filled}）`, emptyCells > 100 && filled > 150 && emptyCells + filled === 365)
-  check(`${T}：③ 知識庫 186／1,156／74／31 與本週 +23`, /186/.test(txt) && /1,156/.test(txt) && /74/.test(txt) && /本週 \+23/.test(txt))
-  const badges = await page.locator('.hm-mile').allInnerTexts()
-  check(`${T}：③ 里程碑膠囊（事件突破 1,000／人物突破 100／概念突破 50／方法突破 25／已完成 1 個想法／去過 25 個地點，共 ${badges.length} 顆 ≤ 6）`,
-    badges.length === 6 && ['事件突破 1,000', '人物突破 100', '概念突破 50', '方法突破 25', '已完成 1 個想法', '去過 25 個地點'].every((b, k) => badges[k].includes(b)), badges.join('|'))
-  const nextTxt = await page.locator('.hm-next-text').innerText()
-  check(`${T}：③ 「下一個」＝比例最高的一組（人物 200，186/200）`, /下一個：人物 200（目前 186，還差 14）/.test(nextTxt), nextTxt)
-  check(`${T}：③ 「下一個」進度條 93%`, (await page.locator('.hm-next-bar').getAttribute('aria-valuenow')) === '93')
-  check(`${T}：③ 兩個入口 #graph/timeline 與 #dossier`, (await page.locator('.hm-growth a[href="#graph/timeline"]').count()) === 1 && (await page.locator('.hm-growth a[href="#dossier"]').count()) === 1)
-  check(`${T}：④ 想法庫前三名`, (await page.locator('.hm-idea').count()) === 3)
-  check(`${T}：④ 26 筆全為去過 → 「還沒有想吃的紀錄」連 #food`, /還沒有想吃的紀錄/.test(txt) && (await page.locator('.hm-fun a[href="#food"]').count()) >= 1 && /已去過 26 \/ 26/.test(txt))
-  check(`${T}：④ 最新一趟遊記（台南三日散步、3 天、已結束）連 #trips/<id>`, /台南三日散步/.test(txt) && /3 天・已結束/.test(txt) && (await page.locator('.hm-fun a[href="#trips/tainan-2609"]').count()) === 1)
-  check(`${T}：⑤ 全部正常`, /全部正常/.test(txt) && (await page.locator('.hm-sys[data-level="ok"]').count()) === 1)
-  check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
-  if ((w === 1440 && h === 900) || (w === 1920 && h === 1080) || (w === 1366 && h === 768) || (w === 1536 && h === 864)) await page.screenshot({ path: path.join(SHOTS, `home-${w}x${h}.png`) })
-  if (w === 1440) {
-    const dEntries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, text: document.body.innerText }))
-    check(`${T}：電腦版頁首與側欄都沒有美食地圖入口（膠囊只在手機）`, !dEntries.pill, JSON.stringify({ pill: dEntries.pill }))
-    check(`${T}：整頁沒有 ①～⑤ 或「04」這類意義不明的數字符號`, !/[①②③④⑤]/.test(dEntries.text) && !/(^|\n)04(\s|\n)/.test(dEntries.text), (dEntries.text.match(/[①②③④⑤]|(^|\n)04(\s|\n)/g) ?? []).join(','))
-    // 互動：點小卡開幸福指數抽屜、ESC 關；⑤ 開戰情室抽屜；想法開想法庫抽屜
-    await page.locator('.hm-score').first().click()
-    await page.waitForSelector('.bd-drawer', { timeout: 5000 })
-    check(`${T}：點今天的大分數 → 開幸福指數詳情抽屜`, /幸福指數詳情/.test(await page.locator('.bd-drawer').getAttribute('aria-label')))
-    const drawerTxt = await page.locator('.bd-drawer').innerText()
-    check(`${T}：抽屜的雷達與權重列用新名稱（財務自由／身體／從容／心智／社交／旅遊）`, ['財務自由', '身體', '從容', '心智', '社交', '旅遊'].every((n) => drawerTxt.includes(n)) && !/人生自由|健身習慣|生活從容/.test(drawerTxt), drawerTxt.slice(0, 160).replace(/\n/g, '|'))
-    await page.keyboard.press('Escape')
-    check(`${T}：ESC 關閉抽屜`, (await page.locator('.bd-drawer').count()) === 0)
-    await page.locator('.hm-sys-bar').click()
-    await page.waitForSelector('.bd-drawer')
-    await page.waitForTimeout(600)
-    check(`${T}：點 ⑤ → 開戰情室抽屜（推送健康在最上）`, /HERMES 戰情室/.test(await page.locator('.bd-drawer').getAttribute('aria-label')) && /入口網推送健康/.test(await page.locator('.bd-drawer').innerText()))
-    await page.waitForSelector('[data-testid="kb-health"]', { timeout: 5000 })
-    const kb = await page.locator('[data-testid="kb-health"]').innerText()
-    check(`${T}：戰情室有「知識庫體檢」：本週新事件 23、佇列積壓、L3 最近落地、健康分 72（四項）`, /本週新事件/.test(kb) && /23/.test(kb) && /佇列積壓/.test(kb) && /L3 最近落地/.test(kb) && /知識庫健康分/.test(kb) && /72/.test(kb) && /轉化 90・連結 80・活化 55・節奏 66/.test(kb), kb.replace(/\n/g, '|').slice(0, 200))
-    await page.keyboard.press('Escape')
-    check(`${T}：有「付費服務」卡，五個服務都在（Ollama、Claude Pro、JEV、Tavily、DeepSeek）`, (await page.locator('.hm-svc [data-testid^="svc-chip-"]').count()) === 5)
-    await page.locator('.hm-svc-bar').click()
-    await page.waitForSelector('.bd-drawer .hm-svc-list')
-    const svcTxt = await page.locator('.bd-drawer').innerText()
-    check(`${T}：付費服務抽屜：DeepSeek 餘額自動讀到、Tavily 提示未設金鑰、Claude Pro／JEV 只有連結、Ollama 有「更新餘額」`, /¥88\.50/.test(svcTxt) && /未設定 TAVILY_API_KEY/.test(svcTxt) && (await page.locator('[data-testid="svc-row-claude"] a[href^="https://"]').count()) === 1 && (await page.locator('[data-testid="svc-row-jev"] a[href^="https://"]').count()) === 1 && /更新餘額|輸入目前餘額/.test(svcTxt), svcTxt.replace(/\n/g, '|').slice(0, 240))
-    await page.keyboard.press('Escape')
-    await page.locator('.hm-idea').first().click()
-    await page.waitForSelector('.bd-drawer')
-    check(`${T}：點想法 → 開想法庫抽屜`, /想法庫/.test(await page.locator('.bd-drawer').getAttribute('aria-label')))
-    await page.keyboard.press('Escape')
-    // 鍵盤：Tab 能走到小卡與 ⑤
-    await page.locator('.hm-nav-item').first().focus()
-    const seen = new Set()
-    for (let i = 0; i < 60; i++) { await page.keyboard.press('Tab'); const c = await page.evaluate(() => document.activeElement?.className?.toString().split(' ')[0] ?? ''); seen.add(c) }
-    check(`${T}：鍵盤 Tab 走得到分數、面向小卡、想法、⑤`, ['hm-score', 'hm-dim', 'hm-idea', 'hm-sys-bar'].every((k) => seen.has(k)), [...seen].join(','))
-    // 預設首頁不再有「預覽版」標示
-    check(`${T}：頁首沒有「預覽版」徽章、也沒有「回到目前首頁」`, (await page.locator('.hm-preview-badge, .hm-back').count()) === 0 && !/預覽版|回到目前首頁/.test(await page.locator('body').innerText()))
-    check(`${T}：頁首保留（翰翰儀表板、版本歷程、帳號）`, /翰翰儀表板/.test(await page.locator('h1').innerText()) && /版本歷程/.test(await page.locator('body').innerText()))
-    await page.locator('button', { hasText: '版本歷程' }).click()
-    await page.waitForTimeout(300)
-    check(`${T}：版本歷程最新是 2.36.0，寫出使用者看得到的變化`, /2\.36\.0/.test(await page.locator('body').innerText()) && /新首頁成為預設首頁/.test(await page.locator('body').innerText()))
-    await page.keyboard.press('Escape')
-  }
-  await ctx.close()
-}
-
-// ═══ 2. 想吃狀態、異常（燈變色並上移）═══
-{
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'wantfood')
-  await page.waitForSelector('.hm-tile-link'); await settle(page)
-  const t = await page.locator('.hm-fun').innerText()
-  check('想吃最久：顯示店名、地區、想吃 268 天了', /示範・鱔魚意麵/.test(t) && /台南 中西/.test(t) && /想吃 268 天了/.test(t) || /想去 268 天了/.test(t), t.replace(/\n/g, ' | ').slice(0, 200))
-  const eatTxt = await page.locator('[data-testid="hm-want-eat"]').innerText(), goTxt = await page.locator('[data-testid="hm-want-go"]').innerText()
-  check('首頁：想吃（美食）與想去（景點）各列出等最久的一個', /示範・鱔魚意麵/.test(eatTxt) && /想吃 268 天了/.test(eatTxt) && /示範・想去的山/.test(goTxt) && /苗栗 三義/.test(goTxt) && /想去 100 天了/.test(goTxt), `${eatTxt} | ${goTxt}`.replace(/\n/g, ' '))
-  await page.evaluate(() => { location.hash = 'food' })
-  await page.waitForSelector('.fm-page'); await settle(page)
-  const stat = await page.locator('.fm-stats').innerText()
-  check('美食地圖：統計卡分成「想吃」與「想去」兩個數字', /想吃\s*1\b/.test(stat.replace(/\n/g, ' ')) && /想去\s*1\b/.test(stat.replace(/\n/g, ' ')), stat.replace(/\n/g, ' | '))
-  const head = await page.locator('.fm-page header').innerText()
-  check('美食地圖：頁首同時有「想吃最久」與「想去最久」', /想吃最久：示範・鱔魚意麵（268 天）/.test(head) && /想去最久：示範・想去的山（100 天）/.test(head), head.replace(/\n/g, ' | '))
-  const btnTexts = async () => (await page.locator('.fm-page button').allInnerTexts()).join('|')
-  check('狀態篩選：全部種類時寫「想吃／想去」', (await btnTexts()).includes('🔖 想吃／想去') && (await btnTexts()).includes('想吃／想去最久'))
-  await page.locator('.fm-page button', { hasText: '🧭 旅遊' }).click()
-  check('狀態篩選：選旅遊 → 「想去」，排序 → 「想去最久」', (await btnTexts()).includes('🔖 想去|') && (await btnTexts()).includes('想去最久'), await btnTexts())
-  await page.locator('.fm-page button', { hasText: '🍜 美食' }).click()
-  check('狀態篩選：選美食 → 「想吃」，排序 → 「想吃最久」', (await btnTexts()).includes('🔖 想吃|') && !(await btnTexts()).includes('🔖 想去'), await btnTexts())
-  await ctx.close()
-}
-for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
-  const { ctx, page, errors } = await open({ width: w, height: h }, 'alert')
-  await page.waitForSelector('.hm-sys .hm-lamp'); await settle(page)
-  const g = await geom(page)
-  const T = `${w}×${h} 異常`
-  check(`${T}：data-sys=alert，⑤ 移到 ① 下方（today 底 ${g.today.bottom} ≈ sys 頂 ${g.sys.top}）`, (await page.locator('.hm-root[data-sys="alert"]').count()) === 1 && Math.abs(g.sys.top - g.today.bottom) <= 14 && g.sys.top < g.dims.top)
-  const lamp = await page.evaluate(() => getComputedStyle(document.querySelector('.hm-sys .hm-lamp')).backgroundColor)
-  check(`${T}：燈變色（crit 紅 ${lamp}）`, /255, 122, 107|184, 58, 48/.test(lamp))
-  const t = await page.locator('.hm-sys').innerText()
-  check(`${T}：寫出原因（管線 L3、Ollama、推送、硬碟）`, /管線 L3 失敗（14 小時前）：apply 失敗/.test(t) && /Ollama 會在補點前用完/.test(t), t.replace(/\n/g, ' | ').slice(0, 300))
-  check(`${T}：頁面可往下捲、不被截掉`, g.scrollH >= g.clientH, `${g.scrollH}/${g.clientH}`)
-  const cl = await clippedCards(page); const ic = await innerClipped(page)
-  check(`${T}：異常時卡片與小卡沒被裁切`, cl.length === 0 && ic.length === 0, JSON.stringify([...cl, ...ic]))
-  check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
-  if (w === 1440 || w === 1920) await page.screenshot({ path: path.join(SHOTS, `home-alert-${w}x${h}.png`) })
-  await ctx.close()
-}
-
-// ═══ 3. 每面向 30 天迷你線 ═══
-for (const [w, h] of [[1366, 768], [1440, 900], [1536, 864], [1920, 1080]]) {
-  const { ctx, page, errors, calls } = await open({ width: w, height: h }, 'spark')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await page.waitForSelector('.hm-dim-spark'); await settle(page)
-  const g = await geom(page)
-  const T = `${w}×${h} 迷你線`
-  const sparks = await page.locator('.hm-dim-spark').count()
-  check(`${T}：有資料的面向畫迷你線（${sparks} 條；travel 只有 1 天資料 → 不畫，共 5 條）`, sparks === 5 && (await page.locator('.hm-dim:has(.hm-dim-spark)').count()) === 5 && (await page.locator('.hm-dim:not(.has-spark) .hm-dim-bar').count()) === 1)
-  check(`${T}：所有小卡仍保有數值條（${await page.locator('.hm-dim-bar').count()} 條）`, (await page.locator('.hm-dim-bar').count()) === 6)
-  check(`${T}：有向 /api/happiness/history?days=30 取資料`, calls.includes('/api/happiness/history?days=30'), calls.filter((c) => /history/.test(c)).join(','))
-  const strokes = await page.evaluate(() => [...document.querySelectorAll('.hm-dim:not(.hm-dim--ghost)')].map((e) => { const l = e.querySelector('.hm-spark-line'); return l ? getComputedStyle(l).stroke : null }))
-  const dims = await page.evaluate(() => [...document.querySelectorAll('.hm-dim:not(.hm-dim--ghost)')].map((e) => getComputedStyle(e).getPropertyValue('--dim').trim()))
-  const hexToRgb = (hx) => { const n = parseInt(hx.slice(1), 16); return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})` }
-  check(`${T}：迷你線用該面向的識別色`, strokes.every((c, k) => c === null || c === hexToRgb(dims[k])), JSON.stringify(strokes))
-  // social 中間 3 天沒資料 → 兩段線（斷線），不補 0
-  const polylines = await page.evaluate(() => [...document.querySelectorAll('.hm-dim:not(.hm-dim--ghost)')].map((e) => e.querySelectorAll('.hm-spark-line').length))
-  check(`${T}：social 中間缺 3 天 → 斷成 2 段（各面向線段數 ${polylines.join('/')}）`, polylines[4] === 2 && polylines[0] === 1 && polylines[1] === 1 && polylines[3] === 1)
-  const endDots = await page.locator('.hm-dim .hm-spark-end').count()
-  check(`${T}：每條線的終點標一個點（${endDots}）`, endDots === 5)
-  const deltas = await page.locator('.hm-spark-delta').allInnerTexts()
-  const deltaColors = await page.evaluate(() => [...document.querySelectorAll('.hm-spark-delta')].map((e) => getComputedStyle(e).color))
-  check(`${T}：最後一個值與昨天的差用 ▲／▼ 小字（${deltas.join('、')}）`, deltas.length >= 3 && deltas.every((d) => /^(▲ \d+|▼ \d+|— 0)$/.test(d)))
-  const calmDelta = await page.locator('.hm-dim', { hasText: '從容' }).locator('.hm-spark-delta').innerText()
-  const mindDelta = await page.locator('.hm-dim', { hasText: '心智' }).locator('.hm-spark-delta').innerText()
-  check(`${T}：變好 ▲ 綠、變差 ▼ 紅（心智 ${mindDelta}、從容 ${calmDelta}）`, /^▲/.test(mindDelta) && /^▼/.test(calmDelta) && deltaColors.some((c) => /95, 191, 122|63, 182|\d+/.test(c)) && (await page.locator('.hm-dim', { hasText: '心智' }).locator('.hm-spark-delta').evaluate((e) => getComputedStyle(e).color)) !== (await page.locator('.hm-dim', { hasText: '從容' }).locator('.hm-spark-delta').evaluate((e) => getComputedStyle(e).color)))
-  const svgW = await page.locator('.hm-dim .hm-spark svg').first().evaluate((e) => e.getBoundingClientRect().width)
-  check(`${T}：迷你線寬度自適應（${Math.round(svgW)}px，不超出小卡）`, svgW > 60 && (await innerClipped(page)).length === 0, String(svgW))
-  check(`${T}：不裁切`, (await clippedCards(page)).length === 0, `${g.scrollH}/${g.clientH}；${JSON.stringify(await clippedCards(page))}`)
-  check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
-  if (w === 1440 || w === 1366) await page.screenshot({ path: path.join(SHOTS, `home-spark-${w}x${h}.png`) })
-  if (w === 1440) {
-    await page.locator('.hm-dimsec').screenshot({ path: path.join(SHOTS, 'home-spark-dims-1440.png') })
-    check(`${T}：aria-label 描述走勢（螢幕閱讀器）`, /近 30 天走勢，\d+ 天有資料，最新 \d+ 分/.test((await page.locator('.hm-dim-spark').first().getAttribute('aria-label')) ?? ''))
-    // 減少動態：不做進場動畫
-    await page.emulateMedia({ reducedMotion: 'reduce' })
-    const anim = await page.evaluate(() => getComputedStyle(document.querySelector('.hm-spark')).animationName)
-    check(`${T}：prefers-reduced-motion 時迷你線沒有進場動畫（animation-name ${anim}）`, anim === 'none')
-  }
-  await ctx.close()
-}
-for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, scn)
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  const t = await page.locator('.hm-dimsec').innerText()
-  check(`${scn}（欄位形狀不對／只有一點／接口失敗）：不畫迷你線，維持六條數值條，沒有錯誤提示`, (await page.locator('.hm-dim-spark, .hm-dim svg').count()) === 0 && (await page.locator('.hm-dim-bar').count()) === 6 && !/錯誤|失敗|暫時無法/.test(t), t.replace(/\n/g, '|').slice(0, 120))
-  const g = await geom(page)
-  check(`${scn}：不裁切`, (await clippedCards(page)).length === 0)
-  check(`${scn}：沒有頁面錯誤`, errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // 迷你線＋異常：⑤ 上移後各面向小卡仍不裁切
-  for (const [w, h] of [[1366, 768], [1440, 900]]) {
-    const { ctx, page, errors } = await open({ width: w, height: h }, 'spark-alert')
-    await page.waitForSelector('.hm-dim-spark'); await settle(page)
-    const g = await geom(page)
-    check(`${w}×${h} 迷你線＋異常：不裁切`, (await clippedCards(page)).length === 0 && (await innerClipped(page)).length === 0, `${g.scrollH}/${g.clientH}；${JSON.stringify(await innerClipped(page))}`)
-    if (w === 1440) await page.screenshot({ path: path.join(SHOTS, 'home-spark-alert-1440x900.png') })
-    await ctx.close()
-  }
-}
-
-// ═══ 3b. 錨點導覽與倉庫索引（2026-10-22）═══
-{
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'normal')
-  await page.waitForSelector('.hm-repo'); await settle(page)
-  await page.locator('.hm-nav-item', { hasText: '倉庫' }).click()
-  await page.waitForTimeout(1200)
-  const top = await page.evaluate(() => document.getElementById('sec-repos').getBoundingClientRect().top)
-  check(`導覽：點「倉庫」捲到倉庫區（區塊上緣離視窗頂 ${Math.round(top)}px）`, top >= 0 && top < 450)
-  check('導覽：捲到那裡後，「倉庫」按鈕高亮（aria-current）', (await page.locator('.hm-nav-item[aria-current="location"]').innerText()).includes('倉庫'))
-  await page.locator('.hm-repos-langs .hm-pill', { hasText: 'Python' }).click()
-  check('倉庫：語言篩選 Python → 只剩 1 個（kb-pipeline；封存的 old-thing 預設隱藏）', (await page.locator('.hm-repo').count()) === 1 && /kb-pipeline/.test(await page.locator('.hm-repo').first().innerText()))
-  await page.locator('.hm-repos-langs .hm-pill', { hasText: '全部' }).click()
-  await page.locator('.hm-repos-q').fill('入口')
-  check('倉庫：搜尋「入口」比對描述 → Aiportal', (await page.locator('.hm-repo').count()) === 1 && /Aiportal/.test(await page.locator('.hm-repo').first().innerText()))
-  await page.locator('.hm-repos-q').fill('')
-  await page.getByLabel('含封存', { exact: false }).check()
-  check('倉庫：勾「含封存」多出封存的倉庫', (await page.locator('.hm-repos').innerText()).includes('封存'))
-  check('倉庫：連結開新分頁且帶 noreferrer，有填網站的倉庫另有「🌐 網站」連結', await page.evaluate(() => { const a = document.querySelector('.hm-repo-main'); const w = document.querySelector('.hm-repo-site'); return a.target === '_blank' && /noreferrer/.test(a.rel) && !!w && w.target === '_blank' && /noopener/.test(w.rel) && w.href === 'https://aiportal.example.test/' }))
-  check('倉庫：有設 token 時不顯示「只顯示公開倉庫」提示', !/GITHUB_TOKEN/.test(await page.locator('.hm-repos').innerText()))
-  check('導覽與倉庫：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{
-  const { ctx, page } = await open({ width: 1440, height: 900 }, 'repos-no-token')
-  await page.waitForSelector('.hm-repo'); await settle(page)
-  check('倉庫：伺服器沒設 token → 明講只顯示公開倉庫', /只顯示公開倉庫.*GITHUB_TOKEN/.test(await page.locator('.hm-repos').innerText()))
-  await ctx.close()
-}
-{
-  const { ctx, page } = await open({ width: 1440, height: 900 }, 'error')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  check('倉庫：抓取失敗 → 「暫時無法取得」＋重試鈕，其他區塊不受影響', /GitHub 倉庫暫時無法取得/.test(await page.locator('.hm-repos').innerText()) && (await page.locator('.hm-repos .hm-retry').count()) === 1)
-  await ctx.close()
-}
-{
-  const { ctx, page } = await open({ width: 390, height: 844 }, 'normal')
-  await page.waitForSelector('.hm-repo'); await settle(page)
-  check('手機：導覽是頂部橫排（寬 > 高），可橫向滑動', await page.evaluate(() => { const n = document.querySelector('.hm-nav').getBoundingClientRect(); return n.height < 80 && n.width > 300 }))
-  const g = await geom(page)
-  check('手機：倉庫卡片沒有造成橫向捲動', g.docW <= g.innerW && g.scW <= g.scCW + 1)
-  await ctx.close()
-}
 
 // ═══ 3c. 知識庫架構頁（#architecture，2026-10-22）═══
 {
@@ -557,8 +287,8 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
   check('架構頁：L3 班表來自即時資料（不是手寫）', await (async () => { await page.locator('.ar-node', { hasText: 'L3 入庫' }).click(); return /班表：/.test(await page.locator('.ar-detail').innerText()) })())
   await page.screenshot({ path: path.join(SHOTS, 'architecture-1440x900.png') })
   await page.locator('.ar-back').click()
-  await page.waitForSelector('.hm-root', { timeout: 10000 })
-  check('架構頁：返回 → 回到首頁（hash 清空）', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-root').count()) === 1)
+  await page.waitForSelector('.st-home', { timeout: 10000 })
+  check('架構頁：返回 → 回到首頁（hash 清空）', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.st-home').count()) === 1)
   await ctx.close()
 }
 {
@@ -576,227 +306,22 @@ for (const scn of ['spark-bad', 'spark-one', 'spark-fail']) {
   check('架構頁（手機）：點節點後詳情在下方可見', await page.locator('.ar-detail').isVisible())
   await ctx.close()
 }
-{
-  const { ctx, page } = await open({ width: 1440, height: 900 }, 'normal')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  await page.locator('[data-testid="hm-arch-link"]').click()
-  await page.waitForSelector('.ar-node', { timeout: 10000 })
-  check('首頁「成長軌跡 → 知識庫架構」連結可進架構頁', (await page.evaluate(() => location.hash)) === '#architecture')
-  await ctx.close()
-}
-
-// ═══ 4. 手機：順序與橫向捲動 ═══
-for (const [w, h] of [[390, 844], [360, 740]]) {
-  for (const scn of ['normal', 'alert', 'spark']) {
-    const { ctx, page, errors } = await open({ width: w, height: h }, scn)
-    await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-    const g = await geom(page)
-    const T = `手機 ${w}×${h} ${scn}`
-    check(`${T}：不橫向捲動`, g.docW <= g.innerW && g.scW <= g.scCW + 1, `${g.docW}/${g.innerW}, ${g.scW}/${g.scCW}`)
-    const order = scn !== 'alert' ? g.today.top < g.dims.top && g.dims.top < g.fun.top && g.fun.top < g.growth.top && g.growth.top < g.sys.top
-      : g.today.top < g.sys.top && g.sys.top < g.dims.top && g.dims.top < g.fun.top && g.fun.top < g.growth.top
-    check(`${T}：順序 ${scn !== 'alert' ? '① → ② → ④ → ③ → ⑤（細列在最後）' : '① → ⑤ → ② → ④ → ③'}`, order, JSON.stringify({ t: g.today.top, s: g.sys.top, d: g.dims.top, f: g.fun.top, gr: g.growth.top }))
-    const cols = await page.evaluate(() => { const d = [...document.querySelectorAll('.hm-dim:not(.hm-dim--ghost)')].map((e) => Math.round(e.getBoundingClientRect().left)); return new Set(d).size })
-    check(`${T}：② 兩欄`, cols === 2, String(cols))
-    const cl = await clippedCards(page); const ic = await innerClipped(page)
-    check(`${T}：沒有內容被裁切`, cl.length === 0 && ic.length === 0, JSON.stringify([...cl, ...ic]))
-    check(`${T}：熱圖 365 格`, (await page.locator('.hm-cell[data-date]').count()) === 365)
-    check(`${T}：「現在用得上」區塊在搜尋區之後、沒有推送時只有一行說明`, await page.evaluate(() => { const o = document.querySelector('.om-root'), n = document.querySelector('[data-testid="now-section"]'); return !!o && !!n && !!(o.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && /沒有需要推給你的/.test(n.textContent ?? '') && n.scrollWidth <= n.clientWidth + 1 }))
-    check(`${T}：沒有頁面錯誤`, errors.length === 0, errors.join(' | ').slice(0, 300))
-    // 手機的工具連結（頁面最下面）與頁首入口
-    if (scn === 'normal') {
-      check(`${T}：頁首有「🍜🧭 美食及旅遊地圖」入口、沒有工具連結區`, (await page.locator('[data-testid="food-entry-pill"]').isVisible()) && (await page.locator('.ip-tools').count()) === 0)
-      // 整頁合理性：美食入口只出現一個（手機＝頁首膠囊；側欄已沒有大卡）、沒有意義不明的數字符號
-      const entries = await page.evaluate(() => ({ pill: !!document.querySelector('[data-testid="food-entry-pill"]')?.getClientRects().length, text: document.body.innerText }))
-      check(`${T}：美食及旅遊地圖入口只有一個（頁首膠囊）`, entries.pill, JSON.stringify({ pill: entries.pill }))
-      check(`${T}：整頁沒有 ①～⑤ 或「04」這類意義不明的數字符號`, !/[①②③④⑤]/.test(entries.text) && !/(^|\n)04(\s|\n)/.test(entries.text), (entries.text.match(/[①②③④⑤]|(^|\n)04(\s|\n)/g) ?? []).join(','))
-      // 首屏利用率：頁首壓成一小條，②面向小卡的上緣在第一屏內（原本頁首獨佔近半個螢幕、② 要捲很久才看到）
-      const top = await page.evaluate(() => { const r = (sel) => { const e = document.querySelector(sel); return e ? e.getBoundingClientRect() : null }; const hd = r('.ip-head'), td = r('.hm-today'), dm = r('.hm-dimsec'), sc = r('.hm-score-n'), mt = r('.hm-score-meta'); return { headH: Math.round(hd.height), todayH: Math.round(td.height), dimsTop: Math.round(dm.top), scoreTop: Math.round(sc.top), metaTop: Math.round(mt.top), scoreRight: Math.round(sc.right), metaLeft: Math.round(mt.left) } })
-      check(`${T}：頁首壓成一條（高 ${top.headH}px ≤ ${Math.round(h * 0.17)}px）`, top.headH <= h * 0.17, JSON.stringify(top))
-      check(`${T}：① 今天卡不超過首屏 40%（${top.todayH}px）`, top.todayH <= h * 0.4, JSON.stringify(top))
-      // 2.87.0 起搜尋框下方多了「現在用得上」：手機首屏改成要求它的上緣在首屏內（使用者 2026-11-14 選「調整斷言」）；
-      // 面向小卡改由第 3 期整併進右欄狀態區後再訂首屏規則，這裡只要求它在 2 個螢幕高度內
-      const nowTop = await page.evaluate(() => Math.round(document.querySelector('[data-testid="now-section"]')?.getBoundingClientRect().top ?? 1e9))
-      check(`${T}：「現在用得上」的上緣在首屏內（${nowTop}px）`, nowTop < h, JSON.stringify({ nowTop }))
-      check(`${T}：② 面向小卡的上緣在 2 個螢幕高度內（${top.dimsTop}px）`, top.dimsTop <= h * 2, JSON.stringify(top))
-      check(`${T}：分數與等級／差並排（同一列，分數在左）`, Math.abs(top.scoreTop - top.metaTop) < 60 && top.metaLeft >= top.scoreRight - 2, JSON.stringify(top))
-      // 手機頁首跟著內容捲走（不釘在最上面）
-      const sc = await page.evaluate(async () => { const sh = document.querySelector('.ip-shell'); sh.scrollTo({ top: 500 }); await new Promise((r) => setTimeout(r, 200)); const hd = document.querySelector('.ip-head').getBoundingClientRect(); return { top: Math.round(sh.scrollTop), headBottom: Math.round(hd.bottom) } })
-      check(`${T}：往下捲時頁首跟著捲走（scrollTop ${sc.top}、頁首下緣 ${sc.headBottom}）`, sc.top > 300 && sc.headBottom <= 0, JSON.stringify(sc))
-      await page.evaluate(() => document.querySelector('.ip-shell').scrollTo({ top: 0 }))
-      if (w === 390) { await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOTS, 'home-mobile-390-first-screen.png') }) }
-      check(`${T}：手機面向卡也有子系統連結`, (await page.locator('.hm-dim-open').count()) === 3)
-    }
-    if (scn === 'spark') {
-      check(`${T}：迷你線有畫、寬度不超出小卡`, (await page.locator('.hm-dim-spark').count()) === 5 && (await page.evaluate(() => [...document.querySelectorAll('.hm-dim-spark')].every((e) => e.scrollWidth <= e.clientWidth + 1 && e.getBoundingClientRect().right <= e.closest('.hm-dim').getBoundingClientRect().right + 1))))
-    }
-    if (w === 390 && scn === 'normal') {
-      await page.screenshot({ path: path.join(SHOTS, 'home-mobile-390-top.png') })
-      await page.setViewportSize({ width: 390, height: 2600 }); await page.waitForTimeout(400)
-      await page.screenshot({ path: path.join(SHOTS, 'home-mobile-390-full.png') })
-    }
-    if (w === 390 && scn === 'alert') { await page.setViewportSize({ width: 390, height: 2600 }); await page.waitForTimeout(400); await page.screenshot({ path: path.join(SHOTS, 'home-mobile-390-alert-full.png') }) }
-    if (w === 390 && scn === 'spark') { await page.setViewportSize({ width: 390, height: 2600 }); await page.waitForTimeout(400); await page.screenshot({ path: path.join(SHOTS, 'home-mobile-390-spark-full.png') }) }
-    if (w === 360 && scn === 'normal') { await page.setViewportSize({ width: 360, height: 2600 }); await page.waitForTimeout(400); await page.screenshot({ path: path.join(SHOTS, 'home-mobile-360-full.png') }) }
-    await ctx.close()
-  }
-}
-// 平板、寬而矮、窄桌面（1100–1299：主區太窄，改堆疊並捲動）
-for (const [w, h] of [[820, 1180], [1280, 600], [1280, 720], [1100, 800]]) {
-  const { ctx, page, errors } = await open({ width: w, height: h }, 'spark')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  const g = await geom(page)
-  check(`${w}×${h}：堆疊版型不橫向捲動、無裁切`, g.docW <= g.innerW && g.scW <= g.scCW + 1 && (await clippedCards(page)).length === 0 && (await innerClipped(page)).length === 0, JSON.stringify([g.docW, g.innerW, g.scW, g.scCW, await clippedCards(page), await innerClipped(page)]))
-  if (w >= 1100) {
-    check(`${w}×${h}：沒有工具連結側欄`, (await page.locator('.ip-aside, .ip-tools').count()) === 0)
-    await page.evaluate(() => { const s = document.querySelector('.ip-scroll'); s.scrollTop = s.scrollHeight })
-    const last = await page.locator('.hm-sys').boundingBox()
-    check(`${w}×${h}：捲到底看得到 ⑤（沒被切掉）`, last.y + last.height <= h + 1, JSON.stringify(last))
-  }
-  check(`${w}×${h}：沒有頁面錯誤`, errors.length === 0)
-  if (w === 1280 && h === 720) await page.screenshot({ path: path.join(SHOTS, 'home-1280x720.png') })
-  await ctx.close()
-}
-
-// ═══ 5. 狀態機 ═══
-{ // 未解鎖
-  const { ctx, page, errors, calls } = await open({ width: 1440, height: 900 }, 'normal', { unlocked: false })
-  await settle(page, 600)
-  const t = await page.locator('.hm-root').innerText()
-  check('未解鎖：私領域區塊都寫「🔒 解鎖後顯示」（①②③④⑤）', (t.match(/🔒 解鎖後顯示/g) ?? []).length >= 7, String((t.match(/🔒 解鎖後顯示/g) ?? []).length))
-  check('未解鎖：不顯示任何假分數（沒有 71、186、1,156）', !/\b71\b|186|1,156/.test(t))
-  check('未解鎖：「一眼看」不露出最弱面向與系統燈（只留今年進度）', (await page.locator('[data-testid="hm-glance-drag"], [data-testid="hm-glance-sys"]').count()) === 0 && !/最弱面向/.test(t))
-  check('未解鎖：今年已過 % 仍可顯示（不是私領域資料）', /已過\s*\d+%/.test(t))
-  check('未解鎖：沒有向私領域 API 發請求', !calls.some((c) => /hermes-|happiness\/history/.test(c)), calls.join(','))
-  const g = await geom(page)
-  check('未解鎖：不被裁切', (await clippedCards(page)).length === 0)
-  check('未解鎖：沒有里程碑假資料、沒有迷你線', (await page.locator('.hm-mile, .hm-next, .hm-dim-spark').count()) === 0)
-  check('未解鎖：沒有工具連結區，也沒有任何子系統連結（/api/sites 未解鎖回空）', (await page.locator('.ip-tools').count()) === 0 && (await page.locator('.hm-dim-open').count()) === 0)
-  await page.screenshot({ path: path.join(SHOTS, 'home-state-locked-1440x900.png') })
-  await page.locator('.hm-today .hm-lock').click()
-  check('未解鎖：點「🔒 解鎖後顯示」會開解鎖視窗', (await page.locator('input[type=password]').count()) >= 1)
-  check('未解鎖：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // 未解鎖＋手機
-  const { ctx, page, errors, calls } = await open({ width: 390, height: 844 }, 'normal', { unlocked: false })
-  await settle(page, 600)
-  const g = await geom(page)
-  check('未解鎖 手機：不橫向捲動、不發私領域請求', g.docW <= g.innerW && !calls.some((c) => /hermes-|happiness\/history/.test(c)))
-  await page.setViewportSize({ width: 390, height: 2600 }); await page.waitForTimeout(300)
-  await page.screenshot({ path: path.join(SHOTS, 'home-mobile-390-locked-full.png') })
-  check('未解鎖 手機：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // 載入中
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'loading')
-  await page.waitForTimeout(900)
-  const busy = await page.locator('.hm-frame[aria-busy="true"]').count()
-  const skel = await page.locator('.hm-skel').count()
-  const t = await page.locator('.hm-root').innerText()
-  check(`載入中：有骨架（${skel} 組、${busy} 個 aria-busy 區塊），不寫「載入中…」字樣`, skel >= 4 && busy >= 4 && !/載入中…/.test(t))
-  check('載入中：沒有假數字（沒有 1,156、186）', !/1,156|\b186\b/.test(t))
-  await page.screenshot({ path: path.join(SHOTS, 'home-state-loading-1440x900.png') })
-  await settle(page, 800)
-  check('載入中 → 載完後出現資料', /1,156/.test(await page.locator('.hm-root').innerText()))
-  check('載入中：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // 空（新系統：沒有歷史、沒想法、沒地點、沒遊記）
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'empty')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  const t = await page.locator('.hm-root').innerText()
-  check('空：歷史沒資料 → 熱圖顯示「資料累積中」，不畫全空的圖', /資料累積中/.test(t) && (await page.locator('.hm-cell[data-date]').count()) === 0)
-  check('空：① 趨勢顯示「資料累積中：再 N 天」而不是 0', /資料累積中：再 1 天會畫出趨勢/.test(t) && !/▲|▼/.test(await page.locator('.hm-today').innerText()))
-  check('空：想法庫「還沒有想法」、地點「還沒有想吃的紀錄」、遊記「還沒有遊記」', /還沒有想法/.test(t) && /還沒有想吃的紀錄/.test(t) && /還沒有遊記/.test(t))
-  const badges = await page.locator('.hm-mile').allInnerTexts()
-  check(`空：里程碑只列確定的（事件突破 1,000、人物突破 100、概念突破 50、方法突破 25；遊記 0 與地點 0 不列膠囊，下一個＝人物 200）`, badges.join('|').includes('事件突破 1,000') && !/遊記|去過|已完成|幸福指數紀錄/.test(badges.join('|')) && /下一個：人物 200/.test(await page.locator('.hm-next-text').innerText()), badges.join('|'))
-  await page.screenshot({ path: path.join(SHOTS, 'home-state-empty-1440x900.png') })
-  check('空：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // 失敗
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'error')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  const t = await page.locator('.hm-root').innerText()
-  check('失敗：各區塊寫「暫時無法取得」並有重試鈕', /幸福指數歷史暫時無法取得/.test(t) && /想法庫暫時無法取得/.test(t) && (await page.locator('.hm-retry').count()) >= 3, String(await page.locator('.hm-retry').count()))
-  check('失敗：① 趨勢說明為「趨勢暫時無法取得」，且一句話不謊稱「昨天沒有紀錄」', /趨勢暫時無法取得/.test(await page.locator('.hm-today').innerText()) && !/昨天沒有紀錄/.test(t))
-  check('失敗：⑤ 燈變色並寫「管線讀取失敗」', /管線讀取失敗/.test(await page.locator('.hm-sys').innerText()) && (await page.locator('.hm-root[data-sys="alert"]').count()) === 1)
-  check('失敗：分數（來自 dashboard）仍顯示 71', /71/.test(await page.locator('.hm-today').innerText()))
-  check('失敗：資料來源失敗的里程碑組整組略過，不顯示 0', (await page.locator('.hm-mile').count()) === 0 && !/下一個/.test(t))
-  const g = await geom(page)
-  check('失敗：不裁切', (await clippedCards(page)).length === 0 && (await innerClipped(page)).length === 0, JSON.stringify(await innerClipped(page)))
-  await page.screenshot({ path: path.join(SHOTS, 'home-state-error-1440x900.png') })
-  check('失敗：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // 過期
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'stale')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  const badges = await page.locator('.hm-badge--stale').allInnerTexts()
-  check(`過期：標「資料 n 小時前／天前」（${badges.join('、')}）`, badges.length >= 3 && badges.every((b) => /^資料 \d+ (分鐘|小時|天)前$/.test(b)))
-  const op = await page.evaluate(() => getComputedStyle(document.querySelector('.hm-frame--stale > .hm-faded')).opacity)
-  check(`過期：內容淡化（opacity ${op}）、數字仍顯示`, Number(op) < 0.7 && /71/.test(await page.locator('.hm-today').innerText()))
-  check('過期：仍不影響燈（只是過期，不是死）', (await page.locator('.hm-root[data-sys="ok"]').count()) === 1)
-  await page.screenshot({ path: path.join(SHOTS, 'home-state-stale-1440x900.png') })
-  check('過期：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // 太久沒更新
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'dead')
-  await page.waitForSelector('.hm-sys .hm-lamp'); await settle(page)
-  const t = await page.locator('.hm-root').innerText()
-  check('死：數字換成「—」並寫「已 n 小時／天沒有更新：來源」', /已 \d+ (小時|天)沒有更新：幸福指數/.test(t) && /已 \d+ 天沒有更新：幸福指數歷史/.test(t) && /已 \d+ 小時沒有更新：知識庫/.test(t), t.replace(/\n/g, ' | ').slice(0, 400))
-  check('死：① 不再顯示分數 71', !/\b71\b/.test(await page.locator('.hm-today').innerText()))
-  check('死：⑤ 燈亮並寫出哪個資料多久沒更新，且移到 ① 下方', (await page.locator('.hm-root[data-sys="alert"]').count()) === 1 && /已 \d+ (小時|天)沒有更新/.test(await page.locator('.hm-sys').innerText()))
-  await page.screenshot({ path: path.join(SHOTS, 'home-state-dead-1440x900.png') })
-  check('死：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-
-// ═══ 6. 路由：#home 相容、#legacy 舊版首頁與退路、⌘K（全站搜尋）═══
-{ // #home：進來就回預設首頁，hash 清掉
+// ═══ 6. 路由：#home 相容、⌘K（全站搜尋）═══
+{ // #home：進來就回預設首頁（v3），hash 清掉
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'normal', { hash: '#home' })
-  await page.waitForSelector('.hm-dim .hm-dim-num')
-  check('#home（舊分享連結）：顯示預設首頁（新首頁），hash 已清掉', (await page.locator('.hm-root').count()) === 1 && (await page.evaluate(() => location.hash)) === '', await page.evaluate(() => location.hash))
+  check('#home（舊分享連結）：顯示預設首頁（新版 v3），hash 已清掉', (await page.locator('.st-home').count()) === 1 && (await page.evaluate(() => location.hash)) === '', await page.evaluate(() => location.hash))
   check('#home：沒有「預覽版」', !/預覽版/.test(await page.locator('body').innerText()))
   check('#home：沒有頁面錯誤', errors.length === 0, errors.join('|'))
   await ctx.close()
 }
-{ // #legacy：完整舊版（DesktopBoard 六張卡＋側欄），頁首有「回到新首頁」
-  const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'normal', { hash: '#legacy', wait: false })
-  await page.waitForSelector('.bd-card', { timeout: 15000 })
-  await page.waitForTimeout(1200)
-  check('#legacy：舊版首頁（六張 .bd-card）、沒有新首頁元素', (await page.locator('.bd-card').count()) === 6 && (await page.locator('.hm-root').count()) === 0)
-  check('#legacy：沒有工具連結側欄、沒有美食入口卡', (await page.locator('.ip-aside, .ip-tools').count()) === 0 && (await page.locator('[data-testid="food-entry"]').count()) === 0)
-  const back = page.locator('.hm-legacy-back')
-  check('#legacy：頁首有「舊版首頁」標示與「← 回到新首頁」連結', (await back.count()) === 1 && /舊版首頁/.test(await back.innerText()) && /回到新首頁/.test(await back.innerText()))
-  const hdr = await page.evaluate(() => { const b = document.querySelector('.ip-scroll').getBoundingClientRect(); return b.top })
-  await page.screenshot({ path: path.join(SHOTS, 'legacy-1440x900.png') })
-  await back.click()
-  await page.waitForSelector('.hm-root', { timeout: 10000 })
-  check('#legacy → 點「回到新首頁」：回到新首頁、hash 清空', (await page.locator('.hm-root').count()) === 1 && (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-legacy-back').count()) === 0)
-  check('#legacy：沒有頁面錯誤', errors.length === 0, errors.join('|'))
-  await ctx.close()
-}
-{ // #legacy 手機
-  const { ctx, page, errors } = await open({ width: 390, height: 844 }, 'normal', { hash: '#legacy', wait: false })
-  await page.waitForSelector('.bd-card', { timeout: 15000 })
-  const g = await page.evaluate(() => ({ docW: document.documentElement.scrollWidth, w: innerWidth }))
-  check('#legacy 手機：不橫向捲動、有退路連結', g.docW <= g.w && (await page.locator('.hm-legacy-back').isVisible()))
-  await ctx.close()
-}
-// ⌘K：聚焦首頁的全站搜尋框（2.86.0 起取代指令面板），`>舊版` 指令前往 #legacy
+// ⌘K：聚焦首頁的全站搜尋框（2.86.0 起取代指令面板）；不驗舊版指令前往的檢查
 {
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'normal')
-  await page.waitForSelector('.hm-dim .hm-dim-num')
+  await page.waitForSelector('.st-home')
   await page.keyboard.press('Control+k')
   check('⌘K → 聚焦全站搜尋框（.om-root 內的輸入框）', await page.evaluate(() => document.activeElement?.closest('.om-root') !== null && document.activeElement?.tagName === 'INPUT'))
   await page.fill('.om-root input', '>舊版')
   check('⌘K 輸入「>舊版」→ 指令清單有「舊版首頁」；舊的「新首頁（預覽版）」不在', (await page.locator('.om-root [role="option"]', { hasText: '舊版首頁' }).count()) === 1 && (await page.getByText('新首頁（預覽版）').count()) === 0)
-  await page.keyboard.press('Enter')
-  await page.waitForSelector('.bd-card', { timeout: 10000 })
-  check('⌘K 選「舊版首頁」→ 前往 #legacy', (await page.evaluate(() => location.hash)) === '#legacy')
   check('⌘K：沒有頁面錯誤', errors.length === 0, errors.join('|'))
   await ctx.close()
 }
@@ -807,14 +332,14 @@ const DIM_EXPECT = {
   fitness: { name: '身體', score: '81', detail: ['覆蓋率', '均衡度', '本週積分'] },
   calm: { name: '從容', score: '74', detail: ['逾期壓力', '近期負荷', '停滯程度'] },
   mind: { name: '心智', score: '79', detail: ['想法分數', '日報分數'] },
-  social: { name: '社交', score: '77', detail: ['廣度', '互動強度', '連結率'] },
+  social: { name: '社交', score: '77', detail: ['廣度', '互動強度', '規律'] },  // 社交 v2 起「連結率」改「規律」
   travel: { name: '旅遊', score: '55', detail: ['Recency', 'Frequency', '距上次旅行'] },
 }
 {
-  // 7a 從首頁點小卡 → 進該面向的頁（網址變 #dim/<key>），不再是同一個抽屜
+  // 7a 從首頁點面向小格 → 進該面向的頁（網址變 #dim/<key>），不是同一個抽屜
   const { ctx, page, errors } = await open({ width: 1440, height: 900 }, 'spark')
-  await page.waitForSelector('.hm-dim .hm-dim-num'); await settle(page)
-  await page.locator('.hm-dim').nth(1).click()
+  await page.waitForSelector('[data-testid="st-dim"]'); await settle(page)
+  await page.locator('[data-testid="st-dim"][data-dim="fitness"]').click()
   await page.waitForSelector('[data-testid="dim-page"]', { timeout: 5000 })
   check('面向頁：點「身體」小卡 → 網址 #dim/fitness、開的是面向頁而不是抽屜', (await page.evaluate(() => location.hash)) === '#dim/fitness' && (await page.locator('.bd-drawer').count()) === 0 && (await page.locator('[data-testid="dim-page"]').getAttribute('data-dim')) === 'fitness')
   check('面向頁：Esc 回首頁', await (async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(300); return (await page.evaluate(() => location.hash)) === '' && (await page.locator('[data-testid="dim-page"]').count()) === 0 })())
@@ -867,7 +392,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   await page.locator('[data-testid="dp-range-90"]').click(); await page.waitForTimeout(200)
   check('面向頁：切到「近 90 天」按鈕狀態更新、統計仍在', (await page.locator('[data-testid="dp-range-90"]').getAttribute('aria-pressed')) === 'true' && (await page.locator('[data-testid="dp-stats"]').count()) === 1, before.length + '')
   await page.locator('[data-testid="dp-back"]').click(); await page.waitForTimeout(400)
-  check('面向頁：「← 首頁」回首頁', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.hm-root').count()) === 1)
+  check('面向頁：「← 首頁」回首頁', (await page.evaluate(() => location.hash)) === '' && (await page.locator('.st-home').count()) === 1)
   check('面向頁：切換與返回沒有頁面錯誤', errors.length === 0, errors.join(' | ').slice(0, 300))
   await ctx.close()
 }
@@ -917,16 +442,15 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   check('面向頁：未解鎖 → 顯示「🔒 解鎖後顯示」、不發私領域請求', (await b.page.locator('.hm-lock').count()) >= 1 && privCalls.length === 0, JSON.stringify(privCalls))
   await b.ctx.close()
   const c = await open({ width: 1440, height: 900 }, 'normal', { hash: '#dim/nope' })
-  check('面向頁：不認得的面向網址 → 當作首頁（沒有面向頁）', (await c.page.locator('[data-testid="dim-page"]').count()) === 0 && (await c.page.locator('.hm-root').count()) === 1)
+  check('面向頁：不認得的面向網址 → 當作首頁（沒有面向頁）', (await c.page.locator('[data-testid="dim-page"]').count()) === 0 && (await c.page.locator('.st-home').count()) === 1)
   await c.ctx.close()
 }
 
 {
   // 8 年度回顧（#year）與各面向年熱圖（P2-1）
   const Y = Number(tpDate().slice(0, 4))
-  const a = await open({ width: 1440, height: 900 }, 'spark')
-  check('成長軌跡有「年度回顧 →」入口', (await a.page.locator('[data-testid="hm-year-link"]').count()) === 1)
-  await a.page.locator('[data-testid="hm-year-link"]').click(); await a.page.waitForSelector('[data-testid="year-page"]')
+  const a = await open({ width: 1440, height: 900 }, 'spark', { hash: '#year', wait: false })
+  await a.page.waitForSelector('[data-testid="year-page"]')
   check(`年度回顧：網址 #year、頁面是今年（${Y}）`, (await a.page.evaluate(() => location.hash)) === '#year' && (await a.page.locator('[data-testid="year-page"]').getAttribute('data-year')) === String(Y))
   await a.page.waitForSelector('[data-testid="yr-hhi-stats"]', { timeout: 8000 })
   const hhiText = await a.page.locator('[data-testid="yr-hhi-stats"]').innerText()
@@ -949,7 +473,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
   check('面向頁：歷史沒有 components 時，年熱圖區寫明原因（不畫假圖）', /還不到 2 天/.test(await c.page.locator('[data-testid="dp-heat-pending"]').innerText()))
   await c.ctx.close()
   const d = await open({ width: 1440, height: 900 }, 'normal', { hash: '#year/1999' })
-  check('年度回顧：年份不合理（#year/1999）→ 當作首頁', (await d.page.locator('[data-testid="year-page"]').count()) === 0 && (await d.page.locator('.hm-root').count()) === 1)
+  check('年度回顧：年份不合理（#year/1999）→ 當作首頁', (await d.page.locator('[data-testid="year-page"]').count()) === 0 && (await d.page.locator('.st-home').count()) === 1)
   await d.ctx.close()
   const e = await open({ width: 390, height: 844 }, 'spark', { hash: '#year', wait: false })
   await e.page.waitForSelector('[data-testid="yr-hhi-stats"]', { timeout: 8000 })
@@ -1046,7 +570,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
       const F = Node.DOCUMENT_POSITION_FOLLOWING
       return !!l && !!c && !!r && !!b && !!n && !!t && !!h && !!(l.compareDocumentPosition(c) & F) && !!(c.compareDocumentPosition(r) & F) && !!(r.compareDocumentPosition(t) & F) && c.contains(b) && c.contains(n) && !!(b.compareDocumentPosition(n) & F) && t === h.lastElementChild && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card--focus').length === 1
     }))
-    check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
+    check(`${T}：沒有 .hm-today，也沒有九個舊區塊`, (await page.locator('.hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
     check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
     // 3.16.0：首頁順序改為 STATUS → 想法板 → 現在用得上 → 心得島嶼（島嶼移到最下方；STATUS 佔滿整列）
     check(`${T}：三欄（.st-col--l/c/r 的 left 遞增、top 差 ≤ 4px）、想法板在現在用得上之前、心得島嶼在三欄下方且跨全寬`, await page.evaluate(() => {
@@ -1085,7 +609,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     check(`${T}：點 STATUS 盒頭開幸福指數抽屜，最上面是活動洞察、後面有成長軌跡熱圖`, await page.evaluate(() => { const b = document.querySelector('.bd-drawer-body'); const i = b.querySelector('[data-testid="activity-insight"]'); const gr = b.querySelector('[data-testid="st-hhi-growth"]'); return !!i && !!gr && b.firstElementChild === i && !!(i.compareDocumentPosition(gr) & Node.DOCUMENT_POSITION_FOLLOWING) && !!gr.querySelector('.hm-cell[data-date]') }))
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     const sc = await page.locator('[data-testid="st-shortcuts"]').innerText()
-    check(`${T}：捷徑列（時間軸、想法庫、關係、知識）在 STATUS 最下面`, /時間軸/.test(sc) && /想法庫/.test(sc) && /關係/.test(sc) && /知識/.test(sc) && await page.evaluate(() => { const f = document.querySelector('[data-testid="st-fun"]'); const s = document.querySelector('[data-testid="st-shortcuts"]'); return !!(f.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) && s === document.querySelector('.st-aside--right').lastElementChild }))
+    check(`${T}：捷徑列（時間軸、想法庫、卷宗、知識）在 STATUS 最下面`, /時間軸/.test(sc) && /想法庫/.test(sc) && /卷宗/.test(sc) && /知識/.test(sc) && await page.evaluate(() => { const f = document.querySelector('[data-testid="st-fun"]'); const s = document.querySelector('[data-testid="st-shortcuts"]'); return !!(f.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) && s === document.querySelector('.st-aside--right').lastElementChild }))
     await page.locator('[data-testid="st-shortcuts"] button').click(); await page.waitForSelector('.bd-drawer')
     check(`${T}：捷徑「想法庫」開想法抽屜`, /想法庫/.test(await page.locator('.bd-drawer-title').innerText()))
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
@@ -1133,26 +657,6 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     const { ctx, page } = await open({ width: 1440, height: 900 }, 'v3-cards5', { layout: 'v3' })
     await page.waitForSelector('[data-testid="now-card"]'); await settle(page)
     check('v3：沒有明日報告區塊（改為抽屜）', (await page.locator('#sec-brief').count()) === 0)
-    await ctx.close()
-  }
-
-  // ── 切換：點開關出現 .hm-nav（classic），再點回 v3；重新整理後維持最後選擇 ──
-  {
-    const { ctx, page, calls } = await open({ width: 1440, height: 900 }, 'normal', { layout: 'v3' })
-    await page.waitForSelector('[data-testid="hm-layout-toggle"]')
-    const t = page.locator('[data-testid="hm-layout-toggle"]')
-    check('切換：預設是 v3（開關 aria-pressed=false、沒有 .hm-nav）、開關在頂欄同一排、title 有「2027-01-31 後移除」的說明、舊的 .st-layoutbar 細列已拿掉', (await t.getAttribute('aria-pressed')) === 'false' && (await page.locator('.hm-nav').count()) === 0 && /2027-01-31/.test((await t.getAttribute('title')) ?? '') && (await page.locator('header.tb [data-testid="hm-layout-toggle"]').count()) === 1 && (await page.locator('.st-layoutbar').count()) === 0)
-    const before = calls.length
-    await t.click(); await page.waitForSelector('.hm-nav'); await settle(page, 600)
-    check('切換：點開關立即出現舊版首頁（.hm-nav、.hm-today），aria-pressed=true，STATUS 消失', (await t.getAttribute('aria-pressed')) === 'true' && (await page.locator('.hm-nav, .hm-today').count()) >= 2 && (await page.locator('.st-aside').count()) === 0)
-    check('切換：寫進 localStorage（hm-layout=classic）', (await page.evaluate(() => localStorage.getItem('hm-layout'))) === 'classic')
-    check('切換：不送任何跟切換有關的 API（只有首頁資料請求）', !calls.slice(before).some((c) => /layout|toggle/i.test(c)))
-    await page.reload(); await page.waitForSelector('.hm-root')
-    check('切換：重新整理後維持舊版', (await page.locator('.hm-nav').count()) === 1 && (await page.locator('[data-testid="hm-layout-toggle"]').getAttribute('aria-pressed')) === 'true')
-    await page.locator('[data-testid="hm-layout-toggle"]').click(); await page.waitForSelector('.st-home')
-    check('切換：再點一次回到 v3，localStorage 變 v3', (await page.locator('.hm-nav').count()) === 0 && (await page.evaluate(() => localStorage.getItem('hm-layout'))) === 'v3')
-    await page.reload(); await page.waitForSelector('.st-home')
-    check('切換：重新整理後維持 v3', (await page.locator('.st-aside').count()) === 2)
     await ctx.close()
   }
 
@@ -1205,7 +709,8 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
         check(`${T}：按「再看 3 則」後 5 張全部出現、按鈕消失`, afterCards === 5 && (await page.locator('[data-testid="now-more"]').count()) === 0, String(afterCards))
         if (w === 390) { await page.evaluate(() => document.querySelector('.ip-shell').scrollTo({ top: 0 })); await page.waitForTimeout(200) }
       } else {
-        check(`${T}：沒有推送卡時只有一行說明`, /沒有需要推給你的/.test(await page.locator('[data-testid="now-section"]').innerText()) && shownCards === 0)
+        // 3.4.0 起最弱面向卡一定在（由幸福指數算出，不靠推送），所以沒有推送卡時畫面上只剩這一張
+        check(`${T}：沒有推送卡時只剩最弱面向卡`, shownCards === 1 && /今天最弱的一面/.test(await page.locator('[data-testid="now-card"]').first().innerText()), String(shownCards))
       }
       await ctx.close()
     }
