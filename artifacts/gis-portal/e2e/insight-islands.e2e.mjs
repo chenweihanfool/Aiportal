@@ -244,9 +244,9 @@ try {
     // 3.16.0：島嶼圖在首頁最下方；先捲到看得見再操作滾輪
     await page.locator('[data-testid="insight-islands"]').scrollIntoViewIfNeeded()
     await page.waitForTimeout(200)
-    check(`${T}：心得島嶼在首頁 DOM 最下方（st-left 之後）`, await page.evaluate(() => {
-      const t = document.querySelector('[data-testid="insight-islands"]'), l = document.querySelector('.st-left'), h = document.querySelector('.st-home')
-      return !!t && !!l && !!h && !!(l.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) && t === h.lastElementChild
+    check(`${T}：心得島嶼在首頁 DOM 最下方（左右欄 st-col 之後）`, await page.evaluate(() => {
+      const t = document.querySelector('[data-testid="insight-islands"]'), l = document.querySelector('.st-col--l'), r = document.querySelector('.st-col--r'), h = document.querySelector('.st-home')
+      return !!t && !!l && !!r && !!h && !!(l.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(r.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) && t === h.lastElementChild
     }))
     await page.screenshot({ path: path.join(SHOTS, 'islands-overview-dark.png') })
     // 3.16.0：不按 Ctrl 的一般滾輪只捲頁面、鏡頭不動，中央出現提示

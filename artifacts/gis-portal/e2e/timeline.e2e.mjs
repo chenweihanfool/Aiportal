@@ -207,7 +207,8 @@ async function newPage(viewport, unlocked = true) {
   check('有／無分數徽章的列，一句話左緣對齊', new Set(lefts).size === 1, `lefts=${[...new Set(lefts)].join(',')}`)
   check('日級列表只顯示「日」每日報告分數徽章（可缺，欄位固定所以不影響對齊），不再有知識庫健康／幸福指數',
     (await page.locator('[data-testid=badge-report]').count()) > 0 && (await page.locator('[data-testid=badge-report]').first().innerText()) === '日 65'
-    && (await page.locator('[data-testid=badge-kb], [data-testid=badge-hhi]').count()) === 0)
+    && (await page.locator('[data-testid=badge-kb], [data-testid=badge-hhi]').count()) === 0,
+    await page.locator('[data-testid=badge-report]').first().innerText())
   check('列表確實顯示了一句話（不是「無摘要」占位）', (await page.locator('[data-testid=timeline-row]').first().innerText()).includes('今天主要在整理管線設定'))
   check('長摘要以刪節號截斷（scrollWidth > clientWidth）', await page.locator('[data-testid=timeline-row]').first().locator('span:has-text("今天主要在整理管線設定")').last().evaluate(e => e.scrollWidth > e.clientWidth))
   check('無日報的日子顯示占位文字並含當日事件數', (await page.locator('text=無日報 · 當日 2 件事件').count()) === 1)
