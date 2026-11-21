@@ -3,7 +3,7 @@
 // 只讀 knowledgeView.ts／knowledgeSteps.ts／insightWeave.ts 已匯出的型別與函式。
 
 import { matchClaims, parseBodyWithMarkers, type Bullet, type BuiltTree, type ParsedBody, type Topic, type TopicDiagram } from './knowledgeView'
-import type { StepDoc, StepInsight, StepRule } from './knowledgeSteps'
+import type { StepDoc, StepInsight, StepRule, TopicStep } from './knowledgeSteps'
 import type { Confidence, KbLink, KbStep, StepBridge, WeaveStatus } from './insightWeave'
 
 /* ───────── 島模型 ───────── */
@@ -399,7 +399,7 @@ export function zoomAt(v: View, f: number, cx: number, cy: number): View {
 
 /* ───────── 索引模式（3.23.0）：格子 ↔ 站、選取、順序、chips ───────── */
 
-export type GroupKey = 'prep' | 'decisions' | 'pitfalls' | 'unknown' | 'why' | 'myths' | 'examples' | 'what' | 'how' | 'caution'
+export type GroupKey = 'steps' | 'prep' | 'decisions' | 'pitfalls' | 'unknown' | 'why' | 'myths' | 'examples' | 'what' | 'how' | 'caution'
 export interface ChipGroup { key: GroupKey; label: string; n: number }
 
 const GROUP_ORDER: Record<'method' | 'concept' | 'legacy', Array<[GroupKey, string]>> = {
@@ -413,12 +413,20 @@ export function groupBullets(parsed: ParsedBody | null, key: GroupKey): Bullet[]
   return parsed ? parsed[key] : []
 }
 
-/** 索引下方 chips：依題目格式列出有條目的組，附數量 */
-export function chipGroups(parsed: ParsedBody | null): ChipGroup[] {
+/** 沒有格子可以進的步驟卡：node 為 null，或 node 指向圖上不存在的格子（沒有圖時全部算） */
+export function orphanSteps(topic: Pick<Topic, 'steps'>, d: TopicDiagram | null | undefined): TopicStep[] {
+  const ids = new Set(nodeOrder(d))
+  return (topic.steps ?? []).filter((s) => !s.node || !ids.has(s.node))
+}
+
+/** 索引下方 chips：依題目格式列出有條目的組，附數量；orphans＞0 時最後加「其他步驟卡」（g:steps） */
+export function chipGroups(parsed: ParsedBody | null, orphans = 0): ChipGroup[] {
   if (!parsed) return []
-  return GROUP_ORDER[parsed.format]
+  const out = GROUP_ORDER[parsed.format]
     .map(([key, label]) => ({ key, label, n: groupBullets(parsed, key).length }))
     .filter((g) => g.n > 0)
+  if (orphans > 0) out.push({ key: 'steps', label: '其他步驟卡', n: orphans })
+  return out
 }
 
 /** 這格對應的站 id：有 node===nodeId 的步驟卡 → 該卡 claim 的站；否則格子 id 本身就是站（備援圖）；都沒有 null */
@@ -450,12 +458,12 @@ export function defaultSelection(topic: Pick<Topic, 'steps'>, a: TopicAnalysis, 
   const hit = order.find((id) => cards.has(id) || a.stations.find((s) => s.id === id)?.kind === 'step')
   if (hit) return hit
   if (order[0]) return order[0]
-  const g = chipGroups(a.parsed)[0]
+  const g = chipGroups(a.parsed, orphanSteps(topic, d).length)[0]
   return g ? `g:${g.key}` : null
 }
 
 /** 選取是否合法（格子 id 在圖上，或 g:組名 在 chips 裡） */
-export function isValidSelection(sel: string, a: TopicAnalysis, d: TopicDiagram | null | undefined): boolean {
-  if (isGroupSel(sel)) return chipGroups(a.parsed).some((g) => `g:${g.key}` === sel)
+export function isValidSelection(sel: string, a: TopicAnalysis, d: TopicDiagram | null | undefined, topic?: Pick<Topic, 'steps'>): boolean {
+  if (isGroupSel(sel)) return chipGroups(a.parsed, topic ? orphanSteps(topic, d).length : 0).some((g) => `g:${g.key}` === sel)
   return nodeOrder(d).includes(sel)
 }

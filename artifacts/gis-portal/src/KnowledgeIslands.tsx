@@ -6,7 +6,7 @@ import { paletteColor, type PaletteTheme } from './insightPalette'
 import { useAsync } from './homeHooks'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, cardMark, cardRect, chipGroups, computeBridges, defaultSelection, fitView, groupBullets, groupOfSel, isValidSelection, islandSize, islandStats,
-  kbLinksFor, layoutSea, nodeOrder, resolveStepBridges, stationCoverage, stationForNode, zoomAt,
+  kbLinksFor, layoutSea, nodeOrder, orphanSteps, resolveStepBridges, stationCoverage, stationForNode, zoomAt,
   CARD_H, CARD_W, DOMAIN_HEAD_H, ISL_LABEL_H, type AiBridge, type Bridge, type IslandModelIsland, type Placed, type Station, type TopicAnalysis, type View,
 } from './knowledgeIslands'
 import { buildTree, kindLabel, recentChangeOf, stripMarks, type Bullet, type Topic, type TopicDiagram, type TopicsData } from './knowledgeView'
@@ -140,7 +140,7 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
     if (!e) return null
     const t = topicById.get(r.topicId)
     const a = analyses.get(r.topicId)
-    const ok = r.stationId !== null && !!t && !!a && isValidSelection(r.stationId, a, indexDiagramOf(t, a))
+    const ok = r.stationId !== null && !!t && !!a && isValidSelection(r.stationId, a, indexDiagramOf(t, a), t)
     return { where: { island: e.island.id, topicId: r.topicId, sel: ok ? r.stationId! : defaultSel(r.topicId) } }
   }
   const [init] = useState(() => {
@@ -520,7 +520,8 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   const diagram = useMemo(() => (a ? indexDiagramOf(topic, a) : null), [a, topic])
   const isFallback = !topic.diagram
   const order = useMemo(() => nodeOrder(diagram), [diagram])
-  const groups = useMemo(() => chipGroups(a?.parsed ?? null), [a])
+  const orphans = useMemo(() => orphanSteps(topic, diagram), [topic, diagram])
+  const groups = useMemo(() => chipGroups(a?.parsed ?? null, orphans.length), [a, orphans])
   const sel = where.sel
   const groupKey = groupOfSel(sel)
   const select = (s: string) => setWhere({ island: island.id, topicId: topic.id, sel: s })
@@ -572,8 +573,9 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
 
   const cov = a ? stationCoverage(a) : { covered: 0, total: 0 }
   const flowNode = !groupKey && diagram?.type === 'flow' ? diagram.nodes.find((n) => n.id === sel) : undefined
-  const card = !groupKey ? (topic.steps ?? []).find((s) => s.node === sel) : undefined
-  const sid: string | null = groupKey ? groupKey : a ? stationForNode(topic, a, sel) : null
+  const card = groupKey === 'steps' ? orphans[0] : !groupKey ? (topic.steps ?? []).find((s) => s.node === sel) : undefined
+  // 其他步驟卡（g:steps）：旁註只顯示第一張卡對應的站
+  const sid: string | null = groupKey === 'steps' ? (a && orphans[0] ? a.stationOfClaim.get(orphans[0].claim) ?? null : null) : groupKey ? groupKey : a ? stationForNode(topic, a, sel) : null
   const station = sid ? stations.find((s) => s.id === sid) : undefined
   const info = diagram && !groupKey ? diagramNodeInfo(diagram, sel) : null
   const links = station && a ? a.links.get(station.id) : undefined
@@ -610,9 +612,14 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   let main: ReactNode = null
   if (groupKey) {
     label = groups.find((g) => g.key === groupKey)?.label ?? ''
-    const list = groupBullets(a?.parsed ?? null, groupKey)
-    const fork = groupKey === 'decisions' ? forkFromText(list, targets) : null
-    main = fork ? <KnowledgeFork fork={fork} onJump={select} /> : bullets(list.map((b, i) => ({ bid: `${groupKey}:${i}`, b })), list.length === 1)
+    if (groupKey === 'steps') {
+      main = <KnowledgeSteps key="orphans" t={topic} steps={orphans} pw={pw} onView={(n) => openSrc(n, '')} highlightStep={null}
+        onGoDiagram={() => sentinelRef.current?.scrollIntoView?.({ behavior: 'smooth' })} />
+    } else {
+      const list = groupBullets(a?.parsed ?? null, groupKey)
+      const fork = groupKey === 'decisions' ? forkFromText(list, targets) : null
+      main = fork ? <KnowledgeFork fork={fork} onJump={select} /> : bullets(list.map((b, i) => ({ bid: `${groupKey}:${i}`, b })), list.length === 1)
+    }
   } else if (diagram?.type === 'flow' && flowNode) {
     label = `${diagram.lanes[flowNode.lane] ?? ''}・${flowNode.shape === 'decision' ? '判斷點' : '步驟'}`
     if (card) {

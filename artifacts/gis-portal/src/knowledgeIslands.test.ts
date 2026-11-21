@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
-  layoutSea, resolveStepBridges, chipGroups, defaultSelection, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
+  layoutSea, resolveStepBridges, chipGroups, defaultSelection, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
 } from './knowledgeIslands'
 import { buildTree, parseBodyWithMarkers, type Topic, type TopicClaim } from './knowledgeView'
 import type { FlowDiagram } from './knowledgeView'
@@ -315,6 +315,21 @@ describe('索引模式（3.23.0）', () => {
     expect(defaultSelection(t, analyzeTopic(t), null)).toBe('g:prep')
     const a = analyzeTopic(topic({ id: 'e', body: null }))
     expect(defaultSelection(t, a, null)).toBeNull()
+  })
+
+  it('orphanSteps／其他步驟卡 chip：node 為 null 或指向不存在的格子', () => {
+    const o = topic({ id: 'o', body: METHOD_BODY, diagram: flow, steps: [
+      { ...step('s1', 'c1'), node: 'n1' }, step('s2', 'c2'), { ...step('s3', 'c3'), node: 'gone' },
+    ] })
+    expect(orphanSteps(o, flow).map((s) => s.id)).toEqual(['s2', 's3'])
+    expect(orphanSteps(o, null)).toHaveLength(3)
+    const a = analyzeTopic(o)
+    expect(chipGroups(a.parsed, 2).at(-1)).toEqual({ key: 'steps', label: '其他步驟卡', n: 2 })
+    expect(chipGroups(a.parsed).some((g) => g.key === 'steps')).toBe(false)
+    expect(isValidSelection('g:steps', a, flow, o)).toBe(true)
+    expect(isValidSelection('g:steps', a, flow)).toBe(false)
+    const none = topic({ id: 'n', body: METHOD_BODY, diagram: flow, steps: [{ ...step('s1', 'c1'), node: 'n1' }] })
+    expect(isValidSelection('g:steps', analyzeTopic(none), flow, none)).toBe(false)
   })
 
   it('isValidSelection', () => {
