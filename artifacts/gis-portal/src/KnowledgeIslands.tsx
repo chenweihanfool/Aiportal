@@ -516,6 +516,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   const fullH = useRef(0)
   const compactRef = useRef(false)
   compactRef.current = compact
+  const autoScrollUntil = useRef(0)
   const topic = island.topics.find((t) => t.id === where.topicId) ?? island.topics[0]!
   const a = analyses.get(topic.id)
   const quotes = useTopicQuotes(pw, topic.id)
@@ -561,6 +562,8 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     const onScroll = () => {
       const s = sentinelRef.current
       if (!s) return
+      // PM 修正：自動捲動期間不切換精簡／完整，避免往上捲時索引又長高、把剛捲進來的主畫面蓋住
+      if (Date.now() < autoScrollUntil.current) return
       if (!compactRef.current && idxRef.current) fullH.current = idxRef.current.offsetHeight
       const head = document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0
       const top = s.getBoundingClientRect().top - head
@@ -593,6 +596,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
       const floor = idx ? idx.getBoundingClientRect().bottom : headH
       if (top >= floor && top < window.innerHeight - 40) return
       const delta = top - (floor + 8)
+      autoScrollUntil.current = Date.now() + 700
       if (typeof sc.scrollBy === 'function') sc.scrollBy({ top: delta, behavior: 'smooth' })
       else sc.scrollTop += delta
     })
