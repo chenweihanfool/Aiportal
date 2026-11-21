@@ -186,7 +186,7 @@ async function newPage(viewport, unlocked = true) {
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', e => errors.push(String(e)))
-  page.on('requestfailed', r => { failedReqs.push(r.url()) })
+  page.on('requestfailed', r => { if (r.failure()?.errorText !== 'net::ERR_ABORTED') failedReqs.push(r.url()) })  // ERR_ABORTED＝程式主動取消（例如換頁時中止搜尋預覽），不算失敗
   page.on('response', r => { if (r.status() >= 400) console.log('  [HTTP ' + r.status() + '] ' + new URL(r.url()).pathname) })
   page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT_AUTHORITY_INVALID|Failed to load resource/.test(m.text())) errors.push(m.text()) })
   return { ctx, page, errors }
@@ -371,7 +371,7 @@ async function newPage(viewport, unlocked = true) {
   check('🏁：手機寬度里程碑卡無橫向溢出', await page.evaluate(() => { const c = document.querySelector('[data-testid=ms-card]'); return c.scrollWidth <= c.clientWidth + 1 }))
   await page.locator('[data-testid=ms-card]').screenshot({ path: SHOTS + '/9-milestones-mobile.png' })
   await page.setViewportSize({ width: 1100, height: 900 })
-  check('📊：總分不再 ×5（假資料這天 59 分）', (await page.locator('[data-testid=rp-score] .hm-h-right b').innerText()) === '59')
+  check('📊：AI 自評總分不再 ×5（假資料這天 59 分；2.64.0 起併入「每日評分」卡的 AI 列）', (await page.locator('[data-testid=rp-daily-ai] b').innerText()) === '59')
   await page.locator('[data-testid=rb-section-echo]').scrollIntoViewIfNeeded()
   await page.screenshot({ path: SHOTS + '/9-echo.png', fullPage: false })
   await page.locator('[data-testid=rb-section-echo]').screenshot({ path: SHOTS + '/9-echo-card.png' })
