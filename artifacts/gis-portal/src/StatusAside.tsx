@@ -88,6 +88,9 @@ export interface StatusAsideProps {
   // 報告庫
   reportLib: AsyncState<Maybe<ReportCatalog>>
   onOpenSearchStats: () => void
+  /** 3.20.0：知識庫這週／你的更正 明細抽屜 */
+  onOpenKbWeek: () => void
+  onOpenFixes: () => void
   onOpenPushStats: () => void
   sysSt: BlockStatus
   light: SystemLight
@@ -107,10 +110,15 @@ export interface StatusAsideProps {
   tripsSt: BlockStatus
   trip: LatestTrip | null
   onOpenIdeas: () => void
+  /** 三欄版面用：left＝STATUS＋成長與系統；right＝好玩的、報告庫、最近、捷徑；預設 all＝全部（舊行為） */
+  slot?: 'left' | 'right' | 'all'
 }
 
 export function StatusAside(p: StatusAsideProps) {
   const { on, now, todayIso, onRequestUnlock } = p
+  const slot = p.slot ?? 'all'
+  const showLeft = slot !== 'right'
+  const showRight = slot !== 'left'
   const cells = useMemo(
     () => (p.breakdown?.rows ?? []).map((r) => ({ row: r, cell: dimCell(p.dimHistory, r.key, r.value, todayIso) })),
     [p.breakdown, p.dimHistory, todayIso],
@@ -155,7 +163,9 @@ export function StatusAside(p: StatusAsideProps) {
   )
 
   return (
-    <aside className="st-aside" aria-label="狀態" data-testid="st-aside">
+    <aside className={`st-aside${slot === 'all' ? '' : ` st-aside--${slot}`}`} aria-label="狀態" data-testid="st-aside">
+      {showLeft && (
+        <>
       <section className="st-box st-dimsbox" data-testid="st-dims" aria-label="六個面向">
         {p.breakdown && (p.hhiSt.state === 'fresh' || p.hhiSt.state === 'stale') ? (
           <button type="button" className="st-boxhead st-boxhead--btn" onClick={p.onOpenHhi} aria-haspopup="dialog" aria-label={`STATUS，幸福指數 ${p.breakdown.displayed}，點開看詳情`}>
@@ -190,8 +200,8 @@ export function StatusAside(p: StatusAsideProps) {
       </section>
 
       <section className="st-box st-rows" data-testid="st-growth" aria-label="成長與系統">
-        <StRow id="st-kb" label="知識庫這週" st={topicsSt} value={week ? knowledgeWeekText(week) : '—'} emptyText="尚未收到" href="#knowledge" onRequestUnlock={onRequestUnlock} />
-        <StRow id="st-fixes" label="你的更正" st={topicsSt} value={`${fixes} 筆已生效`} emptyText="尚未收到" href="#knowledge" onRequestUnlock={onRequestUnlock} />
+        <StRow id="st-kb" label="知識庫這週" st={topicsSt} value={week ? knowledgeWeekText(week) : '—'} emptyText="尚未收到" onClick={p.onOpenKbWeek} onRequestUnlock={onRequestUnlock} title="知識庫這週：點開看新增了哪些頁與句子" />
+        <StRow id="st-fixes" label="你的更正" st={topicsSt} value={`${fixes} 筆已生效`} emptyText="尚未收到" onClick={p.onOpenFixes} onRequestUnlock={onRequestUnlock} title="你的更正：點開看更正了哪些句子" />
         <StRow id="st-search" label="搜尋查無結果率" st={searchSt} emptyText="統計尚未上線" onClick={p.onOpenSearchStats} onRequestUnlock={onRequestUnlock}
           value={ss ? `${ss.searches > 0 ? pctText(ss.zeroRate) : '—'}・本週 ${ss.searches} 次` : '—'} title="搜尋查無結果率（近 7 天），點開看 14 天統計" />
         <StRow id="st-push" label="推送被點開" st={pushSt} emptyText="統計尚未上線" onClick={p.onOpenPushStats} onRequestUnlock={onRequestUnlock}
@@ -200,6 +210,17 @@ export function StatusAside(p: StatusAsideProps) {
           onClick={p.onOpenOps} onRequestUnlock={onRequestUnlock} title={`系統：${p.light.headline}，點開看戰情室`} />
         <StRow id="st-svc" label="付費服務" st={p.svcSt} value={p.svc.text} warn={p.svc.abnormal} onClick={p.onOpenSvc} onRequestUnlock={onRequestUnlock}
           dot={p.svcSt.state === 'fresh' ? (p.svc.abnormal ? 'warn' : 'ok') : undefined} title="付費服務：用量與連結" />
+      </section>
+        </>
+      )}
+
+      {showRight && (
+        <>
+      <section className="st-box st-rows st-funbox" data-testid="st-fun" aria-label="好玩的">
+        {funLine('st-fun-idea', '💡', '想法', p.ideasSt, p.topIdea ? p.topIdea.title : null, undefined, p.onOpenIdeas)}
+        {funLine('st-fun-eat', KIND_ICON.food, '想吃', p.foodSt, p.wantEat ? `${p.wantEat.name}・${p.wantEat.days} 天了` : null, '#food')}
+        {funLine('st-fun-go', '📍', '想去', p.foodSt, p.wantGo ? `${p.wantGo.name}・${p.wantGo.days} 天了` : null, '#food')}
+        {funLine('st-fun-trip', '🧳', '最近遊記', p.tripsSt, p.trip ? p.trip.trip.name : null, p.trip ? `#trips/${encodeURIComponent(p.trip.trip.id)}` : '#trips')}
       </section>
 
       {!reportHidden && (
@@ -226,18 +247,13 @@ export function StatusAside(p: StatusAsideProps) {
         </section>
       )}
 
-      <section className="st-box st-rows st-funbox" data-testid="st-fun" aria-label="好玩的">
-        {funLine('st-fun-idea', '💡', '想法', p.ideasSt, p.topIdea ? p.topIdea.title : null, undefined, p.onOpenIdeas)}
-        {funLine('st-fun-eat', KIND_ICON.food, '想吃', p.foodSt, p.wantEat ? `${p.wantEat.name}・${p.wantEat.days} 天了` : null, '#food')}
-        {funLine('st-fun-go', '📍', '想去', p.foodSt, p.wantGo ? `${p.wantGo.name}・${p.wantGo.days} 天了` : null, '#food')}
-        {funLine('st-fun-trip', '🧳', '最近遊記', p.tripsSt, p.trip ? p.trip.trip.name : null, p.trip ? `#trips/${encodeURIComponent(p.trip.trip.id)}` : '#trips')}
-      </section>
-
       <nav className="st-shortcuts" data-testid="st-shortcuts" aria-label="常用入口">
         {HOME_SHORTCUTS.map((s) => 'href' in s
           ? <a key={s.id} href={s.href} className="st-chip st-chip--short"><span aria-hidden>{s.icon}</span>{s.label}</a>
           : <button key={s.id} type="button" className="st-chip st-chip--short" aria-haspopup="dialog" onClick={p.onOpenIdeas}><span aria-hidden>{s.icon}</span>{s.label}</button>)}
       </nav>
+        </>
+      )}
     </aside>
   )
 }
