@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetchHermesGraph } from './hermesGraphApi'
 import { apiFetchRepos } from './repoApi'
@@ -175,6 +175,17 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
 
   // ── 各區塊的狀態（§2.4）──
   const on = !!pw
+  // 3.23.0：推播卡的「看看 →」連到 #ideas：打開想法庫抽屜並清掉 hash（App.tsx 不認得 #ideas，會停在首頁）
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash !== '#ideas') return
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 維持原網址 */ }
+      if (on) setDrawer('ideas'); else onRequestUnlock()
+    }
+    onHash()
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [on]) // eslint-disable-line react-hooks/exhaustive-deps
   const hhiSt = blockState({
     unlocked: on, loading: !hhiData && !hhiError, error: !!hhiError, hasData: !!breakdown, nowMs,
     updatedAtMs: hhiFetchedAt ? Date.parse(hhiFetchedAt) : null, expectedEveryMin: EXPECTED_EVERY_MIN.hhi,
