@@ -2564,7 +2564,6 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 .pt-msg.pt-err { color: var(--c-ink); }
 .pt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 
-/* ─── 我的心得樹（2.99.0）：樹高＝時間，枝為由粗到細的填色輪廓，葉形依關係，群色盤由 insightPalette.ts 算（深淺主題各一組）。class 一律 it- 開頭；其餘顏色只用全站 --c-* token。 ─── */
 /* 首頁三欄（3.20.0）：左 STATUS＋成長、中 想法板＋現在用得上、右 好玩的＋報告庫＋最近＋捷徑，各欄自己往下堆，不互相撐高。
    <700 單欄（l → c → r → 島嶼）；700–1099 兩欄（左格 l 與 r 上下、右格 c）；≥1100 三欄。 */
 .st-col { display: grid; gap: var(--sp-3); min-width: 0; align-content: start; }
@@ -2581,6 +2580,7 @@ a.st-row:hover, button.st-row:hover { background: var(--c-raised); }
 @media (min-width: 1100px) {
   .st-home { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(280px, 320px); grid-template-areas: "l c r" "isl isl isl"; grid-template-rows: none; align-items: start; gap: var(--sp-4); }
 }
+/* ─── 我的心得樹（2.99.0）：樹高＝時間，枝為由粗到細的填色輪廓，葉形依關係，群色盤由 insightPalette.ts 算（深淺主題各一組）。class 一律 it- 開頭；其餘顏色只用全站 --c-* token。 ─── */
 .it-root {
   --it-trunk0: color-mix(in srgb, var(--c-warn) 38%, var(--c-ink-3));
   --it-trunk1: color-mix(in srgb, var(--c-accent) 62%, var(--c-ink-3));
