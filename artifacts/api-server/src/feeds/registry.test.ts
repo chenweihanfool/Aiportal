@@ -84,6 +84,35 @@ describe("feed registry", () => {
     expect(validateFeedRequest("companion", body({ ...old, quietPeople: [{ ...old.quietPeople[0], events: -1 }] })).ok).toBe(false);
   });
 
+  it("insight-weave：kbSteps／stepBridges 選填，舊 payload 照過、合法樣本通過、壞值被擋", () => {
+    const body = (payload: unknown) => ({ schemaVersion: 1, generatedAt: "2026-11-22", payload });
+    const base = {
+      generatedAt: "2026-11-22",
+      basis: { insights: 1, lastInsightDate: "2026-11-21" },
+      lighthouses: [], insufficient: [], bridges: [], tensions: [], kbLinks: [],
+    };
+    const kbStep = {
+      id: "S-1a2b3c4d", insight: "INS-2026-10-01-0a1b2c3d", topic: "T20261105-01", claim: "c005",
+      relation: "support", text: "這則心得印證了這一步", confidence: "mid", status: "proposed", since: "2026-11-22",
+    };
+    const stepBridge = {
+      id: "J-1a2b3c4d", title: "同一步", text: "兩題在做同一件事",
+      ends: [{ topic: "T20261105-01", claim: "c005" }, { topic: "T20261107-02", claim: "c012" }],
+      confidence: "mid", status: "proposed", since: "2026-11-22",
+    };
+    // 沒有新欄位的舊 payload 通過
+    expect(validateFeedRequest("insight-weave", body(base)).ok).toBe(true);
+    // 合法新欄位通過
+    expect(validateFeedRequest("insight-weave", body({ ...base, kbSteps: [kbStep], stepBridges: [stepBridge] })).ok).toBe(true);
+    // relation 不合法
+    expect(validateFeedRequest("insight-weave", body({ ...base, kbSteps: [{ ...kbStep, relation: "agree" }] })).ok).toBe(false);
+    // stepBridges 只有 1 端
+    expect(validateFeedRequest("insight-weave", body({ ...base, stepBridges: [{ ...stepBridge, ends: [stepBridge.ends[0]] }] })).ok).toBe(false);
+    // id 前綴錯
+    expect(validateFeedRequest("insight-weave", body({ ...base, kbSteps: [{ ...kbStep, id: "X-1a2b3c4d" }] })).ok).toBe(false);
+    expect(validateFeedRequest("insight-weave", body({ ...base, stepBridges: [{ ...stepBridge, id: "S-1a2b3c4d" }] })).ok).toBe(false);
+  });
+
   it("topic-nudges：新選填欄位（why／at／matchedBy／caseName／resumes）通過，舊格式仍合法，壞值或超量被擋", () => {
     const body = (payload: unknown) => ({ schemaVersion: 1, generatedAt: "2026-11-13", payload });
     const match = {

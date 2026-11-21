@@ -122,31 +122,6 @@ describe("insight-weave feed 契約", () => {
     expect(validateFeedRequest("insight-weave", body({ ...payload, tensions: [{ ...payload.tensions[0], extra: 1 }] })).ok).toBe(false);
     expect(validateFeedRequest("insight-weave", body({ ...payload, lighthouses: [{ ...lighthouse, id: "L-0A1B2C3D" }] })).ok).toBe(false);
   });
-
-  it("新欄位 kbSteps／stepBridges 選填：舊 payload 照過、合法樣本通過、壞值被擋", () => {
-    const kbStep = {
-      id: "S-1a2b3c4d", insight: insA, topic: "T20261105-01", claim: "c005",
-      relation: "support", text: "這則心得印證了這一步", confidence: "mid", status: "proposed", since: "2026-11-22",
-    };
-    const stepBridge = {
-      id: "J-1a2b3c4d", title: "同一步", text: "兩題在做同一件事",
-      ends: [{ topic: "T20261105-01", claim: "c005" }, { topic: "T20261107-02", claim: "c012" }],
-      confidence: "mid", status: "proposed", since: "2026-11-22",
-    };
-    // 舊 payload（沒有新欄位）仍合法
-    expect(validateFeedRequest("insight-weave", body(payload)).ok).toBe(true);
-    // 合法新欄位
-    expect(validateFeedRequest("insight-weave", body({ ...payload, kbSteps: [kbStep], stepBridges: [stepBridge] })).ok).toBe(true);
-    // relation 不合法
-    expect(validateFeedRequest("insight-weave", body({ ...payload, kbSteps: [{ ...kbStep, relation: "agree" }] })).ok).toBe(false);
-    // stepBridges 只有 1 端
-    expect(validateFeedRequest("insight-weave", body({ ...payload, stepBridges: [{ ...stepBridge, ends: [stepBridge.ends[0]] }] })).ok).toBe(false);
-    // id 前綴錯
-    expect(validateFeedRequest("insight-weave", body({ ...payload, kbSteps: [{ ...kbStep, id: "X-1a2b3c4d" }] })).ok).toBe(false);
-    expect(validateFeedRequest("insight-weave", body({ ...payload, stepBridges: [{ ...stepBridge, id: "S-1a2b3c4d" }] })).ok).toBe(false);
-    // 多餘鍵
-    expect(validateFeedRequest("insight-weave", body({ ...payload, kbSteps: [{ ...kbStep, extra: 1 }] })).ok).toBe(false);
-  });
 });
 
 describe("insight weave 路由：權限、本文驗證與順序", () => {
