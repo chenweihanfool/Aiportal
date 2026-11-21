@@ -112,7 +112,8 @@ export function ReportBody({ level, startDate, endDate, bodyMd, reportScore, pas
   const tasksDone = useAsync(password, apiFetchTasksDone)
   const life = useAsync(password, apiFetchDailyLife)
   const parsed = useMemo(() => parseReportSections(bodyMd), [bodyMd])
-  const settled = (a: { data: unknown; error: boolean }) => a.data !== null || a.error
+  // 載完＝成功（含「還沒部署」回 null 的情況，靠 loadedAt 判斷）或失敗；只看 data 會讓回 null 的來源永遠算沒載完
+  const settled = (a: { data: unknown; error: boolean; loadedAt: number | null }) => a.data !== null || a.loadedAt !== null || a.error
   const ready = !!password && settled(ideas) && settled(food) && settled(trips)
   const missing = [ideas.error && ideas.data === null ? '想法庫' : '', food.error && food.data === null ? '美食地點' : '', trips.error && trips.data === null ? '遊記' : ''].filter(Boolean)
   const report = useMemo(

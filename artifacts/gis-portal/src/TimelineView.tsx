@@ -68,7 +68,8 @@ export function TimelineView({ unlockedPassword, onBack, initialDay = null, from
   const ideasA = useAsync(unlockedPassword, apiFetchIdeas)
   const tasksA = useAsync(unlockedPassword, apiFetchTasksDone)
   const lifeA = useAsync(unlockedPassword, apiFetchDailyLife)
-  const settled = (a: { data: unknown; error: boolean }) => a.data !== null || a.error
+  // 載完＝成功（含「還沒部署」回 null 的情況，靠 loadedAt 判斷）或失敗；只看 data 會讓回 null 的來源永遠算沒載完
+  const settled = (a: { data: unknown; error: boolean; loadedAt: number | null }) => a.data !== null || a.loadedAt !== null || a.error
   const scoresReady = settled(ideasA) && settled(tasksA) && settled(lifeA)
   const ix = useMemo(() => (ideasA.data && tasksA.data ? dailyIndex(ideasA.data.ideas, tasksA.data, lifeA.data) : null), [ideasA.data, tasksA.data, lifeA.data])
   const scoreOf = useCallback((it: TimelineItem | null): DailyScore | null =>
