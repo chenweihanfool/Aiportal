@@ -618,7 +618,7 @@ button.bd-hrow:hover, button.bd-hrow:focus-visible { background: var(--c-wash); 
 .vh-chev { flex-shrink: 0; color: var(--c-ink-3); transition: transform 0.2s ease; }
 .vh-title.is-open .vh-chev { transform: rotate(180deg); }
 .vh-changes { list-style: none; margin: 4px 0 8px 12px; padding: 0 0 0 16px; border-left: 1px solid var(--c-line); display: flex; flex-direction: column; gap: 6px; }
-.vh-changes li { position: relative; font-size: 0.8rem; line-height: 1.75; color: var(--c-ink-2); }
+.vh-changes li { position: relative; font-size: 0.8rem; line-height: 1.75; color: var(--c-ink-2); overflow-wrap: anywhere; }
 .vh-changes li::before { content: ""; position: absolute; left: -19px; top: 10px; width: 6px; height: 6px; border-radius: 999px; background: var(--c-line-strong); }
 @media (prefers-reduced-motion: reduce) { .vh-chev, .vh-title { transition: none; } }
 

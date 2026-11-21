@@ -186,7 +186,7 @@ async function newPage(viewport, unlocked = true) {
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', e => errors.push(String(e)))
-  page.on('requestfailed', r => { failedReqs.push(r.url()) })
+  page.on('requestfailed', r => { if (r.failure()?.errorText !== 'net::ERR_ABORTED') failedReqs.push(r.url()) })  // ERR_ABORTED＝程式主動取消（例如換頁時中止搜尋預覽），不算失敗
   page.on('response', r => { if (r.status() >= 400) console.log('  [HTTP ' + r.status() + '] ' + new URL(r.url()).pathname) })
   page.on('console', m => { if (m.type() === 'error' && !/ERR_CERT_AUTHORITY_INVALID|Failed to load resource/.test(m.text())) errors.push(m.text()) })
   return { ctx, page, errors }
@@ -206,7 +206,7 @@ async function newPage(viewport, unlocked = true) {
   const lefts = await page.locator('[data-testid=timeline-row]').evaluateAll(rows => rows.slice(0, 12).filter(r => !r.textContent.includes('無日報')).map(r => Math.round([...r.querySelectorAll('span')].find(sp => sp.textContent.includes('今天主要'))?.getBoundingClientRect().left ?? -1)))
   check('有／無分數徽章的列，一句話左緣對齊', new Set(lefts).size === 1, `lefts=${[...new Set(lefts)].join(',')}`)
   check('日級列表只顯示「日」每日報告分數徽章（可缺，欄位固定所以不影響對齊），不再有知識庫健康／幸福指數',
-    (await page.locator('[data-testid=badge-report]').count()) > 0 && (await page.locator('[data-testid=badge-report]').first().innerText()) === '日 65'
+    (await page.locator('[data-testid=badge-report]').count()) > 0 && (await page.locator('[data-testid=badge-report]').first().innerText()) === '日 13'
     && (await page.locator('[data-testid=badge-kb], [data-testid=badge-hhi]').count()) === 0)
   check('列表確實顯示了一句話（不是「無摘要」占位）', (await page.locator('[data-testid=timeline-row]').first().innerText()).includes('今天主要在整理管線設定'))
   check('長摘要以刪節號截斷（scrollWidth > clientWidth）', await page.locator('[data-testid=timeline-row]').first().locator('span:has-text("今天主要在整理管線設定")').last().evaluate(e => e.scrollWidth > e.clientWidth))
@@ -226,7 +226,7 @@ async function newPage(viewport, unlocked = true) {
   await first.click()
   await page.waitForSelector('[role=dialog]')
   check('點擊後開啟對話框（role=dialog、aria-modal）', (await page.locator('[role=dialog][aria-modal=true]').count()) === 1)
-  check('對話框標頭顯示每日報告分數與五項明細', (await page.locator('[data-testid=detail-report-score]').innerText()).includes('每日報告分數 65（推進 3・決策 2・卡點 3・覺察 2・能量 3）'))
+  check('對話框標頭顯示每日評分（80% 成果＋20% AI 自評，2.64.0 起）', (await page.locator('[data-testid=detail-report-score]').innerText()).includes('每日評分 13＝成果 0×80%＋AI 65×20%'))
   await page.waitForSelector('[role=dialog] table')
   check('日報對話框：每日分數條（五項）、段落卡片、可切原文', (await page.locator('[data-testid=rp-score] li').count()) === 5 && (await page.locator('.rb-card').count()) >= 1 && (await page.locator('[data-testid=rb-mode-raw]').count()) === 1)
   check('原文渲染：表格、清單、引用、換行', (await page.locator('[role=dialog] table').count()) === 1 && (await page.locator('[data-testid=rb-sections] li').count()) === 2 && (await page.locator('[role=dialog] blockquote').count()) === 1 && (await page.locator('[role=dialog] br').count()) >= 1)
@@ -355,7 +355,7 @@ async function newPage(viewport, unlocked = true) {
   await page.locator('[data-testid=timeline-row]', { hasText: '09-22' }).first().click()
   await page.waitForSelector('[data-testid=rb-section-echo]')
   const dates = await page.locator('[data-testid=rb-echo-date]').allInnerTexts()
-  check('🕰️：子項畫成時間線，日期附距離', dates.length === 2 && dates[0].includes('2026-09-10') && dates[0].includes('12 天前') && dates[1].includes('一年前'), dates.join(' | '))
+  check('🕰️：子項畫成時間線（3.23.0 起由舊到新），日期附距離', dates.length === 2 && dates[0].includes('一年前') && dates[1].includes('2026-09-10') && dates[1].includes('12 天前'), dates.join(' | '))
   check('🕰️：脈絡線 12 格、3 格亮', (await page.locator('.rb-thread-cells i').count()) === 12 && (await page.locator('.rb-thread-cells i[data-on=true]').count()) === 3)
   check('🕰️：一句話裡的純文字日期也可點', (await page.locator('.rb-echo-lead [role=link]', { hasText: '2026-09-01' }).count()) === 1)
   const bars = await page.locator('[data-testid=ms-trend] .ms-col').count()
@@ -363,7 +363,7 @@ async function newPage(viewport, unlocked = true) {
   check('🏁：這天完成任務 4、成果 4', (await page.locator('[data-testid=ms-part-tasks] b').innerText()).startsWith('4') && (await page.locator('[data-testid=ms-total] b').innerText()) === '4')
   const badgeText = await page.locator('[data-testid=ms-badges]').innerText()
   check('🏁：徽章有連續天數與新高', badgeText.includes('連續 8 天') && badgeText.includes('近 14 天最多'), badgeText.replace(/\n/g, ' | '))
-  check('🏁：年度累計三列', (await page.locator('[data-testid=ms-road] li').count()) === 3)
+  check('🏁：年度累計七列（三項成果＋四項生活面向，2026-10-30 起）', (await page.locator('[data-testid=ms-road] li').count()) === 7)
   check('📈：舊的 AI 分數走勢已移除', (await page.locator('[data-testid=rp-trend]').count()) === 0)
   await page.locator('[data-testid=ms-card]').screenshot({ path: SHOTS + '/9-milestones.png' })
   await page.setViewportSize({ width: 390, height: 844 })
@@ -371,11 +371,11 @@ async function newPage(viewport, unlocked = true) {
   check('🏁：手機寬度里程碑卡無橫向溢出', await page.evaluate(() => { const c = document.querySelector('[data-testid=ms-card]'); return c.scrollWidth <= c.clientWidth + 1 }))
   await page.locator('[data-testid=ms-card]').screenshot({ path: SHOTS + '/9-milestones-mobile.png' })
   await page.setViewportSize({ width: 1100, height: 900 })
-  check('📊：總分不再 ×5（假資料這天 59 分）', (await page.locator('[data-testid=rp-score] .hm-h-right b').innerText()) === '59')
+  check('📊：AI 自評總分不再 ×5（假資料這天 59 分；2.64.0 起併入「每日評分」卡的 AI 列）', (await page.locator('[data-testid=rp-daily-ai] b').innerText()) === '59')
   await page.locator('[data-testid=rb-section-echo]').scrollIntoViewIfNeeded()
   await page.screenshot({ path: SHOTS + '/9-echo.png', fullPage: false })
   await page.locator('[data-testid=rb-section-echo]').screenshot({ path: SHOTS + '/9-echo-card.png' })
-  await page.locator('[data-testid=rb-echo-date]').first().click()
+  await page.locator('[data-testid=rb-echo-date]', { hasText: '2026-09-10' }).click()
   await page.waitForFunction(() => document.querySelector('#timeline-dialog-title')?.textContent?.includes('09-10'))
   check('🕰️：點日期疊一層打開那天', true)
   await page.locator('button', { hasText: '返回' }).first().click()
