@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { DimensionPage } from './DimensionPage'
 import { FoodMapView } from './FoodMapView'
 import { ArchitectureView } from './ArchitectureView'
+import { parseKnowledgeHash } from './knowledgeRoute'
 import { KnowledgeView } from './KnowledgeView'
 import { TimelineView } from './TimelineView'
 import { parseTimelineHash } from './timelineLink'
@@ -110,9 +111,9 @@ export default function App() {
     return <ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />
   }
   // 知識頁（2026-11-05）：#knowledge＝題目牆、#knowledge/<id>＝單題頁；id 經 decodeURIComponent
-  if (hashRoute === '#knowledge' || hashRoute.startsWith('#knowledge/')) {
-    const topicId = hashRoute === '#knowledge' ? null : decodeURIComponent(hashRoute.slice('#knowledge/'.length))
-    return <KnowledgeView unlockedPassword={unlockedPassword} topicId={topicId} onRequestUnlock={handleRequestUnlock} />
+  // 3.21.0：只有島嶼畫面；進島與網址的對應在 knowledgeRoute.ts／KnowledgeIslands.tsx（島內自己讀 location.hash 並監聽 hashchange）
+  if (parseKnowledgeHash(hashRoute) !== null) {
+    return <KnowledgeView unlockedPassword={unlockedPassword} onRequestUnlock={handleRequestUnlock} />
   }
   const timelineRoute = parseTimelineHash(hashRoute)
   if (timelineRoute !== null) {

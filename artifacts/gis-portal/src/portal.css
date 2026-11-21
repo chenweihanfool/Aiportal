@@ -3257,6 +3257,26 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 }
 @media (prefers-reduced-motion: reduce) { .kis-in { animation: none; } }
 
+/* 3.21.0 知識頁只留島嶼：頁首（搜尋、本週變動）、+N 標記、閱讀區 */
+.kis-plus { margin-left: var(--sp-2); font-size: 11px; font-weight: 700; line-height: 1.5; padding: 0 6px; border-radius: var(--r-pill); color: var(--c-bg); background: var(--c-accent); white-space: nowrap; }
+.kis-m-isl b .kis-plus { margin-left: var(--sp-2); }
+.krd-head { margin: var(--sp-3) 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.krd-head .kn-stats { margin: 0; }
+.krd-search { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.krd-search .kn-search { flex: 1 1 220px; width: auto; max-width: 420px; }
+.krd-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: 14px; }
+.krd-week { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); }
+.krd-week-h { font-size: 13px; font-weight: 700; color: var(--c-ink-2); }
+.krd-chip { font: inherit; font-size: 13px; color: var(--c-ink); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 2px var(--sp-3) 2px var(--sp-2); cursor: pointer; display: inline-flex; align-items: center; gap: var(--sp-1); max-width: 100%; overflow-wrap: anywhere; }
+.krd-chip:hover { border-color: var(--c-accent); }
+.krd-chip .kn-chg { margin-left: 0; }
+.krd { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-items: start; padding-top: var(--sp-3); }
+.krd-main, .krd-side { min-width: 0; }
+@media (min-width: 701px) {
+  .krd { grid-template-columns: minmax(0, 1fr) 280px; }
+  .krd-side { position: sticky; top: 64px; max-height: calc(100vh - 80px); overflow-y: auto; }
+}
+
 /* 3.20.0 知識庫這週明細 */
 .kw-panel { display: grid; gap: var(--sp-3); min-width: 0; color: var(--c-ink); }
 .kw-sec { display: grid; gap: var(--sp-2); min-width: 0; }
