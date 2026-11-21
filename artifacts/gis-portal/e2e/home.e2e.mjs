@@ -1039,21 +1039,22 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     // 3.16.0：附近搬到搜尋框旁；點了直接開美食地圖的「附近・由近到遠」
     check(`${T}：搜尋框旁有「📍 附近」按鈕`, (await page.locator('[data-testid="tb-nearby"]').count()) === 1 && (await page.locator('[data-testid="tb-nearby"]').getAttribute('aria-label')) === '附近有什麼：開美食地圖，由近到遠')
-    check(`${T}：想法板在 STATUS 之後、現在用得上之前；心得島嶼在最後（有聚焦卡）`, await page.evaluate(() => {
-      const a = document.querySelector('.st-aside'), b = document.querySelector('[data-testid="idea-board"]'), n = document.querySelector('[data-testid="now-section"]')
+    check(`${T}：DOM 順序＝左欄（STATUS）→ 中欄（想法板 → 現在用得上）→ 右欄 → 心得島嶼；心得島嶼在最後（有聚焦卡）`, await page.evaluate(() => {
+      const l = document.querySelector('.st-col--l'), c = document.querySelector('.st-col--c'), r = document.querySelector('.st-col--r')
+      const b = document.querySelector('[data-testid="idea-board"]'), n = document.querySelector('[data-testid="now-section"]')
       const t = document.querySelector('[data-testid="insight-islands"]'), h = document.querySelector('.st-home')
-      return !!a && !!b && !!n && !!t && !!h && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(n.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) && t === h.lastElementChild && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card').length === 1
+      const F = Node.DOCUMENT_POSITION_FOLLOWING
+      return !!l && !!c && !!r && !!b && !!n && !!t && !!h && !!(l.compareDocumentPosition(c) & F) && !!(c.compareDocumentPosition(r) & F) && !!(r.compareDocumentPosition(t) & F) && c.contains(b) && c.contains(n) && !!(b.compareDocumentPosition(n) & F) && t === h.lastElementChild && b.querySelectorAll('[data-testid="idea-board-focus"] .ib-card--focus').length === 1
     }))
     check(`${T}：沒有 .hm-nav、.hm-today，也沒有九個舊區塊`, (await page.locator('.hm-nav, .hm-today, .hm-dimsec, .hm-growth, .hm-fun, .hm-sys, .hm-repos, .hm-companion, .hm-brief').count()) === 0)
     check(`${T}：STATUS 的盒子都在（面向、成長與系統、最近、好玩的、捷徑）`, (await page.locator('[data-testid="st-dims"], [data-testid="st-growth"], [data-testid="st-recent"], [data-testid="st-fun"], [data-testid="st-shortcuts"]').count()) === 5)
     // 3.16.0：首頁順序改為 STATUS → 想法板 → 現在用得上 → 心得島嶼（島嶼移到最下方；STATUS 佔滿整列）
-    check(`${T}：STATUS → 想法板 → 現在用得上 → 心得島嶼、STATUS 佔滿整列`, await page.evaluate(() => {
-      const h = document.querySelector('.st-home').getBoundingClientRect()
-      const t = document.querySelector('[data-testid="insight-islands"]').getBoundingClientRect()
-      const a = document.querySelector('.st-aside').getBoundingClientRect()
-      const b = document.querySelector('[data-testid="idea-board"]').getBoundingClientRect()
-      const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect()
-      return b.top >= a.bottom - 1 && n.top >= b.bottom - 1 && t.top >= n.bottom - 1 && a.width >= h.width * 0.9
+    check(`${T}：三欄（.st-col--l/c/r 的 left 遞增、top 差 ≤ 4px）、想法板在現在用得上之前、心得島嶼在三欄下方且跨全寬`, await page.evaluate(() => {
+      const R = (q) => document.querySelector(q).getBoundingClientRect()
+      const h = R('.st-home'), l = R('.st-col--l'), c = R('.st-col--c'), r = R('.st-col--r')
+      const t = R('[data-testid="insight-islands"]'), b = R('[data-testid="idea-board"]'), n = R('[data-testid="now-section"]')
+      return l.left < c.left && c.left < r.left && Math.abs(l.top - c.top) <= 4 && Math.abs(c.top - r.top) <= 4
+        && n.top >= b.bottom - 1 && t.top >= Math.max(l.bottom, c.bottom, r.bottom) - 1 && t.width >= h.width * 0.9
     }))
     check(`${T}：st-dims 有 6 格、盒頭有 STATUS 與整體分數 71`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && /STATUS/.test(await page.locator('[data-testid="st-dims"]').innerText()) && (await page.locator('[data-testid="st-hhi"]').innerText()) === '71')
     const spark = await page.locator('[data-testid="st-spark"]').count()
@@ -1084,7 +1085,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     check(`${T}：點 STATUS 盒頭開幸福指數抽屜，最上面是活動洞察、後面有成長軌跡熱圖`, await page.evaluate(() => { const b = document.querySelector('.bd-drawer-body'); const i = b.querySelector('[data-testid="activity-insight"]'); const gr = b.querySelector('[data-testid="st-hhi-growth"]'); return !!i && !!gr && b.firstElementChild === i && !!(i.compareDocumentPosition(gr) & Node.DOCUMENT_POSITION_FOLLOWING) && !!gr.querySelector('.hm-cell[data-date]') }))
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
     const sc = await page.locator('[data-testid="st-shortcuts"]').innerText()
-    check(`${T}：捷徑列（時間軸、想法庫、關係、知識）在 STATUS 最下面`, /時間軸/.test(sc) && /想法庫/.test(sc) && /關係/.test(sc) && /知識/.test(sc) && await page.evaluate(() => { const f = document.querySelector('[data-testid="st-fun"]'); const s = document.querySelector('[data-testid="st-shortcuts"]'); return !!(f.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) && s === document.querySelector('.st-aside').lastElementChild }))
+    check(`${T}：捷徑列（時間軸、想法庫、關係、知識）在 STATUS 最下面`, /時間軸/.test(sc) && /想法庫/.test(sc) && /關係/.test(sc) && /知識/.test(sc) && await page.evaluate(() => { const f = document.querySelector('[data-testid="st-fun"]'); const s = document.querySelector('[data-testid="st-shortcuts"]'); return !!(f.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) && s === document.querySelector('.st-aside--right').lastElementChild }))
     await page.locator('[data-testid="st-shortcuts"] button').click(); await page.waitForSelector('.bd-drawer')
     check(`${T}：捷徑「想法庫」開想法抽屜`, /想法庫/.test(await page.locator('.bd-drawer-title').innerText()))
     await page.keyboard.press('Escape'); await page.waitForTimeout(150)
@@ -1151,7 +1152,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     await page.locator('[data-testid="hm-layout-toggle"]').click(); await page.waitForSelector('.st-home')
     check('切換：再點一次回到 v3，localStorage 變 v3', (await page.locator('.hm-nav').count()) === 0 && (await page.evaluate(() => localStorage.getItem('hm-layout'))) === 'v3')
     await page.reload(); await page.waitForSelector('.st-home')
-    check('切換：重新整理後維持 v3', (await page.locator('.st-aside').count()) === 1)
+    check('切換：重新整理後維持 v3', (await page.locator('.st-aside').count()) === 2)
     await ctx.close()
   }
 
@@ -1196,7 +1197,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
       check(`${T}：st-dims 的上緣 ${dimsTop} ≤ ${limit}（1.5 屏）`, dimsTop !== null && dimsTop <= limit, String(dimsTop))
       check(`${T}：st-dims 有 6 格、3 欄 2 列`, (await page.locator('[data-testid="st-dim"]').count()) === 6 && (await page.evaluate(() => new Set([...document.querySelectorAll('[data-testid="st-dim"]')].map((e) => Math.round(e.getBoundingClientRect().left))).size)) === 3)
       check(`${T}：不橫向捲動、沒有頁面錯誤`, (await noHScroll(page)) && errors.length === 0, errors.join(' | ').slice(0, 300))
-      check(`${T}：單欄順序 STATUS → 現在用得上 → 心得島嶼`, await page.evaluate(() => { const t = document.querySelector('[data-testid="insight-islands"]').getBoundingClientRect(); const a = document.querySelector('.st-aside').getBoundingClientRect(); const n = document.querySelector('[data-testid="now-section"]').getBoundingClientRect(); return n.top >= a.bottom - 1 && t.top >= n.bottom - 1 }))
+      check(`${T}：單欄順序 st-dims → idea-board → now-section → st-fun → insight-islands`, await page.evaluate(() => { const ids = ['[data-testid="st-dims"]', '[data-testid="idea-board"]', '[data-testid="now-section"]', '[data-testid="st-fun"]', '[data-testid="insight-islands"]']; const rs = ids.map((q) => document.querySelector(q)?.getBoundingClientRect()); return rs.every(Boolean) && rs.every((x, i) => i === 0 || x.top >= rs[i - 1].bottom - 1) }))
       if (cards === 5) {
         check(`${T}：5 張推送卡時先顯示 2 張，其餘收在「再看 3 則」（畫面上 ${shownCards} 張）`, shownCards === 2 && /再看 3 則/.test(await page.locator('[data-testid="now-more"]').innerText()), String(shownCards))
         await page.locator('[data-testid="now-more"]').click(); await page.waitForTimeout(500)
