@@ -18,7 +18,8 @@ function monthRange(t: Topic): string {
   return ''
 }
 
-function TopicPage({ t, parsed, hl, cited, topics, quotes, pw, now, onOpen, onSelect, onView, onViewQ }: {
+function TopicPage({ t, parsed, hl, cited, topics, quotes, pw, now, onOpen, onSelect, onView, onViewQ, hideDiagram }: {
+  hideDiagram?: boolean
   t: Topic; parsed: ParsedBody | null; hl: number | null; cited: ReadonlySet<string>; topics: readonly Topic[]
   quotes: readonly HermesTopicQuote[] | null
   pw: string; now: Date
@@ -27,7 +28,7 @@ function TopicPage({ t, parsed, hl, cited, topics, quotes, pw, now, onOpen, onSe
   const claims = useClaimsController(pw, t, parsed, topics, now)
   const range = monthRange(t)
   const [textOpen, setTextOpen] = useState(true)
-  const showDiagram = !!t.diagram
+  const showDiagram = !!t.diagram && !hideDiagram
   // 圖解 ↔ 步驟卡：互相捲過去並高亮 2 秒
   const [hlStep, setHlStep] = useState<string | null>(null)
   const [hlNode, setHlNode] = useState<string | null>(null)
@@ -150,7 +151,7 @@ function MonthChart({ t }: { t: Topic }) {
   )
 }
 
-function ReaderSide({ t, data, onOpen }: { t: Topic; data: TopicsData; onOpen: (id: string) => void }) {
+export function ReaderSide({ t, data, onOpen }: { t: Topic; data: TopicsData; onOpen: (id: string) => void }) {
   const byId = new Map(data.topics.map((x) => [x.id, x]))
   const sameBranch = t.branch ? data.topics.filter((x) => x.branch === t.branch && x.id !== t.id) : []
   const cross = t.related.filter((r) => {
@@ -196,8 +197,12 @@ function ReaderSide({ t, data, onOpen }: { t: Topic; data: TopicsData; onOpen: (
   )
 }
 
-export function KnowledgeReader({ topic, data, pw, now, onOpen }: {
+export function KnowledgeReader({ topic, data, pw, now, onOpen, hideDiagram = false, hideSide = false }: {
   topic: Topic; data: TopicsData; pw: string; now: Date
+  /** 索引畫面已經有圖：全文裡不重複畫圖解 */
+  hideDiagram?: boolean
+  /** 側欄（素材、成長紀錄、同枝、跨枝）已放在資訊帶：不重複 */
+  hideSide?: boolean
   /** 點同枝／跨枝題目、原文面板裡的題目：切到該題並展開閱讀區 */
   onOpen: (id: string) => void
 }) {
@@ -226,9 +231,9 @@ export function KnowledgeReader({ topic, data, pw, now, onOpen }: {
   return (
     <div className="krd" data-testid="krd">
       <main className="krd-main">
-        <TraceProvider value={trace}><TopicPage key={`${topic.id}:${topic.revision}`} t={topic} parsed={parsed} hl={hl} cited={cited} topics={data.topics} quotes={quotes} pw={pw} now={now} onOpen={open} onSelect={select} onView={viewSource} onViewQ={viewSourceQ} /></TraceProvider>
+        <TraceProvider value={trace}><TopicPage key={`${topic.id}:${topic.revision}`} t={topic} parsed={parsed} hl={hl} cited={cited} topics={data.topics} quotes={quotes} pw={pw} now={now} onOpen={open} onSelect={select} onView={viewSource} onViewQ={viewSourceQ} hideDiagram={hideDiagram} /></TraceProvider>
       </main>
-      <ReaderSide t={topic} data={data} onOpen={open} />
+      {!hideSide && <ReaderSide t={topic} data={data} onOpen={open} />}
       {panel && <KnowledgeSourcePanel pw={pw} sourceKey={panel.key} query={panel.q} onClose={() => setPanel(null)} onOpenTopic={open} />}
     </div>
   )

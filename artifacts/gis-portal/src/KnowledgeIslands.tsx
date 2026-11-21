@@ -5,18 +5,26 @@ import { apiFetchInsights } from './insightApi'
 import { paletteColor, type PaletteTheme } from './insightPalette'
 import { useAsync } from './homeHooks'
 import {
-  aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, kbLinksFor, layoutSea, resolveStepBridges, stationCoverage, stationKindLabel, zoomAt,
+  aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, cardMark, cardRect, chipGroups, computeBridges, defaultSelection, fitView, groupBullets, groupOfSel, isValidSelection, islandSize, islandStats,
+  kbLinksFor, layoutSea, nodeOrder, resolveStepBridges, stationCoverage, stationForNode, zoomAt,
   CARD_H, CARD_W, DOMAIN_HEAD_H, ISL_LABEL_H, type AiBridge, type Bridge, type IslandModelIsland, type Placed, type Station, type TopicAnalysis, type View,
 } from './knowledgeIslands'
-import { buildTree, recentChangeOf, stripMarks, type Bullet, type Topic, type TopicsData } from './knowledgeView'
-import { KnowledgeReader } from './KnowledgeReader'
+import { buildTree, kindLabel, recentChangeOf, stripMarks, type Bullet, type Topic, type TopicDiagram, type TopicsData } from './knowledgeView'
+import { KnowledgeReader, ReaderSide } from './KnowledgeReader'
+import { KnowledgeDiagram, DiagramNodeDetail, diagramNodeInfo } from './KnowledgeDiagram'
+import { KnowledgeSteps } from './KnowledgeSteps'
+import { KnowledgeFork } from './KnowledgeFork'
+import { fallbackFlow, forkFromFlow, forkFromText } from './knowledgeFork'
+import { useTopicQuotes } from './KnowledgeTrace'
+import { quoteQueryFor } from './knowledgeDiagramLayout'
 import { formatKnowledgeHash, parseKnowledgeHash, type KnowledgeRoute } from './knowledgeRoute'
 import { RELATION_TEXT, foldVerdicts, verdictOf, type KbLink, type KbStep } from './insightWeave'
 import type { Insight } from './insightModel'
 
 // 知識島（3.18.0）：知識頁的「島嶼」視圖。島＝知識樹的枝；點島飛入後橫軸是該題的做事順序（SOP）；疊加層顯示心得掛在哪一步、共用步驟（橋）與盲點。
 // 互動與外觀照首頁心得島（InsightIslands）；純函式在 knowledgeIslands.ts，樣式在 portal.css 的 kis-*。
-// 3.21.0：知識頁只剩這一種畫面。進島狀態與網址（#knowledge／#knowledge/<id>／#knowledge/<id>/s/<站>）同步，閱讀區（KnowledgeReader）在島內展開。
+// 3.21.0：知識頁只剩這一種畫面。進島狀態與網址（#knowledge／#knowledge/<id>／#knowledge/<id>/s/<選取>）同步。
+// 3.23.0：進島只有一頁——最上方常駐泳道圖（或備援單泳道圖）當索引，點格子切換主畫面與右側旁註；選取＝格子 id 或 g:<組名>。
 
 function useTheme(): PaletteTheme {
   const read = (): PaletteTheme => {
@@ -51,14 +59,14 @@ function useMobile(): boolean {
   return m
 }
 
-interface Where { island: string; topicId: string; stationId: string }
+interface Where { island: string; topicId: string; /** 格子 id 或 g:<組名>；空字串＝沒有可選的 */ sel: string }
 const cvar = (c: string): CSSProperties => ({ ['--c' as string]: c })
 
 const NOT_FOUND_TEXT = '找不到這個題目（可能已移除，或還沒推送到）。'
 
-/** 島內網址：閱讀區展開＝#knowledge/<id>；收起＝#knowledge/<id>/s/<站> */
-function hashOf(w: Where, reader: boolean): string {
-  return formatKnowledgeHash({ view: 'topic', topicId: w.topicId, stationId: reader || !w.stationId ? null : w.stationId })
+/** 島內網址：#knowledge/<id>/s/<選取>（沒有選取就只有 #knowledge/<id>） */
+function hashOf(w: Where): string {
+  return formatKnowledgeHash({ view: 'topic', topicId: w.topicId, stationId: w.sel || null })
 }
 
 export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw: string; now: Date; head?: ReactNode }) {
@@ -109,22 +117,37 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
   }, [model])
   const colorOf = useCallback((slot: number) => paletteColor(slot, theme), [theme])
 
-  const firstStation = (topicId: string): string => analyses.get(topicId)?.stations[0]?.id ?? ''
-  /** 網址 → 進島狀態：找不到題目回 null（留在全景並顯示找不到） */
-  const resolve = (r: KnowledgeRoute): { where: Where; reader: boolean } | null | 'overview' => {
+  const topicById = useMemo(() => new Map(data.topics.map((t) => [t.id, t])), [data])
+  const defaultSel = (topicId: string): string => {
+    const t = topicById.get(topicId)
+    const a = analyses.get(topicId)
+    return t && a ? defaultSelection(t, a, indexDiagramOf(t, a)) ?? '' : ''
+  }
+  /** 這題的站對到哪個選取（橋跳轉用）：先找對應這站的格子，再找同名的組，都沒有用預設 */
+  const selForStation = (topicId: string, stationId: string): string => {
+    const t = topicById.get(topicId)
+    const a = analyses.get(topicId)
+    if (!t || !a) return ''
+    const node = nodeOrder(indexDiagramOf(t, a)).find((id) => stationForNode(t, a, id) === stationId)
+    if (node) return node
+    if (chipGroups(a.parsed).some((g) => g.key === stationId)) return `g:${stationId}`
+    return defaultSel(topicId)
+  }
+  /** 網址 → 進島狀態：找不到題目回 null（留在全景並顯示找不到）；選取不合法退回預設 */
+  const resolve = (r: KnowledgeRoute): { where: Where } | null | 'overview' => {
     if (r.view === 'overview') return 'overview'
     const e = islandOf.get(r.topicId)
     if (!e) return null
-    const sts = analyses.get(r.topicId)?.stations ?? []
-    const sid = r.stationId !== null && sts.some((s) => s.id === r.stationId) ? r.stationId : firstStation(r.topicId)
-    return { where: { island: e.island.id, topicId: r.topicId, stationId: sid }, reader: r.stationId === null }
+    const t = topicById.get(r.topicId)
+    const a = analyses.get(r.topicId)
+    const ok = r.stationId !== null && !!t && !!a && isValidSelection(r.stationId, a, indexDiagramOf(t, a))
+    return { where: { island: e.island.id, topicId: r.topicId, sel: ok ? r.stationId! : defaultSel(r.topicId) } }
   }
   const [init] = useState(() => {
     const r = parseKnowledgeHash(window.location.hash) ?? { view: 'overview' as const }
     return { r, x: resolve(r) }
   })
   const [where, setWhereRaw] = useState<Where | null>(() => (init.x && init.x !== 'overview' ? init.x.where : null))
-  const [reader, setReaderRaw] = useState<boolean>(() => (init.x && init.x !== 'overview' ? init.x.reader : false))
   const [notFound, setNotFound] = useState<boolean>(() => init.r.view === 'topic' && init.x === null)
 
   // 外部網址變動（連結、上一頁）→ 套用到進島狀態。replaceState 不會觸發 hashchange，所以島內切換不會回頭打自己。
@@ -135,34 +158,32 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
       const r = parseKnowledgeHash(window.location.hash)
       if (!r) return
       const x = resolveRef.current(r)
-      if (x === 'overview') { setWhereRaw(null); setReaderRaw(false); setNotFound(false) }
-      else if (x === null) { setWhereRaw(null); setReaderRaw(false); setNotFound(true) }
-      else { setWhereRaw(x.where); setReaderRaw(x.reader); setNotFound(false) }
+      if (x === 'overview') { setWhereRaw(null); setNotFound(false) }
+      else if (x === null) { setWhereRaw(null); setNotFound(true) }
+      else { setWhereRaw(x.where); setNotFound(false) }
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  // 島內切題分頁、切站、開收閱讀區：寫回網址但不新增歷史
+  // 島內切題分頁、切選取：寫回網址但不新增歷史
   const writeHash = (h: string) => { try { window.history.replaceState(null, '', h) } catch { /* 寫不進去就只在畫面上有效 */ } }
-  // 第二參數 rd：切站時傳 false 收起閱讀區；切題分頁不傳，維持目前閱讀區狀態（PM 修正）
-  const setWhere = (w: Where, rd: boolean = reader) => { setWhereRaw(w); setReaderRaw(rd); writeHash(hashOf(w, rd)) }
-  const setReader = (b: boolean) => { setReaderRaw(b); if (where) writeHash(hashOf(where, b)) }
+  const setWhere = (w: Where) => { setWhereRaw(w); writeHash(hashOf(w)) }
   const navTopic = (topicId: string, stationId: string | null) => { window.location.hash = formatKnowledgeHash({ view: 'topic', topicId, stationId }) }
-  // 從全景點島：用一般導航（新增歷史，上一頁回得到全景）寫成第一個非 seed 題目的第一站，狀態由 hashchange 套用
+  // 從全景點島：用一般導航（新增歷史，上一頁回得到全景）寫成第一個非 seed 題目的預設選取，狀態由 hashchange 套用
   const enter = (islandId: string, topicId?: string) => {
     const e = islandById.get(islandId)
     if (!e) return
     const t = (topicId ? e.island.topics.find((x) => x.id === topicId) : undefined) ?? e.island.topics.find((x) => !analyses.get(x.id)?.seed) ?? e.island.topics[0]
-    if (t) navTopic(t.id, firstStation(t.id) || null)
+    if (t) navTopic(t.id, defaultSel(t.id) || null)
   }
   const go = (topicId: string, stationId?: string) => {
     const e = islandOf.get(topicId)
     if (!e) return
-    const w = { island: e.island.id, topicId, stationId: stationId ?? firstStation(topicId) }
-    setWhereRaw(w); setReaderRaw(false); writeHash(hashOf(w, false))
+    const w = { island: e.island.id, topicId, sel: stationId ? selForStation(topicId, stationId) : defaultSel(topicId) }
+    setWhereRaw(w); writeHash(hashOf(w))
   }
-  /** 閱讀區裡點同枝／跨枝題目、原文面板的題目：切到該題並展開閱讀區 */
+  /** 資訊帶裡點同枝／跨枝題目、原文面板的題目：切到該題的預設選取 */
   const openTopic = (id: string) => navTopic(id, null)
   const backToOverview = () => { window.location.hash = '#knowledge' }
   const plusOf = (i: IslandModelIsland) => i.topics.filter((t) => recent.has(t.id)).length
@@ -175,7 +196,7 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
         <IslandInside
           key={where.island} island={e.island} color={colorOf(e.slot)} where={where} setWhere={setWhere} analyses={analyses} bridges={bridges} aiBridges={aiBridges} kbLinks={kbLinks}
           verdicts={verdicts} rejected={rejected.filter((id) => hidden.has(id))} voteErr={voteErr} vote={vote} insightById={insightById}
-          pw={pw} now={now} data={data} reader={reader} setReader={setReader} onBack={backToOverview} onOpen={openTopic} onJump={go} names={names}
+          pw={pw} now={now} data={data} onBack={backToOverview} onOpen={openTopic} onJump={go} names={names}
         />
       )
     }
@@ -458,11 +479,13 @@ function BulletView({ b, t, big, onSrc }: { b: Bullet; t: Topic; big: boolean; o
   return <div className="kis-bullet">{body}<Chips b={b} t={t} onSrc={onSrc} /></div>
 }
 
-function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBridges, kbLinks, verdicts, rejected, voteErr, vote, insightById, pw, now, data, reader, setReader, onBack, onOpen, onJump, names }: {
+const indexDiagramOf = (t: Topic, a: TopicAnalysis): TopicDiagram | null => (a.parsed ? t.diagram ?? fallbackFlow(a.stations) : null)
+
+function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBridges, kbLinks, verdicts, rejected, voteErr, vote, insightById, pw, now, data, onBack, onOpen, onJump, names }: {
   island: IslandModelIsland
   color: string
-  where: { island: string; topicId: string; stationId: string }
-  setWhere: (w: { island: string; topicId: string; stationId: string }, reader?: boolean) => void
+  where: Where
+  setWhere: (w: Where) => void
   analyses: ReadonlyMap<string, TopicAnalysis>
   bridges: readonly Bridge[]
   aiBridges: readonly AiBridge[]
@@ -475,36 +498,49 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   pw: string
   now: Date
   data: TopicsData
-  reader: boolean
-  setReader: (b: boolean) => void
   onBack: () => void
   onOpen: (id: string) => void
   onJump: (topicId: string, stationId?: string) => void
   names: ReadonlyMap<string, string>
 }) {
-  const [ov, setOv] = useState(false)
-  const [panel, setPanel] = useState<string | null>(null)
-  const railRef = useRef<HTMLDivElement>(null)
+  const [panel, setPanel] = useState<{ key: string; q: string } | null>(null)
+  const [band, setBand] = useState(false)
+  const [full, setFull] = useState(false)
+  const [compact, setCompact] = useState(false)
+  const [headH, setHeadH] = useState(0)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const idxRef = useRef<HTMLDivElement>(null)
+  const fullH = useRef(0)
+  const compactRef = useRef(false)
+  compactRef.current = compact
   const topic = island.topics.find((t) => t.id === where.topicId) ?? island.topics[0]!
   const a = analyses.get(topic.id)
+  const quotes = useTopicQuotes(pw, topic.id)
   const stations: Station[] = a?.stations ?? []
-  const idx = Math.max(0, stations.findIndex((s) => s.id === where.stationId))
-  const station = stations[idx]
-  const pick = (i: number) => { const s = stations[i]; if (s) setWhere({ island: island.id, topicId: topic.id, stationId: s.id }, false) }
+  const diagram = useMemo(() => (a ? indexDiagramOf(topic, a) : null), [a, topic])
+  const isFallback = !topic.diagram
+  const order = useMemo(() => nodeOrder(diagram), [diagram])
+  const groups = useMemo(() => chipGroups(a?.parsed ?? null), [a])
+  const sel = where.sel
+  const groupKey = groupOfSel(sel)
+  const select = (s: string) => setWhere({ island: island.id, topicId: topic.id, sel: s })
+  const navList = groupKey ? groups.map((g) => `g:${g.key}`) : order
+  const navIdx = navList.indexOf(sel)
+  const move = (d: number) => { const n = navList[navIdx + d]; if (n) select(n) }
   const myLinks = kbLinksFor(kbLinks, topic)
-  const insightCount = (a?.insightIds.size ?? 0)
-  const ovCount = insightCount + myLinks.length
+  const seedLike = !a || a.seed || !a.parsed
+  const openSrc = (n: number, q: string) => { const s = topic.sources[n - 1]; if (s) setPanel({ key: s.id, q }) }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tg = e.target as HTMLElement | null
       if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable)) return
-      if (e.key === 'ArrowLeft') { e.preventDefault(); pick(Math.max(0, idx - 1)) }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); pick(Math.min(stations.length - 1, idx + 1)) }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1) }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); move(1) }
       // PM 修正：來源面板開著時 Esc 只關面板（捕獲階段先攔，避免面板關掉後同一次事件又退回全景）
       else if (e.key === 'Escape') {
         if (panel) { e.stopPropagation(); setPanel(null) }
-        else if (document.querySelector('.kn-panel')) return // 閱讀區的原文面板開著：Esc 只關面板（面板自己處理）
+        else if (document.querySelector('.kn-panel')) return // 全文裡的原文面板開著：Esc 只關面板（面板自己處理）
         else onBack()
       }
     }
@@ -512,33 +548,106 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // 選中的站置中
+  // 索引區黏在頂端：捲動容器是 .kn-root（position: fixed; overflow-y: auto），.kn-head 也黏在它的頂端，所以索引的 top 取 .kn-head 的高度。
+  // 捲過索引原本高度後切 compact（高度縮半），回到頂端恢復；加一段遲滯避免在門檻上來回跳。
   useEffect(() => {
-    const rail = railRef.current
-    const btn = rail?.querySelector<HTMLElement>('[aria-current="step"]')
-    if (!rail || !btn) return
-    const left = btn.offsetLeft - rail.clientWidth / 2 + btn.clientWidth / 2
-    if (typeof rail.scrollTo === 'function') rail.scrollTo({ left, behavior: 'smooth' })
-    else rail.scrollLeft = left
-  }, [station?.id, topic.id])
+    const sc = sentinelRef.current?.closest<HTMLElement>('.kn-root') ?? null
+    const target: HTMLElement | Window = sc ?? window
+    const measureHead = () => setHeadH(document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0)
+    const onScroll = () => {
+      const s = sentinelRef.current
+      if (!s) return
+      if (!compactRef.current && idxRef.current) fullH.current = idxRef.current.offsetHeight
+      const head = document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0
+      const top = s.getBoundingClientRect().top - head
+      const h = fullH.current
+      if (!compactRef.current && h > 0 && top < -h) setCompact(true)
+      else if (compactRef.current && top > -h / 2) setCompact(false)
+    }
+    measureHead()
+    target.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', measureHead)
+    return () => { target.removeEventListener('scroll', onScroll); window.removeEventListener('resize', measureHead) }
+  }, [])
 
   const cov = a ? stationCoverage(a) : { covered: 0, total: 0 }
+  const flowNode = !groupKey && diagram?.type === 'flow' ? diagram.nodes.find((n) => n.id === sel) : undefined
+  const card = !groupKey ? (topic.steps ?? []).find((s) => s.node === sel) : undefined
+  const sid: string | null = groupKey ? groupKey : a ? stationForNode(topic, a, sel) : null
+  const station = sid ? stations.find((s) => s.id === sid) : undefined
+  const info = diagram && !groupKey ? diagramNodeInfo(diagram, sel) : null
   const links = station && a ? a.links.get(station.id) : undefined
   const stBridges = station ? bridgesAt(bridges, topic.id, station.id) : []
   const stAiBridges = station ? aiBridgesAt(aiBridges, topic.id, station.id) : []
   const stAi = station && a ? a.ai.get(station.id) ?? [] : []
   const ctl = (item: { id: string; status: 'proposed' | 'confirmed' }) => <VerdictCtl v={verdictOf(verdicts, item)} onVote={(x) => vote(item.id, x)} />
 
-  const drawer = ov && (
-    <aside className="kis-drawer" data-testid="kis-drawer" aria-label="疊加層">
-      <h3 className="kis-dh">✦ 疊加層</h3>
+  const nodeDots = useMemo(() => {
+    const m = new Map<string, 'ins' | 'blind'>()
+    if (!a || diagram?.type !== 'flow') return m
+    for (const n of diagram.nodes) {
+      if (n.shape !== 'step') continue
+      const s = stationForNode(topic, a, n.id)
+      if (isFallback && stations.find((x) => x.id === s)?.kind !== 'step') continue
+      const has = s ? (a.links.get(s)?.insights.length ?? 0) > 0 || (a.ai.get(s)?.length ?? 0) > 0 : false
+      m.set(n.id, has ? 'ins' : 'blind')
+    }
+    return m
+  }, [a, diagram, topic, isFallback, stations])
+
+  const targets = useMemo(() => {
+    if (diagram?.type !== 'flow') return []
+    return diagram.nodes.map((n) => {
+      const no = isFallback ? stations.find((s) => s.id === n.id)?.stepNo : (() => { const i = (topic.steps ?? []).findIndex((s) => s.node === n.id); return i >= 0 ? i + 1 : undefined })()
+      return no ? { id: n.id, label: n.label, stepNo: no } : { id: n.id, label: n.label }
+    })
+  }, [diagram, isFallback, stations, topic])
+
+  const bullets = (list: Array<{ bid: string; b: Bullet }>, big: boolean) => list.map((sb) => <BulletView key={sb.bid} b={sb.b} t={topic} big={big} onSrc={(id) => setPanel({ key: id, q: '' })} />)
+  const nodeDetail = <DiagramNodeDetail sel={info} topic={topic} quotes={quotes} onOpenSource={openSrc} />
+
+  let label = ''
+  let main: ReactNode = null
+  if (groupKey) {
+    label = groups.find((g) => g.key === groupKey)?.label ?? ''
+    const list = groupBullets(a?.parsed ?? null, groupKey)
+    const fork = groupKey === 'decisions' ? forkFromText(list, targets) : null
+    main = fork ? <KnowledgeFork fork={fork} onJump={select} /> : bullets(list.map((b, i) => ({ bid: `${groupKey}:${i}`, b })), list.length === 1)
+  } else if (diagram?.type === 'flow' && flowNode) {
+    label = `${diagram.lanes[flowNode.lane] ?? ''}・${flowNode.shape === 'decision' ? '判斷點' : '步驟'}`
+    if (card) {
+      main = (
+        <>
+          <KnowledgeSteps key={card.id} t={topic} steps={[card]} pw={pw} onView={(n) => openSrc(n, '')} highlightStep={null} startNo={(topic.steps ?? []).indexOf(card) + 1}
+            onGoDiagram={() => sentinelRef.current?.scrollIntoView?.({ behavior: 'smooth' })} />
+          {station && <div className="kis-stbul">{bullets(station.bullets, false)}</div>}
+        </>
+      )
+    } else if (flowNode.shape === 'decision') {
+      const fork = isFallback ? (station ? forkFromText(station.bullets.map((x) => x.b), targets) : null) : forkFromFlow(diagram, sel)
+      main = fork ? <KnowledgeFork fork={fork} onJump={select} /> : isFallback && station ? bullets(station.bullets, false) : nodeDetail
+    } else if (isFallback && station) {
+      main = bullets(station.bullets, station.kind === 'step' || station.bullets.length === 1)
+    } else main = nodeDetail
+  } else if (info) {
+    label = info.heading.split('・')[0] ?? ''
+    main = nodeDetail
+  }
+
+  const srcNums = [...new Set([...(station?.bullets.flatMap((x) => x.b.refs) ?? []), ...(info?.src ?? [])])].filter((n) => topic.sources[n - 1])
+  const side = (
+    <aside className="kis-side" data-testid="kis-side" aria-label="這一格的旁註">
+      <h3 className="kis-dh">這一格的旁註</h3>
       {rejected.map((id) => (
         <p key={id} className="kis-undo">已否決，<button type="button" className="kis-vbtn" onClick={() => vote(id, 'undo')}>撤回</button></p>
       ))}
       {voteErr && <p className="kis-err" role="alert">{voteErr}</p>}
+      {!station && (
+        <p className="kis-none">這一格沒有掛心得。{flowNode?.shape === 'step' ? '盲點：這一步還沒有心得。' : ''}</p>
+      )}
       {station && (
         <>
-          <h4 className="kis-sec">這一站的心得</h4>
+          <h4 className="kis-sec">這一格的心得</h4>
           {stAi.map((k) => <AiStepView key={k.id} k={k} insight={insightById.get(k.insight)} ctl={ctl(k)} />)}
           {stAi.length > 0 && links && links.insights.length > 0 && <h4 className="kis-sec">自動比對</h4>}
           {links && links.insights.length > 0
@@ -549,15 +658,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
                 <span className="kis-date">{i.date}</span>
               </div>
             ))
-            : stAi.length === 0 && <p className="kis-none">{station.kind === 'step' ? '盲點：這一站還沒有心得。' : '這一站沒有掛心得。'}</p>}
-          {myLinks.length > 0 && (
-            <>
-              <h4 className="kis-sec">AI 編織（這一題）</h4>
-              {myLinks.map((k) => (
-                <div key={k.id} className="kis-ai"><span className="kis-ai-tag">✦ AI</span><p>{k.text}</p><span className="kis-date">{k.confidence === 'high' ? '把握高' : k.confidence === 'mid' ? '把握中' : '把握低'}</span></div>
-              ))}
-            </>
-          )}
+            : stAi.length === 0 && <p className="kis-none">{station.kind === 'step' ? '盲點：這一步還沒有心得。' : '這一格沒有掛心得。'}</p>}
           <h4 className="kis-sec">橋</h4>
           {stAiBridges.map(({ bridge, others }) => (
             <div key={bridge.id} className="kis-ai kis-aib">
@@ -575,13 +676,42 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
               <div key={bridge.key} className="kis-br">
                 <span className="kis-tag">自動比對</span> <b>{bridge.name}</b>
                 {others.map((o) => {
-                  const ot = analyses.get(o.topicId)
-                  const os = ot?.stations.find((s) => s.id === o.stationId)
+                  const os = analyses.get(o.topicId)?.stations.find((s) => s.id === o.stationId)
                   return <button key={`${o.topicId}:${o.stationId}`} type="button" className="kis-jump" onClick={() => onJump(o.topicId, o.stationId)}>→ {names.get(o.topicId) ?? o.topicId} · {os?.label ?? ''}</button>
                 })}
               </div>
             ))
-            : stAiBridges.length === 0 && <p className="kis-none">這一站沒有和別的題目共用步驟。</p>}
+            : stAiBridges.length === 0 && <p className="kis-none">這一格沒有和別的題目共用步驟。</p>}
+          {links && links.rules.length > 0 && (
+            <>
+              <h4 className="kis-sec">這一步的規定依據</h4>
+              <ul className="kis-rules">
+                {links.rules.map((r) => <li key={`${r.article}:${r.claim}`}><strong>{r.article}</strong> {r.text}</li>)}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+      {card && card.cases.length > 0 && (
+        <>
+          <h4 className="kis-sec">用過的案件</h4>
+          <ul className="kis-rules">{card.cases.map((c) => <li key={c.case}>{c.case}<span className="kis-date"> {c.date}</span></li>)}</ul>
+        </>
+      )}
+      {srcNums.length > 0 && (
+        <>
+          <h4 className="kis-sec">來源</h4>
+          <div className="kis-srcs">
+            {srcNums.map((n) => <button key={n} type="button" className="kis-jump" onClick={() => openSrc(n, quoteQueryFor(quotes, n))}>{n}　{topic.sources[n - 1]?.title}</button>)}
+          </div>
+        </>
+      )}
+      {myLinks.length > 0 && (
+        <>
+          <h4 className="kis-sec">AI 編織（這一題）</h4>
+          {myLinks.map((k) => (
+            <div key={k.id} className="kis-ai"><span className="kis-ai-tag">✦ AI</span><p>{k.text}</p><span className="kis-date">{CONF_SHORT[k.confidence]}</span></div>
+          ))}
         </>
       )}
       <h4 className="kis-sec">盲點</h4>
@@ -589,92 +719,84 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     </aside>
   )
 
-  const rail = (
-          <div className="kis-rail" ref={railRef} data-testid="kis-rail">
-    {stations.map((s, i) => {
-      const l = a?.links.get(s.id)
-      const n = new Set([...(l?.insights ?? []).map((x) => x.insightId), ...(a?.ai.get(s.id) ?? []).map((x) => x.insight)]).size
-      const b = bridgesAt(bridges, topic.id, s.id).length + aiBridgesAt(aiBridges, topic.id, s.id).length
-      return (
-        <button key={s.id} type="button" className={`kis-st kis-k-${s.kind}${i === idx ? ' kis-cur' : ''}`} aria-current={i === idx ? 'step' : undefined} onClick={() => pick(i)}>
-          <span className="kis-st-no">{s.stepNo ?? '•'}</span>
-          <span className="kis-st-l">{s.label}</span>
-          {ov && (
-            <span className="kis-st-m">
-              {n > 0 && <em>💬{n}</em>}
-              {b > 0 && <em>⇄{b}</em>}
-              {s.kind === 'step' && n === 0 && <em className="kis-blind">盲點</em>}
-            </span>
-          )}
-        </button>
-      )
-    })}
-  </div>
-  )
-
+  const summary = a?.parsed?.summary ? stripMarks(a.parsed.summary.text) : ''
   return (
     <div className="kis-root kis-in" style={cvar(color)} data-testid="kis-inside">
       <div className="kis-in-head">
         <button type="button" className="kn-btn" onClick={onBack}>‹ 全景</button>
         <h2 className="kis-in-name">{island.name}</h2>
         <div className="kis-tabs" role="tablist">
-          {island.topics.map((t) => (
-            <button
-              key={t.id} type="button" role="tab" aria-selected={t.id === topic.id}
-              className={`kis-tab${analyses.get(t.id)?.seed ? ' kis-seed' : ''}`}
-              onClick={() => setWhere({ island: island.id, topicId: t.id, stationId: analyses.get(t.id)?.stations[0]?.id ?? '' })}
-            >{t.name}</button>
-          ))}
+          {island.topics.map((t) => {
+            const ta = analyses.get(t.id)
+            return (
+              <button
+                key={t.id} type="button" role="tab" aria-selected={t.id === topic.id}
+                className={`kis-tab${ta?.seed ? ' kis-seed' : ''}`}
+                onClick={() => setWhere({ island: island.id, topicId: t.id, sel: ta ? defaultSelection(t, ta, indexDiagramOf(t, ta)) ?? '' : '' })}
+              >{t.name}</button>
+            )
+          })}
         </div>
-        <button type="button" className={`kis-ovbtn${ov ? ' kis-on' : ''}`} aria-pressed={ov} onClick={() => setOv((x) => !x)}>✦ 疊加層{ovCount > 0 ? `（${ovCount}）` : ''}</button>
       </div>
 
-      {reader ? (
-        <>
-          {a?.seed || !station ? null : rail}
-          <div className={`kis-body${ov ? ' kis-body-ov' : ''}`}>
-            <section className="kis-content krd-slot" data-testid="krd-slot">
-              <div className="kis-ch">
-                <span className="kis-kind">完整頁面</span>
-                <button type="button" className="kn-btn" onClick={() => setReader(false)}>回到這一站</button>
-              </div>
-              <KnowledgeReader key={topic.id} topic={topic} data={data} pw={pw} now={now} onOpen={onOpen} />
-            </section>
-            {drawer}
+      <div className="kis-title" data-testid="kis-title">
+        <h3 className="kis-tn">{topic.name}</h3>
+        <span className="kn-kind" data-kind={topic.kind}>{kindLabel(topic.kind)}</span>
+        {summary && <p className="kis-sum">{summary}</p>}
+        <button type="button" className={`kis-bandbtn${band ? ' kis-on' : ''}`} aria-expanded={band} onClick={() => setBand((x) => !x)}>資訊帶</button>
+      </div>
+      {band && (
+        <div className="kis-band" data-testid="kis-band">
+          <ReaderSide t={topic} data={data} onOpen={onOpen} />
+          <div className="kis-fullwrap">
+            <button type="button" className="kn-btn" aria-expanded={full} onClick={() => setFull((x) => !x)}>{full ? '收起全文與更正' : '全文與更正'}</button>
+            {full && <KnowledgeReader key={topic.id} topic={topic} data={data} pw={pw} now={now} onOpen={onOpen} hideDiagram hideSide />}
           </div>
-        </>
-      ) : (
-        <>
-      {a?.seed || !station ? (
+        </div>
+      )}
+
+      {seedLike ? (
         <div className="kis-seedbox">
           <p className="kis-big">還在累積</p>
           <p className="kis-l">這一題的頁面還沒有長出來，等累積到足夠的資料才會有做事順序。</p>
           {myLinks.map((k) => <div key={k.id} className="kis-ai"><span className="kis-ai-tag">✦ AI</span><p>{k.text}</p></div>)}
-          <button type="button" className="kn-btn" onClick={() => setReader(true)}>完整頁面</button>
         </div>
       ) : (
         <>
-          {rail}
-          <div className={`kis-body${ov ? ' kis-body-ov' : ''}`}>
+          <div ref={sentinelRef} className="kis-sentinel" aria-hidden="true" />
+          {(diagram || groups.length > 0) && (
+            <div ref={idxRef} className="kis-index" data-testid="kis-index" data-compact={compact} style={{ top: headH }}>
+              {diagram && (
+                <KnowledgeDiagram
+                  topic={topic} diagram={diagram} quotes={quotes} onOpenSource={openSrc} now={now}
+                  selectedNode={groupKey ? null : sel} onSelectNode={select} nodeDots={nodeDots} compact={compact} hideDetail hideLegend
+                />
+              )}
+              {groups.length > 0 && (
+                <div className="kis-groups" role="group" aria-label="內容分組">
+                  {groups.map((g) => (
+                    <button key={g.key} type="button" className="kis-grp" aria-pressed={sel === `g:${g.key}`} onClick={() => select(`g:${g.key}`)}>{g.label}<em>{g.n}</em></button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="kis-split">
             <section className="kis-content" data-testid="kis-content">
               <div className="kis-ch">
-                <span className="kis-kind">{stationKindLabel(station.kind)}{station.stepNo ? ` ${station.stepNo}` : ''}</span>
+                <span className="kis-kind">{label}</span>
                 <span className="kis-nav">
-                  <button type="button" disabled={idx === 0} onClick={() => pick(idx - 1)}>← 上一步</button>
-                  <button type="button" disabled={idx >= stations.length - 1} onClick={() => pick(idx + 1)}>下一步 →</button>
+                  <button type="button" disabled={navIdx <= 0} onClick={() => move(-1)}>← 上一格</button>
+                  <button type="button" disabled={navIdx < 0 || navIdx >= navList.length - 1} onClick={() => move(1)}>下一格 →</button>
                 </span>
-                <button type="button" className="kn-btn" onClick={() => setReader(true)}>完整頁面</button>
               </div>
-              {station.bullets.map((sb) => <BulletView key={sb.bid} b={sb.b} t={topic} big={station.kind === 'step' || station.bullets.length === 1} onSrc={setPanel} />)}
+              {main ?? <p className="kis-none">這一題還沒有可以顯示的內容。</p>}
             </section>
-            {drawer}
+            {side}
           </div>
         </>
       )}
-        </>
-      )}
-      {!reader && (a?.seed || !station) && drawer}
-      {panel && <KnowledgeSourcePanel pw={pw} sourceKey={panel} query="" onClose={() => setPanel(null)} onOpenTopic={onOpen} />}
+      {panel && <KnowledgeSourcePanel pw={pw} sourceKey={panel.key} query={panel.q} onClose={() => setPanel(null)} onOpenTopic={onOpen} />}
     </div>
   )
 }
