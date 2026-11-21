@@ -144,7 +144,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })
 async function newPage(viewport) {
-  const ctx = await browser.newContext({ viewport })
+  const ctx = await browser.newContext({ viewport, colorScheme: 'dark' })
   await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
   const page = await ctx.newPage()
   const errors = []
