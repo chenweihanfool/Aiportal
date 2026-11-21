@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
-  layoutSea, resolveStepBridges, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
+  layoutSea, resolveStepBridges, chipGroups, defaultSelection, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
 } from './knowledgeIslands'
 import { buildTree, parseBodyWithMarkers, type Topic, type TopicClaim } from './knowledgeView'
+import type { FlowDiagram } from './knowledgeView'
 import type { TopicStep } from './knowledgeSteps'
 import type { KbLink, KbStep, StepBridge } from './insightWeave'
 
@@ -262,5 +263,65 @@ describe('版面', () => {
     expect(z.k).toBe(2)
     expect((100 - z.x) / z.k).toBeCloseTo((100 - 10) / 1)
     expect(zoomAt({ x: 0, y: 0, k: 2.5 }, 5, 0, 0).k).toBe(2.6)
+  })
+})
+
+describe('索引模式（3.23.0）', () => {
+  const flow: FlowDiagram = {
+    type: 'flow', version: 1, lanes: ['甲', '乙'], phases: ['p0', 'p1'],
+    nodes: [
+      { id: 'n3', label: '丙', src: [1], lane: 0, phase: 1, shape: 'step' },
+      { id: 'n2', label: '乙', src: [1], lane: 1, phase: 0, shape: 'decision' },
+      { id: 'n1', label: '甲', src: [1], lane: 0, phase: 0, shape: 'step' },
+    ],
+    edges: [],
+  }
+  const t = topic({ id: 'x', body: METHOD_BODY, diagram: flow, claims: [claim('c1', '先做甲，再做乙')], steps: [step('s1', 'c1')] })
+
+  it('nodeOrder：flow 依 phase 再 lane', () => {
+    expect(nodeOrder(flow)).toEqual(['n1', 'n2', 'n3'])
+    expect(nodeOrder(null)).toEqual([])
+  })
+
+  it('nodeOrder：timeline 依日期、map 依三欄', () => {
+    expect(nodeOrder({ type: 'timeline', version: 1, tracks: [{ id: 't', label: 't' }], metrics: [], items: [
+      { track: 't', date: '2026-02-01', label: 'b', src: [1] }, { track: 't', date: '2026-01-01', label: 'a', src: [1] },
+    ] })).toEqual(['i1', 'i0'])
+    expect(nodeOrder({ type: 'map', version: 1, core: 'c', links: [],
+      observations: [{ id: 'o1', label: 'o', src: [1] }], frameworks: [{ id: 'f1', label: 'f', src: [1] }], judgments: [{ id: 'j1', label: 'j', src: [1] }] })).toEqual(['o1', 'f1', 'j1'])
+  })
+
+  it('chipGroups：方法題只列有條目的組並附數量；沒有頁面為空', () => {
+    const a = analyzeTopic(t)
+    expect(chipGroups(a.parsed).map((g) => [g.key, g.n])).toEqual([['prep', 1], ['decisions', 1], ['pitfalls', 1], ['unknown', 1]])
+    expect(chipGroups(null)).toEqual([])
+    const c = analyzeTopic(topic({ id: 'c', kind: 'concept', body: CONCEPT_BODY }))
+    expect(chipGroups(c.parsed).map((g) => g.key)).toEqual(['why', 'myths', 'examples'])
+    expect(groupBullets(a.parsed, 'decisions')).toHaveLength(1)
+  })
+
+  it('stationForNode：步驟卡的 node → claim 的站；備援圖的格子就是站；其餘 null', () => {
+    const withNode = topic({ id: 'x', body: METHOD_BODY, diagram: flow, claims: [claim('c1', '- 先做甲，再做乙⟦1⟧')], steps: [{ ...step('s1', 'c1'), node: 'n1' }] })
+    const a = analyzeTopic(withNode)
+    expect(stationForNode(withNode, a, 'n1')).toBe('step:0')
+    expect(stationForNode(withNode, a, 'n3')).toBeNull()
+    expect(stationForNode(withNode, a, 'step:1')).toBe('step:1')
+  })
+
+  it('defaultSelection：有步驟卡的格子優先；沒有則第一格；沒有圖退回第一個 chip', () => {
+    const withNode = topic({ id: 'x', body: METHOD_BODY, diagram: flow, steps: [{ ...step('s1', 'c1'), node: 'n3' }] })
+    expect(defaultSelection(withNode, analyzeTopic(withNode), flow)).toBe('n3')
+    expect(defaultSelection(t, analyzeTopic(t), flow)).toBe('n1')
+    expect(defaultSelection(t, analyzeTopic(t), null)).toBe('g:prep')
+    const a = analyzeTopic(topic({ id: 'e', body: null }))
+    expect(defaultSelection(t, a, null)).toBeNull()
+  })
+
+  it('isValidSelection', () => {
+    const a = analyzeTopic(t)
+    expect(isValidSelection('n2', a, flow)).toBe(true)
+    expect(isValidSelection('zz', a, flow)).toBe(false)
+    expect(isValidSelection('g:decisions', a, flow)).toBe(true)
+    expect(isValidSelection('g:why', a, flow)).toBe(false)
   })
 })

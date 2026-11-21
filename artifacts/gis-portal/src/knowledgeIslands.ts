@@ -2,7 +2,7 @@
 // 不碰 DOM、不發請求；畫面在 KnowledgeIslands.tsx，測試在 knowledgeIslands.test.ts。
 // 只讀 knowledgeView.ts／knowledgeSteps.ts／insightWeave.ts 已匯出的型別與函式。
 
-import { matchClaims, parseBodyWithMarkers, type Bullet, type BuiltTree, type ParsedBody, type Topic } from './knowledgeView'
+import { matchClaims, parseBodyWithMarkers, type Bullet, type BuiltTree, type ParsedBody, type Topic, type TopicDiagram } from './knowledgeView'
 import type { StepDoc, StepInsight, StepRule } from './knowledgeSteps'
 import type { Confidence, KbLink, KbStep, StepBridge, WeaveStatus } from './insightWeave'
 
@@ -395,4 +395,67 @@ export function fitView(cw: number, ch: number, vw: number, vh: number, margin =
 export function zoomAt(v: View, f: number, cx: number, cy: number): View {
   const k = Math.min(MAX_K, Math.max(MIN_K, v.k * f))
   return { k, x: cx - ((cx - v.x) * k) / v.k, y: cy - ((cy - v.y) * k) / v.k }
+}
+
+/* ───────── 索引模式（3.23.0）：格子 ↔ 站、選取、順序、chips ───────── */
+
+export type GroupKey = 'prep' | 'decisions' | 'pitfalls' | 'unknown' | 'why' | 'myths' | 'examples' | 'what' | 'how' | 'caution'
+export interface ChipGroup { key: GroupKey; label: string; n: number }
+
+const GROUP_ORDER: Record<'method' | 'concept' | 'legacy', Array<[GroupKey, string]>> = {
+  method: [['prep', '開工前準備'], ['decisions', '判斷點'], ['pitfalls', '踩過的坑'], ['unknown', '還不知道']],
+  concept: [['why', '為什麼存在'], ['myths', '常見誤解'], ['examples', '實例'], ['unknown', '還不知道']],
+  legacy: [['what', '這件事在幹嘛'], ['how', '怎麼做'], ['caution', '要注意']],
+}
+
+/** 一組的條目（groupKey 與站 id 同名） */
+export function groupBullets(parsed: ParsedBody | null, key: GroupKey): Bullet[] {
+  return parsed ? parsed[key] : []
+}
+
+/** 索引下方 chips：依題目格式列出有條目的組，附數量 */
+export function chipGroups(parsed: ParsedBody | null): ChipGroup[] {
+  if (!parsed) return []
+  return GROUP_ORDER[parsed.format]
+    .map(([key, label]) => ({ key, label, n: groupBullets(parsed, key).length }))
+    .filter((g) => g.n > 0)
+}
+
+/** 這格對應的站 id：有 node===nodeId 的步驟卡 → 該卡 claim 的站；否則格子 id 本身就是站（備援圖）；都沒有 null */
+export function stationForNode(topic: Pick<Topic, 'steps'>, a: TopicAnalysis, nodeId: string): string | null {
+  const step = (topic.steps ?? []).find((s) => s.node === nodeId)
+  if (step) return a.stationOfClaim.get(step.claim) ?? null
+  return a.stations.some((s) => s.id === nodeId) ? nodeId : null
+}
+
+/** ←／→ 用的格子順序：flow 依 phase、再 lane；timeline 依日期；map 依觀察→框架→判斷 */
+export function nodeOrder(d: TopicDiagram | null | undefined): string[] {
+  if (!d) return []
+  if (d.type === 'flow') {
+    return d.nodes.map((n, i) => ({ n, i })).sort((x, y) => x.n.phase - y.n.phase || x.n.lane - y.n.lane || x.i - y.i).map((r) => r.n.id)
+  }
+  if (d.type === 'timeline') {
+    return d.items.map((it, i) => ({ it, i })).sort((x, y) => (x.it.date < y.it.date ? -1 : x.it.date > y.it.date ? 1 : x.i - y.i)).map((r) => `i${r.i}`)
+  }
+  return [...d.observations, ...d.frameworks, ...d.judgments].map((n) => n.id)
+}
+
+export const isGroupSel = (sel: string): boolean => sel.startsWith('g:')
+export const groupOfSel = (sel: string): GroupKey | null => (isGroupSel(sel) ? (sel.slice(2) as GroupKey) : null)
+
+/** 預設選取：第一個有步驟卡或站種類為 step 的格子；沒有則第一格；再沒有則第一個 chip（g:組名）；都沒有回 null */
+export function defaultSelection(topic: Pick<Topic, 'steps'>, a: TopicAnalysis, d: TopicDiagram | null | undefined): string | null {
+  const order = nodeOrder(d)
+  const cards = new Set((topic.steps ?? []).map((s) => s.node).filter((x): x is string => !!x))
+  const hit = order.find((id) => cards.has(id) || a.stations.find((s) => s.id === id)?.kind === 'step')
+  if (hit) return hit
+  if (order[0]) return order[0]
+  const g = chipGroups(a.parsed)[0]
+  return g ? `g:${g.key}` : null
+}
+
+/** 選取是否合法（格子 id 在圖上，或 g:組名 在 chips 裡） */
+export function isValidSelection(sel: string, a: TopicAnalysis, d: TopicDiagram | null | undefined): boolean {
+  if (isGroupSel(sel)) return chipGroups(a.parsed).some((g) => `g:${g.key}` === sel)
+  return nodeOrder(d).includes(sel)
 }
