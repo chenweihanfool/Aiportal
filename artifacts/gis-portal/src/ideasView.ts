@@ -479,3 +479,20 @@ export function lifeStats(ideas: IdeaItem[], nowMs: number): { total: number; cl
   const m = days.length === 0 ? null : days.length % 2 ? days[(days.length - 1) / 2]! : Math.round((days[days.length / 2 - 1]! + days[days.length / 2]!) / 2)
   return { total: ideas.length, closed: days.length, medianDaysToClose: m, recurring }
 }
+
+// ── 首頁想法板（3.20.0）：卡片小字與標題列計數 ──
+/** 「最後提到」的相對天數文字：同一天（或未來）回「今天」，其餘回「N 天前」；解析不到回 null */
+export function daysAgoText(iso: string | null | undefined, nowMs: number): string | null {
+  if (!iso) return null
+  const ms = toMs(iso)
+  if (!Number.isFinite(ms)) return null
+  const days = Math.floor((nowMs - ms) / DAY_MS)
+  return days <= 0 ? '今天' : `${days} 天前`
+}
+
+/** 想法板標題列三顆膠囊：候選（不含聚焦）、聚焦、本月完成 */
+export function boardCounts(ideas: IdeaItem[], nowMs: number): { candidate: number; focus: number; monthDone: number } {
+  const c = stageCounts(ideas)
+  const monthly = ideaDashboard(ideas, nowMs).monthly
+  return { candidate: Math.max(0, c.candidate - c.focus), focus: c.focus, monthDone: monthly[monthly.length - 1]?.done ?? 0 }
+}
