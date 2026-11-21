@@ -11,8 +11,9 @@ export interface ParsedVerdictBody {
   verdict: WeaveVerdict;
 }
 
-/** 編織層項目 id：L（燈塔）／B（橋）／T（張力）／K（知識庫交織）加 8 位小寫十六進位。 */
-const ITEM_ID = /^[LBTK]-[0-9a-f]{8}$/;
+/** 編織層項目 id：L（燈塔）／B（橋）／T（張力）／K（知識庫交織）／S（步驟對應）／J（步驟橋）加 8 位小寫十六進位。 */
+const ITEM_ID = /^[LBTKSJ]-[0-9a-f]{8}$/;
+const ITEM_ID_MESSAGE = "itemId 必須符合 L-、B-、T-、K-、S- 或 J- 加 8 位小寫十六進位的格式";
 const ALLOWED_KEYS = ["itemId", "verdict"] as const;
 
 /**
@@ -26,7 +27,7 @@ export function parseVerdictBody(body: unknown): ParsedVerdictBody | string {
   if (extra !== undefined) return `不接受的欄位：${extra}`;
 
   const itemId = b["itemId"];
-  if (typeof itemId !== "string" || !ITEM_ID.test(itemId)) return "itemId 必須符合 L-、B-、T- 或 K- 加 8 位小寫十六進位的格式";
+  if (typeof itemId !== "string" || !ITEM_ID.test(itemId)) return ITEM_ID_MESSAGE;
 
   const verdict = b["verdict"];
   if (typeof verdict !== "string" || !(WEAVE_VERDICTS as readonly string[]).includes(verdict)) return "verdict 必須是 ok、no 或 undo";
