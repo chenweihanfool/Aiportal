@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { sortDayItems } from './ReportViz'
 import { agoLabel, kindOf, linkifyDates, parseCaseFlow, parseEcho, parseReportSections, parseScoreSection, parseTaskLines, parseViz, parseVizLine, splitEntries, splitTitle } from './reportSections'
 
 const WEEK = `# 📅 週報 2026-09-22 ~ 2026-09-28（第40週）
@@ -264,5 +265,14 @@ describe('視覺化子項（docs/report-visual-modules.md）', () => {
   })
   it('agoLabel：未來的日期標幾天後', () => {
     expect(agoLabel('2026-10-27', '2026-10-24')).toBe('3 天後')
+  })
+})
+
+describe('時間線排序', () => {
+  it('亂序輸入依日期由舊到新，同日維持原順序', () => {
+    const out = sortDayItems([
+      { date: '2026-10-18', text: 'a' }, { date: '2026-09-29', text: 'b' }, { date: '2026-10-18', text: 'c' }, { date: '2026-10-01', text: 'd' },
+    ])
+    expect(out.map((i) => i.text)).toEqual(['b', 'd', 'a', 'c'])
   })
 })

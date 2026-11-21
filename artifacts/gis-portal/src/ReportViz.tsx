@@ -7,8 +7,14 @@ import { DAY_SLOTS, VIZ_LANES, agoLabel, type ScorePart, type VizItem } from './
 type Md = (text: string, size?: string) => ReactNode
 type Of<K extends VizItem['kind']> = Extract<VizItem, { kind: K }>
 
+/** 時間線的項目依日期由舊到新排序（穩定：同一天維持原順序）；AI 寫的順序常亂 */
+export function sortDayItems<T extends { date: string }>(items: T[]): T[] {
+  return items.map((it, i) => ({ it, i })).sort((a, b) => (a.it.date < b.it.date ? -1 : a.it.date > b.it.date ? 1 : a.i - b.i)).map((x) => x.it)
+}
+
 /** 時間線：過去的日期可點（打開那天的日報）、未來的日期標倒數；日報在過去與未來之間畫「今天」 */
-function Timeline({ items, refDate, showNow, md, onOpenDay }: { items: Of<'day'>[]; refDate: string; showNow: boolean; md: Md; onOpenDay?: (date: string) => void }) {
+function Timeline({ items: rawItems, refDate, showNow, md, onOpenDay }: { items: Of<'day'>[]; refDate: string; showNow: boolean; md: Md; onOpenDay?: (date: string) => void }) {
+  const items = sortDayItems(rawItems)
   const firstFuture = items.findIndex((d) => d.date > refDate)
   const nowAt = firstFuture < 0 ? items.length : firstFuture
   const now = <li key="now" className="rb-echo-now" aria-label="今天"><span className="rb-echo-date"><b>今天</b><small>{refDate.slice(5)}</small></span></li>
