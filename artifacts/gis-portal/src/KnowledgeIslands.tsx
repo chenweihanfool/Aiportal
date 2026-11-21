@@ -145,7 +145,8 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
 
   // 島內切題分頁、切站、開收閱讀區：寫回網址但不新增歷史
   const writeHash = (h: string) => { try { window.history.replaceState(null, '', h) } catch { /* 寫不進去就只在畫面上有效 */ } }
-  const setWhere = (w: Where) => { setWhereRaw(w); writeHash(hashOf(w, reader)) }
+  // 第二參數 rd：切站時傳 false 收起閱讀區；切題分頁不傳，維持目前閱讀區狀態（PM 修正）
+  const setWhere = (w: Where, rd: boolean = reader) => { setWhereRaw(w); setReaderRaw(rd); writeHash(hashOf(w, rd)) }
   const setReader = (b: boolean) => { setReaderRaw(b); if (where) writeHash(hashOf(where, b)) }
   const navTopic = (topicId: string, stationId: string | null) => { window.location.hash = formatKnowledgeHash({ view: 'topic', topicId, stationId }) }
   // 從全景點島：用一般導航（新增歷史，上一頁回得到全景）寫成第一個非 seed 題目的第一站，狀態由 hashchange 套用
@@ -461,7 +462,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   island: IslandModelIsland
   color: string
   where: { island: string; topicId: string; stationId: string }
-  setWhere: (w: { island: string; topicId: string; stationId: string }) => void
+  setWhere: (w: { island: string; topicId: string; stationId: string }, reader?: boolean) => void
   analyses: ReadonlyMap<string, TopicAnalysis>
   bridges: readonly Bridge[]
   aiBridges: readonly AiBridge[]
@@ -489,7 +490,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   const stations: Station[] = a?.stations ?? []
   const idx = Math.max(0, stations.findIndex((s) => s.id === where.stationId))
   const station = stations[idx]
-  const pick = (i: number) => { const s = stations[i]; if (s) setWhere({ island: island.id, topicId: topic.id, stationId: s.id }) }
+  const pick = (i: number) => { const s = stations[i]; if (s) setWhere({ island: island.id, topicId: topic.id, stationId: s.id }, false) }
   const myLinks = kbLinksFor(kbLinks, topic)
   const insightCount = (a?.insightIds.size ?? 0)
   const ovCount = insightCount + myLinks.length
