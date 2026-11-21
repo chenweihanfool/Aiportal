@@ -52,7 +52,7 @@ function useNarrow(): boolean {
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, boost, recipe, onActionsChange, todayLine, onOpenBrief, corner = false }: {
+export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActions, sourcesSettled, briefInfo, boost, recipe, ideaAge, travelFresh, onActionsChange, todayLine, onOpenBrief, corner = false }: {
   /** null＝未解鎖：整個區塊不顯示 */
   pw: string | null
   nowMs: number
@@ -69,6 +69,10 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
   boost?: NowCard | null
   /** 3.6.0：每月幸福配方卡（只併進「今天」）；沒給就沒有 */
   recipe?: NowCard | null
+  /** 3.23.0：想法快過期卡（只併進「今天」）；沒給就沒有 */
+  ideaAge?: NowCard | null
+  /** 3.23.0：旅遊新鮮度倒數卡（只併進「今天」）；沒給就沒有 */
+  travelFresh?: NowCard | null
   /** 很久沒聯絡的動作寫入成功後，通知上層重新讀取陪伴資料 */
   onActionsChange: () => void
   /** 新版首頁（v3）：今天的趨勢一句話＋下一步建議合成一行，放在標題列上方；沒給就不顯示 */
@@ -148,13 +152,15 @@ export function NowSection({ pw, nowMs, todayIso, nudges, companion, personActio
       ...(matcher.data ? meetingCards(calendar.data, clock, matcher.data.match) : []),
       ...(boost ? [boost] : []),
       ...(recipe ? [recipe] : []),
+      ...(ideaAge ? [ideaAge] : []),
+      ...(travelFresh ? [travelFresh] : []),
     ]
     if (extra.length === 0) return base
     // boost 點名的人可能和「很久沒聯絡」卡同一人：只留在 boost 那張，免得一天推兩次同一個人
     const person = boost?.person
     const merged = person ? [...base, ...extra].filter((c) => !(c.kind === 'quiet' && c.person === person)) : [...base, ...extra]
     return orderTriggerFirst(sortCards(merged))
-  }, [base, day, pins.data, donePins, matcher.data, calendar.data, clock, todayIso, boost, recipe])
+  }, [base, day, pins.data, donePins, matcher.data, calendar.data, clock, todayIso, boost, recipe, ideaAge, travelFresh])
   const fb: FeedbackState = useMemo(() => {
     const server = feedback.data ?? NO_FEEDBACK
     return {
@@ -364,6 +370,8 @@ function NowCardView({ card, hot, gone, setRef, onHot, onShown, onOpened, onUsef
               <button type="button" className="nw-gh" onClick={onNever} aria-label={`不再提醒：${card.person}`}>不再提醒</button>
             </>
           ) : null
+        ) : card.kind === 'ideaAge' || card.kind === 'travelFresh' ? (
+          card.href ? <a className="nw-cta" href={card.href} onClick={onOpened}>看看 →</a> : null
         ) : card.kind === 'onthisday' || card.kind === 'recipe' ? null : (
           <>
             <button type="button" className="nw-cta" onClick={onContacted} aria-label={`已聯絡：${card.person}`}>已聯絡</button>
