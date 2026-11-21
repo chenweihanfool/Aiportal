@@ -1066,7 +1066,7 @@ for (const [key, ex] of Object.entries(DIM_EXPECT)) {
     const g = await page.locator('[data-testid="st-growth"]').innerText()
     check(`${T}：成長與系統盒五列＋付費服務列（知識庫這週 +1 頁・+1 句、更正 3 筆、查無結果率 25%・本週 12 次、推送被點開 40%・沒用 3 則）`,
       /知識庫這週\s*\+1 頁・\+1 句/.test(g) && /你的更正\s*3 筆已生效/.test(g) && /搜尋查無結果率\s*25%・本週 12 次/.test(g) && /推送被點開\s*40%・沒用 3 則/.test(g) && /系統/.test(g) && (await page.locator('[data-testid="st-svc"]').count()) === 1, g.replace(/\s+/g, ' '))
-    check(`${T}：知識庫兩列連到 #knowledge`, (await page.locator('[data-testid="st-kb"]').getAttribute('href')) === '#knowledge' && (await page.locator('[data-testid="st-fixes"]').getAttribute('href')) === '#knowledge')
+    check(`${T}：知識庫兩列是開抽屜的按鈕（不再連到 #knowledge）`, (await page.locator('button[data-testid="st-kb"]').count()) === 1 && (await page.locator('button[data-testid="st-fixes"]').count()) === 1)
     await page.locator('[data-testid="st-search"]').click(); await page.waitForSelector('[data-testid="search-stats-panel"]')
     const sp = await page.locator('[data-testid="search-stats-panel"]').innerText()
     check(`${T}：點「搜尋查無結果率」開小抽屜（14 天、查無結果的詞）`, /查無結果最多的詞/.test(sp) && /不存在的詞/.test(sp) && calls.includes('/api/search/stats?days=14') && calls.includes('/api/search/stats?days=7'), sp.replace(/\s+/g, ' ').slice(0, 120))

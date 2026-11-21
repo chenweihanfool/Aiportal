@@ -88,6 +88,9 @@ export interface StatusAsideProps {
   // 報告庫
   reportLib: AsyncState<Maybe<ReportCatalog>>
   onOpenSearchStats: () => void
+  /** 3.20.0：知識庫這週／你的更正 明細抽屜 */
+  onOpenKbWeek: () => void
+  onOpenFixes: () => void
   onOpenPushStats: () => void
   sysSt: BlockStatus
   light: SystemLight
@@ -197,8 +200,8 @@ export function StatusAside(p: StatusAsideProps) {
       </section>
 
       <section className="st-box st-rows" data-testid="st-growth" aria-label="成長與系統">
-        <StRow id="st-kb" label="知識庫這週" st={topicsSt} value={week ? knowledgeWeekText(week) : '—'} emptyText="尚未收到" href="#knowledge" onRequestUnlock={onRequestUnlock} />
-        <StRow id="st-fixes" label="你的更正" st={topicsSt} value={`${fixes} 筆已生效`} emptyText="尚未收到" href="#knowledge" onRequestUnlock={onRequestUnlock} />
+        <StRow id="st-kb" label="知識庫這週" st={topicsSt} value={week ? knowledgeWeekText(week) : '—'} emptyText="尚未收到" onClick={p.onOpenKbWeek} onRequestUnlock={onRequestUnlock} title="知識庫這週：點開看新增了哪些頁與句子" />
+        <StRow id="st-fixes" label="你的更正" st={topicsSt} value={`${fixes} 筆已生效`} emptyText="尚未收到" onClick={p.onOpenFixes} onRequestUnlock={onRequestUnlock} title="你的更正：點開看更正了哪些句子" />
         <StRow id="st-search" label="搜尋查無結果率" st={searchSt} emptyText="統計尚未上線" onClick={p.onOpenSearchStats} onRequestUnlock={onRequestUnlock}
           value={ss ? `${ss.searches > 0 ? pctText(ss.zeroRate) : '—'}・本週 ${ss.searches} 次` : '—'} title="搜尋查無結果率（近 7 天），點開看 14 天統計" />
         <StRow id="st-push" label="推送被點開" st={pushSt} emptyText="統計尚未上線" onClick={p.onOpenPushStats} onRequestUnlock={onRequestUnlock}

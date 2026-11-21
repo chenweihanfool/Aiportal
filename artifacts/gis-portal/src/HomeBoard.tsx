@@ -21,10 +21,11 @@ import { useAsync, useNow } from './homeHooks'
 import { PaidServicesPanel, PaidServicesSection } from './PaidServices'
 import { BriefSection, CompanionSection, DimensionsSection, FunSection, GrowthSection, SystemSection, TodaySection, YearHeat } from './HomeSections'
 import { StateFrame } from './StateFrame'
+import { CorrectionsPanel, KnowledgeWeekPanel } from './KnowledgeWeekPanel'
 import { StatusAside } from './StatusAside'
 import { PushStatsPanel, SearchStatsPanel } from './StatsDrawers'
 import { apiFetchTopicsData, fetchPushStats14, fetchRecentSearches, fetchReportCatalog, fetchSearchStats7 } from './statsApi'
-import { serviceSummary, todayLine } from './statusAside'
+import { knowledgeWeek, knowledgeWeekText, serviceSummary, todayLine, userCorrections } from './statusAside'
 import type { HomeLayout } from './homeLayout'
 import { activityInsight, apiFetchCompanion, apiFetchPersonActions, bestMove, monthlyRecipe, prevMonth, recipeLine } from './companion'
 import { apiFetchDailyLife } from './milestones'
@@ -48,7 +49,7 @@ import {
 // 獨立元件，props 與 DesktopBoard 類似；2.36.0 起是預設首頁的主區（App.tsx 的 InstrumentPanelView，左側欄的工具連結保留），舊版 DesktopBoard 在 #legacy。
 // 資料全部來自既有 API 與既有型別／函式，沒有任何示範值：拿不到就依 StateFrame 的狀態機顯示（未解鎖／載入中／空／過期／失敗）。
 
-type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc' | 'searchStats' | 'pushStats' | 'brief'
+type DrawerKey = 'hhi' | 'ops' | 'ideas' | 'svc' | 'searchStats' | 'pushStats' | 'brief' | 'kbWeek' | 'fixes'
 
 // 3.10.0：把搜尋列放進頂欄的插槽（TopBar 的 #tb-search-slot）。插槽不在（測試、舊版）就退回原位渲染。
 function TopBarSearch({ children }: { children: ReactNode }) {
@@ -267,6 +268,9 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
 
   if (v3) {
     const openIdeas = () => { if (on) setDrawer('ideas'); else onRequestUnlock() }
+    // 3.20.0：知識庫明細抽屜裡點題目 → 關抽屜、到題目頁（大綱三欄，不是島嶼全景）
+    const kbTopics = topicsFeed.data?.value?.topics ?? null
+    const openKbTopic = (id: string) => { closeDrawer(); window.location.hash = `#knowledge/${encodeURIComponent(id)}` }
     const insightBlock = (
       <div className="st-dsec" data-testid="activity-insight">
         <h3 className="hm-h3">🔍 什麼事讓你變好</h3>
@@ -323,7 +327,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
               on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
               hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
               topics={topicsFeed} searchStats={searchStats} pushStats={pushStats} reportLib={reportLib}
-              onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')}
+              onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')} onOpenKbWeek={() => setDrawer('kbWeek')} onOpenFixes={() => setDrawer('fixes')}
               sysSt={sysSt} light={light} onOpenOps={() => setDrawer('ops')}
               svcSt={svcSt} svc={svc} onOpenSvc={() => setDrawer('svc')}
               recent={recent.data ?? []} onPickRecent={(q) => setSeed((x) => ({ q, n: x.n + 1 }))}
@@ -342,7 +346,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
               on={on} now={now} todayIso={todayIso} onRequestUnlock={onRequestUnlock}
               hhiSt={hhiSt} breakdown={breakdown} dimHistory={dimHistory} onOpenHhi={() => setDrawer('hhi')}
               topics={topicsFeed} searchStats={searchStats} pushStats={pushStats} reportLib={reportLib}
-              onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')}
+              onOpenSearchStats={() => setDrawer('searchStats')} onOpenPushStats={() => setDrawer('pushStats')} onOpenKbWeek={() => setDrawer('kbWeek')} onOpenFixes={() => setDrawer('fixes')}
               sysSt={sysSt} light={light} onOpenOps={() => setDrawer('ops')}
               svcSt={svcSt} svc={svc} onOpenSvc={() => setDrawer('svc')}
               recent={recent.data ?? []} onPickRecent={(q) => setSeed((x) => ({ q, n: x.n + 1 }))}
@@ -356,6 +360,8 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
         {drawer === 'ideas' && pw && <Drawer title="想法庫：全部想法・類別・狀態・優先分怎麼算" onClose={closeDrawer}><IdeasPanel pw={pw} focusIdeaId={focusIdea} onClose={closeDrawer} hhiScores={hhiScores} /></Drawer>}
         {drawer === 'svc' && pw && <Drawer title="付費服務：用量與連結・Ollama 更新餘額" onClose={() => { closeDrawer(); usage.reload() }}><PaidServicesPanel pw={pw} usage={usage.data} paid={paid.data} /></Drawer>}
         {drawer === 'searchStats' && pw && <Drawer title="搜尋統計：近 14 天" onClose={closeDrawer}><SearchStatsPanel pw={pw} /></Drawer>}
+        {drawer === 'kbWeek' && pw && kbTopics && <Drawer title={`知識庫這週：${knowledgeWeekText(knowledgeWeek(kbTopics, now))}`} onClose={closeDrawer}><KnowledgeWeekPanel topics={kbTopics} now={now} onOpenTopic={openKbTopic} /></Drawer>}
+        {drawer === 'fixes' && pw && kbTopics && <Drawer title={`你的更正：${userCorrections(kbTopics)} 筆已生效`} onClose={closeDrawer}><CorrectionsPanel topics={kbTopics} onOpenTopic={openKbTopic} /></Drawer>}
         {drawer === 'pushStats' && pw && <Drawer title="推送統計：近 14 天" onClose={closeDrawer}><PushStatsPanel pw={pw} /></Drawer>}
         {drawer === 'brief' && pw && <Drawer title="明日報告" onClose={closeDrawer}><BriefSection st={briefSt} brief={brief} parsed={briefParsed} crowd={briefCrowd} onRequestUnlock={onRequestUnlock} onRetry={reports.reload} /></Drawer>}
         {pw && <ChatDock pw={pw} />}
