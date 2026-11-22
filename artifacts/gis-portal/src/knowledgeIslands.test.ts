@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
-  layoutSea, resolveStepBridges, chipGroups, defaultSelection, indexScale, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
+  layoutSea, resolveStepBridges, chipGroups, defaultSelection, indexScale, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt,
+  islandView, latestTopicId, MAX_K, MIN_K, UNASSIGNED_ID, type Box, type Placed,
 } from './knowledgeIslands'
 import { buildTree, parseBodyWithMarkers, type Topic, type TopicClaim } from './knowledgeView'
 import type { FlowDiagram } from './knowledgeView'
@@ -263,6 +264,28 @@ describe('版面', () => {
     expect(z.k).toBe(2)
     expect((100 - z.x) / z.k).toBeCloseTo((100 - 10) / 1)
     expect(zoomAt({ x: 0, y: 0, k: 2.5 }, 5, 0, 0).k).toBe(2.6)
+  })
+})
+
+describe('島視角與最新（3.24.0）', () => {
+  it('islandView：島框置中、縮放到約 70%、k 夾在 MIN_K～MAX_K', () => {
+    const box = { x: 100, y: 200, w: 400, h: 200 }
+    const v = islandView(box, 1000, 800)
+    expect(v.k).toBe(1.75)
+    expect(box.x * v.k + v.x + (box.w * v.k) / 2).toBeCloseTo(500)
+    expect(box.y * v.k + v.y + (box.h * v.k) / 2).toBeCloseTo(400)
+    expect(islandView({ x: 0, y: 0, w: 100000, h: 100000 }, 1000, 800).k).toBe(MIN_K)
+    expect(islandView({ x: 0, y: 0, w: 1, h: 1 }, 1000, 800).k).toBe(MAX_K)
+  })
+  it('islandView：空資料或零尺寸回預設視角', () => {
+    expect(islandView({ x: 0, y: 0, w: 0, h: 0 }, 800, 600)).toEqual({ x: 0, y: 0, k: 1 })
+    expect(islandView({ x: 0, y: 0, w: 10, h: 10 }, 0, 600)).toEqual({ x: 0, y: 0, k: 1 })
+  })
+  it('latestTopicId：updated 最大者；沒有 updated 取 recent 第一個；都沒有 null', () => {
+    const ts = [topic({ id: 'a', updated: '2026-03-01' }), topic({ id: 'b', updated: '2026-05-02' }), topic({ id: 'c' })]
+    expect(latestTopicId(ts, new Map())).toBe('b')
+    expect(latestTopicId([topic({ id: 'x' }), topic({ id: 'y' })], new Map([['y', 'revised']]))).toBe('y')
+    expect(latestTopicId([topic({ id: 'x' })], new Map())).toBeNull()
   })
 })
 
