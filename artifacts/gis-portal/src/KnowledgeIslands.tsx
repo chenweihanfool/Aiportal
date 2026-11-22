@@ -7,7 +7,7 @@ import { paletteColor, type PaletteTheme } from './insightPalette'
 import { useAsync } from './homeHooks'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, cardMark, cardRect, chipGroups, computeBridges, defaultSelection, fitView, groupBullets, groupOfSel, isValidSelection, islandSize, islandStats,
-  kbLinksFor, layoutSea, nodeOrder, orphanSteps, resolveStepBridges, stationCoverage, stationForNode, zoomAt,
+  islandView, kbLinksFor, latestTopicId, layoutSea, nodeOrder, orphanSteps, resolveStepBridges, stationCoverage, stationForNode, zoomAt,
   CARD_H, CARD_W, DOMAIN_HEAD_H, ISL_LABEL_H, type AiBridge, type Bridge, type IslandModelIsland, type Placed, type Station, type TopicAnalysis, type View,
 } from './knowledgeIslands'
 import { buildTree, kindLabel, recentChangeOf, stripMarks, type Bullet, type Topic, type TopicDiagram, type TopicsData } from './knowledgeView'
@@ -228,14 +228,14 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
     <>
       {head}
       {notFound && <p className="kn-empty" role="alert">{NOT_FOUND_TEXT}</p>}
-      <Sea model={model} analyses={analyses} bridges={bridges} aiBridges={aiBridges} kbLinks={kbLinks} colorOf={colorOf} hover={hover} setHover={setHover} onEnter={enter} plusOf={plusOf} />
+      <Sea model={model} analyses={analyses} bridges={bridges} aiBridges={aiBridges} kbLinks={kbLinks} colorOf={colorOf} hover={hover} setHover={setHover} onEnter={enter} plusOf={plusOf} recent={recent} />
     </>
   )
 }
 
 /* ───────── 全景 ───────── */
 
-function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, setHover, onEnter, plusOf }: {
+function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, setHover, onEnter, plusOf, recent }: {
   model: ReturnType<typeof buildIslandModel>
   analyses: ReadonlyMap<string, TopicAnalysis>
   bridges: readonly Bridge[]
@@ -246,6 +246,7 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
   setHover: (id: string | null) => void
   onEnter: (islandId: string, topicId?: string) => void
   plusOf: (i: IslandModelIsland) => number
+  recent: ReadonlyMap<string, unknown>
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -255,6 +256,12 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
   vRef.current = v
   const moved = useRef(0)
   const last = useRef({ x: 0, y: 0 })
+  const [wheelHint, setWheelHint] = useState(false)
+  const hintTimer = useRef(0)
+  const [flash, setFlash] = useState<string | null>(null)
+  const flashTimer = useRef(0)
+  const anim = useRef(0)
+  useEffect(() => () => { window.clearTimeout(hintTimer.current); window.clearTimeout(flashTimer.current); cancelAnimationFrame(anim.current) }, [])
 
   const layout = useMemo(
     () => layoutSea(model.map((d) => ({ islands: d.islands.map((i) => islandSize(i.topics.length)) })), size.w > 0 && size.h > 0 ? size.w / size.h : 1.6),
@@ -271,15 +278,22 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
     return () => ro?.disconnect()
   }, [])
 
-  const fit = useCallback(() => setV(fitView(layout.width, layout.height, size.w, size.h)), [layout.width, layout.height, size.w, size.h])
+  const fit = useCallback(() => { cancelAnimationFrame(anim.current); setV(fitView(layout.width, layout.height, size.w, size.h)) }, [layout.width, layout.height, size.w, size.h])
   useEffect(() => { fit() }, [fit])
 
-  // 滾輪縮放（要 preventDefault，所以用原生非 passive 監聽）
+  // 滾輪：一般滾輪不攔截（頁面正常捲動），只顯示 1.2 秒提示；Ctrl／⌘＋滾輪才阻止預設並縮放（觸控板雙指縮放瀏覽器也會送 ctrlKey）
   useEffect(() => {
     const el = boxRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) {
+        setWheelHint(true)
+        window.clearTimeout(hintTimer.current)
+        hintTimer.current = window.setTimeout(() => setWheelHint(false), 1200)
+        return
+      }
       e.preventDefault()
+      cancelAnimationFrame(anim.current)
       const r = el.getBoundingClientRect()
       setV(zoomAt(vRef.current, e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top))
     }
@@ -287,7 +301,35 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  const zoomBtn = (f: number) => setV((cur) => zoomAt(cur, f, size.w / 2, size.h / 2))
+  const zoomBtn = (f: number) => { cancelAnimationFrame(anim.current); setV((cur) => zoomAt(cur, f, size.w / 2, size.h / 2)) }
+
+  // 「最新」：平滑（約 500ms）縮放到最近有變動的島，並讓該題卡片短暫高亮 2 秒
+  const flyTo = (target: View) => {
+    cancelAnimationFrame(anim.current)
+    const from = vRef.current
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 500)
+      const e = 1 - (1 - p) ** 3
+      setV({ x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, k: from.k + (target.k - from.k) * e })
+      anim.current = p < 1 ? requestAnimationFrame(step) : 0
+    }
+    anim.current = requestAnimationFrame(step)
+  }
+  const allTopics = useMemo(() => model.flatMap((d) => d.islands.flatMap((i) => i.topics)), [model])
+  const latest = useMemo(() => latestTopicId(allTopics, recent), [allTopics, recent])
+  const goLatest = () => {
+    if (!latest) return
+    let box: Placed | undefined
+    model.forEach((d, di) => d.islands.forEach((i, ii) => {
+      if (!box && i.topics.some((t) => t.id === latest)) box = layout.domains[di]?.islands[ii]
+    }))
+    if (!box) return
+    flyTo(islandView(box, size.w, size.h))
+    setFlash(latest)
+    window.clearTimeout(flashTimer.current)
+    flashTimer.current = window.setTimeout(() => setFlash(null), 2000)
+  }
 
   // 卡片絕對位置（供橋的連線用）
   const cardPos = useMemo(() => {
@@ -351,7 +393,7 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
         <div
           ref={boxRef}
           className={`kis-box${drag ? ' kis-drag' : ''}`}
-          onPointerDown={(e) => { if (e.button !== 0) return; setDrag(true); moved.current = 0; last.current = { x: e.clientX, y: e.clientY } }}
+          onPointerDown={(e) => { if (e.button !== 0) return; cancelAnimationFrame(anim.current); setDrag(true); moved.current = 0; last.current = { x: e.clientX, y: e.clientY } }}
           onPointerMove={(e) => {
             if (!drag) return
             const dx = e.clientX - last.current.x, dy = e.clientY - last.current.y
@@ -393,7 +435,7 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
                     const mark = on && a ? cardMark(t, a, kbLinks) : null
                     return (
                       <button
-                        key={t.id} type="button" className={`kis-card${a?.seed ? ' kis-seed' : ''}`} data-testid="kis-card"
+                        key={t.id} type="button" className={`kis-card${a?.seed ? ' kis-seed' : ''}${flash === t.id ? ' kis-flash' : ''}`} data-testid="kis-card"
                         style={{ left: c.x, top: c.y, width: CARD_W, height: CARD_H }} title={t.name} onClick={() => onEnter(i.id, t.id)}
                       >
                         <span className="kis-card-t">{t.name}</span>
@@ -418,11 +460,13 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
             </svg>
           </div>
         </div>
-        <div className="kis-hint">滾輪縮放、拖曳平移；滑過一座島看心得疊加層，點島進入</div>
+        <div className="kis-hint">Ctrl＋滾輪縮放、拖曳平移；滑過一座島看心得疊加層，點島進入</div>
+        <div className={`kis-wheel-hint${wheelHint ? ' kis-on' : ''}`} data-testid="kis-wheel-hint" aria-hidden>按住 Ctrl 再滾動來縮放</div>
         <div className="kis-tools">
           <button type="button" aria-label="放大" onClick={() => zoomBtn(1.25)}>＋</button>
           <button type="button" aria-label="縮小" onClick={() => zoomBtn(0.8)}>－</button>
           <button type="button" onClick={fit}>全景</button>
+          <button type="button" data-testid="kis-latest" aria-label="縮放到最新變動的島" disabled={!latest} onClick={goLatest}>最新</button>
         </div>
         {stats && <div className="kis-stats" data-testid="kis-stats">心得 {stats.insights} 則 · 橋 {stats.bridges} 座 · 盲點 {stats.blind}/{stats.published} 題</div>}
       </div>

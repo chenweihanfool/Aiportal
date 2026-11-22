@@ -397,6 +397,26 @@ export function zoomAt(v: View, f: number, cx: number, cy: number): View {
   return { k, x: cx - ((cx - v.x) * k) / v.k, y: cy - ((cy - v.y) * k) / v.k }
 }
 
+/** 把島框（box，海面座標）置中縮進視窗，島的寬高約佔視窗 fill；k 夾在 MIN_K～MAX_K。尺寸不合法時回預設視角 */
+export function islandView(box: { x: number; y: number; w: number; h: number }, vw: number, vh: number, fill = 0.7): View {
+  if (box.w <= 0 || box.h <= 0 || vw <= 0 || vh <= 0) return { x: 0, y: 0, k: 1 }
+  const k = Math.min(MAX_K, Math.max(MIN_K, Math.min((vw * fill) / box.w, (vh * fill) / box.h)))
+  return { k, x: vw / 2 - (box.x + box.w / 2) * k, y: vh / 2 - (box.y + box.h / 2) * k }
+}
+
+/** 「最新」要找的題目：updated 日期最大者（沒有 updated 的不算）；全都沒有就取 recent 的第一個；再沒有回 null */
+export function latestTopicId(topics: readonly Pick<Topic, 'id' | 'updated'>[], recent: ReadonlyMap<string, unknown>): string | null {
+  let best: string | null = null
+  let bestDate = ''
+  for (const t of topics) {
+    if (!t.updated) continue
+    if (best === null || t.updated > bestDate) { best = t.id; bestDate = t.updated }
+  }
+  if (best !== null) return best
+  for (const id of recent.keys()) return id
+  return null
+}
+
 /* ───────── 索引模式（3.23.0）：格子 ↔ 站、選取、順序、chips ───────── */
 
 export type GroupKey = 'steps' | 'prep' | 'decisions' | 'pitfalls' | 'unknown' | 'why' | 'myths' | 'examples' | 'what' | 'how' | 'caution'
