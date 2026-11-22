@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
+import { nextCompact, wideIndexWidth } from './knowledgeIslands'
 import { apiFetchVerdicts, apiFetchWeave, apiPostVerdict } from './insightWeaveApi'
 import { apiFetchInsights } from './insightApi'
 import { paletteColor, type PaletteTheme } from './insightPalette'
 import { useAsync } from './homeHooks'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, cardMark, cardRect, chipGroups, computeBridges, defaultSelection, fitView, groupBullets, groupOfSel, isValidSelection, islandSize, islandStats,
-  kbLinksFor, layoutSea, nodeOrder, orphanSteps, resolveStepBridges, stationCoverage, stationForNode, zoomAt,
+  islandView, kbLinksFor, latestTopicId, layoutSea, nodeOrder, orphanSteps, resolveStepBridges, stationCoverage, stationForNode, zoomAt,
   CARD_H, CARD_W, DOMAIN_HEAD_H, ISL_LABEL_H, type AiBridge, type Bridge, type IslandModelIsland, type Placed, type Station, type TopicAnalysis, type View,
 } from './knowledgeIslands'
 import { buildTree, kindLabel, recentChangeOf, stripMarks, type Bullet, type Topic, type TopicDiagram, type TopicsData } from './knowledgeView'
@@ -227,14 +228,14 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
     <>
       {head}
       {notFound && <p className="kn-empty" role="alert">{NOT_FOUND_TEXT}</p>}
-      <Sea model={model} analyses={analyses} bridges={bridges} aiBridges={aiBridges} kbLinks={kbLinks} colorOf={colorOf} hover={hover} setHover={setHover} onEnter={enter} plusOf={plusOf} />
+      <Sea model={model} analyses={analyses} bridges={bridges} aiBridges={aiBridges} kbLinks={kbLinks} colorOf={colorOf} hover={hover} setHover={setHover} onEnter={enter} plusOf={plusOf} recent={recent} />
     </>
   )
 }
 
 /* ───────── 全景 ───────── */
 
-function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, setHover, onEnter, plusOf }: {
+function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, setHover, onEnter, plusOf, recent }: {
   model: ReturnType<typeof buildIslandModel>
   analyses: ReadonlyMap<string, TopicAnalysis>
   bridges: readonly Bridge[]
@@ -245,6 +246,7 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
   setHover: (id: string | null) => void
   onEnter: (islandId: string, topicId?: string) => void
   plusOf: (i: IslandModelIsland) => number
+  recent: ReadonlyMap<string, unknown>
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -254,6 +256,12 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
   vRef.current = v
   const moved = useRef(0)
   const last = useRef({ x: 0, y: 0 })
+  const [wheelHint, setWheelHint] = useState(false)
+  const hintTimer = useRef(0)
+  const [flash, setFlash] = useState<string | null>(null)
+  const flashTimer = useRef(0)
+  const anim = useRef(0)
+  useEffect(() => () => { window.clearTimeout(hintTimer.current); window.clearTimeout(flashTimer.current); cancelAnimationFrame(anim.current) }, [])
 
   const layout = useMemo(
     () => layoutSea(model.map((d) => ({ islands: d.islands.map((i) => islandSize(i.topics.length)) })), size.w > 0 && size.h > 0 ? size.w / size.h : 1.6),
@@ -270,15 +278,22 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
     return () => ro?.disconnect()
   }, [])
 
-  const fit = useCallback(() => setV(fitView(layout.width, layout.height, size.w, size.h)), [layout.width, layout.height, size.w, size.h])
+  const fit = useCallback(() => { cancelAnimationFrame(anim.current); setV(fitView(layout.width, layout.height, size.w, size.h)) }, [layout.width, layout.height, size.w, size.h])
   useEffect(() => { fit() }, [fit])
 
-  // 滾輪縮放（要 preventDefault，所以用原生非 passive 監聽）
+  // 滾輪：一般滾輪不攔截（頁面正常捲動），只顯示 1.2 秒提示；Ctrl／⌘＋滾輪才阻止預設並縮放（觸控板雙指縮放瀏覽器也會送 ctrlKey）
   useEffect(() => {
     const el = boxRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) {
+        setWheelHint(true)
+        window.clearTimeout(hintTimer.current)
+        hintTimer.current = window.setTimeout(() => setWheelHint(false), 1200)
+        return
+      }
       e.preventDefault()
+      cancelAnimationFrame(anim.current)
       const r = el.getBoundingClientRect()
       setV(zoomAt(vRef.current, e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top))
     }
@@ -286,7 +301,35 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  const zoomBtn = (f: number) => setV((cur) => zoomAt(cur, f, size.w / 2, size.h / 2))
+  const zoomBtn = (f: number) => { cancelAnimationFrame(anim.current); setV((cur) => zoomAt(cur, f, size.w / 2, size.h / 2)) }
+
+  // 「最新」：平滑（約 500ms）縮放到最近有變動的島，並讓該題卡片短暫高亮 2 秒
+  const flyTo = (target: View) => {
+    cancelAnimationFrame(anim.current)
+    const from = vRef.current
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 500)
+      const e = 1 - (1 - p) ** 3
+      setV({ x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, k: from.k + (target.k - from.k) * e })
+      anim.current = p < 1 ? requestAnimationFrame(step) : 0
+    }
+    anim.current = requestAnimationFrame(step)
+  }
+  const allTopics = useMemo(() => model.flatMap((d) => d.islands.flatMap((i) => i.topics)), [model])
+  const latest = useMemo(() => latestTopicId(allTopics, recent), [allTopics, recent])
+  const goLatest = () => {
+    if (!latest) return
+    let box: Placed | undefined
+    model.forEach((d, di) => d.islands.forEach((i, ii) => {
+      if (!box && i.topics.some((t) => t.id === latest)) box = layout.domains[di]?.islands[ii]
+    }))
+    if (!box) return
+    flyTo(islandView(box, size.w, size.h))
+    setFlash(latest)
+    window.clearTimeout(flashTimer.current)
+    flashTimer.current = window.setTimeout(() => setFlash(null), 2000)
+  }
 
   // 卡片絕對位置（供橋的連線用）
   const cardPos = useMemo(() => {
@@ -350,7 +393,7 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
         <div
           ref={boxRef}
           className={`kis-box${drag ? ' kis-drag' : ''}`}
-          onPointerDown={(e) => { if (e.button !== 0) return; setDrag(true); moved.current = 0; last.current = { x: e.clientX, y: e.clientY } }}
+          onPointerDown={(e) => { if (e.button !== 0) return; cancelAnimationFrame(anim.current); setDrag(true); moved.current = 0; last.current = { x: e.clientX, y: e.clientY } }}
           onPointerMove={(e) => {
             if (!drag) return
             const dx = e.clientX - last.current.x, dy = e.clientY - last.current.y
@@ -392,7 +435,7 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
                     const mark = on && a ? cardMark(t, a, kbLinks) : null
                     return (
                       <button
-                        key={t.id} type="button" className={`kis-card${a?.seed ? ' kis-seed' : ''}`} data-testid="kis-card"
+                        key={t.id} type="button" className={`kis-card${a?.seed ? ' kis-seed' : ''}${flash === t.id ? ' kis-flash' : ''}`} data-testid="kis-card"
                         style={{ left: c.x, top: c.y, width: CARD_W, height: CARD_H }} title={t.name} onClick={() => onEnter(i.id, t.id)}
                       >
                         <span className="kis-card-t">{t.name}</span>
@@ -417,11 +460,13 @@ function Sea({ model, analyses, bridges, aiBridges, kbLinks, colorOf, hover, set
             </svg>
           </div>
         </div>
-        <div className="kis-hint">滾輪縮放、拖曳平移；滑過一座島看心得疊加層，點島進入</div>
+        <div className="kis-hint">Ctrl＋滾輪縮放、拖曳平移；滑過一座島看心得疊加層，點島進入</div>
+        <div className={`kis-wheel-hint${wheelHint ? ' kis-on' : ''}`} data-testid="kis-wheel-hint" aria-hidden>按住 Ctrl 再滾動來縮放</div>
         <div className="kis-tools">
           <button type="button" aria-label="放大" onClick={() => zoomBtn(1.25)}>＋</button>
           <button type="button" aria-label="縮小" onClick={() => zoomBtn(0.8)}>－</button>
           <button type="button" onClick={fit}>全景</button>
+          <button type="button" data-testid="kis-latest" aria-label="縮放到最新變動的島" disabled={!latest} onClick={goLatest}>最新</button>
         </div>
         {stats && <div className="kis-stats" data-testid="kis-stats">心得 {stats.insights} 則 · 橋 {stats.bridges} 座 · 盲點 {stats.blind}/{stats.published} 題</div>}
       </div>
@@ -510,10 +555,19 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   const [headH, setHeadH] = useState(0)
   const mobile = useMobile()
   const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 900))
+  // 桌機左圖右文：容器寬 ≥1100 用寬版（索引在左欄黏住），≥1500 旁註獨立一欄；窄螢幕維持上下排＋黏頂精簡
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [cw, setCw] = useState(0)
+  const [chipsH, setChipsH] = useState(0)
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
+  const wide = cw >= 1100
+  const wide2 = cw >= 1500
+  const wideRef = useRef(false)
+  wideRef.current = wide
+  const chipsRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const idxRef = useRef<HTMLDivElement>(null)
-  const fullH = useRef(0)
   const compactRef = useRef(false)
   compactRef.current = compact
   const autoScrollUntil = useRef(0)
@@ -553,8 +607,20 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
+  // 容器寬（決定寬版／窄版）
+  useLayoutEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const m = () => setCw(Math.round(el.getBoundingClientRect().width))
+    m()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(m)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // 索引區黏在頂端：捲動容器是 .kn-root（position: fixed; overflow-y: auto），.kn-head 也黏在它的頂端，所以索引的 top 取 .kn-head 的高度。
-  // 捲過索引原本高度後切 compact（高度縮半），回到頂端恢復；加一段遲滯避免在門檻上來回跳。
+  // 窄螢幕：捲過黏頂點（以 scrollTop 判斷、與索引高度無關，上下各 40px 遲滯）後切 compact，回到黏頂點之前恢復。桌機寬版不用精簡。
   useEffect(() => {
     const sc = sentinelRef.current?.closest<HTMLElement>('.kn-root') ?? null
     const target: HTMLElement | Window = sc ?? window
@@ -564,13 +630,13 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
       if (!s) return
       // PM 修正：自動捲動期間不切換精簡／完整，避免往上捲時索引又長高、把剛捲進來的主畫面蓋住
       if (Date.now() < autoScrollUntil.current) return
-      if (!compactRef.current && idxRef.current) fullH.current = idxRef.current.offsetHeight
+      if (wideRef.current) { if (compactRef.current) setCompact(false); return }
       const head = document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0
-      const top = s.getBoundingClientRect().top - head
-      const h = fullH.current
-      // PM 修正：索引一黏頂（捲過 40px）就切精簡，回到 10px 內才恢復；縮的是黏頂元素本身、sentinel 位置不變，不會來回跳
-      if (!compactRef.current && h > 0 && top < -40) setCompact(true)
-      else if (compactRef.current && top > -10) setCompact(false)
+      const scrollTop = sc ? sc.scrollTop : window.scrollY
+      // sentinel 在捲動內容裡的絕對位置（它在索引之前，索引高度變化不影響它）；黏頂點＝它的位置 − .kn-head 高
+      const stickTop = s.getBoundingClientRect().top - (sc ? sc.getBoundingClientRect().top : 0) + scrollTop - head
+      const next = nextCompact(compactRef.current, scrollTop, stickTop)
+      if (next !== compactRef.current) setCompact(next)
     }
     measureHead()
     target.addEventListener('scroll', onScroll, { passive: true })
@@ -581,6 +647,20 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
 
   // 索引圖高上限：完整 42vh／精簡 24vh（手機 34vh／20vh）；整張縮進去，不在框內垂直捲
   const maxH = Math.round(vh * (mobile ? (compact ? 0.2 : 0.34) : compact ? 0.24 : 0.42))
+
+  // 桌機寬版：量圖的自然尺寸（viewBox）與 chips 高，算索引欄寬
+  useLayoutEffect(() => {
+    const svg = idxRef.current?.querySelector<SVGSVGElement>('svg.kn-dg-svg')
+    const vb = svg?.viewBox?.baseVal
+    const n = vb && vb.width > 0 && vb.height > 0 ? { w: vb.width, h: vb.height } : null
+    setNat((o) => ((o && n && o.w === n.w && o.h === n.h) || (!o && !n) ? o : n))
+    const ch = Math.round(chipsRef.current?.offsetHeight ?? 0)
+    setChipsH((o) => (o === ch ? o : ch))
+  })
+  const availH = Math.max(240, vh - headH - chipsH - 32)
+  // PM 修正：旁註排在主畫面下方（1100–1499）時圖欄上限放寬到 60%，1280 寬時圖內字約 10px
+  const wideIdx = wide && nat ? wideIndexWidth(nat, availH, cw, 1.6, 380, wide2 ? 0.52 : 0.6) : null
+  const compactNow = wide ? false : compact
 
   // 換格子／組／題之後，主畫面頂端若被黏頂索引蓋住或在視窗下方，就平滑捲動讓它落在索引底部下方 8px；已在視窗內不捲
   const lastKey = useRef(`${where.topicId}|${where.sel}`)
@@ -594,7 +674,8 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
       const sc = sentinelRef.current?.closest<HTMLElement>('.kn-root') ?? null
       if (!el || !sc) return
       const top = el.getBoundingClientRect().top
-      const floor = idx ? idx.getBoundingClientRect().bottom : headH
+      // 寬版：索引在左欄，主畫面頂端只要落在 .kn-head 下方就算看得到
+      const floor = wideRef.current || !idx ? headH : idx.getBoundingClientRect().bottom
       if (top >= floor && top < window.innerHeight - 40) return
       const delta = top - (floor + 8)
       autoScrollUntil.current = Date.now() + 700
@@ -759,9 +840,27 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     </aside>
   )
 
+  const indexEl = (diagram || groups.length > 0) && (
+      <div ref={idxRef} className="kis-index" data-testid="kis-index" data-compact={compactNow} data-wide={wide || undefined} style={wide ? { top: headH, maxHeight: Math.max(240, vh - headH - 16) } : { top: headH }}>
+        {diagram && (
+          <KnowledgeDiagram
+            topic={topic} diagram={diagram} quotes={quotes} onOpenSource={openSrc} now={now}
+            selectedNode={groupKey ? null : sel} onSelectNode={select} nodeDots={nodeDots} compact={compactNow} maxH={maxH} fitWidth={wide} hideDetail hideLegend
+          />
+        )}
+        {groups.length > 0 && (
+          <div ref={chipsRef} className="kis-groups" role="group" aria-label="內容分組">
+            {groups.map((g) => (
+              <button key={g.key} type="button" className="kis-grp" aria-pressed={sel === `g:${g.key}`} onClick={() => select(`g:${g.key}`)}>{g.label}<em>{g.n}</em></button>
+            ))}
+          </div>
+        )}
+      </div>
+  )
+
   const summary = a?.parsed?.summary ? stripMarks(a.parsed.summary.text) : ''
   return (
-    <div className="kis-root kis-in" style={cvar(color)} data-testid="kis-inside">
+    <div ref={rootRef} className="kis-root kis-in" style={cvar(color)} data-testid="kis-inside">
       <div className="kis-in-head">
         <button type="button" className="kn-btn" onClick={onBack}>‹ 全景</button>
         <h2 className="kis-in-name">{island.name}</h2>
@@ -804,24 +903,9 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
       ) : (
         <>
           <div ref={sentinelRef} className="kis-sentinel" aria-hidden="true" />
-          {(diagram || groups.length > 0) && (
-            <div ref={idxRef} className="kis-index" data-testid="kis-index" data-compact={compact} style={{ top: headH }}>
-              {diagram && (
-                <KnowledgeDiagram
-                  topic={topic} diagram={diagram} quotes={quotes} onOpenSource={openSrc} now={now}
-                  selectedNode={groupKey ? null : sel} onSelectNode={select} nodeDots={nodeDots} compact={compact} maxH={maxH} hideDetail hideLegend
-                />
-              )}
-              {groups.length > 0 && (
-                <div className="kis-groups" role="group" aria-label="內容分組">
-                  {groups.map((g) => (
-                    <button key={g.key} type="button" className="kis-grp" aria-pressed={sel === `g:${g.key}`} onClick={() => select(`g:${g.key}`)}>{g.label}<em>{g.n}</em></button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="kis-split">
+          {!wide && indexEl}
+          <div className="kis-split" data-wide={wide2 ? '2' : wide ? '1' : undefined} style={wide ? { gridTemplateColumns: `${wideIdx ? wideIdx.width : 480}px minmax(0, 1fr)${wide2 ? ' minmax(300px, 0.45fr)' : ''}` } : undefined}>
+            {wide && indexEl}
             <section className="kis-content" data-testid="kis-content" ref={contentRef}>
               <div className="kis-ch">
                 <span className="kis-kind">{label}</span>

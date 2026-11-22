@@ -397,6 +397,26 @@ export function zoomAt(v: View, f: number, cx: number, cy: number): View {
   return { k, x: cx - ((cx - v.x) * k) / v.k, y: cy - ((cy - v.y) * k) / v.k }
 }
 
+/** 把島框（box，海面座標）置中縮進視窗，島的寬高約佔視窗 fill；k 夾在 MIN_K～MAX_K。尺寸不合法時回預設視角 */
+export function islandView(box: { x: number; y: number; w: number; h: number }, vw: number, vh: number, fill = 0.7): View {
+  if (box.w <= 0 || box.h <= 0 || vw <= 0 || vh <= 0) return { x: 0, y: 0, k: 1 }
+  const k = Math.min(MAX_K, Math.max(MIN_K, Math.min((vw * fill) / box.w, (vh * fill) / box.h)))
+  return { k, x: vw / 2 - (box.x + box.w / 2) * k, y: vh / 2 - (box.y + box.h / 2) * k }
+}
+
+/** 「最新」要找的題目：updated 日期最大者（沒有 updated 的不算）；全都沒有就取 recent 的第一個；再沒有回 null */
+export function latestTopicId(topics: readonly Pick<Topic, 'id' | 'updated'>[], recent: ReadonlyMap<string, unknown>): string | null {
+  let best: string | null = null
+  let bestDate = ''
+  for (const t of topics) {
+    if (!t.updated) continue
+    if (best === null || t.updated > bestDate) { best = t.id; bestDate = t.updated }
+  }
+  if (best !== null) return best
+  for (const id of recent.keys()) return id
+  return null
+}
+
 /* ───────── 索引模式（3.23.0）：格子 ↔ 站、選取、順序、chips ───────── */
 
 export type GroupKey = 'steps' | 'prep' | 'decisions' | 'pitfalls' | 'unknown' | 'why' | 'myths' | 'examples' | 'what' | 'how' | 'caution'
@@ -460,6 +480,25 @@ export function indexScale(natural: { w: number; h: number }, box: { w: number; 
   const scale = clamped ? minScale : want
   const width = natural.w * scale
   return { scale, width, height: natural.h * scale, clamped, hScroll: width > box.w }
+}
+
+/** 桌機左圖右文的索引欄寬：圖放大倍率 s＝min(maxScale, 可用高 ÷ 圖自然高)，欄寬＝clamp(自然寬 × s, minW, 容器寬 × maxRatio) */
+export function wideIndexWidth(natural: { w: number; h: number }, availH: number, containerW: number, maxScale = 1.6, minW = 380, maxRatio = 0.52): { width: number; scale: number } {
+  const cap = Math.max(minW, containerW * maxRatio)
+  if (natural.w <= 0 || natural.h <= 0) return { width: Math.min(cap, Math.max(minW, 0)), scale: 1 }
+  const s = Math.min(maxScale, availH > 0 ? availH / natural.h : maxScale)
+  const width = Math.round(Math.min(cap, Math.max(minW, natural.w * s)))
+  return { width, scale: width / natural.w }
+}
+
+/**
+ * 索引精簡切換（窄螢幕）：只看 scrollTop 與黏頂點（sentinel 在捲動內容裡的絕對位置 − .kn-head 高），與索引本身高度無關，
+ * 所以切換不會改到觸發條件；上下各 band px 的遲滯。scrollTop > 黏頂點 + band → 精簡；< 黏頂點 − band → 完整；其間維持原狀。
+ */
+export function nextCompact(cur: boolean, scrollTop: number, stickTop: number, band = 40): boolean {
+  if (!cur && scrollTop > stickTop + band) return true
+  if (cur && (scrollTop < stickTop - band || scrollTop <= 5)) return false
+  return cur
 }
 
 export const isGroupSel = (sel: string): boolean => sel.startsWith('g:')
