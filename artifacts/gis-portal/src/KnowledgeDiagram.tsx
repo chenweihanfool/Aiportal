@@ -43,12 +43,14 @@ interface Props {
   compact?: boolean
   /** 索引模式的圖高上限（px）：整張圖縮到放得進，不垂直捲；比例見 indexScale */
   maxH?: number
+  /** 桌機寬版索引：svg 寬度填滿所在欄（優先於 maxH） */
+  fitWidth?: boolean
   hideDetail?: boolean
   hideLegend?: boolean
 }
 
 /** 圖面共用的顯示選項 */
-interface View { dots?: ReadonlyMap<string, 'ins' | 'blind'>; maxH?: number }
+interface View { dots?: ReadonlyMap<string, 'ins' | 'blind'>; maxH?: number; fit?: boolean }
 
 function Dot({ kind, x, y }: { kind: 'ins' | 'blind' | undefined; x: number; y: number }) {
   if (!kind) return null
@@ -56,6 +58,8 @@ function Dot({ kind, x, y }: { kind: 'ins' | 'blind' | undefined; x: number; y: 
 }
 
 const sizeStyle = (w: number, h: number, v: View) => {
+  // 桌機寬版索引：寬度填滿所在欄（欄寬已依圖自然尺寸算好），文字隨 viewBox 一起放大
+  if (v.fit) return { width: '100%', maxWidth: 'none', minWidth: 0, margin: 0 }
   if (v.maxH === undefined) return { maxWidth: Math.round(w * 1.25), minWidth: Math.round(w * 0.6) }
   // 索引模式：依自然尺寸算縮放，寬度用像素固定（靠左，不夠寬就橫捲）
   return { width: Math.round(indexScale({ w, h }, { w: Number.POSITIVE_INFINITY, maxH: v.maxH }).width), maxWidth: 'none', minWidth: 0, margin: 0 }
@@ -331,7 +335,7 @@ export function diagramNodeInfo(diagram: TopicDiagram, id: string): Selected | n
   return null
 }
 
-export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, onNodeStep, highlightNode = null, selectedNode, onSelectNode, nodeDots, compact = false, maxH, hideDetail = false, hideLegend = false }: Props) {
+export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, onNodeStep, highlightNode = null, selectedNode, onSelectNode, nodeDots, compact = false, maxH, fitWidth = false, hideDetail = false, hideLegend = false }: Props) {
   const [sel, setSel] = useState<Selected | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
   const clock = useMemo(() => now ?? new Date(), [now])
@@ -349,7 +353,7 @@ export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, on
     setSel(s)
   }
   const cur = indexMode ? selectedNode ?? null : sel?.key ?? null
-  const v: View = { dots: nodeDots, maxH: indexMode ? maxH : undefined }
+  const v: View = { dots: nodeDots, maxH: indexMode ? maxH : undefined, fit: indexMode && fitWidth }
   let svg: ReactNode
   if (diagram.type === 'flow') svg = <FlowSvg d={diagram} sel={cur} onPick={pick} hl={highlightNode} v={v} />
   else if (diagram.type === 'timeline') svg = <TimelineSvg d={diagram} now={clock} sel={cur} onPick={pick} hl={highlightNode} v={v} />

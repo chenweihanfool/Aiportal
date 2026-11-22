@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
-  layoutSea, resolveStepBridges, chipGroups, defaultSelection, indexScale, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
+  layoutSea, resolveStepBridges, chipGroups, defaultSelection, indexScale, wideIndexWidth, nextCompact, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt, UNASSIGNED_ID, type Box, type Placed,
 } from './knowledgeIslands'
 import { buildTree, parseBodyWithMarkers, type Topic, type TopicClaim } from './knowledgeView'
 import type { FlowDiagram } from './knowledgeView'
@@ -350,5 +350,37 @@ describe('索引模式（3.23.0）', () => {
     expect(isValidSelection('zz', a, flow)).toBe(false)
     expect(isValidSelection('g:decisions', a, flow)).toBe(true)
     expect(isValidSelection('g:why', a, flow)).toBe(false)
+  })
+})
+
+describe('桌機寬版索引欄與精簡切換', () => {
+  it('wideIndexWidth：放大不超過 1.6 倍、欄寬夾在 380 與容器 52% 之間', () => {
+    // 圖 600×300、可用高 400 → s=min(1.6, 1.33)=1.33 → 800，容器 1888 的 52%＝981，未被夾
+    expect(wideIndexWidth({ w: 600, h: 300 }, 400, 1888)).toEqual({ width: 800, scale: 800 / 600 })
+    // 可用高很大：s 封頂 1.6 → 960
+    expect(wideIndexWidth({ w: 600, h: 300 }, 2000, 1888).width).toBe(960)
+    // 超過容器 52%：夾在 52%
+    expect(wideIndexWidth({ w: 1018, h: 502 }, 720, 1248).width).toBe(649)
+    // 很小的圖：至少 380
+    expect(wideIndexWidth({ w: 200, h: 100 }, 400, 1500).width).toBe(380)
+    // 可用高不足：s<1，縮小
+    expect(wideIndexWidth({ w: 800, h: 400 }, 200, 1888).width).toBe(400)
+  })
+  it('nextCompact：只看 scrollTop 與黏頂點，帶 40px 遲滯，切換不改變觸發條件', () => {
+    const stick = 300
+    expect(nextCompact(false, 330, stick)).toBe(false)
+    expect(nextCompact(false, 341, stick)).toBe(true)
+    // 精簡後 scrollTop 被微調（例如掉 53）仍維持精簡，不會來回
+    expect(nextCompact(true, 341 - 53, stick)).toBe(true)
+    expect(nextCompact(true, 270, stick)).toBe(true)
+    expect(nextCompact(true, 259, stick)).toBe(false)
+    expect(nextCompact(false, 259, stick)).toBe(false)
+    // 沿路徑單調下捲再上捲：每個方向最多切換一次
+    let c = false; let flips = 0
+    for (let st = 0; st <= 2000; st += 25) { const n = nextCompact(c, st, stick); if (n !== c) flips++; c = n }
+    for (let st = 2000; st >= 0; st -= 25) { const n = nextCompact(c, st, stick); if (n !== c) flips++; c = n }
+    expect(flips).toBe(2)
+    // 黏頂點很小：回頂端 0 時要能恢復完整
+    expect(nextCompact(true, 0, 20)).toBe(false)
   })
 })

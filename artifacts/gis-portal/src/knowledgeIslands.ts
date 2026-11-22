@@ -462,6 +462,25 @@ export function indexScale(natural: { w: number; h: number }, box: { w: number; 
   return { scale, width, height: natural.h * scale, clamped, hScroll: width > box.w }
 }
 
+/** 桌機左圖右文的索引欄寬：圖放大倍率 s＝min(maxScale, 可用高 ÷ 圖自然高)，欄寬＝clamp(自然寬 × s, minW, 容器寬 × maxRatio) */
+export function wideIndexWidth(natural: { w: number; h: number }, availH: number, containerW: number, maxScale = 1.6, minW = 380, maxRatio = 0.52): { width: number; scale: number } {
+  const cap = Math.max(minW, containerW * maxRatio)
+  if (natural.w <= 0 || natural.h <= 0) return { width: Math.min(cap, Math.max(minW, 0)), scale: 1 }
+  const s = Math.min(maxScale, availH > 0 ? availH / natural.h : maxScale)
+  const width = Math.round(Math.min(cap, Math.max(minW, natural.w * s)))
+  return { width, scale: width / natural.w }
+}
+
+/**
+ * 索引精簡切換（窄螢幕）：只看 scrollTop 與黏頂點（sentinel 在捲動內容裡的絕對位置 − .kn-head 高），與索引本身高度無關，
+ * 所以切換不會改到觸發條件；上下各 band px 的遲滯。scrollTop > 黏頂點 + band → 精簡；< 黏頂點 − band → 完整；其間維持原狀。
+ */
+export function nextCompact(cur: boolean, scrollTop: number, stickTop: number, band = 40): boolean {
+  if (!cur && scrollTop > stickTop + band) return true
+  if (cur && (scrollTop < stickTop - band || scrollTop <= 5)) return false
+  return cur
+}
+
 export const isGroupSel = (sel: string): boolean => sel.startsWith('g:')
 export const groupOfSel = (sel: string): GroupKey | null => (isGroupSel(sel) ? (sel.slice(2) as GroupKey) : null)
 
