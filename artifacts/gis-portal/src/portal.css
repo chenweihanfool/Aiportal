@@ -3148,6 +3148,14 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-grp em { font-style: normal; font-size: 11px; padding: 0 6px; border-radius: var(--r-pill); border: 1px solid var(--c-line-strong); }
 .kis-grp[aria-pressed="true"] { color: var(--c-ink); border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--c-surface)); }
 .kis-split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.kn-root { overflow-anchor: none; }
+/* 3.25.0 桌機左圖右文（.kis-in 容器寬 ≥1100px，欄寬由 JS 以 inline grid-template-columns 設定）：索引欄黏在左、主畫面＋旁註在右 */
+.kis-split[data-wide] { align-items: start; }
+.kis-split[data-wide] .kis-index { grid-column: 1; grid-row: 1 / span 2; align-self: start; margin-bottom: 0; border-bottom: 0; overflow-y: auto; overflow-x: hidden; padding: 0; }
+.kis-split[data-wide] .kis-index .kn-dg-scroll { overflow-x: hidden; }
+.kis-split[data-wide] .kis-content { grid-column: 2; grid-row: 1; }
+.kis-split[data-wide="1"] .kis-side { grid-column: 2; grid-row: 2; }
+.kis-split[data-wide="2"] .kis-side { grid-column: 3; grid-row: 1; }
 .kis-content { min-width: 0; }
 .kis-stbul { margin-top: var(--sp-3); }
 .kis-rules { margin: 0 0 6px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; color: var(--c-ink); }
