@@ -614,7 +614,8 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     setChipsH((o) => (o === ch ? o : ch))
   })
   const availH = Math.max(240, vh - headH - chipsH - 32)
-  const wideIdx = wide && nat ? wideIndexWidth(nat, availH, cw) : null
+  // PM 修正：旁註排在主畫面下方（1100–1499）時圖欄上限放寬到 60%，1280 寬時圖內字約 10px
+  const wideIdx = wide && nat ? wideIndexWidth(nat, availH, cw, 1.6, 380, wide2 ? 0.52 : 0.6) : null
   const compactNow = wide ? false : compact
 
   // 換格子／組／題之後，主畫面頂端若被黏頂索引蓋住或在視窗下方，就平滑捲動讓它落在索引底部下方 8px；已在視窗內不捲
