@@ -43,13 +43,15 @@ function DocChip({ doc, onDownload, onUnlink, status, error }: {
   )
 }
 
-export function KnowledgeSteps({ t, steps, pw, onView, highlightStep, onGoDiagram }: {
+export function KnowledgeSteps({ t, steps, pw, onView, highlightStep, onGoDiagram, startNo = 1 }: {
   t: Topic
   steps: TopicStep[]
   pw: string
   onView: (n: number) => void
   highlightStep: string | null
   onGoDiagram: (nodeId: string) => void
+  /** 第一張卡的編號（單步呈現時用，預設 1） */
+  startNo?: number
 }) {
   const [unlinked, setUnlinked] = useState<Readonly<Record<string, LinkStatus>>>({})
   const [downloading, setDownloading] = useState<ReadonlySet<string>>(new Set<string>())
@@ -83,7 +85,7 @@ export function KnowledgeSteps({ t, steps, pw, onView, highlightStep, onGoDiagra
       {steps.map((step, i) => (
         <li key={step.id} id={`kn-step-card-${step.id}`} className="kn-stepcard" data-hl={highlightStep === step.id}>
           <header className="kn-sc-head">
-            <span className="kn-sc-no" aria-hidden="true">{i + 1}</span>
+            <span className="kn-sc-no" aria-hidden="true">{startNo + i}</span>
             <h4 className="kn-sc-title">{step.title}</h4>
             {step.node && hasDiagram && (
               <button type="button" className="kn-sc-godiag" onClick={() => onGoDiagram(step.node!)}>在流程圖上看</button>

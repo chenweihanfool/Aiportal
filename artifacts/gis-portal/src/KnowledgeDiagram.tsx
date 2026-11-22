@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import type { HermesTopicQuote } from './hermesDocApi'
 import type { FlowDiagram, MapDiagram, Topic, TopicDiagram, TimelineDiagram } from './knowledgeView'
+import { indexScale } from './knowledgeIslands'
 import {
   FLOW_CONST, STRENGTH_TEXT, layoutFlow, layoutMap, layoutTimeline, quoteQueryFor, strengthOf,
   type Strength,
@@ -10,7 +11,7 @@ import {
 // 點任一格 → 說明區（label、sub、note、證據強度、來源清單）→ 點來源 → 開既有的原文面板（帶 2.77 的原文句當 q）。
 // 版面座標在 knowledgeDiagramLayout.ts（純函式、有測試）；樣式在 portal.css 的 kn-dg-*。
 
-interface Selected {
+export interface Selected {
   key: string
   heading: string
   sub?: string
@@ -33,6 +34,31 @@ interface Props {
   onNodeStep?: (nodeId: string) => boolean
   /** 要高亮的節點 id（步驟卡「在流程圖上看」用） */
   highlightNode?: string | null
+  /** 索引模式（3.23.0）：目前選中的格子；有 onSelectNode 時點格子只呼叫它，不開圖內說明區 */
+  selectedNode?: string | null
+  onSelectNode?: (id: string) => void
+  /** 格子右上的小圓點：ins＝掛了心得（綠）、blind＝盲點（黃） */
+  nodeDots?: ReadonlyMap<string, 'ins' | 'blind'>
+  /** 精簡：不畫圖例與預測卡（黏在頂端捲動後用） */
+  compact?: boolean
+  /** 索引模式的圖高上限（px）：整張圖縮到放得進，不垂直捲；比例見 indexScale */
+  maxH?: number
+  hideDetail?: boolean
+  hideLegend?: boolean
+}
+
+/** 圖面共用的顯示選項 */
+interface View { dots?: ReadonlyMap<string, 'ins' | 'blind'>; maxH?: number }
+
+function Dot({ kind, x, y }: { kind: 'ins' | 'blind' | undefined; x: number; y: number }) {
+  if (!kind) return null
+  return <circle className="kn-dg-dot" data-dot={kind} cx={x} cy={y} r={5}><title>{kind === 'ins' ? '這一步有心得' : '盲點：這一步還沒有心得'}</title></circle>
+}
+
+const sizeStyle = (w: number, h: number, v: View) => {
+  if (v.maxH === undefined) return { maxWidth: Math.round(w * 1.25), minWidth: Math.round(w * 0.6) }
+  // 索引模式：依自然尺寸算縮放，寬度用像素固定（靠左，不夠寬就橫捲）
+  return { width: Math.round(indexScale({ w, h }, { w: Number.POSITIVE_INFINITY, maxH: v.maxH }).width), maxWidth: 'none', minWidth: 0, margin: 0 }
 }
 
 const onKey = (act: () => void) => (e: KeyboardEvent) => {
@@ -64,12 +90,12 @@ function NodeText({ label, sub, w, h }: { label: string; sub?: string; w: number
 
 /* ───────── flow ───────── */
 
-function FlowSvg({ d, sel, onPick, hl }: { d: FlowDiagram; sel: string | null; onPick: (s: Selected) => void; hl: string | null }) {
+function FlowSvg({ d, sel, onPick, hl, v }: { d: FlowDiagram; sel: string | null; onPick: (s: Selected) => void; hl: string | null; v: View }) {
   const uid = useId().replace(/:/g, '')
   const lay = useMemo(() => layoutFlow(d), [d])
   const meta = new Map(d.nodes.map((n) => [n.id, n]))
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: Math.round(lay.width * 1.25), minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="流程泳道圖">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={sizeStyle(lay.width, lay.height, v)} role="group" aria-label="流程泳道圖">
       <defs>
         <marker id={`${uid}-ar`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" className="kn-dg-marker">
           <path d="M0 0L10 5L0 10z" fill="currentColor" />
@@ -110,6 +136,7 @@ function FlowSvg({ d, sel, onPick, hl }: { d: FlowDiagram; sel: string | null; o
               <g transform={n.shape === 'decision' ? `translate(${b.cx - 55} ${b.cy - 28})` : `translate(${r.x} ${r.y})`}>
                 <NodeText label={n.label} sub={n.shape === 'decision' ? undefined : n.sub} w={n.shape === 'decision' ? 110 : r.w} h={n.shape === 'decision' ? 56 : r.h} />
               </g>
+              <Dot kind={v.dots?.get(n.id)} x={r.x + r.w - 6} y={r.y + 6} />
               {n.pitfall && <text className="kn-dg-warn" x={r.x + r.w - 14} y={r.y + 16}>⚠</text>}
               {n.unknown && <text className="kn-dg-q" x={n.shape === 'decision' ? b.cx + 22 : r.x + r.w - (n.pitfall ? 30 : 14)} y={r.y + 16}>？</text>}
               <text className="kn-dg-srcno" x={r.x + 2} y={r.y + r.h + 14}>{`來源 ${n.src.join('·')}`}</text>
@@ -123,10 +150,10 @@ function FlowSvg({ d, sel, onPick, hl }: { d: FlowDiagram; sel: string | null; o
 
 /* ───────── timeline ───────── */
 
-function TimelineSvg({ d, now, sel, onPick, hl }: { d: TimelineDiagram; now: Date; sel: string | null; onPick: (s: Selected) => void; hl: string | null }) {
+function TimelineSvg({ d, now, sel, onPick, hl, v }: { d: TimelineDiagram; now: Date; sel: string | null; onPick: (s: Selected) => void; hl: string | null; v: View }) {
   const lay = useMemo(() => layoutTimeline(d, now), [d, now])
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: Math.round(lay.width * 1.25), minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="多軌時間軸">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={sizeStyle(lay.width, lay.height, v)} role="group" aria-label="多軌時間軸">
       {lay.tracks.map((t, i) => (
         <g key={t.id}>
           <rect className="kn-dg-lane" data-odd={i % 2} x={0} y={t.y} width={lay.width} height={t.h} />
@@ -176,6 +203,7 @@ function TimelineSvg({ d, now, sel, onPick, hl }: { d: TimelineDiagram; now: Dat
               ? <rect className="kn-dg-shape" x={mk.x - 6} y={mk.markerY - 6} width={Math.max(12, mk.xEnd - mk.x + 12)} height={12} rx={6} />
               : <circle className="kn-dg-shape" cx={mk.x} cy={mk.markerY} r={7} />}
             <text className="kn-dg-ilabel" x={mk.x} y={mk.markerY + 22} textAnchor="middle">{it.label}</text>
+            <Dot kind={v.dots?.get(mk.key)} x={mk.x + 8} y={mk.markerY - 8} />
             {mk.unknown && <text className="kn-dg-q" x={mk.x + 8} y={mk.markerY - 6}>？</text>}
           </g>
         )
@@ -205,13 +233,13 @@ function ForecastCard({ d, now }: { d: TimelineDiagram; now: Date }) {
 
 /* ───────── map ───────── */
 
-function MapSvg({ d, sel, onPick, hl }: { d: MapDiagram; sel: string | null; onPick: (s: Selected) => void; hl: string | null }) {
+function MapSvg({ d, sel, onPick, hl, v }: { d: MapDiagram; sel: string | null; onPick: (s: Selected) => void; hl: string | null; v: View }) {
   const uid = useId().replace(/:/g, '')
   const lay = useMemo(() => layoutMap(d), [d])
   const all = new Map([...d.observations, ...d.frameworks, ...d.judgments].map((n) => [n.id, n]))
   const colName = { o: '觀察', f: '框架', j: '判斷' } as const
   return (
-    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={{ maxWidth: Math.round(lay.width * 1.25), minWidth: Math.round(lay.width * 0.6) }} role="group" aria-label="觀察、框架、判斷三欄圖">
+    <svg className="kn-dg-svg" viewBox={`0 0 ${lay.width} ${lay.height}`} width="100%" style={sizeStyle(lay.width, lay.height, v)} role="group" aria-label="觀察、框架、判斷三欄圖">
       <defs>
         {(['ai', 'one', 'multi'] as const).map((s) => (
           <marker key={s} id={`${uid}-ar-${s}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" className="kn-dg-marker" data-ev={s}>
@@ -234,6 +262,7 @@ function MapSvg({ d, sel, onPick, hl }: { d: MapDiagram; sel: string | null; onP
             aria-label={ariaOf(n.label, b.strength, !!n.unknown)} aria-pressed={sel === n.id} onClick={pick} onKeyDown={onKey(pick)}>
             <rect className="kn-dg-shape" x={r.x} y={r.y} width={r.w} height={r.h} rx={b.col === 'f' ? 12 : 8} />
             <g transform={`translate(${r.x} ${r.y})`}><NodeText label={n.label} sub={n.sub} w={r.w} h={r.h} /></g>
+            <Dot kind={v.dots?.get(n.id)} x={r.x + r.w - 6} y={r.y + 6} />
             {n.unknown && <text className="kn-dg-q" x={r.x + r.w - 14} y={r.y + 16}>？</text>}
           </g>
         )
@@ -244,9 +273,10 @@ function MapSvg({ d, sel, onPick, hl }: { d: MapDiagram; sel: string | null; onP
 
 /* ───────── 外殼＋說明區 ───────── */
 
-function Detail({ sel, topic, quotes, onOpenSource, detailRef }: {
+/** 格子說明（label、sub、note、證據強度、來源）；圖內點格子與索引模式的主畫面共用 */
+export function DiagramNodeDetail({ sel, topic, quotes, onOpenSource, detailRef }: {
   sel: Selected | null; topic: Topic; quotes: readonly HermesTopicQuote[] | null; onOpenSource: (n: number, q: string) => void
-  detailRef: RefObject<HTMLElement | null>
+  detailRef?: RefObject<HTMLElement | null>
 }) {
   if (!sel) {
     return (
@@ -277,7 +307,31 @@ function Detail({ sel, topic, quotes, onOpenSource, detailRef }: {
   )
 }
 
-export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, onNodeStep, highlightNode = null }: Props) {
+/** 依格子 id 取出說明區要用的資料（不在圖上回 null）；timeline 的 id 是 i<第幾筆> */
+export function diagramNodeInfo(diagram: TopicDiagram, id: string): Selected | null {
+  if (diagram.type === 'flow') {
+    const n = diagram.nodes.find((x) => x.id === id)
+    return n ? { key: n.id, heading: `${diagram.lanes[n.lane]}・${n.label}`, sub: n.sub, note: n.note, strength: strengthOf(n), unknown: !!n.unknown, src: n.src } : null
+  }
+  if (diagram.type === 'timeline') {
+    const m = /^i(\d+)$/.exec(id)
+    const it = m ? diagram.items[Number(m[1])] : undefined
+    if (!it) return null
+    const track = diagram.tracks.find((t) => t.id === it.track)
+    return {
+      key: id, heading: `${track?.label ?? ''}・${it.label}`, sub: [it.date + (it.end ? `～${it.end}` : ''), it.sub].filter(Boolean).join('　'),
+      note: it.note, strength: strengthOf(it), unknown: !!it.unknown, src: it.src,
+    }
+  }
+  const col = [['觀察', diagram.observations], ['框架', diagram.frameworks], ['判斷', diagram.judgments]] as const
+  for (const [name, list] of col) {
+    const n = list.find((x) => x.id === id)
+    if (n) return { key: n.id, heading: `${name}・${n.label}`, sub: n.sub, note: n.note, strength: strengthOf(n), unknown: !!n.unknown, src: n.src }
+  }
+  return null
+}
+
+export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, onNodeStep, highlightNode = null, selectedNode, onSelectNode, nodeDots, compact = false, maxH, hideDetail = false, hideLegend = false }: Props) {
   const [sel, setSel] = useState<Selected | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
   const clock = useMemo(() => now ?? new Date(), [now])
@@ -288,18 +342,25 @@ export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, on
     if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [sel])
   // 有對應步驟卡就交給卡片（捲過去高亮），不開原文；沒有才照舊選取
-  const pick = (s: Selected) => { if (onNodeStep && onNodeStep(s.key)) return; setSel(s) }
+  const indexMode = !!onSelectNode
+  const pick = (s: Selected) => {
+    if (onSelectNode) { onSelectNode(s.key); return }
+    if (onNodeStep && onNodeStep(s.key)) return
+    setSel(s)
+  }
+  const cur = indexMode ? selectedNode ?? null : sel?.key ?? null
+  const v: View = { dots: nodeDots, maxH: indexMode ? maxH : undefined }
   let svg: ReactNode
-  if (diagram.type === 'flow') svg = <FlowSvg d={diagram} sel={sel?.key ?? null} onPick={pick} hl={highlightNode} />
-  else if (diagram.type === 'timeline') svg = <TimelineSvg d={diagram} now={clock} sel={sel?.key ?? null} onPick={pick} hl={highlightNode} />
-  else svg = <MapSvg d={diagram} sel={sel?.key ?? null} onPick={pick} hl={highlightNode} />
+  if (diagram.type === 'flow') svg = <FlowSvg d={diagram} sel={cur} onPick={pick} hl={highlightNode} v={v} />
+  else if (diagram.type === 'timeline') svg = <TimelineSvg d={diagram} now={clock} sel={cur} onPick={pick} hl={highlightNode} v={v} />
+  else svg = <MapSvg d={diagram} sel={cur} onPick={pick} hl={highlightNode} v={v} />
   return (
-    <section className="kn-dg" aria-label="圖解" data-type={diagram.type}>
-      {diagram.type === 'timeline' && <ForecastCard d={diagram} now={clock} />}
-      <Legend type={diagram.type} />
+    <section className="kn-dg" aria-label="圖解" data-type={diagram.type} data-compact={compact} data-index={indexMode}>
+      {diagram.type === 'timeline' && !compact && !indexMode && <ForecastCard d={diagram} now={clock} />}
+      {!hideLegend && !compact && <Legend type={diagram.type} />}
       <div className="kn-dg-body">
         <div className="kn-dg-scroll">{svg}</div>
-        <Detail sel={sel} topic={topic} quotes={quotes} onOpenSource={onOpenSource} detailRef={detailRef} />
+        {!hideDetail && !indexMode && <DiagramNodeDetail sel={sel} topic={topic} quotes={quotes} onOpenSource={onOpenSource} detailRef={detailRef} />}
       </div>
     </section>
   )

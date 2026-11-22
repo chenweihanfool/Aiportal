@@ -2989,20 +2989,6 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-tab { font: inherit; font-size: 13px; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 2px 10px; cursor: pointer; }
 .kis-tab[aria-selected="true"] { color: var(--c-ink); border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--c-surface)); }
 .kis-tab.kis-seed { border-style: dashed; }
-.kis-ovbtn { margin-left: auto; font: inherit; font-size: 13px; color: var(--weave-ai); background: var(--c-surface); border: 1px dashed var(--weave-ai); border-radius: var(--r-pill); padding: 2px 12px; cursor: pointer; }
-.kis-ovbtn.kis-on { background: var(--weave-ai); color: var(--weave-ai-ink); border-style: solid; }
-.kis-rail { display: flex; gap: 10px; overflow-x: auto; padding: 14px 4px 18px; margin-bottom: var(--sp-3); border-bottom: 1px solid var(--c-line); scroll-snap-type: x proximity; }
-.kis-st { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 96px; max-width: 150px; font: inherit; color: var(--c-ink-2); background: transparent; border: 0; cursor: pointer; scroll-snap-align: center; }
-.kis-st-no { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--c-line-strong); background: var(--c-surface); font-size: 13px; font-weight: 700; }
-.kis-st-l { font-size: 13px; line-height: 17px; text-align: center; overflow-wrap: anywhere; }
-.kis-st.kis-cur { color: var(--c-ink); }
-.kis-st.kis-cur .kis-st-no { border-color: var(--c); background: var(--c); color: var(--c-surface); }
-.kis-st.kis-k-pitfall .kis-st-no, .kis-st.kis-k-unknown .kis-st-no { border-style: dashed; }
-.kis-st-m { display: flex; gap: 4px; font-size: 11px; }
-.kis-st-m em { font-style: normal; padding: 0 5px; border-radius: var(--r-pill); border: 1px solid var(--c-line-strong); }
-.kis-st-m em.kis-blind { color: var(--c-warn); border-color: var(--c-warn); }
-.kis-body { display: block; }
-.kis-body-ov { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 400px); gap: var(--sp-4); align-items: start; }
 .kis-content { min-width: 0; }
 .kis-ch { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3); }
 .kis-kind { font-weight: 700; color: var(--c); }
@@ -3020,7 +3006,7 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-seedbox { padding: var(--sp-4); border: 1px dashed var(--c-line-strong); border-radius: var(--r-lg); }
 
 /* 疊加層抽屜 */
-.kis-drawer { min-width: 0; box-sizing: border-box; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-lg); padding: 14px 16px 18px; }
+.kis-side { min-width: 0; box-sizing: border-box; background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-lg); padding: 14px 16px 18px; }
 .kis-dh { margin: 0 0 6px; font-size: 15.5px; color: var(--weave-ai); }
 .kis-sec { margin: 14px 0 6px; font-size: var(--fs-sm); font-weight: 700; color: var(--c-ink-2); }
 .kis-none { margin: 0 0 6px; font-size: 12.5px; color: var(--c-ink-3); }
@@ -3048,10 +3034,8 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-m-isl b { color: var(--c); }
 .kis-m-isl span { font-size: var(--fs-sm); color: var(--c-ink-2); }
 @media (max-width: 700px) {
-  .kis-body-ov { display: block; }
-  .kis-drawer { margin-top: var(--sp-3); }
+  .kis-side { margin-top: var(--sp-3); }
   .kis-big { font-size: 18px; }
-  .kis-ovbtn { margin-left: 0; }
   .kis-mode { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .kis-in { animation: none; } }
@@ -3144,3 +3128,33 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .tc-tile.lv-0 { background: transparent; }
 .tc-tile.lv-3, .tc-tile.lv-4 { color: var(--c-bg); border-color: transparent; font-weight: 600; }
 .tc-tile.lv-1, .tc-tile.lv-2 { color: var(--c-ink); border-color: transparent; }
+/* 3.23.0 進島改成泳道圖索引：標題列、黏頂索引、chips、主畫面＋旁註、資訊帶 */
+.kis-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin: 0 0 var(--sp-3); }
+.kis-tn { margin: 0; font-size: var(--fs-lg); color: var(--c-ink); }
+.kis-sum { flex: 1 1 100%; margin: 0; color: var(--c-ink-2); line-height: 1.6; font-size: 14px; }
+.kis-bandbtn { margin-left: auto; font: inherit; font-size: 13px; color: var(--c-ink); background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 2px 12px; cursor: pointer; }
+.kis-bandbtn.kis-on { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--c-surface)); }
+.kis-band { margin: 0 0 var(--sp-3); padding: var(--sp-3); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-lg); display: grid; gap: var(--sp-3); min-width: 0; }
+.kis-band .krd-side { position: static; max-height: none; overflow: visible; }
+.kis-fullwrap { min-width: 0; display: grid; gap: var(--sp-3); justify-items: start; }
+.kis-fullwrap .krd { width: 100%; }
+.kis-sentinel { height: 0; }
+.kis-index { position: sticky; z-index: 4; top: 0; background: var(--c-bg); padding: var(--sp-2) 0; margin-bottom: var(--sp-3); border-bottom: 1px solid var(--c-line); min-width: 0; }
+.kis-index .kn-dg { margin: 0; }
+.kis-index .kn-dg-scroll { overflow-x: auto; overflow-y: hidden; }
+.kis-index .kn-dg-svg { margin: 0; }
+.kis-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-2); }
+.kis-grp { font: inherit; font-size: 13px; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 2px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.kis-grp em { font-style: normal; font-size: 11px; padding: 0 6px; border-radius: var(--r-pill); border: 1px solid var(--c-line-strong); }
+.kis-grp[aria-pressed="true"] { color: var(--c-ink); border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--c-surface)); }
+.kis-split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.kis-content { min-width: 0; }
+.kis-stbul { margin-top: var(--sp-3); }
+.kis-rules { margin: 0 0 6px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; color: var(--c-ink); }
+.kis-srcs { display: grid; gap: 4px; }
+.kn-dg-dot { stroke: var(--c-bg); stroke-width: 1.5px; fill: var(--c-ink-3); }
+.kn-dg-dot[data-dot="ins"] { fill: var(--c-ok); }
+.kn-dg-dot[data-dot="blind"] { fill: var(--c-warn); }
+@media (max-width: 700px) {
+  .kis-split { grid-template-columns: minmax(0, 1fr); }
+}

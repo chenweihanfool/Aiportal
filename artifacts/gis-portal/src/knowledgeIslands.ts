@@ -2,8 +2,8 @@
 // 不碰 DOM、不發請求；畫面在 KnowledgeIslands.tsx，測試在 knowledgeIslands.test.ts。
 // 只讀 knowledgeView.ts／knowledgeSteps.ts／insightWeave.ts 已匯出的型別與函式。
 
-import { matchClaims, parseBodyWithMarkers, type Bullet, type BuiltTree, type ParsedBody, type Topic } from './knowledgeView'
-import type { StepDoc, StepInsight, StepRule } from './knowledgeSteps'
+import { matchClaims, parseBodyWithMarkers, type Bullet, type BuiltTree, type ParsedBody, type Topic, type TopicDiagram } from './knowledgeView'
+import type { StepDoc, StepInsight, StepRule, TopicStep } from './knowledgeSteps'
 import type { Confidence, KbLink, KbStep, StepBridge, WeaveStatus } from './insightWeave'
 
 /* ───────── 島模型 ───────── */
@@ -395,4 +395,89 @@ export function fitView(cw: number, ch: number, vw: number, vh: number, margin =
 export function zoomAt(v: View, f: number, cx: number, cy: number): View {
   const k = Math.min(MAX_K, Math.max(MIN_K, v.k * f))
   return { k, x: cx - ((cx - v.x) * k) / v.k, y: cy - ((cy - v.y) * k) / v.k }
+}
+
+/* ───────── 索引模式（3.23.0）：格子 ↔ 站、選取、順序、chips ───────── */
+
+export type GroupKey = 'steps' | 'prep' | 'decisions' | 'pitfalls' | 'unknown' | 'why' | 'myths' | 'examples' | 'what' | 'how' | 'caution'
+export interface ChipGroup { key: GroupKey; label: string; n: number }
+
+const GROUP_ORDER: Record<'method' | 'concept' | 'legacy', Array<[GroupKey, string]>> = {
+  method: [['prep', '開工前準備'], ['decisions', '判斷點'], ['pitfalls', '踩過的坑'], ['unknown', '還不知道']],
+  concept: [['why', '為什麼存在'], ['myths', '常見誤解'], ['examples', '實例'], ['unknown', '還不知道']],
+  legacy: [['what', '這件事在幹嘛'], ['how', '怎麼做'], ['caution', '要注意']],
+}
+
+/** 一組的條目（groupKey 與站 id 同名） */
+export function groupBullets(parsed: ParsedBody | null, key: GroupKey): Bullet[] {
+  return parsed ? parsed[key] : []
+}
+
+/** 沒有格子可以進的步驟卡：node 為 null，或 node 指向圖上不存在的格子（沒有圖時全部算） */
+export function orphanSteps(topic: Pick<Topic, 'steps'>, d: TopicDiagram | null | undefined): TopicStep[] {
+  const ids = new Set(nodeOrder(d))
+  return (topic.steps ?? []).filter((s) => !s.node || !ids.has(s.node))
+}
+
+/** 索引下方 chips：依題目格式列出有條目的組，附數量；orphans＞0 時最後加「其他步驟卡」（g:steps） */
+export function chipGroups(parsed: ParsedBody | null, orphans = 0): ChipGroup[] {
+  if (!parsed) return []
+  const out = GROUP_ORDER[parsed.format]
+    .map(([key, label]) => ({ key, label, n: groupBullets(parsed, key).length }))
+    .filter((g) => g.n > 0)
+  if (orphans > 0) out.push({ key: 'steps', label: '其他步驟卡', n: orphans })
+  return out
+}
+
+/** 這格對應的站 id：有 node===nodeId 的步驟卡 → 該卡 claim 的站；否則格子 id 本身就是站（備援圖）；都沒有 null */
+export function stationForNode(topic: Pick<Topic, 'steps'>, a: TopicAnalysis, nodeId: string): string | null {
+  const step = (topic.steps ?? []).find((s) => s.node === nodeId)
+  if (step) return a.stationOfClaim.get(step.claim) ?? null
+  return a.stations.some((s) => s.id === nodeId) ? nodeId : null
+}
+
+/** ←／→ 用的格子順序：flow 依 phase、再 lane；timeline 依日期；map 依觀察→框架→判斷 */
+export function nodeOrder(d: TopicDiagram | null | undefined): string[] {
+  if (!d) return []
+  if (d.type === 'flow') {
+    return d.nodes.map((n, i) => ({ n, i })).sort((x, y) => x.n.phase - y.n.phase || x.n.lane - y.n.lane || x.i - y.i).map((r) => r.n.id)
+  }
+  if (d.type === 'timeline') {
+    return d.items.map((it, i) => ({ it, i })).sort((x, y) => (x.it.date < y.it.date ? -1 : x.it.date > y.it.date ? 1 : x.i - y.i)).map((r) => `i${r.i}`)
+  }
+  return [...d.observations, ...d.frameworks, ...d.judgments].map((n) => n.id)
+}
+
+/**
+ * 索引圖縮放：整張圖縮到放得進高度上限（不允許框內垂直捲動），比例不超過 1；
+ * 比例低於 minScale 時改用 minScale 繪製（clamped），這時高度會超過上限、寬度超過框就橫向捲（hScroll）。
+ * natural＝圖的自然尺寸（viewBox），box.w＝可用寬度，box.maxH＝高度上限。
+ */
+export function indexScale(natural: { w: number; h: number }, box: { w: number; maxH: number }, minScale = 0.45): { scale: number; width: number; height: number; clamped: boolean; hScroll: boolean } {
+  if (natural.w <= 0 || natural.h <= 0) return { scale: 1, width: Math.max(0, natural.w), height: Math.max(0, natural.h), clamped: false, hScroll: false }
+  const want = Math.min(1, box.maxH > 0 ? box.maxH / natural.h : 1)
+  const clamped = want < minScale
+  const scale = clamped ? minScale : want
+  const width = natural.w * scale
+  return { scale, width, height: natural.h * scale, clamped, hScroll: width > box.w }
+}
+
+export const isGroupSel = (sel: string): boolean => sel.startsWith('g:')
+export const groupOfSel = (sel: string): GroupKey | null => (isGroupSel(sel) ? (sel.slice(2) as GroupKey) : null)
+
+/** 預設選取：第一個有步驟卡或站種類為 step 的格子；沒有則第一格；再沒有則第一個 chip（g:組名）；都沒有回 null */
+export function defaultSelection(topic: Pick<Topic, 'steps'>, a: TopicAnalysis, d: TopicDiagram | null | undefined): string | null {
+  const order = nodeOrder(d)
+  const cards = new Set((topic.steps ?? []).map((s) => s.node).filter((x): x is string => !!x))
+  const hit = order.find((id) => cards.has(id) || a.stations.find((s) => s.id === id)?.kind === 'step')
+  if (hit) return hit
+  if (order[0]) return order[0]
+  const g = chipGroups(a.parsed, orphanSteps(topic, d).length)[0]
+  return g ? `g:${g.key}` : null
+}
+
+/** 選取是否合法（格子 id 在圖上，或 g:組名 在 chips 裡） */
+export function isValidSelection(sel: string, a: TopicAnalysis, d: TopicDiagram | null | undefined, topic?: Pick<Topic, 'steps'>): boolean {
+  if (isGroupSel(sel)) return chipGroups(a.parsed, topic ? orphanSteps(topic, d).length : 0).some((g) => `g:${g.key}` === sel)
+  return nodeOrder(d).includes(sel)
 }
