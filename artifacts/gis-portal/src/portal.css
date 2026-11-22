@@ -3158,3 +3158,8 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 @media (max-width: 700px) {
   .kis-split { grid-template-columns: minmax(0, 1fr); }
 }
+/* 知識島：一般滾輪時顯示的 Ctrl 提示（pointer-events:none，不擋點擊）與「最新」按鈕的卡片高亮 */
+.kis-wheel-hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; pointer-events: none; opacity: 0; transition: opacity 0.18s ease; font-size: var(--fs-sm); color: var(--c-ink); background: color-mix(in srgb, var(--c-surface) 92%, transparent); border: 1px solid var(--c-line-strong); border-radius: var(--r-pill); padding: 6px 14px; white-space: nowrap; box-shadow: var(--shadow-card); }
+.kis-wheel-hint.kis-on { opacity: 1; }
+.kis-flash { outline: 2px solid var(--c-accent); outline-offset: 1px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-accent) 25%, transparent); z-index: 2; }
+@media (prefers-reduced-motion: reduce) { .kis-wheel-hint { transition: none; } }
