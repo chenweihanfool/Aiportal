@@ -469,16 +469,15 @@ export function nodeOrder(d: TopicDiagram | null | undefined): string[] {
 }
 
 /**
- * 置頂索引圖縮放（3.26.0）：圖放在最上方佔整欄寬，s＝clamp(min(maxScale, boxW/w, availH/h), minScale, maxScale)。
- * 低於 minScale 時夾在 minScale（字不再變小），這時 width 超過 boxW，外框橫向捲動（hScroll）。
- * natural＝圖的自然尺寸（viewBox），boxW＝索引內容寬，availH＝可用高。
+ * 置頂索引圖縮放（3.26.1）：只看寬度，圖剛好塞滿整欄；scale＝clamp(boxW/w, minScale, maxScale)。
+ * boxW ≤ 0（還沒量到）時 scale＝1；低於 minScale 時夾在 minScale（字不再變小），這時 width 超過 boxW，外框橫向捲動（hScroll）。
+ * natural＝圖的自然尺寸（viewBox），boxW＝索引內容寬。
  */
-export function topIndexScale(natural: { w: number; h: number }, boxW: number, availH: number, maxScale = 1.5, minScale = 0.9): { scale: number; width: number; height: number; hScroll: boolean } {
+export function topIndexScale(natural: { w: number; h: number }, boxW: number, maxScale = 2, minScale = 0.9): { scale: number; width: number; height: number; hScroll: boolean } {
   if (!(natural.w > 0) || !(natural.h > 0)) return { scale: 1, width: natural.w, height: natural.h, hScroll: false }
-  const want = Math.min(maxScale, boxW > 0 ? boxW / natural.w : maxScale, availH > 0 ? availH / natural.h : maxScale)
-  const scale = Math.min(maxScale, Math.max(minScale, want))
+  const scale = boxW > 0 ? Math.min(maxScale, Math.max(minScale, boxW / natural.w)) : 1
   const width = natural.w * scale
-  return { scale, width, height: natural.h * scale, hScroll: width > boxW }
+  return { scale, width, height: natural.h * scale, hScroll: width > boxW + 0.5 }
 }
 
 export const isGroupSel = (sel: string): boolean => sel.startsWith('g:')
