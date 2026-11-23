@@ -112,6 +112,21 @@ try {
   await r.page.locator('.kn-dg-node[aria-label^="附件齊全"]').click()
   await r.page.waitForSelector('.kfk, .kn-dg-detail', { timeout: 5000 })
   check('點判斷點格子顯示分岔卡（沒有分支時退回格子說明）', (await r.page.locator('.kfk').count()) + (await r.page.locator('.kn-dg-detail').count()) >= 1)
+  // 3.26.0：圖置頂佔整欄寬、黏頂步驟列
+  const strip = r.page.locator('[data-testid="kis-strip"]')
+  check('有黏頂步驟列，且步驟按鈕帶 data-node', (await strip.count()) === 1 && (await strip.locator('button[data-node]').count()) >= 2)
+  check('步驟列有一個目前步驟（aria-current=step）', (await strip.locator('[aria-current="step"]').count()) === 1)
+  check('步驟列右端有上一格／下一格', (await strip.getByRole('button', { name: /上一格/ }).count()) === 1 && (await strip.getByRole('button', { name: /下一格/ }).count()) === 1)
+  const gm = await r.page.evaluate(() => {
+    const i = document.querySelector('[data-testid="kis-index"]')?.getBoundingClientRect()
+    const c = document.querySelector('[data-testid="kis-content"]')?.getBoundingClientRect()
+    const st = document.querySelector('[data-testid="kis-strip"]')?.getBoundingClientRect()
+    return i && c && st ? { idxBottom: i.bottom, stripTop: st.top, contentTop: c.top, idxW: i.width } : null
+  })
+  check('圖在最上方、步驟列在圖下、主畫面在步驟列下', !!gm && gm.idxBottom <= gm.stripTop + 1 && gm.stripTop < gm.contentTop, JSON.stringify(gm))
+  await strip.locator('button[data-node="a"], button[data-node]').nth(1).click()
+  await r.page.waitForFunction(() => document.querySelectorAll('[data-testid="kis-strip"] [aria-current="step"]').length === 1)
+  check('點步驟列的按鈕會換格（網址同步）', /\/s\//.test(await r.page.evaluate(() => location.hash)), await r.page.evaluate(() => location.hash))
   check('沒有 pageerror', r.errors.length === 0, r.errors.join(' | '))
   await r.ctx.close()
 
