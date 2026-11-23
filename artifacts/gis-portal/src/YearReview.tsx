@@ -50,7 +50,7 @@ export function YearReview({ year, unlocked, unlockedPassword, toneOf, onRequest
     <div className="dp-page yr-page" data-testid="year-page" data-year={year}
       style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
       <header className="dp-head">
-        <BackToOrigin fallback={<a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); goto('') }}>← 首頁</a>} />
+        <BackToOrigin testId="dp-back" fallback={<a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); goto('') }}>← 首頁</a>} />
         <nav className="yr-nav" aria-label="切換年份">
           <button type="button" className="dp-range" disabled={year <= MIN_YEAR} data-testid="yr-prev" onClick={() => go(year - 1)}>← {year - 1}</button>
           <button type="button" className="dp-range" disabled={year >= thisYear} data-testid="yr-next" onClick={() => go(year + 1)}>{year + 1} →</button>

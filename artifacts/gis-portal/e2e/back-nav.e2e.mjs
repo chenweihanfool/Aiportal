@@ -4,7 +4,8 @@
 //   a. 首頁捲到下方 → 點卷宗連結 → 左上「‹ 回到 首頁」→ 點它 → 回首頁且捲動位置差 < 50px
 //   b. 全站搜尋輸入字 → 開知識題目（看整頁）→「‹ 回到 首頁」→ 搜尋框的字還在
 //   c. 心得面板 #insight/<id> → 點題目 chip → 知識頁 →「‹ 回到 心得」→ 心得面板還開著同一則
-//   d. 同 a，但改用瀏覽器上一頁（page.goBack）
+//   d. 同 a，但改用瀏覽器上一頁（page.goBack）；c2 同 c 用上一頁
+//   e. 面向頁「下一個」一次只跳一頁、不疊歷史，「‹ 回到」回首頁
 // 資料全是虛構。
 //
 // 執行（需先 build）：
@@ -37,7 +38,13 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
 
 // ── 假資料 ──
 const fixture = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'topics-diagram.json'), 'utf8'))
-const topicsFeed = () => ({ ...fixture, payload: { ...fixture.payload, computedAt: new Date().toISOString() } })
+// 題目要帶 business＋steps，搜尋答案面板才會出「看整頁 →」（同 search-answer.e2e.mjs）
+const STEPS = [
+  { id: 's1', title: '收件檢查', claim: 'c010', node: null, docs: [], why: { rules: [], insights: [], pitfalls: [] }, cases: [] },
+  { id: 's2', title: '寄出通知', claim: 'c011', node: null, docs: [], why: { rules: [], insights: [], pitfalls: [] }, cases: [] },
+]
+const topicsFeed = () => ({ ...fixture, payload: { ...fixture.payload, computedAt: new Date().toISOString(),
+  topics: fixture.payload.topics.map((t) => (t.id === 'tflow' ? { ...t, business: '鑑界', steps: STEPS } : t)) } })
 const INS_ID = 'I-01'
 const insight = { id: INS_ID, date: '2026-11-20', time: '21:30', text: '虛構心得：事情要先講清楚再動手', provenance: 'quote', cluster: 'K01', thread: 'TH-a', relation: 'new', parent: null,
   links: { people: [], ideas: [], topics: [{ id: 'tflow', name: '送件補正流程' }] } }
@@ -48,7 +55,7 @@ const SEARCH = { '送件': [{ kind: 'topic', count: 1, items: [{ kind: 'topic', 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, channel: process.env.CHROMIUM_PATH ? undefined : 'chrome', args: ['--no-sandbox'] })
 async function open(url) {
   const ctx = await browser.newContext({ viewport: { width: 1200, height: 420 } })
-  await ctx.addInitScript((k) => localStorage.setItem('portal_unlocked', k), PWD)
+  await ctx.addInitScript((k) => { localStorage.setItem('portal_unlocked', k); localStorage.setItem('hm-layout', 'v3') }, PWD)
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e.stack || e).slice(0, 400)))
@@ -57,7 +64,7 @@ async function open(url) {
     const p = u.pathname
     const authed = route.request().headers()['x-admin-password'] === PWD
     const json = (o, code = 200) => route.fulfill({ status: code, contentType: 'application/json', body: JSON.stringify(o) })
-    if (p === '/api/sites') return json([])
+    if (p === '/api/sites') return json({ sites: [] })
     if (p === '/api/dashboard') return json({ summaries: [], unlocked: authed })
     if (!authed) return json({ message: 'no' }, 403)
     if (p === '/api/feed/topics') return json(topicsFeed())
@@ -132,18 +139,43 @@ try {
   check('b. 回來後搜尋框的字還在', (await r.page.getByRole('combobox').first().inputValue()) === '送件')
   await r.ctx.close()
 
-  // c. 心得面板 → 知識 → 回到 心得
+  // c. 心得（#insight/<id> 開島內詳情 ii-detail）→「全文與脈絡」面板的題目 chip → 知識 → 回到 心得
   r = await open(`/#insight/${INS_ID}`)
-  await r.page.waitForSelector('[data-testid="insight-panel"]', { timeout: 15000 })
-  const txt = await r.page.getByTestId('insight-panel-text').innerText()
+  await r.page.waitForSelector('[data-testid="ii-detail"]', { timeout: 15000 })
+  const txt = await r.page.getByTestId('ii-detail-text').innerText()
+  await r.page.locator('[data-testid="ii-dossier"]').first().click()
+  await r.page.waitForSelector('a.it-chip', { timeout: 15000 })
   await clickLink(r.page, 'a.it-chip')
   await r.page.waitForSelector('.kn-root')
   const back3 = r.page.getByTestId('back-origin')
   await back3.waitFor({ timeout: 5000 })
   check('c. 知識頁出現「‹ 回到 心得」', /回到\s*心得/.test(await back3.innerText()), await back3.innerText())
   await back3.click()
-  await r.page.waitForSelector('[data-testid="insight-panel"]', { timeout: 15000 })
-  check('c. 回來後心得面板還開著同一則', (await r.page.getByTestId('insight-panel-text').innerText()) === txt)
+  await r.page.waitForSelector('[data-testid="ii-detail"]', { timeout: 15000 })
+  check('c. 回來後心得詳情還開著同一則', (await r.page.getByTestId('ii-detail-text').innerText()) === txt)
+  // c2. 同 c，改用瀏覽器上一頁
+  await r.page.locator('[data-testid="ii-dossier"]').first().click()
+  await r.page.waitForSelector('a.it-chip', { timeout: 15000 })
+  await clickLink(r.page, 'a.it-chip')
+  await r.page.waitForSelector('.kn-root')
+  await r.page.goBack()
+  await r.page.waitForSelector('[data-testid="ii-detail"]', { timeout: 15000 })
+  check('c2. 瀏覽器上一頁：心得詳情還開著同一則', (await r.page.getByTestId('ii-detail-text').innerText()) === txt)
+  await r.ctx.close()
+
+  // e. 面向頁「下一個」一次只跳一頁，「‹ 回到 首頁」仍回首頁（面向之間是平移、不疊歷史）
+  r = await open('/')
+  await r.page.waitForSelector('.ip-scroll')
+  await r.page.evaluate(() => { window.location.hash = '#dim/social' })
+  await r.page.waitForSelector('[data-testid="dp-next"]', { timeout: 15000 })
+  await r.page.evaluate(() => { history.replaceState(null, '', '/'); history.pushState({ aiFrom: { hash: '', label: '首頁' } }, '', '#dim/social'); dispatchEvent(new HashChangeEvent('hashchange')) })
+  await r.page.waitForTimeout(300)
+  const len0 = await r.page.evaluate(() => history.length)
+  await r.page.locator('[data-testid="dp-next"]').click(); await r.page.waitForTimeout(300)
+  check('e. 下一個只跳一頁（#dim/social → #dim/travel）', (await r.page.evaluate(() => location.hash)) === '#dim/travel', await r.page.evaluate(() => location.hash))
+  check('e. 面向平移不新增歷史', (await r.page.evaluate(() => history.length)) === len0)
+  await r.page.locator('[data-testid="dp-back"]').click(); await r.page.waitForTimeout(500)
+  check('e. 「‹ 回到」回首頁', (await r.page.evaluate(() => location.hash)) === '')
   await r.ctx.close()
 } catch (e) {
   check('e2e 執行過程沒有例外', false, String(e.stack || e).slice(0, 800))

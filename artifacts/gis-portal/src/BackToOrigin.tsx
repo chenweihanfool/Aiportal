@@ -16,11 +16,11 @@ export function useAiFrom(): AiFrom | null {
   return from
 }
 
-export function BackToOrigin({ fallback = null, className }: { fallback?: ReactNode; className?: string }) {
+export function BackToOrigin({ fallback = null, className, testId = 'back-origin' }: { fallback?: ReactNode; className?: string; testId?: string }) {
   const from = useAiFrom()
   if (!from) return <>{fallback}</>
   return (
-    <button type="button" className={`nav-back${className ? ' ' + className : ''}`} data-testid="back-origin"
+    <button type="button" className={`nav-back${className ? ' ' + className : ''}`} data-testid={testId}
       onClick={() => window.history.back()} aria-label={`回到${from.label}`}>‹ 回到 {from.label}</button>
   )
 }

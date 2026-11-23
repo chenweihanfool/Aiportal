@@ -118,6 +118,14 @@ export const goto = (hash: string): boolean => dom.goto(hash)
 /** 有來源就 history.back()，否則跳 fallback（通常 ''＝首頁） */
 export const goBack = (fallbackHash = ''): void => dom.goBack(fallbackHash)
 
+/** 平移到同一層的另一頁（例如面向頁上一個／下一個）：不新增歷史、保留來源，「‹ 回到」仍回最初的來源 */
+export function gotoLateral(hash: string): void {
+  const h = normHash(hash)
+  if (sameHash(h, window.location.hash)) return
+  replaceHashKeepState(h === '' ? window.location.pathname + window.location.search : h)
+  window.dispatchEvent(new HashChangeEvent('hashchange'))
+}
+
 /** 只改網址選取（不新增歷史）時用：保留 history.state，免得丟掉 aiFrom／aiNav */
 export function replaceHashKeepState(hash: string): void {
   try { window.history.replaceState(window.history.state, '', hash) } catch { /* 取不到 history 就維持原網址 */ }
@@ -145,8 +153,10 @@ export function installLinkInterceptor(): () => void {
     if (hash === '#') { goto(''); return }
     goto(hash)
   }
-  document.addEventListener('click', onClick, true)
-  return () => document.removeEventListener('click', onClick, true)
+  // bubble 階段（不用 capture）：React 掛在 root 的 onClick 先跑，自己 preventDefault 的連結會被 defaultPrevented 擋掉，
+  // 只攔沒人處理的純連結；用 capture 會比 React 早，onClick 依新狀態再算一次目標就會一次跳兩頁
+  document.addEventListener('click', onClick)
+  return () => document.removeEventListener('click', onClick)
 }
 
 // ── 還原 ──
