@@ -852,7 +852,7 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
         </div>
       ) : (
         <>
-          <div ref={sentinelRef} className="kis-sentinel" aria-hidden="true" />
+          <div ref={sentinelRef} className="kis-sentinel" aria-hidden="true" style={{ scrollMarginTop: headH + 8 }} />
           {indexEl}
           <div className="kis-split">
             <section className="kis-content" data-testid="kis-content" ref={contentRef}>

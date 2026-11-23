@@ -3143,6 +3143,8 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-index .kn-dg { margin: 0; }
 .kis-index .kn-dg-scroll { overflow-x: auto; overflow-y: hidden; }
 .kis-index .kn-dg-svg { margin: 0; }
+/* 3.26.1 PM 修正：索引模式不顯示詳情（hideDetail），寬容器時 .kn-dg-body 的 300px 詳情欄會空著並壓縮圖框，強制單欄 */
+.kis-index .kn-dg-body { grid-template-columns: minmax(0, 1fr); }
 .kis-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-2); }
 .kis-grp { font: inherit; font-size: 13px; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 2px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .kis-grp em { font-style: normal; font-size: 11px; padding: 0 6px; border-radius: var(--r-pill); border: 1px solid var(--c-line-strong); }
