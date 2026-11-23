@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
-import { nextCompact, wideIndexWidth } from './knowledgeIslands'
+import { topIndexScale } from './knowledgeIslands'
 import { apiFetchVerdicts, apiFetchWeave, apiPostVerdict } from './insightWeaveApi'
 import { apiFetchInsights } from './insightApi'
 import { paletteColor, type PaletteTheme } from './insightPalette'
@@ -551,26 +551,21 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   const [panel, setPanel] = useState<{ key: string; q: string } | null>(null)
   const [band, setBand] = useState(false)
   const [full, setFull] = useState(false)
-  const [compact, setCompact] = useState(false)
   const [headH, setHeadH] = useState(0)
   const mobile = useMobile()
   const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 900))
-  // 桌機左圖右文：容器寬 ≥1100 用寬版（索引在左欄黏住），≥1500 旁註獨立一欄；窄螢幕維持上下排＋黏頂精簡
-  const rootRef = useRef<HTMLDivElement>(null)
-  const [cw, setCw] = useState(0)
+  const [, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280))
+  // 3.26.0：圖置頂佔整欄寬（縮放比由 topIndexScale 算）；步驟列 .kis-strip 黏在 .kn-head 下方
+  const [boxW, setBoxW] = useState(0)
   const [chipsH, setChipsH] = useState(0)
+  const [stripH, setStripH] = useState(40)
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
-  const wide = cw >= 1100
-  const wide2 = cw >= 1500
-  const wideRef = useRef(false)
-  wideRef.current = wide
   const chipsRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const idxRef = useRef<HTMLDivElement>(null)
-  const compactRef = useRef(false)
-  compactRef.current = compact
-  const autoScrollUntil = useRef(0)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const stepsRef = useRef<HTMLDivElement>(null)
   const topic = island.topics.find((t) => t.id === where.topicId) ?? island.topics[0]!
   const a = analyses.get(topic.id)
   const quotes = useTopicQuotes(pw, topic.id)
@@ -607,62 +602,33 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // 容器寬（決定寬版／窄版）
-  useLayoutEffect(() => {
-    const el = rootRef.current
-    if (!el) return
-    const m = () => setCw(Math.round(el.getBoundingClientRect().width))
-    m()
-    if (typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(m)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  // 索引區黏在頂端：捲動容器是 .kn-root（position: fixed; overflow-y: auto），.kn-head 也黏在它的頂端，所以索引的 top 取 .kn-head 的高度。
-  // 窄螢幕：捲過黏頂點（以 scrollTop 判斷、與索引高度無關，上下各 40px 遲滯）後切 compact，回到黏頂點之前恢復。桌機寬版不用精簡。
+  // .kn-head 的高度（步驟列黏在它下面）；視窗尺寸變了就重算
   useEffect(() => {
-    const sc = sentinelRef.current?.closest<HTMLElement>('.kn-root') ?? null
-    const target: HTMLElement | Window = sc ?? window
     const measureHead = () => setHeadH(document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0)
-    const onScroll = () => {
-      const s = sentinelRef.current
-      if (!s) return
-      // PM 修正：自動捲動期間不切換精簡／完整，避免往上捲時索引又長高、把剛捲進來的主畫面蓋住
-      if (Date.now() < autoScrollUntil.current) return
-      if (wideRef.current) { if (compactRef.current) setCompact(false); return }
-      const head = document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0
-      const scrollTop = sc ? sc.scrollTop : window.scrollY
-      // sentinel 在捲動內容裡的絕對位置（它在索引之前，索引高度變化不影響它）；黏頂點＝它的位置 − .kn-head 高
-      const stickTop = s.getBoundingClientRect().top - (sc ? sc.getBoundingClientRect().top : 0) + scrollTop - head
-      const next = nextCompact(compactRef.current, scrollTop, stickTop)
-      if (next !== compactRef.current) setCompact(next)
-    }
     measureHead()
-    target.addEventListener('scroll', onScroll, { passive: true })
-    const onResize = () => { measureHead(); setVh(window.innerHeight) }
+    const onResize = () => { measureHead(); setVh(window.innerHeight); setVw(window.innerWidth) }
     window.addEventListener('resize', onResize)
-    return () => { target.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onResize) }
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // 索引圖高上限：完整 42vh／精簡 24vh（手機 34vh／20vh）；整張縮進去，不在框內垂直捲
-  const maxH = Math.round(vh * (mobile ? (compact ? 0.2 : 0.34) : compact ? 0.24 : 0.42))
-
-  // 桌機寬版：量圖的自然尺寸（viewBox）與 chips 高，算索引欄寬
+  // 量圖的自然尺寸（viewBox）、索引內容寬、chips 與步驟列高，算圖的縮放比
   useLayoutEffect(() => {
     const svg = idxRef.current?.querySelector<SVGSVGElement>('svg.kn-dg-svg')
     const vb = svg?.viewBox?.baseVal
     const n = vb && vb.width > 0 && vb.height > 0 ? { w: vb.width, h: vb.height } : null
     setNat((o) => ((o && n && o.w === n.w && o.h === n.h) || (!o && !n) ? o : n))
+    const bw = Math.max(0, Math.round((idxRef.current?.clientWidth ?? 0) - 2))
+    setBoxW((o) => (o === bw ? o : bw))
     const ch = Math.round(chipsRef.current?.offsetHeight ?? 0)
     setChipsH((o) => (o === ch ? o : ch))
+    const sh = Math.round(stripRef.current?.offsetHeight ?? 0)
+    if (sh > 0) setStripH((o) => (o === sh ? o : sh))
   })
-  const availH = Math.max(240, vh - headH - chipsH - 32)
-  // PM 修正：旁註排在主畫面下方（1100–1499）時圖欄上限放寬到 60%，1280 寬時圖內字約 10px
-  const wideIdx = wide && nat ? wideIndexWidth(nat, availH, cw, 1.6, 380, wide2 ? 0.52 : 0.6) : null
-  const compactNow = wide ? false : compact
+  // 桌機：視窗高 − .kn-head − 步驟列 − chips − 160（留給主畫面頂端露出）；手機：視窗高 × 0.45
+  const availH = mobile ? vh * 0.45 : vh - headH - stripH - chipsH - 160
+  const idxScale = nat && boxW > 0 ? topIndexScale(nat, boxW, availH).scale : undefined
 
-  // 換格子／組／題之後，主畫面頂端若被黏頂索引蓋住或在視窗下方，就平滑捲動讓它落在索引底部下方 8px；已在視窗內不捲
+  // 換格子／組／題之後，主畫面頂端若被黏頂步驟列蓋住或在視窗下方，就平滑捲動讓它落在步驟列底部下方 8px；已在視窗內不捲
   const lastKey = useRef(`${where.topicId}|${where.sel}`)
   useEffect(() => {
     const key = `${where.topicId}|${where.sel}`
@@ -670,15 +636,13 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     lastKey.current = key
     const id = window.requestAnimationFrame(() => {
       const el = contentRef.current
-      const idx = idxRef.current
+      const strip = stripRef.current
       const sc = sentinelRef.current?.closest<HTMLElement>('.kn-root') ?? null
       if (!el || !sc) return
       const top = el.getBoundingClientRect().top
-      // 寬版：索引在左欄，主畫面頂端只要落在 .kn-head 下方就算看得到
-      const floor = wideRef.current || !idx ? headH : idx.getBoundingClientRect().bottom
+      const floor = strip ? strip.getBoundingClientRect().bottom : headH
       if (top >= floor && top < window.innerHeight - 40) return
       const delta = top - (floor + 8)
-      autoScrollUntil.current = Date.now() + 700
       if (typeof sc.scrollBy === 'function') sc.scrollBy({ top: delta, behavior: 'smooth' })
       else sc.scrollTop += delta
     })
@@ -841,11 +805,11 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   )
 
   const indexEl = (diagram || groups.length > 0) && (
-      <div ref={idxRef} className="kis-index" data-testid="kis-index" data-compact={compactNow} data-wide={wide || undefined} style={wide ? { top: headH, maxHeight: Math.max(240, vh - headH - 16) } : { top: headH }}>
+      <div ref={idxRef} className="kis-index" data-testid="kis-index">
         {diagram && (
           <KnowledgeDiagram
             topic={topic} diagram={diagram} quotes={quotes} onOpenSource={openSrc} now={now}
-            selectedNode={groupKey ? null : sel} onSelectNode={select} nodeDots={nodeDots} compact={compactNow} maxH={maxH} fitWidth={wide} hideDetail hideLegend
+            selectedNode={groupKey ? null : sel} onSelectNode={select} nodeDots={nodeDots} scale={idxScale} hideDetail hideLegend
           />
         )}
         {groups.length > 0 && (
@@ -858,9 +822,59 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
       </div>
   )
 
+  // 黏頂步驟列：flow 依泳道分段（泳道名：步驟 › 步驟），段與段用「｜」分隔；非 flow 或沒有泳道就一列排；右端上一格／下一格
+  const stripSegs = useMemo(() => {
+    if (!diagram) return []
+    const item = (id: string) => {
+      const n = diagram.type === 'flow' ? diagram.nodes.find((x) => x.id === id) : undefined
+      const label = n ? n.label : (diagramNodeInfo(diagram, id)?.heading.split('・').slice(1).join('・') ?? id)
+      return { id, label, decision: n?.shape === 'decision' }
+    }
+    if (diagram.type === 'flow' && diagram.lanes.length > 0) {
+      return diagram.lanes
+        .map((name, li) => ({ name, items: order.filter((id) => diagram.nodes.find((x) => x.id === id)?.lane === li).map(item) }))
+        .filter((g) => g.items.length > 0)
+    }
+    return [{ name: '', items: order.map(item) }]
+  }, [diagram, order])
+
+  // 選取變更時只捲步驟列本身，讓目前的步驟按鈕進入可見範圍（不捲動頁面）
+  useEffect(() => {
+    const box = stepsRef.current
+    const btn = box?.querySelector<HTMLElement>('[aria-current="step"]')
+    if (!box || !btn) return
+    const b = box.getBoundingClientRect()
+    const r = btn.getBoundingClientRect()
+    if (r.left < b.left) box.scrollLeft += r.left - b.left - 8
+    else if (r.right > b.right) box.scrollLeft += r.right - b.right + 8
+  }, [sel, topic.id, stripSegs])
+
+  const stripEl = (diagram || groups.length > 0) && (
+    <div ref={stripRef} className="kis-strip" data-testid="kis-strip" style={{ top: headH }}>
+      <div ref={stepsRef} className="kis-strip-steps">
+        {stripSegs.map((g, gi) => (
+          <Fragment key={gi}>
+            {gi > 0 && <span className="kis-strip-sep" aria-hidden="true">｜</span>}
+            {g.name && <span className="kis-strip-lane">{g.name}：</span>}
+            {g.items.map((it, ii) => (
+              <Fragment key={it.id}>
+                {ii > 0 && <span className="kis-strip-arrow" aria-hidden="true">›</span>}
+                <button type="button" className="kis-strip-step" data-node={it.id} aria-current={!groupKey && sel === it.id ? 'step' : undefined} onClick={() => select(it.id)}>{it.decision ? '◇ ' : ''}{it.label}</button>
+              </Fragment>
+            ))}
+          </Fragment>
+        ))}
+      </div>
+      <span className="kis-nav">
+        <button type="button" disabled={navIdx <= 0} onClick={() => move(-1)}>← 上一格</button>
+        <button type="button" disabled={navIdx < 0 || navIdx >= navList.length - 1} onClick={() => move(1)}>下一格 →</button>
+      </span>
+    </div>
+  )
+
   const summary = a?.parsed?.summary ? stripMarks(a.parsed.summary.text) : ''
   return (
-    <div ref={rootRef} className="kis-root kis-in" style={cvar(color)} data-testid="kis-inside">
+    <div className="kis-root kis-in" style={cvar(color)} data-testid="kis-inside">
       <div className="kis-in-head">
         <button type="button" className="kn-btn" onClick={onBack}>‹ 全景</button>
         <h2 className="kis-in-name">{island.name}</h2>
@@ -903,16 +917,12 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
       ) : (
         <>
           <div ref={sentinelRef} className="kis-sentinel" aria-hidden="true" />
-          {!wide && indexEl}
-          <div className="kis-split" data-wide={wide2 ? '2' : wide ? '1' : undefined} style={wide ? { gridTemplateColumns: `${wideIdx ? wideIdx.width : 480}px minmax(0, 1fr)${wide2 ? ' minmax(300px, 0.45fr)' : ''}` } : undefined}>
-            {wide && indexEl}
+          {indexEl}
+          {stripEl}
+          <div className="kis-split">
             <section className="kis-content" data-testid="kis-content" ref={contentRef}>
               <div className="kis-ch">
                 <span className="kis-kind">{label}</span>
-                <span className="kis-nav">
-                  <button type="button" disabled={navIdx <= 0} onClick={() => move(-1)}>← 上一格</button>
-                  <button type="button" disabled={navIdx < 0 || navIdx >= navList.length - 1} onClick={() => move(1)}>下一格 →</button>
-                </span>
               </div>
               {main ?? <p className="kis-none">這一題還沒有可以顯示的內容。</p>}
             </section>

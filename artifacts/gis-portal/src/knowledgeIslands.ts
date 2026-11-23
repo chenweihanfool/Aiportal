@@ -469,36 +469,16 @@ export function nodeOrder(d: TopicDiagram | null | undefined): string[] {
 }
 
 /**
- * 索引圖縮放：整張圖縮到放得進高度上限（不允許框內垂直捲動），比例不超過 1；
- * 比例低於 minScale 時改用 minScale 繪製（clamped），這時高度會超過上限、寬度超過框就橫向捲（hScroll）。
- * natural＝圖的自然尺寸（viewBox），box.w＝可用寬度，box.maxH＝高度上限。
+ * 置頂索引圖縮放（3.26.0）：圖放在最上方佔整欄寬，s＝clamp(min(maxScale, boxW/w, availH/h), minScale, maxScale)。
+ * 低於 minScale 時夾在 minScale（字不再變小），這時 width 超過 boxW，外框橫向捲動（hScroll）。
+ * natural＝圖的自然尺寸（viewBox），boxW＝索引內容寬，availH＝可用高。
  */
-export function indexScale(natural: { w: number; h: number }, box: { w: number; maxH: number }, minScale = 0.45): { scale: number; width: number; height: number; clamped: boolean; hScroll: boolean } {
-  if (natural.w <= 0 || natural.h <= 0) return { scale: 1, width: Math.max(0, natural.w), height: Math.max(0, natural.h), clamped: false, hScroll: false }
-  const want = Math.min(1, box.maxH > 0 ? box.maxH / natural.h : 1)
-  const clamped = want < minScale
-  const scale = clamped ? minScale : want
+export function topIndexScale(natural: { w: number; h: number }, boxW: number, availH: number, maxScale = 1.5, minScale = 0.9): { scale: number; width: number; height: number; hScroll: boolean } {
+  if (!(natural.w > 0) || !(natural.h > 0)) return { scale: 1, width: natural.w, height: natural.h, hScroll: false }
+  const want = Math.min(maxScale, boxW > 0 ? boxW / natural.w : maxScale, availH > 0 ? availH / natural.h : maxScale)
+  const scale = Math.min(maxScale, Math.max(minScale, want))
   const width = natural.w * scale
-  return { scale, width, height: natural.h * scale, clamped, hScroll: width > box.w }
-}
-
-/** 桌機左圖右文的索引欄寬：圖放大倍率 s＝min(maxScale, 可用高 ÷ 圖自然高)，欄寬＝clamp(自然寬 × s, minW, 容器寬 × maxRatio) */
-export function wideIndexWidth(natural: { w: number; h: number }, availH: number, containerW: number, maxScale = 1.6, minW = 380, maxRatio = 0.52): { width: number; scale: number } {
-  const cap = Math.max(minW, containerW * maxRatio)
-  if (natural.w <= 0 || natural.h <= 0) return { width: Math.min(cap, Math.max(minW, 0)), scale: 1 }
-  const s = Math.min(maxScale, availH > 0 ? availH / natural.h : maxScale)
-  const width = Math.round(Math.min(cap, Math.max(minW, natural.w * s)))
-  return { width, scale: width / natural.w }
-}
-
-/**
- * 索引精簡切換（窄螢幕）：只看 scrollTop 與黏頂點（sentinel 在捲動內容裡的絕對位置 − .kn-head 高），與索引本身高度無關，
- * 所以切換不會改到觸發條件；上下各 band px 的遲滯。scrollTop > 黏頂點 + band → 精簡；< 黏頂點 − band → 完整；其間維持原狀。
- */
-export function nextCompact(cur: boolean, scrollTop: number, stickTop: number, band = 40): boolean {
-  if (!cur && scrollTop > stickTop + band) return true
-  if (cur && (scrollTop < stickTop - band || scrollTop <= 5)) return false
-  return cur
+  return { scale, width, height: natural.h * scale, hScroll: width > boxW }
 }
 
 export const isGroupSel = (sel: string): boolean => sel.startsWith('g:')
