@@ -123,6 +123,11 @@ try {
   check('主畫面標題列有上一格／下一格與「↑ 回到圖」', (await r.page.locator('.kis-ch').getByRole('button', { name: /上一格/ }).count()) === 1 && (await r.page.locator('.kis-ch').getByRole('button', { name: /下一格/ }).count()) === 1 && (await r.page.locator('.kis-ch').getByRole('button', { name: /回到圖/ }).count()) === 1)
   // 往下捲 800px，點「↑ 回到圖」後圖的頂端回到視窗內
   await r.page.evaluate(() => { const sc = document.querySelector('.kn-root'); if (sc) sc.scrollBy(0, 800) })
+  await r.page.waitForTimeout(300)
+  await r.page.locator('[data-testid="kis-back-diagram"]').click()
+  await r.page.waitForTimeout(900)
+  const back = await r.page.evaluate(() => ({ idx: document.querySelector('[data-testid="kis-index"]').getBoundingClientRect().top, head: document.querySelector('.kn-head')?.getBoundingClientRect().bottom ?? 0 }))
+  check('點「↑ 回到圖」後圖頂在 .kn-head 下方、視窗內', back.idx >= back.head - 1 && back.idx < 900, JSON.stringify(back))
   await r.page.waitForTimeout(150)
   const idxAway = await r.page.evaluate(() => {
     const i = document.querySelector('[data-testid="kis-index"]')
@@ -143,6 +148,17 @@ try {
   } catch { idxBack = false }
   check('往下捲後點「↑ 回到圖」，圖的頂端回到視窗內', idxBack, `捲前=${JSON.stringify(idxAway)}`)
   check('沒有 pageerror', r.errors.length === 0, r.errors.join(' | '))
+  await r.ctx.close()
+
+  // 1b. 3.26.1：1960 寬（寬容器）圖框不被 300px 詳情欄壓縮，svg 仍塞滿整欄
+  r = await open({ width: 1960, height: 910 }, 'knowledge/tflow', '鑑界')
+  await r.page.waitForSelector('[data-testid="kis-index"] svg.kn-dg-svg', { timeout: 15000 })
+  await r.page.waitForTimeout(300)
+  const fitW = await r.page.evaluate(() => {
+    const idx = document.querySelector('[data-testid="kis-index"]'); const svg = idx.querySelector('svg.kn-dg-svg'); const sc = idx.querySelector('.kn-dg-scroll')
+    return { idxW: idx.clientWidth, svgW: svg.getBoundingClientRect().width, boxW: sc.clientWidth, sw: sc.scrollWidth }
+  })
+  check('1960 寬：svg 寬＝橫捲框寬（差 ≤ 4px）、框寬接近整欄、不需橫捲', Math.abs(fitW.svgW - fitW.boxW) <= 4 && fitW.idxW - fitW.boxW <= 4 && fitW.sw <= fitW.boxW + 1, JSON.stringify(fitW))
   await r.ctx.close()
 
   // 2. business 為 null：整頁不顯示 📄 列
