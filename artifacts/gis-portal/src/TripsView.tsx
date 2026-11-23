@@ -10,8 +10,8 @@ import { MarkdownView } from './MarkdownView'
 import { apiFetchTrips, type Trip, type TripDay, type TripEntry, type TripData, type TripStatus } from './tripsApi'
 import { sampleTripData } from './tripsSample'
 import { goto } from './navBack'
-import {
 import { BackToOrigin } from './BackToOrigin'
+import {
   TRIP_STATUS_LABEL, dayDigest, dayHeading, dayPhotoCount, dayRouteText, defaultOpenDays, entryPreview, formatDateRange, isEmptyTrip,
   isEntryExpandable, photoSummary, splitEntryText, tripMapPlaces, tripStats,
 } from './tripsView'
