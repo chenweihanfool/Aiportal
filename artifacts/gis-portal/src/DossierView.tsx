@@ -281,7 +281,7 @@ export function DossierView({ unlockedPassword, route, onRequestUnlock }: {
   useEffect(() => {
     if (route === 'index' || route.kind !== 'event' || load.state !== 'ok') return
     const target = resolved ? dossierHref(resolved.kind, resolved.name) : '#dossier'
-    try { window.history.replaceState(null, '', window.location.pathname + window.location.search + target) } catch { /* 取不到 history 就維持原網址 */ }
+    try { window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + target) } catch { /* 取不到 history 就維持原網址 */ }
   }, [route, load.state, resolved])
   const shown = route === 'index' ? 'index' : route.kind === 'event' ? resolved : route
   return (

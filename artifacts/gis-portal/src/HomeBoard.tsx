@@ -182,7 +182,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   useEffect(() => {
     const onHash = () => {
       if (window.location.hash !== '#ideas') return
-      try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 維持原網址 */ }
+      try { window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search) } catch { /* 維持原網址 */ }
       if (on) setDrawer('ideas'); else onRequestUnlock()
     }
     onHash()
