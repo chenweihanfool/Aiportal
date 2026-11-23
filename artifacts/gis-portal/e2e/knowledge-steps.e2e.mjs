@@ -112,22 +112,53 @@ try {
   await r.page.locator('.kn-dg-node[aria-label^="附件齊全"]').click()
   await r.page.waitForSelector('.kfk, .kn-dg-detail', { timeout: 5000 })
   check('點判斷點格子顯示分岔卡（沒有分支時退回格子說明）', (await r.page.locator('.kfk').count()) + (await r.page.locator('.kn-dg-detail').count()) >= 1)
-  // 3.26.0：圖置頂佔整欄寬、黏頂步驟列
-  const strip = r.page.locator('[data-testid="kis-strip"]')
-  check('有黏頂步驟列，且步驟按鈕帶 data-node', (await strip.count()) === 1 && (await strip.locator('button[data-node]').count()) >= 2)
-  check('步驟列有一個目前步驟（aria-current=step）', (await strip.locator('[aria-current="step"]').count()) === 1)
-  check('步驟列右端有上一格／下一格', (await strip.getByRole('button', { name: /上一格/ }).count()) === 1 && (await strip.getByRole('button', { name: /下一格/ }).count()) === 1)
-  const gm = await r.page.evaluate(() => {
-    const i = document.querySelector('[data-testid="kis-index"]')?.getBoundingClientRect()
-    const c = document.querySelector('[data-testid="kis-content"]')?.getBoundingClientRect()
-    const st = document.querySelector('[data-testid="kis-strip"]')?.getBoundingClientRect()
-    return i && c && st ? { idxBottom: i.bottom, stripTop: st.top, contentTop: c.top, idxW: i.width } : null
+  // 3.26.1：圖只看寬度、塞滿整欄；拿掉步驟列，上一格／下一格與「↑ 回到圖」在主畫面標題列
+  check('沒有黏頂步驟列 .kis-strip', (await r.page.locator('.kis-strip').count()) === 0)
+  const fit = await r.page.evaluate(() => {
+    const svg = document.querySelector('[data-testid="kis-index"] svg.kn-dg-svg')
+    const sc = document.querySelector('[data-testid="kis-index"] .kn-dg-scroll')
+    return svg && sc ? { svgW: svg.getBoundingClientRect().width, boxW: sc.clientWidth } : null
   })
-  check('圖在最上方、步驟列在圖下、主畫面在步驟列下', !!gm && gm.idxBottom <= gm.stripTop + 1 && gm.stripTop < gm.contentTop, JSON.stringify(gm))
-  await strip.locator('button[data-node="a"], button[data-node]').nth(1).click()
-  await r.page.waitForFunction(() => document.querySelectorAll('[data-testid="kis-strip"] [aria-current="step"]').length === 1)
-  check('點步驟列的按鈕會換格（網址同步）', /\/s\//.test(await r.page.evaluate(() => location.hash)), await r.page.evaluate(() => location.hash))
+  check('1280 寬時圖塞滿整欄（svg 寬與索引橫捲框 clientWidth 差 ≤ 4px）', !!fit && Math.abs(fit.svgW - fit.boxW) <= 4, JSON.stringify(fit))
+  check('主畫面標題列有上一格／下一格與「↑ 回到圖」', (await r.page.locator('.kis-ch').getByRole('button', { name: /上一格/ }).count()) === 1 && (await r.page.locator('.kis-ch').getByRole('button', { name: /下一格/ }).count()) === 1 && (await r.page.locator('.kis-ch').getByRole('button', { name: /回到圖/ }).count()) === 1)
+  // 往下捲 800px，點「↑ 回到圖」後圖的頂端回到視窗內
+  await r.page.evaluate(() => { const sc = document.querySelector('.kn-root'); if (sc) sc.scrollBy(0, 800) })
+  await r.page.waitForTimeout(300)
+  await r.page.locator('[data-testid="kis-back-diagram"]').click()
+  await r.page.waitForTimeout(900)
+  const back = await r.page.evaluate(() => ({ idx: document.querySelector('[data-testid="kis-index"]').getBoundingClientRect().top, head: document.querySelector('.kn-head')?.getBoundingClientRect().bottom ?? 0 }))
+  check('點「↑ 回到圖」後圖頂在 .kn-head 下方、視窗內', back.idx >= back.head - 1 && back.idx < 900, JSON.stringify(back))
+  await r.page.waitForTimeout(150)
+  const idxAway = await r.page.evaluate(() => {
+    const i = document.querySelector('[data-testid="kis-index"]')
+    if (!i) return null
+    const t = i.getBoundingClientRect().top
+    return { top: Math.round(t), inView: t >= 0 && t < window.innerHeight }
+  })
+  await r.page.locator('.kis-ch').getByRole('button', { name: /回到圖/ }).click()
+  let idxBack = false
+  try {
+    await r.page.waitForFunction(() => {
+      const i = document.querySelector('[data-testid="kis-index"]')
+      if (!i) return false
+      const t = i.getBoundingClientRect().top
+      return t >= 0 && t < window.innerHeight
+    }, null, { timeout: 5000 })
+    idxBack = true
+  } catch { idxBack = false }
+  check('往下捲後點「↑ 回到圖」，圖的頂端回到視窗內', idxBack, `捲前=${JSON.stringify(idxAway)}`)
   check('沒有 pageerror', r.errors.length === 0, r.errors.join(' | '))
+  await r.ctx.close()
+
+  // 1b. 3.26.1：1960 寬（寬容器）圖框不被 300px 詳情欄壓縮，svg 仍塞滿整欄
+  r = await open({ width: 1960, height: 910 }, 'knowledge/tflow', '鑑界')
+  await r.page.waitForSelector('[data-testid="kis-index"] svg.kn-dg-svg', { timeout: 15000 })
+  await r.page.waitForTimeout(300)
+  const fitW = await r.page.evaluate(() => {
+    const idx = document.querySelector('[data-testid="kis-index"]'); const svg = idx.querySelector('svg.kn-dg-svg'); const sc = idx.querySelector('.kn-dg-scroll')
+    return { idxW: idx.clientWidth, svgW: svg.getBoundingClientRect().width, boxW: sc.clientWidth, sw: sc.scrollWidth }
+  })
+  check('1960 寬：svg 寬＝橫捲框寬（差 ≤ 4px）、框寬接近整欄、不需橫捲', Math.abs(fitW.svgW - fitW.boxW) <= 4 && fitW.idxW - fitW.boxW <= 4 && fitW.sw <= fitW.boxW + 1, JSON.stringify(fitW))
   await r.ctx.close()
 
   // 2. business 為 null：整頁不顯示 📄 列

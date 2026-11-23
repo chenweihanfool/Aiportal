@@ -3143,15 +3143,8 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-index .kn-dg { margin: 0; }
 .kis-index .kn-dg-scroll { overflow-x: auto; overflow-y: hidden; }
 .kis-index .kn-dg-svg { margin: 0; }
-/* 3.26.0 黏頂步驟列：文字步驟（依泳道分段）＋右端上一格／下一格；一律顯示、單行、固定高度 */
-.kis-strip { position: sticky; z-index: 4; top: 0; height: 40px; box-sizing: border-box; display: flex; align-items: center; gap: var(--sp-3); background: var(--c-bg); border-bottom: 1px solid var(--c-line); margin-bottom: var(--sp-3); min-width: 0; }
-.kis-strip-steps { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-.kis-strip-lane { font-size: 12.5px; font-weight: 700; color: var(--c-ink-2); }
-.kis-strip-sep, .kis-strip-arrow { color: var(--c-ink-3); font-size: 12.5px; }
-.kis-strip-step { flex: none; font: inherit; font-size: 13px; color: var(--c-ink); background: transparent; border: 1px solid transparent; border-radius: var(--r-md); padding: 1px 8px; cursor: pointer; }
-.kis-strip-step:hover { border-color: var(--c-line-strong); }
-.kis-strip-step[aria-current="step"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--c-surface)); font-weight: 700; }
-.kis-strip .kis-nav { flex: none; margin-right: 0; }
+/* 3.26.1 PM 修正：索引模式不顯示詳情（hideDetail），寬容器時 .kn-dg-body 的 300px 詳情欄會空著並壓縮圖框，強制單欄 */
+.kis-index .kn-dg-body { grid-template-columns: minmax(0, 1fr); }
 .kis-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-2); }
 .kis-grp { font: inherit; font-size: 13px; color: var(--c-ink-2); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 2px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .kis-grp em { font-style: normal; font-size: 11px; padding: 0 6px; border-radius: var(--r-pill); border: 1px solid var(--c-line-strong); }
