@@ -12,6 +12,7 @@ import type { IdeaItem } from './boardApi'
 import { bornBand } from './hhiBorn'
 import { insightUsages } from './knowledgeSteps'
 import { parseTopics, type Topic } from './knowledgeView'
+import { BackToOrigin } from './BackToOrigin'
 
 // 心得側邊面板：一則心得的詳情（原文、那一天、連結的人／想法／知識、後來怎麼變）。樣式 it- 前綴在 portal.css。
 
@@ -88,6 +89,7 @@ export function InsightPanel({ pw, id, fallback, onClose, onSelect, ideas = null
       <aside className="it-panel" role="dialog" aria-label="心得詳情" data-testid="insight-panel">
         <div className="it-panel-top">
           <span className="it-kd">心得{d ? `・${d.cluster.name}` : ''}</span>
+          <BackToOrigin />
           <button ref={closeRef} type="button" className="it-x" onClick={onClose} aria-label="關閉心得面板">關閉 ✕</button>
         </div>
         <h3 className="it-panel-text" data-testid="insight-panel-text">{text || '（找不到這則心得）'}</h3>

@@ -7,6 +7,7 @@ import { dailyScoreLine, type DailyScore } from './dailyScore'
 import { apiFetchTimelineDetail, type TimelineDetail, type TimelineItem, type TimelineLevel } from './timelineApi'
 import { LEVEL_LABEL, reportScoreLine, rowDateLabel } from './timelineLogic'
 import { isValidDay } from './timelineLink'
+import { goto } from './navBack'
 
 // 全尺寸日報視窗：時間軸（TimelineView）與心得面板（InsightPanel）共用。
 export interface Ref { level: TimelineLevel; periodKey: string }
@@ -171,6 +172,6 @@ export function DayReportDialog({ date, password, onClose, timelineHref, leading
       leading={leading} timelineHref={timelineHref} testId="day-report-dialog"
       onClose={onClose} onBack={() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s))} onGo={() => {}}
       onDrill={(r) => setStack((s) => [...s, r.periodKey])}
-      onEvent={(id) => { window.location.hash = '#dossier/event/' + encodeURIComponent(id) }} />
+      onEvent={(id) => { goto('#dossier/event/' + encodeURIComponent(id)) }} />
   )
 }

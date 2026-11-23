@@ -11,6 +11,8 @@ import { Skeleton, StateFrame } from './StateFrame'
 import { TaskGantt } from './TaskGantt'
 import { TravelCharts } from './TravelCharts'
 import { CV, FONT, themedColor } from './theme'
+import { goBack, goto, gotoLateral } from './navBack'
+import { BackToOrigin } from './BackToOrigin'
 
 // 面向頁（#dim/<key>）：從首頁點某個面向進來，看這一個面向自己的東西——
 // 現在的分數與權重、近 30／90 天走勢與統計、這個分數怎麼來（原始數據與算法）、相關連結。
@@ -50,7 +52,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
   const [range, setRange] = useState<30 | 90>(30)
   // Esc 回首頁（燈箱、對話框之類在上層的東西自己會攔掉 Esc）
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) window.location.hash = '' }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) goBack('') }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
@@ -84,7 +86,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
   if (!dim) {
     return (
       <Shell title="面向" dimKey={dimKey}>
-        <div className="dp-body"><div className="dp-wrap"><p className="hm-note">找不到這個面向。<a href="#" onClick={(e) => { e.preventDefault(); window.location.hash = '' }} style={{ color: CV.amber }}>回首頁</a></p></div></div>
+        <div className="dp-body"><div className="dp-wrap"><p className="hm-note">找不到這個面向。<a href="#" onClick={(e) => { e.preventDefault(); goto('') }} style={{ color: CV.amber }}>回首頁</a></p></div></div>
       </Shell>
     )
   }
@@ -189,7 +191,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                               <li key={r.key}>
                                 <a href={dimHref(r.key)} className={`dp-ov-row${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined} style={{ ['--dim' as string]: d?.color ?? DIMENSION_FALLBACK_COLOR }}
                                   title={r.gap === null ? `${r.label}：沒有分數` : `${r.label} ${Math.round(r.value!)} 分・權重 ${r.weightPct}%・還能補 ${r.gap} 分`}
-                                  onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(r.key) }}>
+                                  onClick={(e) => { e.preventDefault(); gotoLateral(dimHash(r.key)) }}>
                                   <span className="dp-ov-name"><span aria-hidden>{d?.icon}</span>{r.label}{drag?.key === r.key && <em title="權重 × 離滿分的差最大">短板</em>}</span>
                                   <span className="dp-ov-n">{r.value === null ? '—' : Math.round(r.value)}</span>
                                   <span className="dp-ov-bar" aria-hidden><i style={{ width: `${r.value ?? 0}%` }} /></span>
@@ -227,7 +229,7 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
                     <h2 className="hm-h">相關</h2>
                     <div className="dp-link-row">
                       {links.map((l) => (
-                        <a key={l.label} className="dp-link" href={l.hash !== undefined ? `#${l.hash}` : '#'} onClick={(e) => { e.preventDefault(); if (l.onClick) l.onClick(); else if (l.hash !== undefined) window.location.hash = l.hash }}>{l.label}</a>
+                        <a key={l.label} className="dp-link" href={l.hash !== undefined ? `#${l.hash}` : '#'} onClick={(e) => { e.preventDefault(); if (l.onClick) l.onClick(); else if (l.hash !== undefined) goto(l.hash) }}>{l.label}</a>
                       ))}
                     </div>
                   </section>
@@ -237,8 +239,8 @@ export function DimensionPage({ dimKey, hhiData, hhiFetchedAt, hhiError, unlocke
           </div>
           {nb && (
             <nav className="dp-pager" aria-label="切換面向">
-              <a href={dimHref(nb.prev)} data-testid="dp-prev" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.prev) }}>← {dimensionOf(nb.prev)?.label}</a>
-              <a href={dimHref(nb.next)} data-testid="dp-next" onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(nb.next) }}>{dimensionOf(nb.next)?.label} →</a>
+              <a href={dimHref(nb.prev)} data-testid="dp-prev" onClick={(e) => { e.preventDefault(); gotoLateral(dimHash(nb.prev)) }}>← {dimensionOf(nb.prev)?.label}</a>
+              <a href={dimHref(nb.next)} data-testid="dp-next" onClick={(e) => { e.preventDefault(); gotoLateral(dimHash(nb.next)) }}>{dimensionOf(nb.next)?.label} →</a>
             </nav>
           )}
         </div>
@@ -251,12 +253,12 @@ function Shell({ title, dimKey, children }: { title: string; dimKey: string; chi
   return (
     <div className="dp-page" style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
       <header className="dp-head">
-        <a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); window.location.hash = '' }}>← 首頁</a>
+        <BackToOrigin testId="dp-back" fallback={<a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); goto('') }}>← 首頁</a>} />
         <nav className="dp-nav" aria-label="六個面向">
           {DIMENSIONS.map((d) => (
             <a key={d.key} href={dimHref(d.key)} data-testid={`dp-nav-${d.key}`} className={`dp-chip${d.key === dimKey ? ' is-on' : ''}`} style={{ ['--dim' as string]: d.color }}
               aria-current={d.key === dimKey ? 'page' : undefined} aria-label={d.label} title={d.label}
-              onClick={(e) => { e.preventDefault(); window.location.hash = dimHash(d.key) }}>
+              onClick={(e) => { e.preventDefault(); gotoLateral(dimHash(d.key)) }}>
               <span aria-hidden>{d.icon}</span><span className="dp-chip-t">{d.label}</span>
             </a>
           ))}

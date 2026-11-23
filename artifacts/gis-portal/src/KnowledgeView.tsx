@@ -1,10 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
 import { SourceSearchResults } from './KnowledgeSearch'
 import { KnowledgeIslands } from './KnowledgeIslands'
 import { useAsync, useNow } from './homeHooks'
 import { filterTopics, groupTopics, isStale, parseTopics, recentChangeOf, type TopicChange, type TopicsData } from './knowledgeView'
 import { formatKnowledgeHash } from './knowledgeRoute'
+import { goto, setNavNames } from './navBack'
+import { BackToOrigin } from './BackToOrigin'
 
 // 知識頁（3.21.0 起只有島嶼：#knowledge＝全景、#knowledge/<id>＝進島展開該題）。資料來自 feed `topics`（HERMES 每週推送）。
 // 純函式在 knowledgeView.ts／knowledgeRoute.ts（有測試）；島嶼在 KnowledgeIslands.tsx，閱讀區在 KnowledgeReader.tsx；樣式在 portal.css 的 kn-*／kis-*／krd-*。
@@ -37,7 +39,7 @@ function Locked({ onRequestUnlock }: { onRequestUnlock: () => void }) {
   )
 }
 
-const goTopic = (id: string) => { window.location.hash = formatKnowledgeHash({ view: 'topic', topicId: id, stationId: null }) }
+const goTopic = (id: string) => { goto(formatKnowledgeHash({ view: 'topic', topicId: id, stationId: null })) }
 
 function Stats({ data, now }: { data: TopicsData; now: Date }) {
   const recentCount = useMemo(() => groupTopics(data.topics, now).recent.length, [data.topics, now])
@@ -101,6 +103,12 @@ export function KnowledgeView({ unlockedPassword, onRequestUnlock }: {
   const now = useNow()
   const unlocked = !!unlockedPassword
   const data = feed.data?.data ?? null
+  // 3.27.0：從知識頁跳出去時，「‹ 回到 知識：<題名>」顯示題名而不是 id
+  useEffect(() => {
+    const byId = new Map((data?.topics ?? []).map((t) => [t.id, t.name]))
+    setNavNames(() => ({ topic: (id) => byId.get(id) }))
+    return () => setNavNames(() => ({}))
+  }, [data])
 
   let content: ReactNode
   if (!unlocked) {
@@ -118,7 +126,7 @@ export function KnowledgeView({ unlockedPassword, onRequestUnlock }: {
   return (
     <div className="kn-root">
       <header className="kn-head">
-        <button type="button" className="kn-back" onClick={() => { window.location.hash = '' }}>← 返回儀表板</button>
+        <BackToOrigin fallback={<button type="button" className="kn-back" onClick={() => { goto('') }}>← 返回儀表板</button>} />
         <h1>知識</h1>
         {unlocked && data && isStale(data.computedAt, now) && <span className="kn-stale">資料已過期（{stamp(data.computedAt)}）</span>}
         {!unlocked && <button type="button" className="kn-btn kn-btn--head" onClick={onRequestUnlock}>🔒 解鎖</button>}

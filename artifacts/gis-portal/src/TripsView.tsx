@@ -9,6 +9,8 @@ import { AuthImage, MediaAuthContext, thumbOf } from './AuthImage'
 import { MarkdownView } from './MarkdownView'
 import { apiFetchTrips, type Trip, type TripDay, type TripEntry, type TripData, type TripStatus } from './tripsApi'
 import { sampleTripData } from './tripsSample'
+import { goto } from './navBack'
+import { BackToOrigin } from './BackToOrigin'
 import {
   TRIP_STATUS_LABEL, dayDigest, dayHeading, dayPhotoCount, dayRouteText, defaultOpenDays, entryPreview, formatDateRange, isEmptyTrip,
   isEntryExpandable, photoSummary, splitEntryText, tripMapPlaces, tripStats,
@@ -64,12 +66,12 @@ function Shell({ title, back, children, badges }: { title: ReactNode; back: { la
   return (
     <div className="tr-page" style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${CV.line}`, flexWrap: 'wrap' }}>
-        <a href={back.hash === '' ? '#' : `#${back.hash}`} data-testid="trips-back"
-          onClick={e => { e.preventDefault(); window.location.hash = back.hash }}
-          style={{ color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', textDecoration: 'none' }}>{back.label}</a>
+        <BackToOrigin fallback={<a href={back.hash === '' ? '#' : `#${back.hash}`} data-testid="trips-back"
+          onClick={e => { e.preventDefault(); goto(back.hash) }}
+          style={{ color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', textDecoration: 'none' }}>{back.label}</a>} />
         <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, minWidth: 0 }}>{title}</h1>
         {badges}
-        <a href="#food" data-testid="trips-to-food" onClick={e => { e.preventDefault(); window.location.hash = 'food' }}
+        <a href="#food" data-testid="trips-to-food" onClick={e => { e.preventDefault(); goto('food') }}
           style={{ ...chip(CV.amberDim), marginLeft: 'auto' }}>🍜 美食地圖</a>
       </header>
       {children}
@@ -82,7 +84,7 @@ function TripCard({ t }: { t: Trip }) {
   const href = `trips/${encodeURIComponent(t.id)}`
   return (
     <a href={`#${href}`} className="tr-card" data-testid="trip-card"
-      onClick={e => { e.preventDefault(); window.location.hash = href }}>
+      onClick={e => { e.preventDefault(); goto(href) }}>
       {t.cover
         ? <AuthImage className="tr-cover" src={thumbOf(t.cover)} fallbackSrc={t.cover} alt="" loading="lazy" decoding="async" />
         : <div className="tr-cover-ph" aria-hidden>🧳</div>}
@@ -285,7 +287,7 @@ function TripsPage({ tripId, unlockedPassword = null }: { tripId: string | null;
             : (
               <div data-testid="trip-not-found" style={{ fontSize: '0.84rem', color: CV.steel, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
                 找不到這趟遊記。
-                <a href="#trips" onClick={e => { e.preventDefault(); window.location.hash = 'trips' }} style={{ color: CV.amberDim }}>回遊記列表 →</a>
+                <a href="#trips" onClick={e => { e.preventDefault(); goto('trips') }} style={{ color: CV.amberDim }}>回遊記列表 →</a>
               </div>
             )}
         </div>

@@ -41,6 +41,7 @@ import { NowSection } from './NowSection'
 import { InsightIslands } from './InsightIslands'
 import { IdeaBoard } from './IdeaBoard'
 import { nowReady } from './nowCards'
+import { goto, useRestorable, useScrollRestore } from './navBack'
 import {
   EXPECTED_EVERY_MIN, badFeedNames, dataEveryMinFor, dimensionSeries, blockState, buildHeatmap, greeting, hhiRecordedDays, hhiTrend, historyUpdatedAtMs, knowledgeStats, latestTrip, milestones,
   oldestWantPlace, placesBeenCount, systemLight, taipeiDate, todaySentence, yearProgress, type BlockStatus, type DimSeries,
@@ -93,7 +94,9 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   const now = useNow()
   const nowMs = now.getTime()
   const todayIso = taipeiDate(now)
-  const [drawer, setDrawer] = useState<DrawerKey | null>(null)
+  const [drawer, setDrawer] = useRestorable<DrawerKey | null>('home.drawer', null)
+  // 3.27.0：跳到別頁再回來，首頁捲動位置與抽屜都還原（捲動的是 InstrumentPanelView 的 .ip-scroll）
+  useScrollRestore('home', () => document.querySelector<HTMLElement>('.ip-scroll'))
   const v3 = layout === 'v3'
   // 最近搜尋的詞帶回搜尋框：n 每點一次加 1（OmniSearch 的 seed 介面）
   const [seed, setSeed] = useState({ q: '', n: 0 })
@@ -179,7 +182,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
   useEffect(() => {
     const onHash = () => {
       if (window.location.hash !== '#ideas') return
-      try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* 維持原網址 */ }
+      try { window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search) } catch { /* 維持原網址 */ }
       if (on) setDrawer('ideas'); else onRequestUnlock()
     }
     onHash()
@@ -303,7 +306,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
     const openIdeas = () => { if (on) setDrawer('ideas'); else onRequestUnlock() }
     // 3.20.0：知識庫明細抽屜裡點題目 → 關抽屜、到題目頁（大綱三欄，不是島嶼全景）
     const kbTopics = topicsFeed.data?.value?.topics ?? null
-    const openKbTopic = (id: string) => { closeDrawer(); window.location.hash = `#knowledge/${encodeURIComponent(id)}` }
+    const openKbTopic = (id: string) => { goto(`#knowledge/${encodeURIComponent(id)}`); closeDrawer() }
     const insightBlock = (
       <div className="st-dsec" data-testid="activity-insight">
         <h3 className="hm-h3">🔍 什麼事讓你變好</h3>
@@ -350,7 +353,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
             onRequestUnlock={onRequestUnlock} />
           {/* 3.16.0：附近搬到搜尋框旁邊——點了直接開美食地圖的「附近・由近到遠」 */}
           <button type="button" className="tb-nearby" data-testid="tb-nearby" aria-label="附近有什麼：開美食地圖，由近到遠"
-            onClick={() => { if (on) window.location.hash = '#food/nearby'; else onRequestUnlock() }}>
+            onClick={() => { if (on) goto('#food/nearby'); else onRequestUnlock() }}>
             <span aria-hidden>📍</span><span className="tb-nearby-tx">附近</span>
           </button>
         </TopBarSearch>
@@ -427,7 +430,7 @@ export function HomeBoard({ unlocked, unlockedPassword, hhiData, hhiFetchedAt, h
       <SystemSection st={sysSt} light={light} onOpen={() => setDrawer('ops')} onRequestUnlock={onRequestUnlock} />
       <PaidServicesSection st={svcSt} usage={usage.data} paid={paid.data} onOpen={() => setDrawer('svc')} onRequestUnlock={onRequestUnlock} />
       <BriefSection st={briefSt} brief={brief} parsed={briefParsed} crowd={briefCrowd} onRequestUnlock={onRequestUnlock} onRetry={reports.reload} />
-      <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} links={dimLinks} onOpen={(key) => { window.location.hash = dimHash(key) }} onRequestUnlock={onRequestUnlock} />
+      <DimensionsSection st={hhiSt} breakdown={breakdown} series={sparkSeries} links={dimLinks} onOpen={(key) => { goto(dimHash(key)) }} onRequestUnlock={onRequestUnlock} />
       <CompanionSection st={companionSt} data={companion.data} insight={insight} onRequestUnlock={onRequestUnlock} onRetry={companion.reload} pw={pw} today={todayIso} actions={personActions.data ?? undefined} onActionsChange={personActions.reload} actionsReady={personActions.data !== null} />
       <GrowthSection histSt={heatSt} heat={heat} heatPending={`資料累積中：有紀錄的日子還不到 2 天（目前 ${heat.withData} 天）`}
         kbSt={kbSt} kb={kb} milestones={miles} toneOf={toneOf} onRequestUnlock={onRequestUnlock} onRetryHistory={history.reload} onRetryKb={graph.reload} />

@@ -9,6 +9,7 @@ import { pinTargetFor } from './pushTriggers'
 import { TemplateAnswer, TopicAnswer } from './SearchAnswerPanel'
 import type { Topic } from './knowledgeView'
 import { CTX_H, CTX_W, contextLayout, ctxLabel, highlightSegments, kindLabel, openAction, type PreviewRelated, type SearchKind, type SearchPreview } from './omniSearch'
+import { goto } from './navBack'
 
 // 全站搜尋的右側閱讀面板（類型、標題、一句話、重點、脈絡圖、出處、開啟）。狀態都由 OmniSearch.tsx 傳進來。
 
@@ -170,7 +171,7 @@ export function OmniSearchReader({ item, preview, q, expanded, onToggleExpand, o
       )}
       <div className="om-act">
         {isTemplate ? null : isDiary
-          ? <button type="button" className="om-cta" onClick={() => { window.location.hash = buildTimelineDayLink(item.id, '') }}>在時間軸看 ↵</button>
+          ? <button type="button" className="om-cta" onClick={() => { goto(buildTimelineDayLink(item.id, '')) }}>在時間軸看 ↵</button>
           : <button type="button" className={inPanel ? 'om-gh' : 'om-cta'} onClick={onOpen}>{inPanel ? (expanded ? '收合原文 ↵' : '看原文 ↵') : isEvent ? '開啟事件卷宗 ↵' : item.kind === 'repo' ? '在 GitHub 開啟 ↵' : '開啟 ↵'}</button>}
         {p?.url && <a className="om-gh" href={p.url} target="_blank" rel="noopener noreferrer">在 GitHub 開啟 ↗</a>}
         {p?.bodyMd != null && !inPanel && (

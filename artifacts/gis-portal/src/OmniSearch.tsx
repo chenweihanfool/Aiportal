@@ -18,6 +18,7 @@ import { dossierHref } from './dossier'
 import { InsightHit, Marked, OmniSearchReader, type PreviewState, type ReaderItem } from './OmniSearchReader'
 import { shouldFocusSearch } from './searchHotkey'
 import type { SiteData } from './portalApi'
+import { goto, useRestorable } from './navBack'
 
 // 首頁最上方「一個框搜全部」（2.86.0，取代原本的指令面板）。純邏輯在 omniSearch.ts、網路在 omniSearchApi.ts、閱讀面板在 OmniSearchReader.tsx。
 
@@ -64,7 +65,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   /** 3.10.0：頂欄的一行搜尋列——不畫大標題／脈動，模式、最近、即答、結果都收進浮層，聚焦或有字才展開 */
   compact?: boolean
 }) {
-  const [raw, setRaw] = useState('')
+  const [raw, setRaw] = useRestorable<string>('omni.q', '')
   const [focused, setFocused] = useState(false)
   // compact：點到搜尋列與浮層以外的地方就收起（有字時光 blur 不夠，浮層會因「正在搜尋」繼續開著）
   const [dismissed, setDismissed] = useState(false)
@@ -324,7 +325,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
   }
   const run = (a: OpenAction, q: string) => {
     switch (a.type) {
-      case 'hash': window.location.hash = a.hash; break
+      case 'hash': goto(a.hash); break
       case 'ideas': onOpenIdeas(); break
       case 'chat': onOpenChat(q || undefined); break
       case 'tool': {
@@ -336,7 +337,7 @@ export function OmniSearch({ pw, sites, onSelectSite, onOpenIdeas, onOpenChat, o
       }
       case 'expand': setExpanded((v) => !v); break
       case 'report': document.getElementById('om-report')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); break
-      case 'dossier': window.location.hash = dossierHref(a.kind, a.name); break
+      case 'dossier': goto(dossierHref(a.kind, a.name)); break
       case 'repo': {
         const url = repoUrlFor(a.id)
         if (url) window.open(url, '_blank', 'noopener,noreferrer')

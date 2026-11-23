@@ -11,6 +11,8 @@ import { PhotoGallery } from './PhotoGallery'
 import { AuthImage, MediaAuthContext } from './AuthImage'
 import { useGeolocation } from './useGeolocation'
 import { apiFetchFood, formatReceivedAt } from './foodApi'
+import { goto } from './navBack'
+import { BackToOrigin } from './BackToOrigin'
 
 // ─────────────────────────────────────────────
 // 🍜 美食地圖（#food，2026-10-15 原型）
@@ -264,7 +266,7 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
     return (
       <div className="fm-page" style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${CV.line}` }}>
-          <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
+          <BackToOrigin fallback={<button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>} />
           <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
         </header>
         <div role="status" style={{ flex: 1, display: 'grid', placeItems: 'center', color: CV.steelDim, fontFamily: FONT.mono, fontSize: '0.8rem' }}>載入中…</div>
@@ -275,9 +277,9 @@ function FoodMapPage({ onBack, data: dataProp, now: nowProp, unlockedPassword = 
   return (
     <div className={`fm-page${nearbyOn ? ' is-nearby' : ''}`} style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.7rem 1.2rem', borderBottom: `1px solid ${CV.line}`, flexWrap: 'wrap' }}>
-        <button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>
+        <BackToOrigin fallback={<button type="button" onClick={onBack} style={{ cursor: 'pointer', background: 'none', border: 'none', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', padding: 0 }}>← 返回儀表板</button>} />
         <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>🍜🧭 美食及旅遊地圖</h1>
-        <a href="#trips" data-testid="food-to-trips" onClick={e => { e.preventDefault(); window.location.hash = 'trips' }}
+        <a href="#trips" data-testid="food-to-trips" onClick={e => { e.preventDefault(); goto('trips') }}
           style={{ ...pill(false, CV.amberDim), textDecoration: 'none' }}>📖 遊記</a>
         {isSample && <span data-testid="food-sample-chip" style={{ fontFamily: FONT.mono, fontSize: '0.6rem', color: CV.warn, border: `1px solid ${CV.warn}`, borderRadius: 4, padding: '2px 6px' }}>示範資料・尚未接知識庫</span>}
         {src.note && <span data-testid="food-source-note" style={{ fontSize: '0.66rem', color: CV.steelDim }}>{src.note}</span>}

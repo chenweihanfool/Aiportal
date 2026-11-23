@@ -5,6 +5,7 @@ import { apiFetchArchStats, ageMinutes, cardMetrics, formatValue, isStale } from
 import { formatMinutesAgo } from './format'
 import { useAsync, useNow } from './homeHooks'
 import { scheduleLine, shortSchedule } from './pipelineSchedule'
+import { BackToOrigin } from './BackToOrigin'
 
 // 知識庫架構頁（#architecture，2026-10-22）：分層畫出「來源 → 萃取管線 → 權威儲存 → 衍生索引 → 入口網」，
 // L1～L5 的班表與健康狀態是即時的（/api/hermes-pipeline），其餘是結構說明。點節點高亮上下游、看職責與腳本。
@@ -65,7 +66,7 @@ export function ArchitectureView({ unlockedPassword, onBack, onRequestUnlock }: 
   return (
     <div className="ar-root">
       <header className="ar-head">
-        <button type="button" className="ar-back" onClick={onBack}>← 返回儀表板</button>
+        <BackToOrigin fallback={<button type="button" className="ar-back" onClick={onBack}>← 返回儀表板</button>} />
         <h1>知識庫架構</h1>
         <span className="ar-legend" aria-label="圖例">
           {(['authority', 'pipeline', 'derived', 'experimental'] as const).map((k) => <span key={k} className="ar-badge" data-role={k}>{ROLE_LABEL[k]}</span>)}

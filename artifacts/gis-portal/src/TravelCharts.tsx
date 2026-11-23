@@ -4,6 +4,7 @@ import { useAsync } from './homeHooks'
 import { blockState } from './homeView'
 import { Skeleton, StateFrame } from './StateFrame'
 import { apiFetchTrips, taipeiTodayIso } from './tripsApi'
+import { goto } from './navBack'
 import {
   COUNTIES, COUNTY_GRID, buildCalendar, buildFootprint, daysSinceLastTrip, footprintLevel, monthLabels, nextTrip,
 } from './travelCharts'
@@ -78,7 +79,7 @@ export function TravelCharts({ pw, now, color, onRequestUnlock }: {
                       const dot = c.food ? <b className="tc-dot" aria-hidden /> : null
                       return first ? (
                         <button key={c.date} type="button" className={cls} title={tip} aria-label={tip} data-testid="tc-trip-cell"
-                          onClick={() => { location.hash = `trips/${first.id}` }}>{dot}</button>
+                          onClick={() => { goto(`trips/${first.id}`) }}>{dot}</button>
                       ) : (
                         <i key={c.date} className={cls} title={tip}>{dot}</i>
                       )

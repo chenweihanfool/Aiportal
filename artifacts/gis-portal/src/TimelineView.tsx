@@ -11,6 +11,7 @@ import {
   apiFetchTimelineDetail, apiFetchTimelineList,
   type TimelineDetail, type TimelineItem, type TimelineLevel,
 } from './timelineApi'
+import { goto } from './navBack'
 import {
   LEVELS, LEVEL_LABEL, groupItems, itemKey, mergePages, neighbors, oneLine, reportBadge, reportScoreLine, rowDateLabel,
   type ScoreTone,
@@ -53,7 +54,7 @@ export function TimelineView({ unlockedPassword, onBack, initialDay = null, from
   const [stack, setStack] = useState<Ref[]>(() => (initialDay ? [{ level: 'day', periodKey: initialDay }] : []))
   // 對話框是從深連結（帶 from）打開的：✕／Esc／回去鍵都回到來源，而不是停在列表
   const [fromActive, setFromActive] = useState(() => !!initialDay && from !== null)
-  const goFrom = useCallback(() => { if (from !== null) window.location.hash = from }, [from])
+  const goFrom = useCallback(() => { if (from !== null) goto(from) }, [from])
   useEffect(() => {
     if (initialDay) { setStack([{ level: 'day', periodKey: initialDay }]); setFromActive(from !== null) }
   }, [initialDay, from])
@@ -152,7 +153,7 @@ export function TimelineView({ unlockedPassword, onBack, initialDay = null, from
 
   const jumpToEvent = useCallback((id: string) => {
     setStack([])
-    window.location.hash = '#dossier/event/' + encodeURIComponent(id)
+    goto('#dossier/event/' + encodeURIComponent(id))
   }, [])
 
   const groups = groupItems(level, items)

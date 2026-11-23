@@ -21,6 +21,7 @@ import { InstrumentPanelView } from './InstrumentPanelView'
 import { hhiTone } from './format'
 import { apiFetchDashboard, apiFetchSites, clearUnlock, readUnlock, type DashboardSummary, type SiteData } from './portalApi'
 import './portal.css'
+import { goBack, installLinkInterceptor, restoreWindowScroll, useWindowScrollRegistration } from './navBack'
 
 /** #trips/<id> 的 id（網址編碼還原；格式壞掉就當作找不到） */
 function tripIdFromHash(hash: string): string {
@@ -58,6 +59,10 @@ export default function App() {
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
+  // 3.27.0 全站「回到原頁」：站內 <a href="#…"> 走 goto()（記來源與捲動）；視窗捲動登記並在換頁（含上一頁）後還原
+  useEffect(() => installLinkInterceptor(), [])
+  useWindowScrollRegistration()
+  useEffect(() => { restoreWindowScroll() }, [hashRoute])
 
   // 面向對應的子系統連結（人生進度、健身追蹤、任務追蹤）：要解鎖才給；未解鎖或抓失敗就是空清單
   useEffect(() => {
@@ -108,7 +113,7 @@ export default function App() {
   }
   // 知識庫架構頁（2026-10-22）：分層架構圖＋L1～L5 即時狀態；入口在首頁「成長軌跡」與戰情室旁
   if (hashRoute === '#architecture') {
-    return <ArchitectureView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} onRequestUnlock={handleRequestUnlock} />
+    return <ArchitectureView unlockedPassword={unlockedPassword} onBack={() => goBack('')} onRequestUnlock={handleRequestUnlock} />
   }
   // 知識頁（2026-11-05）：#knowledge＝題目牆、#knowledge/<id>＝單題頁；id 經 decodeURIComponent
   // 3.21.0：只有島嶼畫面；進島與網址的對應在 knowledgeRoute.ts／KnowledgeIslands.tsx（島內自己讀 location.hash 並監聽 hashchange）
@@ -117,12 +122,12 @@ export default function App() {
   }
   const timelineRoute = parseTimelineHash(hashRoute)
   if (timelineRoute !== null) {
-    return <TimelineView unlockedPassword={unlockedPassword} onBack={() => { window.location.hash = '' }} initialDay={timelineRoute.day} from={timelineRoute.from} />
+    return <TimelineView unlockedPassword={unlockedPassword} onBack={() => goBack('')} initialDay={timelineRoute.day} from={timelineRoute.from} />
   }
   // 美食地圖（2026-10-15）：解鎖後讀知識庫的地點（/api/hermes-places），沒有資料才退回示範資料；入口見首頁按鈕與全站搜尋輸入 >美食。
   // #food/nearby（3.16.0）：頂欄「📍 附近」直接開美食地圖的「附近・由近到遠」
   if (hashRoute === '#food' || hashRoute === '#food/nearby') {
-    return <FoodMapView onBack={() => { window.location.hash = '' }} unlockedPassword={unlockedPassword} autoNearby={hashRoute === '#food/nearby'} />
+    return <FoodMapView onBack={() => goBack('')} unlockedPassword={unlockedPassword} autoNearby={hashRoute === '#food/nearby'} />
   }
   // 遊記（2026-10-15）：#trips 列表、#trips/<id> 單趟；兩者同一個元件，切換時不重抓資料
   if (hashRoute === '#trips') {
