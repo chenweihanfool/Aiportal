@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { CV, FONT } from './theme'
+import { goto } from './navBack'
 
 export type GraphTab = 'dossier' | 'timeline'
 
@@ -17,9 +18,9 @@ export function GraphShell({ tab, onBack, extra, children }: { tab: GraphTab; on
         <span onClick={onBack} style={{ cursor: 'pointer', color: CV.amberDim, fontFamily: FONT.mono, fontSize: '0.72rem', letterSpacing: '0.04em' }}>← 返回儀表板</span>
         <nav aria-label="關係圖分頁" style={{ display: 'flex', gap: '1.1rem' }}>
           <button type="button" aria-current={tab === 'dossier' ? 'page' : undefined} style={tabStyle(tab === 'dossier')}
-            onClick={() => { window.location.hash = '#dossier' }}>卷宗</button>
+            onClick={() => { goto('#dossier') }}>卷宗</button>
           <button type="button" aria-current={tab === 'timeline' ? 'page' : undefined} style={tabStyle(tab === 'timeline')}
-            onClick={() => { window.location.hash = '#graph/timeline' }}>時間軸</button>
+            onClick={() => { goto('#graph/timeline') }}>時間軸</button>
         </nav>
         {extra}
       </div>

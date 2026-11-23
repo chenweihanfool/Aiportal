@@ -59,8 +59,8 @@ function useTheme(): PaletteTheme {
 
 function writeHash(id: string | null): void {
   try {
-    if (id) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#insight/${encodeURIComponent(id)}`)
-    else if (insightIdFromHash(window.location.hash)) window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    if (id) window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#insight/${encodeURIComponent(id)}`)
+    else if (insightIdFromHash(window.location.hash)) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
   } catch { /* 取不到 history 就維持原網址 */ }
 }
 

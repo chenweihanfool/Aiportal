@@ -15,6 +15,7 @@ import {
   type PushStats, type ReportCatalog, type SearchStats, type ServiceSummary,
 } from './statusAside'
 import type { FoodPlace } from './foodMap'
+import { goto } from './navBack'
 
 // 首頁右欄 STATUS（2.88.0）：六個面向、成長與系統、最近搜尋、好玩的小盒、捷徑。
 // 資料與狀態判定由 HomeBoard 傳進來，純計算在 statusAside.ts；樣式 st- 前綴在 portal.css。
@@ -182,7 +183,7 @@ export function StatusAside(p: StatusAsideProps) {
               const d = cell.delta
               return (
                 <button key={row.key} type="button" className="st-dim" data-testid="st-dim" data-dim={row.key} style={{ ['--dim' as string]: meta?.color ?? DIMENSION_FALLBACK_COLOR }}
-                  onClick={() => { window.location.hash = dimHash(row.key) }}
+                  onClick={() => { goto(dimHash(row.key)) }}
                   aria-label={`${label} ${row.value ?? '沒有資料'}，與 7 天平均${d === null || d === 0 ? '差不多或資料不足' : d > 0 ? `高 ${d}` : `低 ${-d}`}，點開看面向頁`}>
                   <span className="st-dim-k">{label}</span>
                   <span className="st-dim-n">{row.value ?? '—'}</span>

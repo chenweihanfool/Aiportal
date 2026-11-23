@@ -7,6 +7,8 @@ import { taipeiDate } from './homeView'
 import { dimensionsYear, hhiYear, placesYear, tripsYear } from './yearReview'
 import { Skeleton } from './StateFrame'
 import { CV, FONT, themedColor } from './theme'
+import { goBack, goto } from './navBack'
+import { BackToOrigin } from './BackToOrigin'
 
 // 年度回顧頁（#year／#year/<年>，P2-1）：這一年的幸福指數、六個面向、旅行、去過的地點。
 // 全部由既有接口算出來（/api/happiness/history、遊記、美食地圖），沒有新後端。
@@ -30,7 +32,7 @@ export function YearReview({ year, unlocked, unlockedPassword, toneOf, onRequest
   const food = useAsync(pw, apiFetchFood)
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) window.location.hash = '' }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) goBack('') }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
@@ -42,13 +44,13 @@ export function YearReview({ year, unlocked, unlockedPassword, toneOf, onRequest
   const withDims = dims.filter((d) => d.avg !== null)
   const strongest = withDims[0] ?? null
   const weakest = withDims.length >= 2 ? withDims[withDims.length - 1]! : null
-  const go = (y: number) => { window.location.hash = `year/${y}` }
+  const go = (y: number) => { goto(`year/${y}`) }
 
   return (
     <div className="dp-page yr-page" data-testid="year-page" data-year={year}
       style={{ position: 'fixed', inset: 0, background: CV.panelDeep, display: 'flex', flexDirection: 'column', zIndex: 200, color: CV.ink, fontFamily: FONT.body }}>
       <header className="dp-head">
-        <a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); window.location.hash = '' }}>← 首頁</a>
+        <BackToOrigin fallback={<a href="#" data-testid="dp-back" className="dp-back" onClick={(e) => { e.preventDefault(); goto('') }}>← 首頁</a>} />
         <nav className="yr-nav" aria-label="切換年份">
           <button type="button" className="dp-range" disabled={year <= MIN_YEAR} data-testid="yr-prev" onClick={() => go(year - 1)}>← {year - 1}</button>
           <button type="button" className="dp-range" disabled={year >= thisYear} data-testid="yr-next" onClick={() => go(year + 1)}>{year + 1} →</button>

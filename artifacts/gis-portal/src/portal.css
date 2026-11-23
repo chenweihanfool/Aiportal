@@ -3173,3 +3173,7 @@ a.it-chip:hover, button.it-chip:hover { border-color: var(--c-accent); backgroun
 .kis-wheel-hint.kis-on { opacity: 1; }
 .kis-flash { outline: 2px solid var(--c-accent); outline-offset: 1px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-accent) 25%, transparent); z-index: 2; }
 @media (prefers-reduced-motion: reduce) { .kis-wheel-hint { transition: none; } }
+
+/* 3.27.0 全站「回到原頁」按鈕 */
+.nav-back { cursor: pointer; background: none; border: 1px solid var(--c-line-strong); border-radius: 999px; color: inherit; font: inherit; font-size: 0.8rem; padding: 4px 12px; line-height: 1.4; }
+.nav-back:hover, .nav-back:focus-visible { border-color: var(--c-accent); color: var(--c-accent); }

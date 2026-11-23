@@ -16,6 +16,7 @@ import { taipeiDateOf } from './companion'
 import { RELATION_LABEL, type Insight, type InsightData } from './insightModel'
 import { describeForecast, formatBytes, storageShares } from './diskView'
 import { balanceChartGeometry, biggestDrag, buildHhiBreakdown, dailyBars, formatCalls, formatEmptyDay, formatUsd } from './boardView'
+import { goto } from './navBack'
 
 // 桌面首頁（≥1100px 寬、≥640px 高）的「一個畫面放得下」儀表板，首頁電腦版就只有這一塊，不必捲動。
 // 手機、窄／矮視窗也用同一組卡片（2026-10-12 起），由 portal.css 改成上下堆疊、高度隨內容、抽屜全螢幕。
@@ -797,7 +798,7 @@ function NetworkCard({ pw }: { pw: string }) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: '0.7rem', color: CV.steel }}>
             <span>{m.mostActivePerson ? <>這陣子最活躍：<b style={{ color: CV.amber }}>{m.mostActivePerson.name}</b><span style={{ color: CV.steelDim }}>（{m.mostActivePerson.eventCount} 個事件）</span></> : ''}</span>
-            <button type="button" onClick={() => { window.location.hash = 'dossier' }} style={btn}>看卷宗 →</button>
+            <button type="button" onClick={() => { goto('dossier') }} style={btn}>看卷宗 →</button>
           </div>
         </>
       )}

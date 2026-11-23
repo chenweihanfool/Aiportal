@@ -7,6 +7,7 @@ import { FoodMapPill } from './FoodMapPill'
 import { VersionHistory } from './VersionHistory'
 import { CLASSIC_REMOVAL_NOTE, type HomeLayout } from './homeLayout'
 import { THEME_LABEL, THEME_MODES, applyThemeMode, browserThemeStore, readThemeMode, writeThemeMode, type ThemeMode } from './themeMode'
+import { goto } from './navBack'
 
 /** 深／淺／跟系統 三段切換（2.89.0）：存 localStorage hm-theme，dark／light 設 <html data-theme>，system 移除。 */
 function ThemeToggle() {
@@ -43,7 +44,7 @@ export function TopBar({ portals, legacy, onOpenAdmin, layout, onToggleLayout }:
         <h1 className="tb-title">翰翰儀表板</h1>
         <span className="tb-tag ip-head-sub">Life Instrumentation</span>
         {legacy && (
-          <a className="hm-legacy-back" href="#" onClick={e => { e.preventDefault(); window.location.hash = '' }} title="回到新首頁">
+          <a className="hm-legacy-back" href="#" onClick={e => { e.preventDefault(); goto('') }} title="回到新首頁">
             <span className="hm-legacy-badge">舊版首頁</span>← 回到新首頁
           </a>
         )}

@@ -8,6 +8,7 @@ import { HermesPipelinePanel } from './PipelineFlow'
 import { formatGb, formatMinutesAgo, pctTone } from './format'
 import { CollapsibleSubPanel, StatCell, SubLabel, SubPanel, TrendLineChart } from './panelUi'
 import { apiFetchDashboard, apiFetchHermesActivity, apiFetchHermesPipeline, apiFetchHermesStatus, apiFetchHermesStatusHistory, type HermesActivityEntry, type HermesContainerInfo, type HermesDiskInfo, type HermesPipelineData, type HermesScheduledTaskInfo, type HermesStatusData, type HermesStatusHistoryPoint } from './portalApi'
+import { goto } from './navBack'
 
 // ─────────────────────────────────────────────
 // HERMES 戰情室 — operational monitoring, collected by
@@ -54,7 +55,7 @@ function HermesEventGraphPanel({ unlockedPassword }: { unlockedPassword: string 
           )}
           <button
             type="button"
-            onClick={() => { window.location.hash = 'dossier' }}
+            onClick={() => { goto('dossier') }}
             style={{
               width: '100%', padding: '0.7rem', borderRadius: '5px', cursor: 'pointer', fontFamily: FONT.mono, fontSize: '0.74rem', letterSpacing: '0.06em',
               background: 'color-mix(in srgb, var(--c-accent) 8%, transparent)', border: `1px solid ${CV.amberDim}`, color: CV.amber,

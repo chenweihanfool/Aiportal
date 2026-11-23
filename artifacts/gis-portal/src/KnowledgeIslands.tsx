@@ -21,6 +21,7 @@ import { quoteQueryFor } from './knowledgeDiagramLayout'
 import { formatKnowledgeHash, parseKnowledgeHash, type KnowledgeRoute } from './knowledgeRoute'
 import { RELATION_TEXT, foldVerdicts, verdictOf, type KbLink, type KbStep } from './insightWeave'
 import type { Insight } from './insightModel'
+import { goto } from './navBack'
 
 // 知識島（3.18.0）：知識頁的「島嶼」視圖。島＝知識樹的枝；點島飛入後橫軸是該題的做事順序（SOP）；疊加層顯示心得掛在哪一步、共用步驟（橋）與盲點。
 // 互動與外觀照首頁心得島（InsightIslands）；純函式在 knowledgeIslands.ts，樣式在 portal.css 的 kis-*。
@@ -168,9 +169,9 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
   }, [])
 
   // 島內切題分頁、切選取：寫回網址但不新增歷史
-  const writeHash = (h: string) => { try { window.history.replaceState(null, '', h) } catch { /* 寫不進去就只在畫面上有效 */ } }
+  const writeHash = (h: string) => { try { window.history.replaceState(window.history.state, '', h) } catch { /* 寫不進去就只在畫面上有效 */ } }
   const setWhere = (w: Where) => { setWhereRaw(w); writeHash(hashOf(w)) }
-  const navTopic = (topicId: string, stationId: string | null) => { window.location.hash = formatKnowledgeHash({ view: 'topic', topicId, stationId }) }
+  const navTopic = (topicId: string, stationId: string | null) => { goto(formatKnowledgeHash({ view: 'topic', topicId, stationId })) }
   // 從全景點島：用一般導航（新增歷史，上一頁回得到全景）寫成第一個非 seed 題目的預設選取，狀態由 hashchange 套用
   const enter = (islandId: string, topicId?: string) => {
     const e = islandById.get(islandId)
@@ -181,6 +182,8 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
   const go = (topicId: string, stationId?: string) => {
     const e = islandOf.get(topicId)
     if (!e) return
+    // 3.27.0：跳到別的題目要留歷史（上一頁／「回到」回得來）；同一題內換站維持 replaceState
+    if (where && where.topicId !== topicId) { navTopic(topicId, stationId ?? (defaultSel(topicId) || null)); return }
     const w = { island: e.island.id, topicId, sel: stationId ? selForStation(topicId, stationId) : defaultSel(topicId) }
     setWhereRaw(w); writeHash(hashOf(w))
   }

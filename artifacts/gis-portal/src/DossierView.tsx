@@ -17,8 +17,10 @@ import { apiFetchInsights } from './insightApi'
 import { insightsForPerson } from './insightLinks'
 import { RELATION_LABEL, type Insight } from './insightModel'
 import './dossier.css'
+import { goto } from './navBack'
+import { BackToOrigin } from './BackToOrigin'
 
-const go = (hash: string) => { window.location.hash = hash }
+const go = (hash: string) => { goto(hash) }
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
 type Load = { state: 'loading' } | { state: 'error' } | { state: 'empty' } | { state: 'ok'; index: GraphIndex }
@@ -286,7 +288,7 @@ export function DossierView({ unlockedPassword, route, onRequestUnlock }: {
     <div className="dz-page">
       <div className="dz-wrap">
         <nav className="dz-nav" aria-label="卷宗導覽">
-          <a href="#" onClick={e => { e.preventDefault(); go('') }}>← 回首頁</a>
+          <BackToOrigin fallback={<a href="#" onClick={e => { e.preventDefault(); go('') }}>← 回首頁</a>} />
           <a href="#dossier">卷宗索引</a>
         </nav>
         {!unlockedPassword ? (
