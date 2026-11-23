@@ -225,7 +225,15 @@ export function useRestorable<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   latest.current = v
   useEffect(() => {
     stateGetters.set(key, () => latest.current)
-    return () => { stateGetters.delete(key) }
+    // 元件沒卸載時（例如首頁抽屜 → #insight 仍在首頁），上一頁回來不會重新掛載，所以 popstate 時再讀一次還原值
+    const onPop = () => {
+      try {
+        const r = savedNav().restore
+        if (r && Object.prototype.hasOwnProperty.call(r, key)) setV(r[key] as T)
+      } catch { /* 取不到就維持現狀 */ }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => { stateGetters.delete(key); window.removeEventListener('popstate', onPop) }
   }, [key])
   return [v, setV]
 }
