@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
 import { topIndexScale } from './knowledgeIslands'
 import { apiFetchVerdicts, apiFetchWeave, apiPostVerdict } from './insightWeaveApi'
@@ -552,20 +552,14 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
   const [band, setBand] = useState(false)
   const [full, setFull] = useState(false)
   const [headH, setHeadH] = useState(0)
-  const mobile = useMobile()
-  const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 900))
+  // 只用 setter：視窗 resize 時觸發重繪，好重量索引內容寬
   const [, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280))
-  // 3.26.0：圖置頂佔整欄寬（縮放比由 topIndexScale 算）；步驟列 .kis-strip 黏在 .kn-head 下方
+  // 3.26.1：圖置頂只看寬度、剛好塞滿整欄（縮放比由 topIndexScale 算）
   const [boxW, setBoxW] = useState(0)
-  const [chipsH, setChipsH] = useState(0)
-  const [stripH, setStripH] = useState(40)
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
-  const chipsRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const idxRef = useRef<HTMLDivElement>(null)
-  const stripRef = useRef<HTMLDivElement>(null)
-  const stepsRef = useRef<HTMLDivElement>(null)
   const topic = island.topics.find((t) => t.id === where.topicId) ?? island.topics[0]!
   const a = analyses.get(topic.id)
   const quotes = useTopicQuotes(pw, topic.id)
@@ -602,16 +596,16 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // .kn-head 的高度（步驟列黏在它下面）；視窗尺寸變了就重算
+  // .kn-head 的高度（換格捲動的基準）；視窗尺寸變了就重算並觸發重量索引寬
   useEffect(() => {
     const measureHead = () => setHeadH(document.querySelector<HTMLElement>('.kn-head')?.offsetHeight ?? 0)
     measureHead()
-    const onResize = () => { measureHead(); setVh(window.innerHeight); setVw(window.innerWidth) }
+    const onResize = () => { measureHead(); setVw(window.innerWidth) }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // 量圖的自然尺寸（viewBox）、索引內容寬、chips 與步驟列高，算圖的縮放比
+  // 量圖的自然尺寸（viewBox）與索引內容寬，算圖的縮放比（只看寬，塞滿整欄）
   useLayoutEffect(() => {
     const svg = idxRef.current?.querySelector<SVGSVGElement>('svg.kn-dg-svg')
     const vb = svg?.viewBox?.baseVal
@@ -619,16 +613,10 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     setNat((o) => ((o && n && o.w === n.w && o.h === n.h) || (!o && !n) ? o : n))
     const bw = Math.max(0, Math.round((idxRef.current?.clientWidth ?? 0) - 2))
     setBoxW((o) => (o === bw ? o : bw))
-    const ch = Math.round(chipsRef.current?.offsetHeight ?? 0)
-    setChipsH((o) => (o === ch ? o : ch))
-    const sh = Math.round(stripRef.current?.offsetHeight ?? 0)
-    if (sh > 0) setStripH((o) => (o === sh ? o : sh))
   })
-  // 桌機：視窗高 − .kn-head − 步驟列 − chips − 160（留給主畫面頂端露出）；手機：視窗高 × 0.45
-  const availH = mobile ? vh * 0.45 : vh - headH - stripH - chipsH - 160
-  const idxScale = nat && boxW > 0 ? topIndexScale(nat, boxW, availH).scale : undefined
+  const idxScale = nat && boxW > 0 ? topIndexScale(nat, boxW).scale : undefined
 
-  // 換格子／組／題之後，主畫面頂端若被黏頂步驟列蓋住或在視窗下方，就平滑捲動讓它落在步驟列底部下方 8px；已在視窗內不捲
+  // 換格子／組／題之後，主畫面頂端若被 .kn-head 蓋住或在視窗下方，就平滑捲動讓它落在 .kn-head 下方 8px；已在視窗內不捲
   const lastKey = useRef(`${where.topicId}|${where.sel}`)
   useEffect(() => {
     const key = `${where.topicId}|${where.sel}`
@@ -636,13 +624,11 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
     lastKey.current = key
     const id = window.requestAnimationFrame(() => {
       const el = contentRef.current
-      const strip = stripRef.current
       const sc = sentinelRef.current?.closest<HTMLElement>('.kn-root') ?? null
       if (!el || !sc) return
       const top = el.getBoundingClientRect().top
-      const floor = strip ? strip.getBoundingClientRect().bottom : headH
-      if (top >= floor && top < window.innerHeight - 40) return
-      const delta = top - (floor + 8)
+      if (top >= headH && top < window.innerHeight - 40) return
+      const delta = top - (headH + 8)
       if (typeof sc.scrollBy === 'function') sc.scrollBy({ top: delta, behavior: 'smooth' })
       else sc.scrollTop += delta
     })
@@ -813,63 +799,13 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
           />
         )}
         {groups.length > 0 && (
-          <div ref={chipsRef} className="kis-groups" role="group" aria-label="內容分組">
+          <div className="kis-groups" role="group" aria-label="內容分組">
             {groups.map((g) => (
               <button key={g.key} type="button" className="kis-grp" aria-pressed={sel === `g:${g.key}`} onClick={() => select(`g:${g.key}`)}>{g.label}<em>{g.n}</em></button>
             ))}
           </div>
         )}
       </div>
-  )
-
-  // 黏頂步驟列：flow 依泳道分段（泳道名：步驟 › 步驟），段與段用「｜」分隔；非 flow 或沒有泳道就一列排；右端上一格／下一格
-  const stripSegs = useMemo(() => {
-    if (!diagram) return []
-    const item = (id: string) => {
-      const n = diagram.type === 'flow' ? diagram.nodes.find((x) => x.id === id) : undefined
-      const label = n ? n.label : (diagramNodeInfo(diagram, id)?.heading.split('・').slice(1).join('・') ?? id)
-      return { id, label, decision: n?.shape === 'decision' }
-    }
-    if (diagram.type === 'flow' && diagram.lanes.length > 0) {
-      return diagram.lanes
-        .map((name, li) => ({ name, items: order.filter((id) => diagram.nodes.find((x) => x.id === id)?.lane === li).map(item) }))
-        .filter((g) => g.items.length > 0)
-    }
-    return [{ name: '', items: order.map(item) }]
-  }, [diagram, order])
-
-  // 選取變更時只捲步驟列本身，讓目前的步驟按鈕進入可見範圍（不捲動頁面）
-  useEffect(() => {
-    const box = stepsRef.current
-    const btn = box?.querySelector<HTMLElement>('[aria-current="step"]')
-    if (!box || !btn) return
-    const b = box.getBoundingClientRect()
-    const r = btn.getBoundingClientRect()
-    if (r.left < b.left) box.scrollLeft += r.left - b.left - 8
-    else if (r.right > b.right) box.scrollLeft += r.right - b.right + 8
-  }, [sel, topic.id, stripSegs])
-
-  const stripEl = (diagram || groups.length > 0) && (
-    <div ref={stripRef} className="kis-strip" data-testid="kis-strip" style={{ top: headH }}>
-      <div ref={stepsRef} className="kis-strip-steps">
-        {stripSegs.map((g, gi) => (
-          <Fragment key={gi}>
-            {gi > 0 && <span className="kis-strip-sep" aria-hidden="true">｜</span>}
-            {g.name && <span className="kis-strip-lane">{g.name}：</span>}
-            {g.items.map((it, ii) => (
-              <Fragment key={it.id}>
-                {ii > 0 && <span className="kis-strip-arrow" aria-hidden="true">›</span>}
-                <button type="button" className="kis-strip-step" data-node={it.id} aria-current={!groupKey && sel === it.id ? 'step' : undefined} onClick={() => select(it.id)}>{it.decision ? '◇ ' : ''}{it.label}</button>
-              </Fragment>
-            ))}
-          </Fragment>
-        ))}
-      </div>
-      <span className="kis-nav">
-        <button type="button" disabled={navIdx <= 0} onClick={() => move(-1)}>← 上一格</button>
-        <button type="button" disabled={navIdx < 0 || navIdx >= navList.length - 1} onClick={() => move(1)}>下一格 →</button>
-      </span>
-    </div>
   )
 
   const summary = a?.parsed?.summary ? stripMarks(a.parsed.summary.text) : ''
@@ -916,13 +852,17 @@ function IslandInside({ island, color, where, setWhere, analyses, bridges, aiBri
         </div>
       ) : (
         <>
-          <div ref={sentinelRef} className="kis-sentinel" aria-hidden="true" />
+          <div ref={sentinelRef} className="kis-sentinel" aria-hidden="true" style={{ scrollMarginTop: headH + 8 }} />
           {indexEl}
-          {stripEl}
           <div className="kis-split">
             <section className="kis-content" data-testid="kis-content" ref={contentRef}>
               <div className="kis-ch">
                 <span className="kis-kind">{label}</span>
+                <span className="kis-nav">
+                  {diagram && <button type="button" data-testid="kis-back-diagram" onClick={() => sentinelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })}>↑ 回到圖</button>}
+                  <button type="button" disabled={navIdx <= 0} onClick={() => move(-1)}>← 上一格</button>
+                  <button type="button" disabled={navIdx < 0 || navIdx >= navList.length - 1} onClick={() => move(1)}>下一格 →</button>
+                </span>
               </div>
               {main ?? <p className="kis-none">這一題還沒有可以顯示的內容。</p>}
             </section>

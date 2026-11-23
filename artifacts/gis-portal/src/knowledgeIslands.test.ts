@@ -355,31 +355,32 @@ describe('索引模式（3.23.0）', () => {
     expect(isValidSelection('g:steps', analyzeTopic(none), flow, none)).toBe(false)
   })
 
-  it('topIndexScale：寬受限、高受限、maxScale 封頂、低於 minScale 夾住並橫捲、natural 無效', () => {
-    // 寬受限：boxW 1000 / w 1018 → 約 0.982（高不是限制）
-    const w = topIndexScale({ w: 1018, h: 502 }, 1000, 2000)
+  it('topIndexScale：只看寬、剛好塞滿、maxScale 封頂、低於 minScale 夾住並橫捲、boxW 0、natural 無效', () => {
+    // 剛好塞滿：boxW 1000 / w 1018 → 約 0.982，寬度等於 boxW
+    const w = topIndexScale({ w: 1018, h: 502 }, 1000)
     expect(w.scale).toBeCloseTo(1000 / 1018)
     expect(w.width).toBeCloseTo(1000)
     expect(w.hScroll).toBe(false)
-    // 高受限：availH 500 / h 502 → 約 0.996，小於寬限制
-    const h = topIndexScale({ w: 1018, h: 502 }, 2000, 500)
-    expect(h.scale).toBeCloseTo(500 / 502)
-    expect(h.height).toBeCloseTo(500)
-    // maxScale 封頂：很寬很高的空間也只放大 1.5
-    const cap = topIndexScale({ w: 1018, h: 502 }, 5000, 5000)
-    expect(cap.scale).toBe(1.5)
-    expect(cap.width).toBeCloseTo(1527)
+    // 高度不夠也不影響（只看寬）
+    expect(topIndexScale({ w: 1018, h: 5000 }, 1000).scale).toBeCloseTo(1000 / 1018)
+    // maxScale 封頂：很寬的空間也只放大 2
+    const cap = topIndexScale({ w: 1018, h: 502 }, 5000)
+    expect(cap.scale).toBe(2)
+    expect(cap.width).toBeCloseTo(2036)
     expect(cap.hScroll).toBe(false)
     // 低於 minScale：夾在 0.9，寬度超過 boxW 就橫捲
-    const low = topIndexScale({ w: 1018, h: 502 }, 350, 2000)
+    const low = topIndexScale({ w: 1018, h: 502 }, 350)
     expect(low.scale).toBe(0.9)
     expect(low.width).toBeCloseTo(916.2)
     expect(low.hScroll).toBe(true)
-    // 高度不足也不縮到 minScale 以下
-    expect(topIndexScale({ w: 1000, h: 1000 }, 2000, 100).scale).toBe(0.9)
+    // boxW 0（還沒量到）：scale 1
+    const zero = topIndexScale({ w: 1018, h: 502 }, 0)
+    expect(zero.scale).toBe(1)
+    expect(zero.width).toBe(1018)
+    expect(zero.height).toBeCloseTo(502)
     // natural 無效
-    expect(topIndexScale({ w: 0, h: 0 }, 100, 100)).toEqual({ scale: 1, width: 0, height: 0, hScroll: false })
-    expect(topIndexScale({ w: -5, h: 10 }, 100, 100).scale).toBe(1)
+    expect(topIndexScale({ w: 0, h: 0 }, 100)).toEqual({ scale: 1, width: 0, height: 0, hScroll: false })
+    expect(topIndexScale({ w: -5, h: 10 }, 100).scale).toBe(1)
   })
 
   it('isValidSelection', () => {
