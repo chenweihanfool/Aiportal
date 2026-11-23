@@ -189,7 +189,7 @@ export function KnowledgeIslands({ data, pw, now, head }: { data: TopicsData; pw
   }
   /** 資訊帶裡點同枝／跨枝題目、原文面板的題目：切到該題的預設選取 */
   const openTopic = (id: string) => navTopic(id, null)
-  const backToOverview = () => { window.location.hash = '#knowledge' }
+  const backToOverview = () => { goto('#knowledge') }
   const plusOf = (i: IslandModelIsland) => i.topics.filter((t) => recent.has(t.id)).length
 
   if (model.length === 0) return <p className="kn-empty">還沒有可以畫成島的題目。</p>

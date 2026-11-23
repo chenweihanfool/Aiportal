@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { KnowledgeSourcePanel } from './KnowledgeSourcePanel'
 import { SourceSearchResults } from './KnowledgeSearch'
 import { KnowledgeIslands } from './KnowledgeIslands'
 import { useAsync, useNow } from './homeHooks'
 import { filterTopics, groupTopics, isStale, parseTopics, recentChangeOf, type TopicChange, type TopicsData } from './knowledgeView'
 import { formatKnowledgeHash } from './knowledgeRoute'
-import { goto } from './navBack'
+import { goto, setNavNames } from './navBack'
 import { BackToOrigin } from './BackToOrigin'
 
 // 知識頁（3.21.0 起只有島嶼：#knowledge＝全景、#knowledge/<id>＝進島展開該題）。資料來自 feed `topics`（HERMES 每週推送）。
@@ -103,6 +103,12 @@ export function KnowledgeView({ unlockedPassword, onRequestUnlock }: {
   const now = useNow()
   const unlocked = !!unlockedPassword
   const data = feed.data?.data ?? null
+  // 3.27.0：從知識頁跳出去時，「‹ 回到 知識：<題名>」顯示題名而不是 id
+  useEffect(() => {
+    const byId = new Map((data?.topics ?? []).map((t) => [t.id, t.name]))
+    setNavNames(() => ({ topic: (id) => byId.get(id) }))
+    return () => setNavNames(() => ({}))
+  }, [data])
 
   let content: ReactNode
   if (!unlocked) {
