@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import type { HermesTopicQuote } from './hermesDocApi'
 import type { FlowDiagram, MapDiagram, Topic, TopicDiagram, TimelineDiagram } from './knowledgeView'
-import { indexScale } from './knowledgeIslands'
 import {
   FLOW_CONST, STRENGTH_TEXT, layoutFlow, layoutMap, layoutTimeline, quoteQueryFor, strengthOf,
   type Strength,
@@ -41,28 +40,24 @@ interface Props {
   nodeDots?: ReadonlyMap<string, 'ins' | 'blind'>
   /** 精簡：不畫圖例與預測卡（黏在頂端捲動後用） */
   compact?: boolean
-  /** 索引模式的圖高上限（px）：整張圖縮到放得進，不垂直捲；比例見 indexScale */
-  maxH?: number
-  /** 桌機寬版索引：svg 寬度填滿所在欄（優先於 maxH） */
-  fitWidth?: boolean
+  /** 索引模式的縮放比（3.26.0）：svg 以 自然寬 × scale 的像素寬顯示；比例見 topIndexScale。不給就維持原本的寬度規則 */
+  scale?: number
   hideDetail?: boolean
   hideLegend?: boolean
 }
 
 /** 圖面共用的顯示選項 */
-interface View { dots?: ReadonlyMap<string, 'ins' | 'blind'>; maxH?: number; fit?: boolean }
+interface View { dots?: ReadonlyMap<string, 'ins' | 'blind'>; scale?: number }
 
 function Dot({ kind, x, y }: { kind: 'ins' | 'blind' | undefined; x: number; y: number }) {
   if (!kind) return null
   return <circle className="kn-dg-dot" data-dot={kind} cx={x} cy={y} r={5}><title>{kind === 'ins' ? '這一步有心得' : '盲點：這一步還沒有心得'}</title></circle>
 }
 
-const sizeStyle = (w: number, h: number, v: View) => {
-  // 桌機寬版索引：寬度填滿所在欄（欄寬已依圖自然尺寸算好），文字隨 viewBox 一起放大
-  if (v.fit) return { width: '100%', maxWidth: 'none', minWidth: 0, margin: 0 }
-  if (v.maxH === undefined) return { maxWidth: Math.round(w * 1.25), minWidth: Math.round(w * 0.6) }
-  // 索引模式：依自然尺寸算縮放，寬度用像素固定（靠左，不夠寬就橫捲）
-  return { width: Math.round(indexScale({ w, h }, { w: Number.POSITIVE_INFINITY, maxH: v.maxH }).width), maxWidth: 'none', minWidth: 0, margin: 0 }
+const sizeStyle = (w: number, _h: number, v: View) => {
+  if (v.scale === undefined) return { maxWidth: Math.round(w * 1.25), minWidth: Math.round(w * 0.6) }
+  // 索引模式：依縮放比用像素寬固定（靠左，比外框寬就橫捲），文字隨 viewBox 一起放大
+  return { width: Math.round(w * v.scale), maxWidth: 'none', minWidth: 0, margin: 0 }
 }
 
 const onKey = (act: () => void) => (e: KeyboardEvent) => {
@@ -335,7 +330,7 @@ export function diagramNodeInfo(diagram: TopicDiagram, id: string): Selected | n
   return null
 }
 
-export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, onNodeStep, highlightNode = null, selectedNode, onSelectNode, nodeDots, compact = false, maxH, fitWidth = false, hideDetail = false, hideLegend = false }: Props) {
+export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, onNodeStep, highlightNode = null, selectedNode, onSelectNode, nodeDots, compact = false, scale, hideDetail = false, hideLegend = false }: Props) {
   const [sel, setSel] = useState<Selected | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
   const clock = useMemo(() => now ?? new Date(), [now])
@@ -353,7 +348,7 @@ export function KnowledgeDiagram({ topic, diagram, quotes, onOpenSource, now, on
     setSel(s)
   }
   const cur = indexMode ? selectedNode ?? null : sel?.key ?? null
-  const v: View = { dots: nodeDots, maxH: indexMode ? maxH : undefined, fit: indexMode && fitWidth }
+  const v: View = { dots: nodeDots, scale: indexMode ? scale : undefined }
   let svg: ReactNode
   if (diagram.type === 'flow') svg = <FlowSvg d={diagram} sel={cur} onPick={pick} hl={highlightNode} v={v} />
   else if (diagram.type === 'timeline') svg = <TimelineSvg d={diagram} now={clock} sel={cur} onPick={pick} hl={highlightNode} v={v} />

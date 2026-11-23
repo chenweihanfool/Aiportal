@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiBridgesAt, analyzeTopic, bridgesAt, buildIslandModel, buildStations, cardMark, cardRect, computeBridges, fitView, islandSize, islandStats, isSeed, kbLinksFor,
-  layoutSea, resolveStepBridges, chipGroups, defaultSelection, indexScale, wideIndexWidth, nextCompact, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt,
+  layoutSea, resolveStepBridges, chipGroups, defaultSelection, topIndexScale, orphanSteps, groupBullets, isValidSelection, nodeOrder, stationForNode, shelf, shortLabel, stationCoverage, zoomAt,
   islandView, latestTopicId, MAX_K, MIN_K, UNASSIGNED_ID, type Box, type Placed,
 } from './knowledgeIslands'
 import { buildTree, parseBodyWithMarkers, type Topic, type TopicClaim } from './knowledgeView'
@@ -355,16 +355,31 @@ describe('索引模式（3.23.0）', () => {
     expect(isValidSelection('g:steps', analyzeTopic(none), flow, none)).toBe(false)
   })
 
-  it('indexScale：縮到放得進高度上限、不放大、低於下限改用下限並橫捲', () => {
-    expect(indexScale({ w: 900, h: 400 }, { w: 1200, maxH: 500 })).toMatchObject({ scale: 1, height: 400, clamped: false, hScroll: false })
-    const half = indexScale({ w: 1000, h: 600 }, { w: 1200, maxH: 300 })
-    expect(half.scale).toBeCloseTo(0.5)
-    expect(half.height).toBeCloseTo(300)
-    expect(half.width).toBeCloseTo(500)
-    const tiny = indexScale({ w: 1000, h: 1000 }, { w: 400, maxH: 100 })
-    expect(tiny).toMatchObject({ scale: 0.45, clamped: true, hScroll: true })
-    expect(tiny.height).toBeCloseTo(450)
-    expect(indexScale({ w: 0, h: 0 }, { w: 100, maxH: 100 }).scale).toBe(1)
+  it('topIndexScale：寬受限、高受限、maxScale 封頂、低於 minScale 夾住並橫捲、natural 無效', () => {
+    // 寬受限：boxW 1000 / w 1018 → 約 0.982（高不是限制）
+    const w = topIndexScale({ w: 1018, h: 502 }, 1000, 2000)
+    expect(w.scale).toBeCloseTo(1000 / 1018)
+    expect(w.width).toBeCloseTo(1000)
+    expect(w.hScroll).toBe(false)
+    // 高受限：availH 500 / h 502 → 約 0.996，小於寬限制
+    const h = topIndexScale({ w: 1018, h: 502 }, 2000, 500)
+    expect(h.scale).toBeCloseTo(500 / 502)
+    expect(h.height).toBeCloseTo(500)
+    // maxScale 封頂：很寬很高的空間也只放大 1.5
+    const cap = topIndexScale({ w: 1018, h: 502 }, 5000, 5000)
+    expect(cap.scale).toBe(1.5)
+    expect(cap.width).toBeCloseTo(1527)
+    expect(cap.hScroll).toBe(false)
+    // 低於 minScale：夾在 0.9，寬度超過 boxW 就橫捲
+    const low = topIndexScale({ w: 1018, h: 502 }, 350, 2000)
+    expect(low.scale).toBe(0.9)
+    expect(low.width).toBeCloseTo(916.2)
+    expect(low.hScroll).toBe(true)
+    // 高度不足也不縮到 minScale 以下
+    expect(topIndexScale({ w: 1000, h: 1000 }, 2000, 100).scale).toBe(0.9)
+    // natural 無效
+    expect(topIndexScale({ w: 0, h: 0 }, 100, 100)).toEqual({ scale: 1, width: 0, height: 0, hScroll: false })
+    expect(topIndexScale({ w: -5, h: 10 }, 100, 100).scale).toBe(1)
   })
 
   it('isValidSelection', () => {
@@ -373,37 +388,5 @@ describe('索引模式（3.23.0）', () => {
     expect(isValidSelection('zz', a, flow)).toBe(false)
     expect(isValidSelection('g:decisions', a, flow)).toBe(true)
     expect(isValidSelection('g:why', a, flow)).toBe(false)
-  })
-})
-
-describe('桌機寬版索引欄與精簡切換', () => {
-  it('wideIndexWidth：放大不超過 1.6 倍、欄寬夾在 380 與容器 52% 之間', () => {
-    // 圖 600×300、可用高 400 → s=min(1.6, 1.33)=1.33 → 800，容器 1888 的 52%＝981，未被夾
-    expect(wideIndexWidth({ w: 600, h: 300 }, 400, 1888)).toEqual({ width: 800, scale: 800 / 600 })
-    // 可用高很大：s 封頂 1.6 → 960
-    expect(wideIndexWidth({ w: 600, h: 300 }, 2000, 1888).width).toBe(960)
-    // 超過容器 52%：夾在 52%
-    expect(wideIndexWidth({ w: 1018, h: 502 }, 720, 1248).width).toBe(649)
-    // 很小的圖：至少 380
-    expect(wideIndexWidth({ w: 200, h: 100 }, 400, 1500).width).toBe(380)
-    // 可用高不足：s<1，縮小
-    expect(wideIndexWidth({ w: 800, h: 400 }, 200, 1888).width).toBe(400)
-  })
-  it('nextCompact：只看 scrollTop 與黏頂點，帶 40px 遲滯，切換不改變觸發條件', () => {
-    const stick = 300
-    expect(nextCompact(false, 330, stick)).toBe(false)
-    expect(nextCompact(false, 341, stick)).toBe(true)
-    // 精簡後 scrollTop 被微調（例如掉 53）仍維持精簡，不會來回
-    expect(nextCompact(true, 341 - 53, stick)).toBe(true)
-    expect(nextCompact(true, 270, stick)).toBe(true)
-    expect(nextCompact(true, 259, stick)).toBe(false)
-    expect(nextCompact(false, 259, stick)).toBe(false)
-    // 沿路徑單調下捲再上捲：每個方向最多切換一次
-    let c = false; let flips = 0
-    for (let st = 0; st <= 2000; st += 25) { const n = nextCompact(c, st, stick); if (n !== c) flips++; c = n }
-    for (let st = 2000; st >= 0; st -= 25) { const n = nextCompact(c, st, stick); if (n !== c) flips++; c = n }
-    expect(flips).toBe(2)
-    // 黏頂點很小：回頂端 0 時要能恢復完整
-    expect(nextCompact(true, 0, 20)).toBe(false)
   })
 })
